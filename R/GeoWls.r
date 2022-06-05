@@ -462,8 +462,10 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
         initparam$param['scale'] <- bins[max(variograms)==variograms]}
     ###### ----------- END Estimation of the empirical variogram ---------- #####
 
+
+
     ###### ---------- START model fitting by weighted least squares method ----------######
-    if(model=='Gaussian'||model=='Gauss') # Gaussian random field:
+    #if(model=='Gaussian'||model=='Gauss') # Gaussian random field:
       if(weighted) fname <- 'GeoWLS_G'
       else fname <- 'LeastSquare_G'
 
@@ -480,6 +482,9 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
                       moments=moments, namescorr=initparam$namescorr, namesnuis=initparam$namesnuis,
                       numbins=numbins, numbint=numbint, control=list(fnscale=-1, reltol=1e-14, maxit=1e8),
                       hessian=FALSE)
+
+
+
     ###### ---------- END model fitting by weighted least squares method ----------######
     ### Removes the global variobales:
      .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)  

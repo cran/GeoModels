@@ -432,6 +432,10 @@ The bivariate spatial tapers  implemented are the following :
    \emph{Journal of the American Statistical Association}. 
    DOI: 10.1080/01621459.2015.1072541
 
+   Alegria, A.,Cuevas-Pacheco, F.,Diggle, P, Porcu E. (2021)
+   The F-family of covariance functions: A Matérn analogue for modeling random fields on spheres.
+   \emph{patial Statistics} 43, 100512
+
 }
 
 \seealso{

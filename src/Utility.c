@@ -834,7 +834,7 @@ void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordt,int *gri
   maxtime=(double *) Calloc(1,double);//temporal threshold
     if(maxtime==NULL) {*ismal=0; return;}
 
-   ntime=(int *) Calloc(1,int);//number of times
+  ntime=(int *) Calloc(1,int);//number of times
     if(ntime==NULL) {*ismal=0; return;}
     *ntime=*times;
 
@@ -883,10 +883,8 @@ void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordt,int *gri
   REARTH=(double *) Calloc(1,double);//radius of hearth
    if(REARTH==NULL) {*ismal=0; return;}
     REARTH[0]=radius[0];
-    //const double *REARTH=*radius;
-    
-    //double *REARTH=*radius;//definition
-    //REARTH[0]=radius[0]; // Initialization
+
+  //double *REARTH=*radius;//definition
     
 
   tapsep=(double *) Calloc(5,double);
@@ -1040,17 +1038,13 @@ if(isbiv[0]) {SpaceBiv_Dist(coordx,coordy,coordt,ia,idx,ismal,ja,tapmodel,
   return;
      }
 }
-
-
-
+/****************************************************************/
 void DeleteGlobalVar()
 {
-
   int i=0;
   // Delete all the global variables:
   Free(maxdist);Free(maxtime);
-  Free(ncoordx);Free(ncoordy); 
-  Free(ncoord);
+  Free(ncoord);Free(ncoordx);Free(ncoordy); 
   Free(npairs);
   Free(type);Free(REARTH);
   Free(tapsep);
@@ -1062,14 +1056,11 @@ void DeleteGlobalVar()
            if(isst[0])    {Free(lagt);}
            if(isbiv[0])   {Free(first);Free(second);}
   }
-
   Free(isbiv); Free(istap);
   Free(isst);Free(ismem);
   Free(cdyn);
   return;
 }
-
-
 /*#######################################################################*/
 void SetGlobalVar2 (int *nsite, int *times, 
                     double *h,int *nn, double  *maxh,

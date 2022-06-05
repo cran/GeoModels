@@ -1568,7 +1568,7 @@ else{          # all the rest
 ##############################################################
 ## loading distances in memory using brute force C routine ###
 #############################################################
-### aca paso solo para  simular o maximum likelihood o (variograma) tapering
+### aca paso solo para  simular o maximum likelihood o variogram 
 ### o si hay CL with  maxdist!!!
 if(distC||fcall=="Simulation"||(fcall=="Fitting"&likelihood==2)||(fcall=="Fitting"&typereal=="GeoWLS")) {
 
@@ -1576,26 +1576,36 @@ if(fcall=="Fitting"&mem==TRUE&(!space)&!tapering)   {vv=length(NS); numcoord=NS[
 
 
 
-gb=dotCall64::.C64('SetGlobalVar',SIGNATURE = c(
-         "integer","double","double","double","integer", "integer","integer",  #7
-         "integer","integer","integer","integer", "integer","integer", #6
-         "integer","double","double","double", "integer",  #5
-         "integer","double", "integer","integer","integer","integer", #6
-         "integer","integer", # 2
-         "integer","integer","integer"),  # 3
-     bivariate, coordx, coordy, coordt,grid,ia=ia,idx=idx,  #7
-           isinit=isinit,ja=ja, mem, numcoord, numcoordx,  numcoordy, #6
-           numpairs=numpairs, radius,srange,  tapsep,  spacetime, #5
-            numtime,trange, tapering, tapmodel,distance, weighted, #6
-           colidx= colidx,rowidx= rowidx, # 2
-            ns, NS, isdyn, #3
- INTENT = c("r","r","r","r","r","w","w", #7
-            "rw","w", "rw", "r", "r", "r", #6
-           "rw", "r", "rw", "r", "r", #5
-             "r",  "rw", "r", "r", "r", "r", #6
-             "w", "w",#2
-             "r", "r", "r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+#gb=dotCall64::.C64('SetGlobalVar',SIGNATURE = c(
+#         "integer","double","double","double","integer", "integer","integer",  #7
+#         "integer","integer","integer","integer", "integer","integer", #6
+#         "integer","double","double","double", "integer",  #5
+#         "integer","double", "integer","integer","integer","integer", #6
+#         "integer","integer", # 2
+#         "integer","integer","integer"),  # 3
+#     bivariate, coordx, coordy, coordt,grid,ia=ia,idx=idx,  #7
+#           isinit=isinit,ja=ja, mem, numcoord, numcoordx,  numcoordy, #6
+#           numpairs=numpairs, radius,srange,  tapsep,  spacetime, #5
+#            numtime,trange, tapering, tapmodel,distance, weighted, #6
+#           colidx= colidx,rowidx= rowidx, # 2
+#            ns, NS, isdyn, #3
+# INTENT = c("r","r","r","r","r","rw","rw", #7
+#            "rw","rw", "rw", "r", "r", "r", #6
+#           "rw", "r", "rw", "r", "r", #5
+#             "r",  "rw", "r", "r", "r", "r", #6
+#             "w", "w",#2
+#             "r", "r", "r"),
+#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+
+srange[which(srange==Inf)]=1e+50;trange[which(trange==Inf)]=1e+50
+gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy), as.double(coordt),as.integer(grid),ia=as.integer(ia),idx=as.integer(idx),  #7
+           isinit=as.integer(isinit),ja=as.integer(ja), as.integer(mem), as.integer(numcoord),as.integer( numcoordx),  as.integer(numcoordy), #6
+           numpairs=as.integer(numpairs), as.double(radius),as.double(srange), as.double( tapsep),  as.integer(spacetime), #5
+            as.integer(numtime),as.double(trange), as.integer(tapering), as.integer(tapmodel),as.integer(distance),as.integer(weighted), #6
+           colidx= as.integer(colidx),rowidx= as.integer(rowidx), # 2
+            as.integer(ns), as.integer(NS), as.integer(isdyn))
+
 
 rm(colidx);rm(rowidx)
 if(type=="Tapering") {rm(idx);rm(ja);rm(ia)}

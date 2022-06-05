@@ -218,13 +218,12 @@ The first three combinations can be used for any model. The standard likelihood 
     \item \code{Gamma} for a Gamma  RF (see  Bevilacqua M., Caamano C.,  Gaetan, 2020)
     \item \code{Weibull} for a Weibull  RF (see  Bevilacqua M., Caamano C.,  Gaetan, 2020)
     \item \code{LogGaussian} for a  LogGaussian  RF (see  Bevilacqua M., Caamano C.,  Gaetan, 2020)
-    \item \code{LogLogistics} for a  LogLogistic RF. 
+    \item \code{LogLogistic} for a  LogLogistic RF. 
 }
 RF with with possibly asymmetric marginal distribution:
   \itemize{
     \item \code{SkewGaussian} for a skew Gaussian  RF (see   Alegrıa et al. (2017)).
     \item \code{SinhAsinh} for a Sinh-arcsinh  RF (see Blasi et. al 2022).
-    \item \code{TwopieceGaussian} for a Twopiece Gaussian RF   (see Blasi et. al 2022).
     \item \code{TwopieceGaussian} for a Twopiece Gaussian RF   (see Bevilacqua et. al 2022).
     \item \code{TwopieceTukeyh} for a Twopiece Tukeyh RF   (see Bevilacqua et. al 2022).
  }
@@ -234,8 +233,8 @@ RF with with possibly asymmetric marginal distribution:
     }
 RF with marginal counts data
  \itemize{  
-     \item \code{Poisson} for a Poisson  RF. (see Morales-Navarrete et. al 2021)
-     \item \code{PoissonZIP} for a zero inflated Poisson  RF.
+     \item \code{Poisson} for a Poisson  RF (see Morales-Navarrete et. al 2021).
+     \item \code{PoissonZIP} for a zero inflated Poisson  RF (see Morales-Navarrete et. al 2021).
      \item \code{Binomial} for a Binomial  RF.
      \item \code{BinomialNeg} for a negative Binomial RF.
      \item \code{BinomialNegZINB} for a zero inflated negative Binomial RF.
@@ -246,8 +245,8 @@ RF using Gaussian and Clayton copula with the following marginal distribution:
     \item \code{Beta2}  for Beta   RF 
     }
 
-  For  a given \code{model} the associated parameters are given by nuisance and correlation parameters. In order to obtain the nuisance parameters associated to a specific model use \code{\link{NuisParam}}. 
-  In order to obtain the correlation parameters associated to a given correlation model use 
+  For  a given \code{model} the associated parameters are given by nuisance and correlation parameters. In order to obtain the nuisance parameters associated with a specific model use \code{\link{NuisParam}}. 
+  In order to obtain the correlation parameters associated with a given correlation model use 
   \code{\link{CorrParam}}.
 
    All the nuisance and covariance parameters must be specified
@@ -302,7 +301,7 @@ RF using Gaussian and Clayton copula with the following marginal distribution:
   by successive steps in order to cover the entire spatial
   domain.
   Observations, that fall in disjoint or overlapping windows
-  are considered indipendent samples.
+  are considered independent samples.
 
   In the spatio-temporal case  \code{winconst_t} represents
   the lenght of the temporal sub-window. By default the size of the
@@ -394,10 +393,14 @@ RF using Gaussian and Clayton copula with the following marginal distribution:
   Blasi F., Caamaño C., Bevilacqua M., Furrer R. (2022) A selective view of climatological data and likelihood estimation  \emph{Spatial Statistics}   10.1016/j.spasta.2022.100596
 
   Bevilacqua M., Caamaño C., Arellano-Valle R. B., Camilo Gomez C. (2022) A class of random fields with two-piece marginal distributions for modeling point-referenced data with spatial outliers. \emph{Test}  10.1007/s11749-021-00797-5
+  
+  Modelling Point Referenced Spatial Count Data: A Poisson Process Approach (2021)
+  Morales-Navarrete D. and Bevilacqua M.,  Caamaño-Carrillo C., Castro L. M.
+  arXiv:2105.03734 
 
   Weighted Composite-likelihood for Gaussian RFs:
 
-    Bevilacqua, M. Gaetan, C., Mateu, J. and Porcu, E. (2012)
+  Bevilacqua, M. Gaetan, C., Mateu, J. and Porcu, E. (2012)
   Estimating space and space-time covariance functions for large data
   sets: a weighted composite likelihood approach.
   \emph{Journal of the American Statistical Association, Theory &
@@ -408,27 +411,11 @@ RF using Gaussian and Clayton copula with the following marginal distribution:
 
   Sub-sampling estimation:
 
-  Carlstein, E. (1986) The Use of Subseries Values for Estimating the
-  Variance.
-  \emph{The Annals of Statistics},
-  \bold{14}, 1171--1179.
-
   Heagerty, P. J. and Lumley T. (2000) Window Subsampling of Estimating
   Functions with Application to Regression Models.
   \emph{Journal of the American Statistical Association, Theory &
     Methods}, \bold{95}, 197--211.
-
-  Lee, Y. D. and Lahiri S. N. (2002) Variogram Fitting by Spatial
-  Subsampling.
-  \emph{Journal of the Royal Statistical Society. Series B},
-  \bold{64}, 837--854.
-
- Lee, Y. D. and Lahiri S. N. (2002) Variogram Fitting by Spatial
-  Subsampling.
-
-  Modelling Point Referenced Spatial Count Data: A Poisson Process Approach (2021)
-  Morales-Navarrete D. and Bevilacqua M.,  Caamaño-Carrillo C., Castro L. M.
-  arXiv:2105.03734 
+ 
 }
 
 
@@ -454,22 +441,26 @@ set.seed(6)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
 
-# Define spatial matrix covariates
+# Define spatial matrix covariates and regression parameters
 X=cbind(rep(1,N),runif(N))
+mean <- 0.2
+mean1 <- -0.5
 
 # Set the covariance model's parameters:
 corrmodel <- "Matern"
-mean <- 0.2
-mean1 <- -0.5
 sill <- 1
 nugget <- 0
 scale <- 0.2/3
 smooth=0.5
+
+
 param<-list(mean=mean,mean1=mean1,sill=sill,nugget=nugget,scale=scale,smooth=smooth)
 
 # Simulation of the spatial Gaussian RF:
 data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,X=X)$data
 
+
+# setting fixed and parameters to be estimated
 fixed<-list(nugget=nugget,smooth=smooth)
 start<-list(mean=mean,mean1=mean1,scale=scale,sill=sill)
 
@@ -522,7 +513,7 @@ print(fit2)
 ################################################################
 ###
 ### Example 3. Maximum pairwise likelihood fitting of a Weibull  RF 
-### with Generalized Wendland correlation with Nelder-Meaf
+### with Generalized Wendland correlation with Nelder-Mead
 ### 
 ###############################################################
 set.seed(524)
@@ -549,9 +540,9 @@ data <- GeoSim(coordx=coords, corrmodel=corrmodel,model=model,X=X,
 fixed<-list(nugget=nugget,power2=4,sill=1,smooth=smooth)
 start<-list(mean=mean,mean1=mean1,scale=scale,shape=shape)
 
-# Maximum pairwise composite-likelihood fitting of the RF:
+# Maximum conditional composite-likelihood fitting of the RF:
 fit <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
-                    neighb=3,likelihood="Marginal",type="Pairwise",X=X,
+                    neighb=3,likelihood="Conditional",type="Pairwise",X=X,
                     optimizer="Nelder-Mead",
                     start=start,fixed=fixed)
 print(fit$param)
@@ -587,12 +578,11 @@ data <- GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
 plot(density(data))
 fixed=list(power2=power2,nugget=nugget)
 start=list(scale=c_supp,skew=skew,tail=tail,mean=mean,sill=sill)
-# Maximum pairwise likelihood:
+# Maximum marginal pairwise likelihood:
 fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                     neighb=3,likelihood="Marginal",type="Pairwise",
                     start=start,fixed=fixed)
 print(fit1$param)
-
 
 
 ################################################################
@@ -629,7 +619,7 @@ print(fit0)
 fixed <- list(nugget=nugget,power2=4,sill=1)
 start <- as.list(fit0$param)
 start$scale=0.2
-# Maximum pairwise likelihood:
+# Maximum conditional pairwise likelihood:
 fit1 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=10, X=X, 
                     likelihood="Conditional",type="Pairwise",  neighb=3
          ,model="Binomial", start=start, fixed=fixed, optimizer="BFGS")
@@ -705,7 +695,8 @@ coords=cbind(x,y)
 # parameters
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,
            nugget_1=0,nugget_2=0,pcol=0.2)
-# Simulation of a spatial Gaussian RF:
+
+# Simulation of a spatial bivariate Gaussian RF:
 data <- GeoSim(coordx=coords, corrmodel="Bi_Matern_sep", 
               param=param)$data
 
@@ -715,14 +706,12 @@ start=list(mean_1=0,mean_2=0,sill_1=var(data[1,]),sill_2=var(data[2,]),
            scale=0.1,pcol=cor(data[1,],data[2,]))
 
 
-# Maximum pairwise likelihood
-
+# Maximum marginal pairwise likelihood
 fitcl<- GeoFit(data=data, coordx=coords, corrmodel="Bi_Matern_sep",
                      likelihood="Marginal",type="Pairwise",
                      optimizer="BFGS" , start=start,fixed=fixed,
                      neighb=c(3,3,3))
 print(fitcl)
-
 
 }
 \keyword{Composite}
