@@ -41,6 +41,7 @@ WlsStart <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distan
                     paramrange, radius, start, taper, tapsep, type, varest, vartype,
                     weighted, winconst,winconst_t, winstp_t, winstp,copula,X,memdist,nosym)
   {
+  
     # Determines the range of the parameters for a given correlation
     SetRangeParam <- function(namesparam, numparam)
     {
@@ -142,15 +143,13 @@ WlsStart <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distan
               
         return(list(lower=lower, upper=upper))
     }
-
+    
     ### Initialization parameters:
     initparam <- StartParam(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed,
                            grid, likelihood, maxdist,neighb, maxtime, model, n, 
                            param, parscale, paramrange, radius,  start, taper, tapsep,
                            "GeoWLS", type, varest, vartype,
                            weighted, winconst,winconst_t, winstp_t, winstp,copula, X, memdist, nosym)
-
-       
   
     if(!is.null(initparam$error))     stop(initparam$error)
     if(length(coordt)>0&&is.list(X)) X=X[[1]]

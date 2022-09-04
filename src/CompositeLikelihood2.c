@@ -722,7 +722,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     // if(fabs(corr)>1|| !R_FINITE(corr)) {*res=LOW; return;}
                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                       uu=(int) data1[i];  ww=(int) data2[i];
-                      Rprintf("%f %f \n",mui,muj);
+                      //Rprintf("%f %f \n",mui,muj);
                       bl=biv_PoissonZIP(corr,uu,ww,mui, muj,mup,nugget1,nugget2);
                       *res+= log(bl)*weights;
                     }}
@@ -873,6 +873,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     corr=CorFct(cormod,lags[i],0,par,0,0);
                     if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                    bl=biv_tukey_hh((1-nugget)*corr,zi,zj,mean1[i],mean2[i],sill,h1,h2);
+                  // Rprintf("%d %d\n",i,npairs[0]);
                              *res+= weights*log(bl);
                 }}
 
@@ -2158,13 +2159,12 @@ void Comp_Pair_Gauss_biv2mem(int *cormod, double *data1,double *data2,int *NN,
     double *nuis, int *local,int *GPU)
 {
     int i=0;
+
     double  dens=0.0,weights=1.0;
     if(  par[0]<0|| par[1]<0|| par[2]<0|| par[3]<0) {*res=LOW;  return;}
-
  for(i=0;i<npairs[0];i++){
-       // Rprintf("%f %f %f %d %d  \n",lags[i],data1[i],data2[i],first[i],second[i]);
   if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-          dens=log_biv2gauss(cormod,lags[i],par, data1[i]-mean1[i], data2[i]-mean2[i],first[i], second[i]);
+          dens=log_biv2gauss(cormod,lags_1[i],par, data1[i]-mean1[i], data2[i]-mean2[i],first_1[i], second_1[i]);
           *res+= dens*weights;
                                 }}
 
@@ -2191,8 +2191,8 @@ void Comp_Pair_SkewGauss_biv2mem(int *cormod, double *data1,double *data2,int *N
                              u=data1[i];
                              w=data2[i];
                                 if(!ISNAN(u)&&!ISNAN(w) ){
-                                    rhotv=CorFct(cormod,lags[i],0,par,first[i],second[i]);
-                     *res+= log(biv_skew2(rhotv,u,w,vari[first[i]],vari[second[i]],1,nuis[first[i]],nuis[second[i]]))*weights;
+                                    rhotv=CorFct(cormod,lags_1[i],0,par,first_1[i],second_1[i]);
+                     *res+= log(biv_skew2(rhotv,u,w,vari[first_1[i]],vari[second_1[i]],1,nuis[first_1[i]],nuis[second_1[i]]))*weights;
                                 }}
 
         Free(vari);

@@ -244,52 +244,6 @@ GeoCovariogram(fit,vario=vario,fix.lagt=1,fix.lags=1,show.vario=TRUE,pch=20)
 
 
 
-################################################################
-###
-### Example 5. Plot of fitted  and empirical semivariograms
-### estimated from a Bivariate Gaussian random fields with 
-### constrained Matern correlation. 
-###
-###############################################################
-
-# Simulation of a bivariate spatial Gaussian random field:
-set.seed(892)
-# Define the spatial-coordinates of the points:
-x = runif(500, -1, 1)
-y = runif(500, -1, 1)
-coords=cbind(x,y)
-
-# Simulation of a bivariate Gaussian Random field 
-# with matern (cross)  covariance function
-scale_1 = 0.18/3
-scale_2 = 0.2/3
-scale_12 = 0.15/3
-sill_1=1
-sill_2=1
-smooth=0.5
-pcol=0.2
-param=list(mean_1=0,mean_2=0,scale_1=scale_1,scale_2=scale_2,
-           sill_1=sill_1,sill_2=sill_2,nugget_1=0,nugget_2=0,
-           smooth_1=smooth,smooth_2=smooth,pcol=pcol)  
-data = GeoSim(coordx=coords, corrmodel="Bi_Matern_contr", param=param)$data
-
-# Empirical bivariate variogram estimation:
-biv_vario=GeoVariogram(data,coordx=coords, bivariate=TRUE,maxdist=c(0.5,0.5,0.5)) 
-
-# selecting fixed and estimating parameters
-fixed=list(mean_1=0,mean_2=0,nugget_1=0,nugget_2=0,
-          smooth_1=smooth,smooth_2=smooth)
-start=list(sill_1=var(data[1,]),sill_2=var(data[2,]),
-          scale_1=scale_1,scale_2=scale_2,
-          pcol=cor(data[1,],data[2,]))
-
-# Maximum likelihood fitting of the bivariate random field:
-fit= GeoFit(data, coordx=coords, corrmodel="Bi_Matern_contr",likelihood="Marginal",
-            optimizer="BFGS", type="Pairwise",
-            start=start,fixed=fixed,neighb=c(2,2,2))
-            
-GeoCovariogram(fit, vario=biv_vario,show.vario=TRUE,pch=20)
-
 
 }
 

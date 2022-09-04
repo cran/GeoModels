@@ -326,7 +326,6 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   while(KK<=npoi) {
   for(i in 1:k) {
 
-
     ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
    #### simulating with cholesky decomposition using GPU
     if(!is.null(GPU)&&sparse) sparse=FALSE   ### if gpu no sparse
@@ -355,12 +354,10 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     }
     #######################################################################
     nuisance<-param[ccov$namesnuis]
-
     sim<-RFfct1(ccov,dime,nuisance,simd,ccov$X,ns)
     ####################################
     ####### starting cases #############
     ####################################
-
     if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
 
         simdim <- dim(sim)

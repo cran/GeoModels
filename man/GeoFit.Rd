@@ -435,7 +435,7 @@ library(GeoModels)
 
 # Define the spatial-coordinates of the points:
 set.seed(3)
-N=400  # number of location sites
+N=300  # number of location sites
 x <- runif(N, 0, 1)
 set.seed(6)
 y <- runif(N, 0, 1)
@@ -477,7 +477,6 @@ fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel,
 print(fit1)
 
 
-
 ################################################################
 ###
 ### Example 1. Maximum conditional pairwise likelihood fitting of
@@ -495,13 +494,29 @@ print(fit1)
 ### a Gaussian RF using nlminb
 ###
 ###############################################################
+# Define the spatial-coordinates of the points:
+set.seed(3)
+N=100  # number of location sites
+x <- runif(N, 0, 1)
+set.seed(6)
+y <- runif(N, 0, 1)
+coords <- cbind(x,y)
+
+param<-list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth)
+
+data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param)$data
+
+# setting fixed and parameters to be estimated
+fixed<-list(nugget=nugget,smooth=smooth)
+start<-list(mean=mean,scale=scale,sill=sill)
+
 I=Inf
-lower<-list(mean=-I,mean1=-I,scale=0,sill=0)
-upper<-list(mean=I,mean1=I,scale=I,sill=I)
+lower<-list(mean=-I,scale=0,sill=0)
+upper<-list(mean=I,scale=I,sill=I)
 fit2 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel,
                     optimizer="nlminb",upper=upper,lower=lower,
                     likelihood="Full",type="Standard", 
-                    start=start,fixed=fixed,X=X)
+                    start=start,fixed=fixed)
 print(fit2)
 
 
@@ -518,7 +533,7 @@ print(fit2)
 ###############################################################
 set.seed(524)
 # Define the spatial-coordinates of the points:
-N=400
+N=300
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -593,7 +608,7 @@ print(fit1$param)
 ###############################################################
 
 set.seed(422)
-N=350
+N=250
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -607,18 +622,9 @@ data <- GeoSim(coordx=coords, corrmodel=corrmodel, model="Binomial", n=10,X=X,
 
 
 ## estimating the marginal parameters using independence cl
-fixed <- list(nugget=nugget,power2=4,sill=1,scale=0.2)
-start <- list(mean=mean,mean1=mean1,mean2=mean2)
-# Maximum pairwise likelihood:
-fit0 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=10, X=X, start=start,
-          type="Independence",neighb=3,model="Binomial",  fixed=fixed)
-                  
-print(fit0)
-
-## using the estimates as starting values
 fixed <- list(nugget=nugget,power2=4,sill=1)
-start <- as.list(fit0$param)
-start$scale=0.2
+start <- list(mean=mean,mean1=mean1,mean2=mean2,scale=0.2)
+
 # Maximum conditional pairwise likelihood:
 fit1 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=10, X=X, 
                     likelihood="Conditional",type="Pairwise",  neighb=3
@@ -689,8 +695,8 @@ print(fit)
 
 # Define the spatial-coordinates of the points:
 set.seed(8)
-x <- runif(350, 0, 1)
-y <- runif(350, 0, 1)
+x <- runif(200, 0, 1)
+y <- runif(200, 0, 1)
 coords=cbind(x,y)
 # parameters
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,

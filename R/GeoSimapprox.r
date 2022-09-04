@@ -5,7 +5,7 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="TB",M=30, L=500,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL)
+     local=c(1,1),method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL)
 {
 ####################################################################
 ############ internal function #####################################
@@ -22,7 +22,7 @@ GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrm
                                num_betas=sum(sel);mm=NULL
                                if(num_betas==1) mm=nuisance$mean
                                if(num_betas>1)  mm=c(mm,as.numeric((nuisance[sel])))
-                               
+                        
                                sim <- X%*%mm+simd
                               }
                 if(bivariate)  {
@@ -86,6 +86,7 @@ tbm2d<- function(coord, a0, nu0,mu,sill, L,model){
   d <- 1
   n <- dim(coord)[1]
   sequen <- c(seq(0,n-0.5, by = ceiling(1e6/2)),n)
+  if(n>500000) sequen=c(sequen[1],sequen[length(sequen)])
   coord_n <- coord[(sequen[1]+1):sequen[2], ]
   m <- dim(coord_n)[1]
   # Generate random frequencies and random phases

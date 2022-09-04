@@ -25,8 +25,10 @@ comploglik2MM <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fix
         Mean=MM   ### for non constant fixed mean
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
         res=double(1)
+ 
 ################################
          if(aniso){
+                 
             anisopar<-param[namesaniso]
             coords1=GeoAniso (coords, anisopars=anisopar)
             c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
@@ -111,11 +113,13 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
        #             as.double(other_nuis),
        #             as.integer(local),as.integer(GPU),
       #            PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)$res
+        
         result=dotCall64::.C64(as.character(fan),
           SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx],Mean[rowidx],other_nuis,local,GPU,
           INTENT =    c("r","r","r","r","r","r","rw", "r", "r","r", "r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
+        
         return(-result)
       }
 
@@ -392,8 +396,8 @@ else            lname="comploglik2MM"
 coords=cbind(coordx,coordy)
 
    if(!onlyvar){
-   
-
+  
+#ptm=proc.time()
   ##############################.  spatial or space time ############################################
    if(!bivariate)           {
     if(length(param)==1) {
@@ -486,12 +490,18 @@ coords=cbind(coordx,coordy)
                                fan=fname,hessian=TRUE,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, 
                                iterlim=100000, weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso)
   
-    if(optimizer=='nlminb')
+    if(optimizer=='nlminb'){
+
+    # tt1 <- proc.time() 
      CompLikelihood <-nlminb(objective=eval(as.name(lname)),start=param,colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
                                 control = list( iter.max=100000),
                               lower=lower,upper=upper,
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
                                weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso)
+     # tt1 <- proc.time()-tt1;print(tt1[3]/as.numeric(CompLikelihood$iterations))
+
+
+    }
     if(optimizer=='ucminf')   
       CompLikelihood <-ucminf::ucminf(par=param, fn=eval(as.name(lname)), hessian=as.numeric(hessian),   
                         control=list( maxeval=100000),
@@ -584,7 +594,7 @@ coords=cbind(coordx,coordy)
                         weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
     if(optimizer=='nlminb') 
         CompLikelihood <- nlminb( objective=comploglik_biv2,start=param, 
-                                     control = list( iter.max=100000),
+                                     control = list(iter.max=100000),
                               lower=lower,upper=upper,
                                 colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
@@ -610,7 +620,9 @@ coords=cbind(coordx,coordy)
 
    }
  }  
-        
+ 
+ #a=proc.time() - ptm
+ #print(a[3]/as.numeric(CompLikelihood$iterations))
       ########################################################################################   
       ########################################################################################
     # check the optimisation outcome
@@ -625,6 +637,7 @@ coords=cbind(coordx,coordy)
         else
         CompLikelihood$convergence <- "Optimization may have failed"
         if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        CompLikelihood$counts=as.numeric(CompLikelihood$counts[1])
     }
         if(optimizer=='nmk'||optimizer=='nmkb'){
         CompLikelihood$value = -CompLikelihood$value
@@ -633,6 +646,7 @@ coords=cbind(coordx,coordy)
         CompLikelihood$convergence <- 'Successful'
         else CompLikelihood$convergence <- "Optimization may have failed"
         if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        CompLikelihood$counts=as.numeric(CompLikelihood$feval)
     }
       if(optimizer=='ucminf'){
         CompLikelihood$value = -CompLikelihood$value
@@ -657,6 +671,7 @@ coords=cbind(coordx,coordy)
         else
         CompLikelihood$convergence <- "Optimization may have failed"
         if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        CompLikelihood$counts=as.numeric(CompLikelihood$counts[1])
     }
 
      if(optimizer=='nlm'){
@@ -671,6 +686,7 @@ coords=cbind(coordx,coordy)
         else
         CompLikelihood$convergence <- "Optimization may have failed"
         if(CompLikelihood$value>= 1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        CompLikelihood$counts=as.numeric(CompLikelihood$iterations)
     }
 
     if(optimizer=='nlminb'||optimizer=='multinlminb'){
@@ -680,6 +696,7 @@ coords=cbind(coordx,coordy)
         if(CompLikelihood$convergence == 0) { CompLikelihood$convergence <- 'Successful' }
         else {CompLikelihood$convergence <- "Optimization may have failed" }
         if(CompLikelihood$objective>= 1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        CompLikelihood$counts=as.numeric(CompLikelihood$iterations)
     }
     if(optimizer=='optimize'){
     param<-CompLikelihood$minimum
@@ -688,6 +705,7 @@ coords=cbind(coordx,coordy)
     maxfun <- -CompLikelihood$objective
     CompLikelihood$value <- maxfun
     CompLikelihood$convergence <- 'Successful'
+       CompLikelihood$counts=NULL
     }
   } ##### end if !onlyvar
     else {

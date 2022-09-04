@@ -14,7 +14,7 @@ importFrom("utils", "head")
 importFrom("plotrix", "draw.circle")
 importFrom("lamW","lambertW0")
 importFrom("GpGp","fast_Gp_sim")
-import("GPvecchia", "fields", "mapproj", "plot3D", "shape")
+import("GPvecchia", "fields", "mapproj","shape","codetools")
 
 
 

@@ -54,8 +54,7 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
                          type, varest, vartype, weighted, winconst, winstp,winconst_t, winstp_t, copula,X,memdist,nosym)#32
-
-
+    
         ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
         if(sum(initparam$namesparam=='sill')==1)
         {
@@ -166,7 +165,9 @@ if(!is.null(anisopars)) {
                                    initparam$winconst_t,initparam$winstp_t,initparam$ns,
                                    unname(initparam$X),sensitivity,MM,aniso)
     if(memdist)
-        fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
+        {
+      
+      fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
                                    coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
                                    initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
                                    initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
@@ -175,7 +176,7 @@ if(!is.null(anisopars)) {
                                    initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,varest,initparam$vartype,initparam$weighted,initparam$winconst,initparam$winstp,#33
                                    initparam$winconst_t,initparam$winstp_t,initparam$ns,
-                                   unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)
+                                   unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)}
       }
 
  if(likelihood=='Marginal'&&type=="Independence")
@@ -225,7 +226,16 @@ if(aniso) anisopars=as.list(c(fitted$par,ff)[namesaniso])
 
 if(is.null(unlist(ff))) ff=NULL
 
-if(likelihood!="Full") {if(is.null(neighb)&is.numeric(maxdist))  fitted$value=2*fitted$value}  #!!ojo
+#!!ojo this is the case maxdist and neighb =NULL
+# distances are computed in C i=1 j>i
+# for comparson we consider this code
+if(likelihood!="Full") {if(is.null(neighb)&&is.numeric(maxdist)&&likelihood=="Marginal")
+                                                    { 
+                                                     fitted$value=2*fitted$value;
+                                                     initparam$numpairs=2*initparam$numpairs
+                                                    } 
+                       }
+
     ### Set the output object:
     GeoFit <- list(      anisopars=anisopars,
                          bivariate=initparam$bivariate,

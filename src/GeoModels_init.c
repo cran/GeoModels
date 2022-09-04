@@ -605,7 +605,7 @@ extern void Comp_Cond_Kumaraswamy2CCop2mem(int *cormod, double *data1,double *da
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                     double *nuis, int *local,int *GPU);
 
-/********************** spatial anisotropic +************************************/
+/********************** spatial anisotropic  marginal************************************/
 extern void Comp_Pair_Gauss2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                double *nuis, int *local,int *GPU);
@@ -627,9 +627,6 @@ extern void Comp_Pair_Gamma2mem_aniso(int *cormod, double *coord1,double *coord2
 extern void Comp_Pair_Weibull2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                  double *nuis, int *local,int *GPU);
-
-
-
 extern void Comp_Pair_Kumaraswamy2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                      double *nuis, int *local,int *GPU);
@@ -757,7 +754,110 @@ extern void Comp_Pair_Kumaraswamy2CCop2mem_aniso(int *cormod, double *coord1,dou
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                           double *nuis, int *local,int *GPU);
 
-
+/********************** spatial anisotropic conditional ************************************/
+extern void Comp_Cond_Gauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Tukeyhh2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_SkewGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_T2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_T2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_SkewT2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_Tukeygh2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_SinhGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Weibull2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_LogGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Beta2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Kumaraswamy2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Kumaraswamy22mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_Pois2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomNNGauss_misp2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Pois2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomLogi2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomNNGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomNNLogi2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomnegGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomnegLogi2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_TWOPIECETukeyh2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_TWOPIECET2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_TWOPIECEGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_TWOPIECEBIMODAL2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_BinomnegGaussZINB2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_PoisZIP2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Gauss_misp_PoisZIP2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_LogLogistic2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+extern void Comp_Cond_Logistic2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
+/*********************************************************************************************/
 extern void CorrelationMat_st_dis_tap(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
                                int *ns, int *NS, int *n1,int *n2, double *mu1,double *mu2,int  *model);
 
@@ -989,7 +1089,6 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Beta2CCop2mem",         (DL_FUNC) &Comp_Cond_Beta2CCop2mem,         12},//93
     
     /********************** spatial anisotropic +************************************/
-    
     {"Comp_Pair_Gauss2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss2mem_aniso,         14},
     {"Comp_Diff_Gauss2mem_aniso",         (DL_FUNC) &Comp_Diff_Gauss2mem_aniso,         14},
     {"Comp_Pair_WrapGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_WrapGauss2mem_aniso,         14},
@@ -1037,6 +1136,36 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Beta2CCop2mem_aniso",         (DL_FUNC) &Comp_Pair_Beta2CCop2mem_aniso,         14},
     {"Comp_Pair_KumaraswamyCCop2mem_aniso",         (DL_FUNC) &Comp_Pair_KumaraswamyCCop2mem_aniso,         14},
     {"Comp_Pair_Kumaraswamy2CCop2mem_aniso",         (DL_FUNC) &Comp_Pair_Kumaraswamy2CCop2mem_aniso,         14},
+    {"Comp_Cond_Gauss2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss2mem_aniso,         14},
+    {"Comp_Cond_Tukeyhh2mem_aniso",         (DL_FUNC) &Comp_Cond_Tukeyhh2mem_aniso,         14},
+    {"Comp_Cond_SkewGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_SkewGauss2mem_aniso,         14},
+    {"Comp_Cond_T2mem_aniso",         (DL_FUNC) &Comp_Cond_T2mem_aniso,         14},
+    {"Comp_Cond_Gauss_misp_T2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_T2mem_aniso,         14},
+    {"Comp_Cond_Gauss_misp_SkewT2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_SkewT2mem_aniso,         14},
+    {"Comp_Cond_SinhGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_SinhGauss2mem_aniso,         14},
+    {"Comp_Cond_Gamma2mem_aniso",         (DL_FUNC) & Comp_Cond_Gamma2mem_aniso,         14},
+    {"Comp_Cond_Weibull2mem_aniso",         (DL_FUNC) &Comp_Cond_Weibull2mem_aniso,         14},
+    {"Comp_Cond_LogGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_LogGauss2mem_aniso,         14},
+    {"Comp_Cond_Beta2mem_aniso",         (DL_FUNC) &Comp_Cond_Beta2mem_aniso,         14},
+    {"Comp_Cond_Kumaraswamy2mem_aniso",         (DL_FUNC) &Comp_Cond_Kumaraswamy2mem_aniso,         14},
+    {"Comp_Cond_Gauss_misp_Pois2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_Pois2mem_aniso,         14},
+    {"Comp_Cond_BinomNNGauss_misp2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomNNGauss_misp2mem_aniso,         14},
+    {"Comp_Cond_Gauss_misp_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisGamma2mem_aniso,         14},
+    {"Comp_Cond_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Cond_PoisGamma2mem_aniso,         14},
+    {"Comp_Cond_Pois2mem_aniso",         (DL_FUNC) &Comp_Cond_Pois2mem_aniso,         14},
+    {"Comp_Cond_BinomGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomGauss2mem_aniso,         14},
+    {"Comp_Cond_BinomLogi2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomLogi2mem_aniso,         14},
+    {"Comp_Cond_BinomNNGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomNNGauss2mem_aniso,         14},
+    {"Comp_Cond_BinomNNLogi2mem_aniso",         (DL_FUNC) & Comp_Cond_BinomNNLogi2mem_aniso,         14},
+    {"Comp_Cond_BinomnegGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomnegGauss2mem_aniso,         14},
+    {"Comp_Cond_TWOPIECETukeyh2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECETukeyh2mem_aniso,         14},
+    {"Comp_Cond_TWOPIECET2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECET2mem_aniso,         14},
+    {"Comp_Cond_TWOPIECEGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECEGauss2mem_aniso,         14},
+    {"Comp_Cond_TWOPIECEBIMODAL2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECEBIMODAL2mem_aniso,         14},
+    {"Comp_Cond_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomnegGaussZINB2mem_aniso,         14},
+    {"Comp_Cond_PoisZIP2mem_aniso",         (DL_FUNC) &Comp_Cond_PoisZIP2mem_aniso,         14},
+    {"Comp_Cond_LogLogistic2mem_aniso",         (DL_FUNC) &Comp_Cond_LogLogistic2mem_aniso,         14},
+    {"Comp_Cond_Logistic2mem_aniso",         (DL_FUNC) &Comp_Cond_Logistic2mem_aniso,         14},
     {"Comp_Pair_Gauss_biv2mem",         (DL_FUNC) &Comp_Pair_Gauss_biv2mem,         12},
     {NULL, NULL, 0}
 };
