@@ -241,10 +241,6 @@ GeoCovariogram(fit,vario=vario,show.vario=TRUE)
 # Plot of covariance, variogram and spatio and temporal profiles:
 GeoCovariogram(fit,vario=vario,fix.lagt=1,fix.lags=1,show.vario=TRUE,pch=20)
 
-
-
-
-
 }
 
 \keyword{Composite}

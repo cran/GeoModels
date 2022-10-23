@@ -30,8 +30,8 @@ extern void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordt,i
                          int *npair,double *radius,double *srange, double *sep,int *st, int *times,double *trange,
                          int *tap,int *tapmodel,int *tp,int *weighted, int *colidx,int *rowidx,
                      int *ns, int *NS, int *dyn);
-extern void DeleteGlobalVar();
-extern void DeleteGlobalVar2();
+extern void DeleteGlobalVar(void);
+extern void DeleteGlobalVar2(void);
 extern void GodambeMat(double *betas,int *biv,double *coordx, double *coordy, double *coordt, int *cormod, double *data, int *dst,
                        double *eps,int *flagcor, int *flagnuis, int *grid, int *like, double *mean,int *model,double *NN, int *nbetas,
                        int *npar, int *nparc,int *nparcT, double *parcor, double *nuis, double *score,

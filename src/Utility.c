@@ -1054,7 +1054,7 @@ if(isbiv[0]) {
      }
 }
 /****************************************************************/
-void DeleteGlobalVar()
+void DeleteGlobalVar(void)
 {
   int i=0;
   // Delete all the global variables:
@@ -1141,7 +1141,7 @@ else{
 
 /*#######################################################################*/
 
-void DeleteGlobalVar2()
+void DeleteGlobalVar2(void)
 {
   Free(ncoord);  Free(ntime);
   Free(maxdist);Free(maxtime);

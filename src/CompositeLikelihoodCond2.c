@@ -19,6 +19,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                        if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                       bl=log_biv_Norm((1-nugget)*corr,data1[i],data2[i],mean1[i],mean2[i],sill,0);
                       l2= dnorm(data2[i], mean2[i],sqrt(sill),1);
+                     // Rprintf("%f %f %f %f %f %f \n",corr,lags[i],data1[i],data2[i],mean1[i],mean2[i]);
                       //  *res+= (2*bl-l1-l2)*weights;
                        *res+= (bl-l2)*weights;
                     }}
@@ -65,10 +66,11 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
              
 
                 corr=CorFct(cormod,lags[i],0,par,0,0);
-                l2=one_log_tukeyhh(data2[i],mean2[i],sill,h1,h2);
+              
                if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-               bl=log(biv_tukey_hh((1-nugget)*corr,data1[i],data2[i],mean1[i],mean2[i],sill,h1,h2))-l2;
-                             *res+= weights*bl;
+               bl=log(biv_tukey_hh((1-nugget)*corr,data1[i],data2[i],mean1[i],mean2[i],sill,h1,h2));
+               l2=one_log_tukeyhh(data2[i],mean2[i],sill,h1,h2);
+                             *res+= (bl-l2)*weights;
                //   Rprintf("%d %d\n",i,npairs[0]);
                 }}
     // Rprintf("%f--%d \n",*res,npairs[0]);

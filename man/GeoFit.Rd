@@ -679,45 +679,5 @@ fit <- GeoFit(data=data,coordx=coords,coordt=time,
                      start=start,fixed=fixed)
 print(fit)
 
-
-###############################################################
-######### Examples of  spatial bivariate RFs ###########
-###############################################################
-
-
-################################################################
-###
-### Example 7. Maximum pairwise  likelihood fitting of a
-### bivariate Gaussian RF with separable Bivariate  matern 
-### (cross) correlation model 
-###
-###############################################################
-
-# Define the spatial-coordinates of the points:
-set.seed(8)
-x <- runif(200, 0, 1)
-y <- runif(200, 0, 1)
-coords=cbind(x,y)
-# parameters
-param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,
-           nugget_1=0,nugget_2=0,pcol=0.2)
-
-# Simulation of a spatial bivariate Gaussian RF:
-data <- GeoSim(coordx=coords, corrmodel="Bi_Matern_sep", 
-              param=param)$data
-
-# selecting fixed and estimated parameters
-fixed=list(nugget_1=0,nugget_2=0,smooth=0.5)
-start=list(mean_1=0,mean_2=0,sill_1=var(data[1,]),sill_2=var(data[2,]),
-           scale=0.1,pcol=cor(data[1,],data[2,]))
-
-
-# Maximum marginal pairwise likelihood
-fitcl<- GeoFit(data=data, coordx=coords, corrmodel="Bi_Matern_sep",
-                     likelihood="Marginal",type="Pairwise",
-                     optimizer="BFGS" , start=start,fixed=fixed,
-                     neighb=c(3,3,3))
-print(fitcl)
-
 }
 \keyword{Composite}

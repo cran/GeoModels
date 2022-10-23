@@ -952,6 +952,7 @@ CorrelationPar <- function(corrmodel)
 NuisParam <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
 {
   param <- NULL
+if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
  #if((!bivariate) && ((num_betas==c(1,1)))) num_betas=1 
  if(!bivariate&all(num_betas==c(1,1))) num_betas=1
   ############################################################# 
@@ -993,8 +994,7 @@ if((model %in% c('Beta','Kumaraswamy'))) {
       return(param)}     
   # Skew Gaussian univariate random field:
    if((model %in% c('SkewGaussian','SkewGauss','TwoPieceGaussian','TwoPieceGauss',
-     'Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
-     'BinomialNeg_TwoPieceGaussian','BinomialNeg_TwoPieceGauss'))  ){
+     'Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss','BinomialNeg_TwoPieceGaussian','BinomialNeg_TwoPieceGauss'))){
       param <- c(mm, 'nugget', 'sill','skew')
       if(!is.null(copula))if(copula=="Clayton") param=c(param,'nu')
       return(param)}
@@ -1011,7 +1011,7 @@ if((model %in% c('Beta','Kumaraswamy'))) {
     # T univariate random field:
   if((model %in% c('StudentT','Gaussian_misp_StudentT')) ){
       param <- c(mm, 'df','nugget', 'sill')
-      if(!is.null(copula))if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
       return(param)}  
      if( (model %in% c('Tukeyh','tukeyh'))){
       param <- c(mm, 'nugget', 'sill','tail')

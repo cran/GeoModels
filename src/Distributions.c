@@ -181,8 +181,7 @@ double Poch(int q,int n)
 
 
 
-double hyperg(a, b, x)
-double a, b, x;
+double hyperg(double a, double b, double x)
 {
     double asum, psum, acanc, pcanc, temp;
     double alpha=(b-a-1)/x;    double aux1,aux2,aux3,res=0.0;
@@ -1247,8 +1246,7 @@ double lgam1p(double x)
 
 
 
-double zeta(x, q)
-double x, q;
+double zeta(double x, double q)
 {
     int i;
     double a, b, k, s, t, w;
@@ -2264,7 +2262,7 @@ double cdf_norm2(double lim1,double lim2,double a11,double a12, double a22)
 }
 
 
-// compute the bivariate normal cdf for the bernoulli RF:
+
 // compute the bivariate normal cdf for the bernoulli RF:
 double pbnorm(int *cormod, double h, double u, double mean1, double mean2, 
   double nugget, double var,double *par, double thr)
@@ -4631,28 +4629,18 @@ switch(model) // Correlation functions are in alphabetical order
    break;
        }
 
-/*******************************************/
-
+/******************copula gaussiana*************************/
 if(type_cop==1)  { dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);}
-                
+/******************copula gaussiana*************************/             
 if(type_cop==2) 
 {
     double nu=2;
-
     if(model==50||model==42) nu=nuis[5];   // for beta2 regression
-
-   // Rprintf("%f %f %f %f %f %f \n",nuis[0],nuis[1],nuis[2],nuis[3],nuis[4],nuis[5]);
-    // ojo 
     dens= biv_unif_CopulaClayton(a1,a2,rho1,nu)+ log(g1)+log(g2);
 }
 
-
-
 if(cond)  {
-
     dens=dens-log(g2);}
-   
-
 return(dens);
 }
 

@@ -635,7 +635,6 @@ if(model %in% c("Beta","Kumaraswamy","Kumaraswamy2"))   {
     while(i<=round(param$shape1))  {sim1=cbind(sim1,dd[,,i]^2);i=i+1}
     while(i<=(round(param$shape1)+round(param$shape2)))  {sim2=cbind(sim2,dd[,,i]^2);i=i+1}
     aa=rowSums(sim1)
-    #sim=aa/(aa+rowSums(sim2))
    sim=param$min + (param$max-param$min)*aa/(aa+rowSums(sim2))
     }
      if(model=="Kumaraswamy"||model=="Kumaraswamy2")
