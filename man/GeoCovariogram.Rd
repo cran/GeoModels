@@ -82,7 +82,7 @@ library(scatterplot3d)
 ################################################################
 ###
 ### Example 1. Plot of fitted covariance and fitted 
-### and empirical semivariograms from a  Gaussian RF 
+### and empirical semivariogram from a  Gaussian RF 
 ### with Matern correlation. 
 ###
 ###############################################################
@@ -124,7 +124,7 @@ GeoCovariogram(fit, show.cov=TRUE,show.vario=TRUE, vario=vario,pch=20)
 ################################################################
 ###
 ### Example 2. Plot of fitted covariance and fitted 
-### and empirical semivariograms from a  Binomial  
+### and empirical semivariogram from a  Binomial  
 ###  RF with exponential correlation. 
 ###
 ###############################################################
@@ -164,7 +164,7 @@ GeoCovariogram(fit, show.cov=TRUE,show.vario=TRUE, vario=vario,pch=20)
 ################################################################
 ###
 ### Example 3. Plot of fitted covariance and fitted 
-### and empirical semivariograms from a  Weibull  RF
+### and empirical semivariogram from a  Weibull  RF
 ###   with Wend0 correlation. 
 ###
 ###############################################################
@@ -208,7 +208,7 @@ GeoCovariogram(fit, show.vario=TRUE, vario=vario,pch=20)
 
 ################################################################
 ###
-### Example 4. Plot of  fitted  and empirical semivariograms
+### Example 4. Plot of  fitted  and empirical semivariogram
 ### from a space time Gaussian random fields  
 ### with double exponential correlation. 
 ###

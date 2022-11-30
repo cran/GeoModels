@@ -14,7 +14,7 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
 {
     call <- match.call()
 
-  
+    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
      { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
 

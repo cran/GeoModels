@@ -128,6 +128,7 @@ forGaussparam<-function(model,param,bivariate)
 ####################################################################
 
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
+    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
     model=gsub("[[:blank:]]", "",model)
     distance=gsub("[[:blank:]]", "",distance)

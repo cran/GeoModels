@@ -514,7 +514,7 @@ double cond_exp_bin(int *cormod,double data_i,double data_j,double lags_i,double
 
 
 double biv_cop(double rho,int type_cop,int cond,
-             double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN);
+             double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2);
 
 double marg_binom(int n,double x,double p);
 

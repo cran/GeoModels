@@ -48,8 +48,8 @@ q_e=quantile(dd,probabilities)
 q_e1=quantile(dd,probabilities1)
 #######################################
 #######################################
-if(!is.null(copula)){
-if(copula %in% c("Gaussian","Clayton")){
+#if(!is.null(copula)){
+#if(copula %in% c("Gaussian","Clayton")){
 
 #######################################  OK
 if(model %in% c("Beta2")){
@@ -72,10 +72,8 @@ q_t1=pmin+(pmax-pmin)*(1-(1-(probabilities1)^(sh))^(shape1))
 plot(q_t,q_e, main ="Kumaraswamy qq-plot",...)
  }
 ####################################### 
-
-}
-}
-else{    ### non copula models
+#}
+#}else{    ### non copula models
 if(model %in% c("Gaussian",                                           
               "Gaussian_misp_Binomial",
               "Gaussian_misp_Poisson","Gaussian_misp_BinomialNeg")) {
@@ -306,7 +304,7 @@ q_t1 =MM+sqrt(VV)*qtptukey(probabilities1,skew,tail)
 plot(q_t,q_e,main="Two-Piece Tukey-h qq-plot",...)
 }
 #######
-}
+#}
 ########################################
 #aa=lm(q_e~1+q_t)
 #abline(as.numeric(aa$coefficients[1]),as.numeric(aa$coefficients[2]))
@@ -378,9 +376,9 @@ if(is.list(fit$coordx_dyn)) dd=unlist(fit$data)
 else dd=c(t(fit$data))
 
 
-if(!is.null(copula)){
+#if(!is.null(copula)){
 #################################
-if(copula %in% c("Gaussian","Clayton")){
+#if(copula %in% c("Gaussian","Clayton")){
 
 if(model %in% c("Beta2")){
 mm=1/(1+exp(-MM))
@@ -391,9 +389,7 @@ ds=dbeta((ll-pmin)/(pmax-pmin),shape1=mm*sh,shape2=(1-mm)*sh)/(pmax-pmin)
 if(!add) hist(dd,freq=F,xlim=c(pmin,pmax),xlab="",main="Beta Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...)
 }
-
-###########################################################  OK
-
+###########################################################  
 if(model %in% c("Kumaraswamy2")){
 sh=as.numeric(pp["shape"])
 pmin=as.numeric(pp["min"]);pmax=as.numeric(pp["max"]);
@@ -409,9 +405,8 @@ ds=dkuma(ll,MM,sh,pmin,pmax)
 if(!add) hist(dd,freq=F,xlim=c(pmin,pmax),xlab="",main="Kumaraswamy Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...)
 }
-}
-}
-else{
+#}
+#}else{
 
 #######################################  OK
 if(model%in%c("Gaussian"))
@@ -546,8 +541,6 @@ ds=qth((ll-MM)/sqrt(VV),tail,VV)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Tukey-h Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...) 
 }
-
-
 ####################################### OK
 if(model %in% c("Tukeyh2"))
 {
@@ -558,7 +551,6 @@ inverse_lamb=function(x,tail)
   value = sqrt(VGAM::lambertW(tail*x*x)/tail);
    return(sign(x)*value);
 }
-
 qtpTukeyh22= function(x,tail1,tail2,VV){
   aa=1:length(x)
   sel1=I(x>=0)*aa
@@ -579,8 +571,6 @@ ds=qtpTukeyh22((ll-MM)/sqrt(VV),tail1,tail2,VV)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Tukey-hh Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...) 
 }
-
-
 #######################################   OK
 if(model %in% c("TwoPieceGaussian"))
 {
@@ -600,8 +590,6 @@ ds=qtpGaussian1((ll-MM)/sqrt(VV),skew,VV)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Two-Piece Gaussian Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...) 
 }
-
-
 ####################################### OK
 if(model %in% c("TwoPieceStudentT"))
 {
@@ -622,8 +610,6 @@ ds=qtpt((ll-MM)/sqrt(VV),skew,df,VV)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Two-Piece Student Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...)
 }
-
-
 ####################################### OK
 if(model %in% c("TwoPieceTukeyh"))
 {
@@ -657,7 +643,6 @@ ds=dTTukeyh((ll-MM)/sqrt(VV),tail,skew,VV)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Two-Piece Tukey-h Histogram",ylim=ylim,breaks=breaks)
 lines(ll,ds,...)
 }
-
 #######################################  OK
 if(model %in% c("TwoPieceBimodal"))
 {
@@ -682,9 +667,6 @@ if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="Two-Piece Bimodal 
 lines(ll,ds,...)
 }
 
-
-
-
 ###############################################  OK
 if(model %in% c("BinomialNeg")) {
 ll=as.numeric(table(dd)/length(dd))
@@ -694,8 +676,6 @@ if(!add) plot(y,ll,type = "h", col = "blue",main="Binomial Negative Histogram", 
 points(y,ds,type = "p", col = "black", lwd = 3)
 lines(y,ds)
 }
-
-
 ###############################################  OK
 if(model %in% c("Binomial")) {
 ll=as.numeric(table(dd)/length(dd))
@@ -724,7 +704,7 @@ points(y,ds,type = "p", col = "black", lwd = 3)
 lines(y,ds)
 }
 
-}
+#}
 
 }
  

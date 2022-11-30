@@ -727,7 +727,8 @@ return(varcov)
     spacetime<-CheckST(CkCorrModel(corrmodel))
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
     space=!(spacetime||bivariate)
-    if(is.null(CkCorrModel (corrmodel))) stop("The name of the coorelation model  is not correct\n")
+    if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
+    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     ## setting zero mean and nugget if no mean or nugget is fixed
     if(!bivariate){
     if(is.null(param$mean)) param$mean<-0

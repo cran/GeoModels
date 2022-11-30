@@ -13,7 +13,7 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
                          winconst_t=NULL, winstp_t=NULL,X=NULL,nosym=FALSE)
 {
     call <- match.call()
-
+    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
      { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
 
@@ -154,7 +154,7 @@ if(!is.null(anisopars)) {
         likelihood=='Marginal_2')&&type=="Pairwise"){
 
 
-    if(!memdist)
+    if(!memdist)     ## old style
           fitted <- CompLik(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
                                    initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
                                    initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
@@ -166,7 +166,6 @@ if(!is.null(anisopars)) {
                                    unname(initparam$X),sensitivity,MM,aniso)
     if(memdist)
         {
-      
       fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
                                    coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
                                    initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
@@ -178,7 +177,6 @@ if(!is.null(anisopars)) {
                                    initparam$winconst_t,initparam$winstp_t,initparam$ns,
                                    unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)}
       }
-
  if(likelihood=='Marginal'&&type=="Independence")
    {
 

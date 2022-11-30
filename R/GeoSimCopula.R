@@ -114,7 +114,7 @@ if(model=="Logistic")
          {
          simcop=qlogis(unif,location=mm,scale=sqrt(as.numeric(param$sill)))
          }
-if(model=="Studendt") {
+if(model=="StudentT") {
 vv=as.numeric(param$sill)
 dd=as.numeric(param$df)
 simcop=mm+sqrt(vv)*qt(unif,df=round(1/dd))
