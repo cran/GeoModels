@@ -4640,37 +4640,38 @@ switch(model) // Correlation functions are in alphabetical order
       rho1=(1-nuis[0])*rho; 
       s1=exp(mu1);s2=exp(mu2);
       b2=dpois(z2,s2,0);
-      a1=qnorm(  ppois(z1,  s1,1,0),0,1,1,0);
-      a2=qnorm(  ppois(z1-1,s1,1,0),0,1,1,0);
-      g1=qnorm(  ppois(z2,  s2,1,0),0,1,1,0);      
-      g2=qnorm(  ppois(z2-1,s2,1,0),0,1,1,0);  
-      if(z1==0) a2=-99;
-      if(z2==0) g2=-99;
+      a1=qnorm(ppois(z1,  s1,1,0),0,1,1,0);
+      a2=qnorm(ppois(z1-1,s1,1,0),0,1,1,0);
+      g1=qnorm(ppois(z2,  s2,1,0),0,1,1,0);      
+      g2=qnorm(ppois(z2-1,s2,1,0),0,1,1,0);  
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
    break;
      case 11: // binomial     /// 
       rho1=(1-nuis[0])*rho;
       s1=pnorm(mu1,0,1,1,0);
       s2=pnorm(mu2,0,1,1,0);
       b2=dbinom(z2,NN2,s2,0);
-      a1=qnorm(  pbinom(z1,  NN1,s1,1,0),0,1,1,0);
-      a2=qnorm(  pbinom(z1-1,NN1,s1,1,0),0,1,1,0);
-      g1=qnorm(  pbinom(z2,  NN2,s2,1,0),0,1,1,0);      
-      g2=qnorm(  pbinom(z2-1,NN2,s2,1,0),0,1,1,0);
-
-      if(z1==NN1) a1=999;if(z1==0) a2=-999;  //
-      if(z2==NN2) g1=999; if(z2==0) g2=-999;  //
+      a1=qnorm(pbinom(z1,  NN1,s1,1,0),0,1,1,0);
+      a2=qnorm(pbinom(z1-1,NN1,s1,1,0),0,1,1,0);
+      g1=qnorm(pbinom(z2,  NN2,s2,1,0),0,1,1,0);      
+      g2=qnorm(pbinom(z2-1,NN2,s2,1,0),0,1,1,0);
+      if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
+      if(z1==0){a2=-99;}  
+      if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
+      if(z2==0){g2=-99;}  
    break;
        case 16: // binomial neg     /// ok 
       rho1=(1-nuis[0])*rho;
       s1=pnorm(mu1,0,1,1,0);
       s2=pnorm(mu2,0,1,1,0);
       b2=dnbinom(z2,NN2,s2,0);
-      a1=qnorm(  pnbinom(z1,  NN1,s1,1,0),0,1,1,0);
-      a2=qnorm(  pnbinom(z1-1,NN1,s1,1,0),0,1,1,0);
-      g1=qnorm(  pnbinom(z2,  NN2,s2,1,0),0,1,1,0);      
-      g2=qnorm(  pnbinom(z2-1,NN2,s2,1,0),0,1,1,0);
-      if(z1==0) a2=-99;
-      if(z2==0) g2=-99;
+      a1=qnorm(pnbinom(z1,  NN1,s1,1,0),0,1,1,0);
+      a2=qnorm(pnbinom(z1-1,NN1,s1,1,0),0,1,1,0);
+      g1=qnorm(pnbinom(z2,  NN2,s2,1,0),0,1,1,0);      
+      g2=qnorm(pnbinom(z2-1,NN2,s2,1,0),0,1,1,0);
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
    break;
 
    case 28: //Beta

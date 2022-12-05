@@ -1,4 +1,4 @@
-2bbcd9b9d2260f6e59aa1d2b4363609a *DESCRIPTION
+904167b18001fdf7463748c43f9b2067 *DESCRIPTION
 8018fa770940bd431253d42793da3ee7 *NAMESPACE
 59f64f55dd9511fa38919469bde98ad8 *R/GeoAniso.R
 ac5abee38c5ad278143c96b47b1e95e9 *R/GeoCV.R
@@ -93,11 +93,11 @@ bb8dd22c70f58239824169fd6b745961 *man/plot.GeoVariogram.Rd
 56eeabb2ec3223bc18e4e231e6af284f *man/winds.coords.Rd
 212cbbea4e2863d6dbb515537669a5bd *src/CompositeLikelihood2.c
 40f5a61500ca74f19c88b47f8ed6e359 *src/CompositeLikelihood2_ani.c
-33f08ab37cf2139a2414f19fa617506f *src/CompositeLikelihoodCond2.c
+76ac6a33964e85a981e517cbe1cf332d *src/CompositeLikelihoodCond2.c
 de6f2d46782d04d9d22f6fef3ea4c4ca *src/CompositeLikelihoodCond2_ani.c
 4f35a0c1324bd1326662b5ccc805ebcb *src/CorrelationFunction.c
-19410c370eacb16bd6b84874938a0f3e *src/Distributions.c
-8fe213e9a11d3613a6943bc8d4733581 *src/GeoModels_init.c
+a6cebc5258716c6b5d09de3f760b2471 *src/Distributions.c
+e9a3fdafee9bbce2bf12fe3371c74a26 *src/GeoModels_init.c
 43ad8d719d830e70f57dc2d7d3847938 *src/Godambe.c
 abe401929aa179376125865403e4cfe4 *src/Gradient.c
 b99f7c743ef54a0af15ebe8c2cd78e8b *src/HypergeometricFunctions.f

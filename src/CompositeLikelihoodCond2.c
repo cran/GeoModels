@@ -607,15 +607,12 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                  ai=mean1[i];aj=mean2[i];
                  corr=CorFct(cormod,lags[i],0,par,0,0);
     p11=pbnorm22(ai,aj,(1-nugget)*corr);
-    //Rprintf("p11: %f\n",p11);
                 p1=pnorm(ai,0,1,1,0);
                 p2=pnorm(aj,0,1,1,0);
                 u=data1[i];v=data2[i];
                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                           uu=(int) u; vv=(int) v;
-                         // l1=dbinom(uu,NN[0],p1,1);
                           l2=dbinom(vv,NN[0],p2,1);
-                       // bl=2*log(biv_binom (NN[0],uu,vv,p1,p2,p11))-(l1+l2);
                         bl=log(biv_binom (NN[0],uu,vv,p1,p2,p11))-l2;
                     *res+= weights*bl;
                 }}

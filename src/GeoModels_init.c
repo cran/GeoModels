@@ -337,6 +337,9 @@ extern void Comp_Pair_Gauss_biv2mem(int *cormod, double *data1,double *data2,int
 extern void Comp_Pair_SkewGauss_biv2mem(int *cormod, double *data1,double *data2,int *NN,
     double *par, int *weigthed,double *res,double *mean1,double *mean2,
     double *nuis, int *local,int *GPU);
+extern void Comp_Pair_Gauss_misp_T_st2mem(int *cormod, double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
 extern void Comp_Pair_GaussCop2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU,int *type_cop, int *cond);
@@ -368,9 +371,6 @@ extern void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1,double *data
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU,int *type_cop, int *cond);
 extern void Comp_Pair_Kumaraswamy2Cop2mem(int *cormod, double *data1,double *data2,int *NN,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond);
-extern void Comp_Pair_Gauss_misp_T_st2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU,int *type_cop, int *cond);
 extern void Comp_Pair_PoisCop2mem(int *cormod, double *data1,double *data2,int *NN,
