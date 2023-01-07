@@ -131,7 +131,7 @@ if(!type_cop) { # not copula models
       }
 
 comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, 
-                          namescorr, namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso)
+                          namescorr, namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
       {
 
         names(param) <- namesparam
@@ -440,12 +440,13 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
 
 
 
- #print(fname)
+
 ##################
 if(!bivariate){
 if(is.null(MM)) lname="comploglik2"
 else            lname="comploglik2MM"
 }
+
 
 coords=cbind(coordx,coordy)
 

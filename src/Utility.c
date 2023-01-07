@@ -1106,10 +1106,8 @@ void SetGlobalVar2 (int *nsite, int *times,//2
 
     isst=(int *)R_Calloc(1,int);//is a spatio-temporal random field?
     isst[0]=st[0];
-
-
-
-   if(!isst[0]&&!isbiv[0]) {  /// spatial case
+/*########*/
+if(!isst[0]&&!isbiv[0]) {  /// spatial case
        lags=(double *)R_Calloc(npairs[0],   double);
         for (i=0;i<*npairs;i++) lags[i]=h[i];
     }
@@ -1123,6 +1121,7 @@ else{
  
     
  if(isbiv[0]) {  // spatial bivariate  case
+  
     lags_1=(double *)R_Calloc(npairs[0],   double);
     second_1 =(int *)R_Calloc(npairs[0],int);
      first_1= (int *)R_Calloc(npairs[0],int);
@@ -1133,7 +1132,7 @@ else{
         }
       }
    }
-      return;
+    return;
 }
 
 
@@ -1149,7 +1148,9 @@ void DeleteGlobalVar2(void)
   if(!isst[0]&&!isbiv[0]) { Free(lags);}
   else {
   if(isst[0]) {Free(lags);Free(lagt);}
-  if(isbiv[0]){free(lags_1);Free(first_1);Free(second_1);}
+  if(isbiv[0]){
+    
+    Free(lags_1);Free(first_1);Free(second_1);}
   }
   Free(isbiv);
   Free(isst);

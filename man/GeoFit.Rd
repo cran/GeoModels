@@ -10,7 +10,7 @@
 }
 \usage{
 GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
-      corrmodel,distance="Eucl",fixed=NULL,anisopars=NULL,
+      corrmodel=NULL,distance="Eucl",fixed=NULL,anisopars=NULL,
       est.aniso=c(FALSE,FALSE),GPU=NULL, grid=FALSE, likelihood='Marginal',
      local=c(1,1),  lower=NULL,maxdist=Inf,neighb=NULL,
       maxtime=Inf, memdist=TRUE,method="cholesky", 
@@ -460,20 +460,20 @@ param<-list(mean=mean,mean1=mean1,sill=sill,nugget=nugget,scale=scale,smooth=smo
 data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,X=X)$data
 
 
-# setting fixed and parameters to be estimated
-fixed<-list(nugget=nugget,smooth=smooth)
-start<-list(mean=mean,mean1=mean1,scale=scale,sill=sill)
+
 
 
 ################################################################
 ###
 ### Example 0. Maximum independence composite likelihood fitting of
-### a Gaussian RF
+### a Gaussian RF (no dependence parameters)
 ### 
 ###############################################################
-fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, 
-                    neighb=3,likelihood="Marginal",
-                    type="Independence", start=start,fixed=fixed,X=X)
+# setting starting parameters to be estimated
+start<-list(mean=mean,mean1=mean1,sill=sill)
+
+fit1 <- GeoFit(data=data,coordx=coords,likelihood="Marginal",
+                    type="Independence", start=start,X=X)
 print(fit1)
 
 
@@ -483,6 +483,10 @@ print(fit1)
 ### a Gaussian RF using BFGS
 ### 
 ###############################################################
+# setting fixed and starting parameters to be estimated
+fixed<-list(nugget=nugget,smooth=smooth)
+start<-list(mean=mean,mean1=mean1,scale=scale,sill=sill)
+
 fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, 
                     neighb=3,likelihood="Conditional",optimizer="BFGS",
                     type="Pairwise", start=start,fixed=fixed,X=X)
@@ -622,19 +626,29 @@ data <- GeoSim(coordx=coords, corrmodel=corrmodel, model="Binomial", n=10,X=X,
 
 
 ## estimating the marginal parameters using independence cl
-fixed <- list(nugget=nugget,power2=4,sill=1)
+fixed <- list(sill=1)
+start <- list(mean=mean,mean1=mean1,mean2=mean2)
+
+# Maximum conditional pairwise likelihood:
+fit <- GeoFit(data=data, coordx=coords,n=10, X=X, 
+           likelihood="Marginal",type="Independence"
+         ,model="Binomial", start=start, fixed=fixed)
+                  
+print(fit)
+## estimating marginal  and dependnce
+fixed <- list(nugget=0,power2=4,sill=1)
 start <- list(mean=mean,mean1=mean1,mean2=mean2,scale=0.2)
 
 # Maximum conditional pairwise likelihood:
 fit1 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=10, X=X, 
-                    likelihood="Conditional",type="Pairwise",  neighb=3
-         ,model="Binomial", start=start, fixed=fixed, optimizer="BFGS")
+          likelihood="Conditional",type="Pairwise",  neighb=3
+         ,model="Binomial", start=start, fixed=fixed)
                   
 print(fit1)
 
 
 ###############################################################
-######### Examples of spatio-temporal RFs ###########
+######### Examples of Gaussian spatio-temporal RFs ###########
 ###############################################################
 set.seed(52)
 # Define the temporal sequence:
@@ -678,6 +692,44 @@ fit <- GeoFit(data=data,coordx=coords,coordt=time,
                     likelihood="Marginal",type="Pairwise",
                      start=start,fixed=fixed)
 print(fit)
+
+
+
+###############################################################
+######### Examples of a bivariate Gaussian  RF ###########
+###############################################################
+
+################################################################
+### Example 7. Maximum pairwise  likelihood fitting of a
+### bivariate Gaussian RF with separable Bivariate  matern 
+### (cross) correlation model 
+###############################################################
+
+# Define the spatial-coordinates of the points:
+set.seed(89)
+x <- runif(200, 0, 1)
+y <- runif(200, 0, 1)
+coords=cbind(x,y)
+# parameters
+param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,
+           nugget_1=0,nugget_2=0,pcol=0.2)
+
+# Simulation of a spatial bivariate Gaussian RF:
+data <- GeoSim(coordx=coords, corrmodel="Bi_Matern_sep", 
+              param=param)$data
+
+# selecting fixed and estimated parameters
+fixed=list(mean_1=0,mean_2=0,nugget_1=0,nugget_2=0,smooth=0.5)
+start=list(sill_1=var(data[1,]),sill_2=var(data[2,]),
+           scale=0.1,pcol=cor(data[1,],data[2,]))
+
+
+# Maximum marginal pairwise likelihood
+fitcl<- GeoFit(data=data, coordx=coords, corrmodel="Bi_Matern_sep",
+                     likelihood="Marginal",type="Pairwise",
+                     optimizer="BFGS" , start=start,fixed=fixed,
+                     neighb=c(4,4,4))
+print(fitcl)
 
 }
 \keyword{Composite}

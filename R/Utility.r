@@ -63,6 +63,9 @@ CkCorrModel <- function(corrmodel)
                              Sinpower=18,sinpower=18,
                              Genwend=19,GenWend=19,
                              smoke=20,Smoke=20,
+                             Hypergeometric2=21,HyperGeometric2=21, hypergeometric2=21,
+                             Hypergeometric=22,HyperGeometric=22, hypergeometric=22,
+                             Hypergeometric_Matern=23,HyperGeometric_Matern=23, hypergeometric_Matern=23,
              # spatial-temporal non-separable models
                              gneiting=42,Gneiting=42,  #ok
                              iacocesare=44,Iacocesare=44, #ok
@@ -206,7 +209,7 @@ CkInput <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distanc
         if(!is.na(param['power'])) if(param['power'] <=0 || param['power'] > 2) return(FALSE)
         if(!is.na(param['power_s'])) if(param['power_s'] <=0 || param['power_s'] > 2) return(FALSE)
         if(!is.na(param['power_t'])) if(param['power_t'] <=0 || param['power_t'] > 2) return(FALSE)
-        if(!is.na(param['power1'])) if(param['power1'] <=0 || param['power1'] > 2) return(FALSE)
+       # if(!is.na(param['power1'])) if(param['power1'] <=0 || param['power1'] > 2) return(FALSE)
         if(!is.na(param['power2'])) if(param['power2'] <= 0) return(FALSE)
         if(!is.na(param['power2_1'])) if(param['power2_1'] <= 0) return(FALSE)
         if(!is.na(param['power2_12'])) if(param['power2_12'] <= 0) return(FALSE)
@@ -793,6 +796,14 @@ CorrelationPar <- function(corrmodel)
    if(corrmodel %in% c(8,5)) {
       param <- c('power1', 'power2','scale')
       return(param)}
+    # hypergeometric2
+     if(corrmodel %in% c(21)) {
+        param <- c('power1', 'power2','scale','smooth')
+        return(param)}
+        # hypergeometric2
+     if(corrmodel %in% c(22,23)) {
+        param <- c('power2','scale','smooth')
+        return(param)}  
     # Generalised wend correlation model abnd reparametrized version:
      if(corrmodel %in% c(19,6,7)) {
         param <- c('power2', 'scale','smooth')
@@ -1649,16 +1660,13 @@ if(space)   #  spatial case
   
   K=neighb
   x=cbind(coordx, coordy)
-  
-  #tt0 <- proc.time()
+
   sol=GeoNeighIndex(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius)
 #tt0 <- proc.time()-tt0;print(tt0[3])
   
  ###    deleting symmetric indexes with associate distances
  if(nosym){
-   
   aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-  
   sol$rowidx=c(aa$xy[,1])
   sol$colidx=c(aa$xy[,2])
   sol$lags=c(aa$d) }
@@ -1716,16 +1724,12 @@ if(bivariate)   # bivariate case
   K=neighb
   x=cbind(coordx, coordy)
   sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
-  
   ###    deleting symmetric indexes with associate distances
   if(nosym){
-    
   aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-  
   sol$rowidx=c(aa$xy[,1])
   sol$colidx=c(aa$xy[,2])
   sol$lags=c(aa$d)}
-
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
              #gb$first=sol$first
@@ -1734,7 +1738,7 @@ if(bivariate)   # bivariate case
              gb$numpairs=nn
 ## loading space time distances in memory   
   mmm=1
-if(weighted) { mmm=max(sol$lags) }
+if(weighted) { mmm=max(sol$lags)}
   
   
   ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(2),  

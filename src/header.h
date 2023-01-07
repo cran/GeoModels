@@ -554,6 +554,8 @@ double CorFunW0(double h,double scale,double power);
 double CorFunW1(double h,double scale,double power);
 double CorFunW2(double h,double scale,double power);
 double CorFunW_gen(double h, double power1, double smooth, double scale);
+double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale);
+double CorFunHyperg(double lag,double R_power,double smooth,double scale);
 double CorFunWend1(double lag,double scale);
 double CorFunWend2(double lag,double scale);
 double CorFunWend3(double lag,double scale);

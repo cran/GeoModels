@@ -3,7 +3,7 @@
 ####################################################
 
 
-GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,corrmodel, distance="Eucl",
+GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,corrmodel=NULL, distance="Eucl",
                          fixed=NULL,anisopars=NULL,est.aniso=c(FALSE,FALSE),GPU=NULL, grid=FALSE, likelihood='Marginal', local=c(1,1),
                          lower=NULL,maxdist=Inf,neighb=NULL,
                           maxtime=Inf, memdist=TRUE,method="cholesky", model='Gaussian',n=1, onlyvar=FALSE ,
@@ -13,6 +13,13 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
                          winconst_t=NULL, winstp_t=NULL,X=NULL,nosym=FALSE)
 {
     call <- match.call()
+
+    if(is.null(corrmodel)&& likelihood=="Marginal"&&type=="Independence") 
+    {
+        if(is.null(coordt)){corrmodel="Exponential";tlist=list(nugget=0,scale=1)}
+        else               {corrmodel="Exp_Exp";tlist=list(nugget=0,scale_s=1,scale_t=1)}
+        fixed=append(fixed,tlist)
+    }
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
      { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
@@ -207,6 +214,7 @@ if(!is.null(anisopars)) {
     if(is.null(dim(initparam$X)))  initparam$X=as.matrix(rep(1,dimat))
     # Delete the global variables:
 
+     
      
     if( !(likelihood=='Marginal'&&type=="Independence"))
     {             
