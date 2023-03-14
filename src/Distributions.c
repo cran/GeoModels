@@ -1319,20 +1319,8 @@ double zeta(double x, double q)
 done:
     return (s);
 }
-
-
-
-
-
 //************************************* END igam.c*****************************************
 
-
-
-
-
-
-
-/******************************************************************************/
 /******************************************************************************/
 /******************************************************************************/
 /* Wendland covariance */
@@ -4968,4 +4956,39 @@ double one_log_logistic(double z,double m, double sill)
   double k=exp((z-m)/sqrt(sill));
   res=log(k)-2*log(k+1)-0.5*log(sill);
   return(res);
+}
+
+
+
+double hypU_wrap(double a, double b, double x) {
+  double out;
+  int md; /* method code --- not returned */
+  int isfer = 0;
+
+    F77_CALL(chgu)(&a, &b, &x, &out, &md, &isfer);
+  if (out == 1e300) {
+      out = INFINITY;
+      Rprintf("\n chgu out == 1e300 %f\n", out);
+  }
+  if (isfer == 6) {
+    out = NAN;
+      Rprintf("\n chgu isfer == 6 %f\n", out);
+  } else if (isfer != 0) {
+    out = NAN;
+      Rprintf("\n chgu isfer != 0 %f\n", out);
+  }
+  return out;
+}
+
+void hyperg_U_e_call( double *a,  double *b,  double *x, double *val)
+{
+    *val = hypU_wrap(*a, *b, *x);
+}
+
+
+double kummer(double a,double b, double c)
+{
+    double res=0.0;
+    res=hypU_wrap(a,b,c);
+    return (res);
 }

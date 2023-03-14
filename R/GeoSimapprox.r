@@ -63,17 +63,18 @@ return(dims*dimt)
 
 
 #########################################################
-tbm2d<- function(coord, a0, nu0,mu,sill, L,model){
+tbm2d<- function(coord, a0, nu0, mu, sill, L, model, nugget){
   # Preparing parameters to use
   # =============================================
 
 
   #if(model == "Matern"){
+
     a_frecuency = a0
     nu_frecuency = nu0
      mu_frecuency = mu
   parametersg <- list("C" = 1, "a" = a_frecuency, "nu1" = nu_frecuency, "mu" =    mu_frecuency )
-  parameters <- list("C" = sill, "a" = a0 , "nu1" = nu0, "mu" =     mu_frecuency )
+  parameters <- list("C" = sill*(1-nugget), "a" = a0 , "nu1" = nu0, "mu" =  mu_frecuency )
   #}
   #if(model == "GenWend"){
   #   a_frecuency = a0
@@ -115,6 +116,7 @@ tbm2d<- function(coord, a0, nu0,mu,sill, L,model){
              matrix_out = as.double(rep(0, d*dim(coord)[1])),
              PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
   simu <- matrix(simu$matrix_out, m, 1)/sqrt(L)
+  simu = simu + rnorm(m, 0, sqrt(sill*nugget))
   return(simu)
 }
 
@@ -128,7 +130,7 @@ if(method=="TB")
    if(corrmodel=="GenWend") {model=1; mu=as.numeric(param['power2'])}
    
    simu=tbm2d(coords, as.numeric(param['scale']), as.numeric(param['smooth']), mu, as.numeric(param['sill']), 
-                                                       L=L,  model = model)
+                                                       L=L,  model = model, nugget = as.numeric(param['nugget']))
    simu=c(simu[,1])  
 }     
 ## Vecchia

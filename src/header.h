@@ -394,6 +394,8 @@ extern int *cdyn; // dynamic coords indicator
 //---------END GLOBAL VARIABLES-------------
 //void indx(double *ind, int *n);
 
+
+
 // fortran declaration for bivariate normal cdf:
 extern double F77_NAME(chfm)(double *xr,double *xi,double *ar, double *ai,
   double *br, double *bi,double *r, double *ri,int *len, int *lnchf,int *ip);
@@ -406,6 +408,12 @@ extern void mult_pmnorm( int *nvar , double *lower , double *upper , int *infin 
 extern void F77_NAME(sadmvn)( int* , double* , double*, int* , double* , int* , double* , double* , double* , double * , int*) ;
 
 extern double F77_NAME(mvndst)(int *N,double *lower, double *upper, int *infin, double *correl);
+
+
+extern void F77_NAME(chgu)(double *,double *,double *,double *, int *, int *);
+
+double hypU_wrap(double a, double b, double x);
+
 // Internal function declaration:
 // 1)
 /*----------------------------------------------------------------
@@ -556,6 +564,7 @@ double CorFunW2(double h,double scale,double power);
 double CorFunW_gen(double h, double power1, double smooth, double scale);
 double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale);
 double CorFunHyperg(double lag,double R_power,double smooth,double scale);
+double CorKummer(double lag,double R_power,double smooth,double scale);
 double CorFunWend1(double lag,double scale);
 double CorFunWend2(double lag,double scale);
 double CorFunWend3(double lag,double scale);
@@ -790,6 +799,7 @@ double d2lognorm(double x, double y, double sill,double nugget, double mux,doubl
 double dNnorm(int N,double **M, double *dat);
 
 double int_pt(double x, double df);
+double kummer(double a, double b,double c);
 
 double int_gen(double x,double mu, double alpha,double lag,double supp);
 double int_hyp(double x,double a, double b,double c,double z);

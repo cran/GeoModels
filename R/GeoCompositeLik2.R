@@ -770,22 +770,23 @@ if(!onlyvar){
           CompLikelihood$claic <- NULL;CompLikelihood$clbic <- NULL;
           CompLikelihood$convergence <- 'Successful'
           if(!bivariate) CompLikelihood$value = - comploglik2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed, fan=fname,
+                              data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
                              n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU)
           else CompLikelihood$value = -comploglik_biv2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                data1=data1,data2=data2, fixed=fixed, fan=fname,
+                data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
                              n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso)
 
           if(hessian) 
           {
                if(!bivariate)  
                 CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=param,method="Richardson",  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2,fixed=fixed,fan=fname,n=n,
+                              data1=data1,data2=data2,fixed=fixed,fan=fname,n=n,type_cop=type_cop,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
                if(bivariate)  
                CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=param,method="Richardson",colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                             data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
+                             data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
+                             namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
                              weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
                rownames(CompLikelihood$hessian)=namesparam
                colnames(CompLikelihood$hessian)=namesparam
@@ -805,14 +806,15 @@ if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=matrix(c(1,2,3,2),2,
 if( min(eigen( CompLikelihood$hessian )$values) <0)
 {
   CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=CompLikelihood$par,method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
+                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)}
 }
 
 if(bivariate)  
 CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=CompLikelihood$par,method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                          data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
+                          data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
+                          namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
                                weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
 }
 rownames(CompLikelihood$hessian)=namesparam

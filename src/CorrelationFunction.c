@@ -59,7 +59,14 @@ double CheckCor(int *cormod, double *par)
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
-       if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
+       //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
+            if(scale<=0 ||smooth<0) rho=-2;
+      break;
+      case 24: //kummer
+        R_power1=par[0];
+        scale=par[1];
+        smooth=par[2];
+       //if(scale<=0 ||  R_power1<0 ||smooth<0) rho=-2;
             if(scale<=0 ||smooth<0) rho=-2;
       break;
     case 21: // hyperg
@@ -564,6 +571,12 @@ case 23: // hyperg correlation 1 parameter with matern
         scale=par[1];
         smooth=par[2];
   rho=CorFunW_gen(h, R_power1, smooth, scale);
+        break;
+     case 24: // original   kummer
+        R_power1=par[0];
+        scale=par[1];
+        smooth=par[2];
+  rho=CorKummer(h, R_power1, smooth, scale);
         break;
     case 6: // Bevilacqua Generalised wend correlation function  "better"  parametrization
         R_power1=1/par[0];
@@ -1896,6 +1909,16 @@ double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,dou
 }
 
 
+/* kummer function*/
+double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
+{
+  double rho=0.0,x=0.0;
+    x=lag/scale;
+    if(x<1e-32) rho=1;
+    else
+    rho=(gammafn(smooth+R_power)/(gammafn(smooth)))*kummer(R_power,1-smooth,smooth*x*x);
+    return(rho);
+}    
 /* generalized wendland function*/
 double CorFunHyperg(double lag,double R_power,double smooth,double scale)  // mu alpha beta
 {
@@ -1928,7 +1951,7 @@ double CorFunHyperg(double lag,double R_power,double smooth,double scale)  // mu
     }  */
     if(x<=1)
          {
-             rho=(exp((2*lgammafn(R_power-d/2))-(lgammafn(2*R_power-smooth-d/2)+lgammafn(smooth-d/2)))
+             rho=(exp((lgammafn(R_power-d/2)+lgammafn(R_power-d/2))-(lgammafn(2*R_power-smooth-d/2)+lgammafn(smooth-d/2)))
          *R_pow(1-x*x,2*R_power-smooth-d/2-1)*hypergeo(R_power-smooth,R_power-smooth,2*R_power-smooth-d/2, 1-x*x));
       }
   else {rho=0;}

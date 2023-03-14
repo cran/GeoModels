@@ -21,6 +21,8 @@
 
 /********************** utility C calls ****************************************************/
 
+extern void hyperg_U_e_call( double *a,  double *b,  double *x, double *val);
+
 extern void SetGlobalVar2 (int *nsite, int *times,
                            double *h,int *nn,  double *maxh,
                            double *u,int *tt,  double *maxu,
@@ -859,6 +861,7 @@ extern void qnorm55_call(double *p, double *mu, double *sigma, int *lower_tail, 
 extern void integr_kuma(double *x, int n, void *ex);
 
 static const R_CMethodDef CEntries[] = {
+    {"hyperg_U_e_call",                     (DL_FUNC) &hyperg_U_e_call,      4},
     {"integr_kuma",               (DL_FUNC) &integr_kuma,              3},
     {"lgnd",                      (DL_FUNC) &lgnd,                     3},
     {"qnorm55_call",              (DL_FUNC) &qnorm55_call,             6},
