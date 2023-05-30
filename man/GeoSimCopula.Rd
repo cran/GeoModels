@@ -15,7 +15,7 @@ coordx_dyn=NULL, corrmodel, distance="Eucl",
       GPU=NULL, grid=FALSE, local=c(1,1),
       method="cholesky", model='Gaussian', n=1, param,
       anisopars=NULL,radius=6371, sparse=FALSE,
-      copula="Gaussian",X=NULL)
+      copula="Gaussian",seed=NULL, X=NULL)
 }
 \arguments{
   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
@@ -59,6 +59,7 @@ coordx_dyn=NULL, corrmodel, distance="Eucl",
   using sparse matrices algorithms (spam packake). It should be used
   with compactly supported covariance models.\code{FALSE} is the default.}
   \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
+  \item{seed}{Numeric; an integer used in set.seed function to reproduce the simulation.}
   \item{X}{Numeric; Matrix of space-time covariates.}
 }
 

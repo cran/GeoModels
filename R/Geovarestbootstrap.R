@@ -5,7 +5,7 @@
 
    
 GeoVarestbootstrap=function(fit,K=100,sparse=FALSE,GPU=NULL,  local=c(1,1),optimizer="Nelder-Mead",
-  lower=NULL, upper=NULL,method="cholesky",memdist=TRUE, M=30,L=500,seed=1)
+  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, memdist=TRUE, M=30,L=500,seed=1)
 {
 
 
@@ -124,7 +124,13 @@ fit$stderr=stderr
 fit$varcov=invG
 fit$estimates=res
 fit$X=tempX
+
+
+stderr=sqrt(diag(invG))
+aa=qnorm(1-(1-alpha)/2)*stderr
+pp=as.numeric(fit$param)
+low=pp-aa; upp=pp+aa
+fit$conf.int=rbind(low,upp)
 #set.seed(sample(1:10000,1))
 return(fit)
-
 }

@@ -2481,7 +2481,26 @@ double marg_pois(int n,double x,double p)
  pr=R_pow(lambda,x)*exp(-lambda)/fac(x,1);
     return(pr);
 }
-                    
+       
+/* cdf inflated poisson*/
+double ppoisinflated(double z, double m, double p)
+{
+ double res;
+ double ans = ppois(z, m,1,0);
+ if(z < 0) res=0;
+ else     res=p + (1 - p) * ans;
+ return(res);
+}
+/* cdf inflated binom neg*/
+double pbneginflated(double z, int N,double m, double p)
+{
+ double res;   
+ double ans = pnbinom(z,N,m,1,0);
+ if(z < 0) res=0;
+ else     res=p + (1 - p) * ans;
+ return(res);
+}
+
 
 double marg_p(double categ_0,double psm,int *model,int n)
 {
@@ -4635,6 +4654,17 @@ switch(model) // Correlation functions are in alphabetical order
       if(z1==0) {a2=-99;}
       if(z2==0) {g2=-99;}
    break;
+      case 43: // Poisson inflated
+      rho1=(1-nuis[0])*rho; 
+      s1=exp(mu1);s2=exp(mu2);
+      b2=dpois(z2,s2,0);
+      a1=qnorm(ppoisinflated(z1,  s1,nuis[1]),0,1,1,0);
+      a2=qnorm(ppoisinflated(z1-1,s1,nuis[1]),0,1,1,0);
+      g1=qnorm(ppoisinflated(z2,  s2,nuis[1]),0,1,1,0);      
+      g2=qnorm(ppoisinflated(z2-1,s2,nuis[1]),0,1,1,0);  
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
+   break;
      case 11: // binomial     /// 
       rho1=(1-nuis[0])*rho;
       s1=pnorm(mu1,0,1,1,0);
@@ -4661,6 +4691,19 @@ switch(model) // Correlation functions are in alphabetical order
       if(z1==0) {a2=-99;}
       if(z2==0) {g2=-99;}
    break;
+    case 45: // binomial neg  inflated   /// ok 
+      rho1=(1-nuis[0])*rho;
+      s1=pnorm(mu1,0,1,1,0);
+      s2=pnorm(mu2,0,1,1,0);
+      b2=dnbinom(z2,NN2,s2,0);
+      a1=qnorm(pbneginflated(z1,  NN1,s1,nuis[1]),0,1,1,0);
+      a2=qnorm(pbneginflated(z1-1,NN1,s1,nuis[1]),0,1,1,0);
+      g1=qnorm(pbneginflated(z2,  NN2,s2,nuis[1]),0,1,1,0);      
+      g2=qnorm(pbneginflated(z2-1,NN2,s2,nuis[1]),0,1,1,0);
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
+   break;
+
 
    case 28: //Beta
       rho1=(1-nuis[0])*rho; 

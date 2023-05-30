@@ -25,6 +25,8 @@ comploglik2MM <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fix
         res=double(1)
 ################################
 
+
+
 if(!type_cop) { # not copula models
          if(aniso){     ### anisotropy
              anisopar<-param[namesaniso]
@@ -84,6 +86,7 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
         res=double(1)
 
+
 ############################################
 if(!type_cop) { # not copula models 
         if(aniso){
@@ -120,6 +123,8 @@ if(!type_cop) { # not copula models
         }
          else
          {
+
+
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer","integer","integer"), 
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
@@ -127,6 +132,7 @@ if(!type_cop) { # not copula models
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
        }
    }
+
          return(-result)
       }
 
@@ -402,7 +408,7 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
 
     if(aniso) fname <- paste(fname,"_aniso",sep="")
      
-
+   
     #path.parent <- getwd()
 
   
@@ -449,6 +455,7 @@ else            lname="comploglik2MM"
 
 
 coords=cbind(coordx,coordy)
+
 
 if(!onlyvar){
   
@@ -509,6 +516,7 @@ if(!onlyvar){
           control=list( reltol=1e-14, maxit=100000), data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=TRUE, method='Nelder-Mead',n=n,namescorr=namescorr,
                                   namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+
  #if(optimizer=='multinlminb'){
   #     CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=eval(as.name(lname)),
    #     colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
@@ -554,14 +562,14 @@ if(!onlyvar){
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
                                weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
      # tt1 <- proc.time()-tt1;print(tt1[3]/as.numeric(CompLikelihood$iterations))
-
+      
 
     }
-    if(optimizer=='ucminf')   
-      CompLikelihood <-ucminf::ucminf(par=param, fn=eval(as.name(lname)), hessian=as.numeric(hessian),   
-                        control=list( maxeval=100000),
-                            colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2,fixed=fixed, fan=fname,
-                            n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+    #if(optimizer=='ucminf')   
+     # CompLikelihood <-ucminf::ucminf(par=param, fn=eval(as.name(lname)), hessian=as.numeric(hessian),   
+      #                  control=list( maxeval=100000),
+       #                     colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2,fixed=fixed, fan=fname,
+        #                    n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
       
 
     #  if(optimizer=='sa')
@@ -641,12 +649,12 @@ if(!onlyvar){
         CompLikelihood <- nlm( f=comploglik_biv2,p=param,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
                                fan=fname,hessian=FALSE,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
                                weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-    if(optimizer=='ucminf') 
-         CompLikelihood <-ucminf::ucminf(par=param, fn=comploglik_biv2, hessian=as.numeric(hessian),   
-                        control=list( maxeval=100000), 
-                         colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
-                        fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, 
-                        weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+  #  if(optimizer=='ucminf') 
+   #      CompLikelihood <-ucminf::ucminf(par=param, fn=comploglik_biv2, hessian=as.numeric(hessian),   
+    #                    control=list( maxeval=100000), 
+     #                    colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
+      #                  fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, 
+       #                 weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     if(optimizer=='nlminb') 
         CompLikelihood <- nlminb( objective=comploglik_biv2,start=param, 
                                      control = list(iter.max=100000),
@@ -703,18 +711,18 @@ if(!onlyvar){
         if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
         CompLikelihood$counts=as.numeric(CompLikelihood$feval)
     }
-      if(optimizer=='ucminf'){
-        CompLikelihood$value = -CompLikelihood$value
-        names(CompLikelihood$par)<- namesparam
-        if(CompLikelihood$convergence == 1||CompLikelihood$convergence == 2||CompLikelihood$convergence == 4)
-        CompLikelihood$convergence <- 'Successful'
-        else
-        if(CompLikelihood$convergence == 3)
-        CompLikelihood$convergence <- 'Iteration limit reached'
-        else
-        CompLikelihood$convergence <- "Optimization may have failed"
-        if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
-    }
+    #  if(optimizer=='ucminf'){
+     #   CompLikelihood$value = -CompLikelihood$value
+      #  names(CompLikelihood$par)<- namesparam
+      #  if(CompLikelihood$convergence == 1||CompLikelihood$convergence == 2||CompLikelihood$convergence == 4)
+      #  CompLikelihood$convergence <- 'Successful'
+      #  else
+      #  if(CompLikelihood$convergence == 3)
+      #  CompLikelihood$convergence <- 'Iteration limit reached'
+      #  else
+      #  CompLikelihood$convergence <- "Optimization may have failed"
+      #  if(CompLikelihood$value>=1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+   # }
     if(optimizer=='L-BFGS-B'||optimizer=='BFGS'||optimizer=='lbfgsb3c'){
         CompLikelihood$value = -CompLikelihood$value
         names(CompLikelihood$par)<- namesparam
@@ -745,6 +753,7 @@ if(!onlyvar){
     }
 
     if(optimizer=='nlminb'||optimizer=='multinlminb'){
+     
         CompLikelihood$par <- CompLikelihood$par
         names(CompLikelihood$par)<- namesparam
         CompLikelihood$value <- -CompLikelihood$objective
@@ -798,7 +807,7 @@ if(!onlyvar){
 if((sensitivity||varest))
   {
 
-
+ 
 {
 if(!bivariate)  {
 
@@ -806,16 +815,16 @@ if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=matrix(c(1,2,3,2),2,
 if( min(eigen( CompLikelihood$hessian )$values) <0)
 {
   CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=CompLikelihood$par,method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
+                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                              weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)}
+                              weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
 }
 
 if(bivariate)  
 CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=CompLikelihood$par,method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                          data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
+                          data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                           namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
+                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
 }
 rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
@@ -879,7 +888,6 @@ colnames(CompLikelihood$hessian)=namesparam
             # Set variability matrix:
             CompLikelihood$varimat <- matrix(rep(0,dimmat),ncol=numparam)
             
-          
 
             namesgod <- c(namesnuis[as.logical(flagnuis)], namescorr[as.logical(flagcorr)])
             names(CompLikelihood$score) <- namesgod

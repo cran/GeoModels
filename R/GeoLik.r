@@ -959,13 +959,13 @@ if(optimizer=='L-BFGS-B'&&!parallel)
            #                   control = list( iter.max=100000),
             #               typerunif = "sobol")#,nbclusters=2,
              #      }                 
-    if(optimizer=='ucminf')    
-                        Likelihood <-ucminf::ucminf(par=param, fn=eval(as.name(lname)), hessian=as.numeric(hessian),  
-                        control=list( maxeval=100000),
-                        const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,MM=MM,
-                          corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,
-                          model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,
-                          radius=radius,setup=setup,X=X,ns=ns,NS=NS)
+    #if(optimizer=='ucminf')    
+     #                   Likelihood <-ucminf::ucminf(par=param, fn=eval(as.name(lname)), hessian=as.numeric(hessian),  
+      #                  control=list( maxeval=100000),
+       #                 const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,MM=MM,
+        #                  corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,
+         #                 model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,
+          #                radius=radius,setup=setup,X=X,ns=ns,NS=NS)
     if(optimizer=='nmk')    
                         Likelihood <- dfoptim::nmk(par=param, fn=eval(as.name(lname)), control = list(maxfeval=100000,tol=1e-10),
                         const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,MM=MM,
@@ -993,12 +993,12 @@ if(optimizer=='L-BFGS-B'&&!parallel)
      if(optimizer %in% c('nmk','nmkb'))                    Likelihood$counts=as.numeric(Likelihood$feval)
                }
 
-    if(optimizer=='ucminf'){
-                   names(Likelihood$par)=namesparam
-                   param <- Likelihood$par
-                   maxfun <- -Likelihood$value
-                   Likelihood$value <- maxfun
-      }
+    #if(optimizer=='ucminf'){
+    #               names(Likelihood$par)=namesparam
+    #               param <- Likelihood$par
+    #               maxfun <- -Likelihood$value
+     #              Likelihood$value <- maxfun
+     # }
        if(optimizer %in% c('nlminb','multinlminb')){
                    names(Likelihood$par)=namesparam
                    param <- Likelihood$par
@@ -1052,11 +1052,11 @@ if(optimizer=='L-BFGS-B'&&!parallel)
                Likelihood$convergence <- 'Successful'
                else
                Likelihood$convergence <- 'Optimization may have failed'}
-       if(optimizer=='ucminf'){
-               if(Likelihood$convergence== 1||Likelihood$convergence== 2||Likelihood$convergence == 4)
-               Likelihood$convergence <- 'Successful'
-               else
-               Likelihood$convergence <- 'Optimization may have failed'}
+      # if(optimizer=='ucminf'){
+       #        if(Likelihood$convergence== 1||Likelihood$convergence== 2||Likelihood$convergence == 4)
+        #       Likelihood$convergence <- 'Successful'
+         #      else
+          #     Likelihood$convergence <- 'Optimization may have failed'}
     if(maxfun==-1.0e8) Likelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
      }
      else {Likelihood=as.list(0)   # in the case of computing just the asym variance

@@ -741,7 +741,9 @@ CkModel <- function(model)
                          BinomialLogistic=49,Binomiallogistic=49,
                          Beta2=50,
                          Gaussian_misp_Binomial=51,
-                         Gaussian_misp_BinomialNeg=52
+                         Gaussian_misp_BinomialNeg=52,
+                         PoissonZIP1=53,
+                         BinomialNegZINB1=56,
                          )
     return(CkModel)
   }
@@ -985,6 +987,13 @@ if(!bivariate)      {
  if( (model %in% c('PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB')))
   {
     param <- c(mm, 'nugget1','nugget2','pmu','sill')
+    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    return(param)
+  }
+
+ if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1')))
+  {
+    param <- c(mm, 'nugget','pmu','sill')
     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
     return(param)
   }
@@ -1292,7 +1301,7 @@ if(method1=="euclidean")
                            if(likelihood==2 && (CkType(typereal)==5 || CkType(typereal)==7)) tapering <- 1
                  }
         }
-        if(model %in% c(11,14,15,16,19,17,30,45,49,51,52)){
+        if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,56)){
     
             p <- mean(unlist(data)[!is.na(unlist(data))])
             mu=0
@@ -1303,6 +1312,7 @@ if(method1=="euclidean")
             nuisance <- c(mu, 0, 1)
             #if(model==45) nuisance <- c(mu, 0, 0,1)
             if(model==45) nuisance <- c(mu, 0, 0,0,1)
+            if(model==53||model==56) nuisance <- c(mu, 0,0,1)
         }
         #if(model %in% c(43,44)) nuisance <- c(0, 0, 0, 1)
         if(model %in% c(43,44)) nuisance <- c(0, 0, 0,0, 1)
@@ -1364,7 +1374,8 @@ if(method1=="euclidean")
      #if(model %in% c(45)) nuisance <- c(0,rep(1,num_betas-1) ,0,0, 1)
      if(model %in% c(45)) nuisance <- c(0,rep(1,num_betas-1) ,0,0, 0,1)
      #if(model %in% c(43,44)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,1)
-     if(model %in% c(43,44)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,1)
+     if(model %in% c(43,45)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,1)
+     if(model %in% c(53,56)) nuisance <- c(0,rep(1,num_betas-1) , 0,0,1)
      #
 
      }
@@ -1489,7 +1500,7 @@ if(method1=="euclidean")
         numparam <- length(param)
         namesparam <- names(param)
 
-        if(!bivariate) if(any(model!=c(43,45)))  namessim <- c("mean","sill","nugget","scale",namescorr[!namescorr=="scale"])
+        if(!bivariate) if(any(model!=c(43,45,53,56)))  namessim <- c("mean","sill","nugget","scale",namescorr[!namescorr=="scale"])
        
        # if(any(model==c(43,45)))  namessim <- c("mean","sill","nugget1","nugget2","scale",namescorr[!namescorr=="scale"])
        if(bivariate)  namessim <- c("mean_1","mean_2","scale",namescorr[!namescorr=="scale"])  

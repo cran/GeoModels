@@ -12,7 +12,7 @@
 \usage{
 GeoSim(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="Eucl",
       GPU=NULL, grid=FALSE, local=c(1,1),method="cholesky", model='Gaussian', n=1, param,
-      anisopars=NULL,radius=6371, sparse=FALSE, X=NULL)
+      anisopars=NULL,radius=6371, sparse=FALSE, seed=NULL,X=NULL)
 }
 \arguments{
   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
@@ -55,6 +55,7 @@ GeoSim(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="E
   \item{sparse}{Logical; if \code{TRUE} then  cholesky decomposition is performed
   using sparse matrices algorithms (spam packake). It should be used
   with compactly supported covariance models.\code{FALSE} is the default.}
+   \item{seed}{Numeric; an integer used in set.seed function to reproduce the simulation.}
   \item{X}{Numeric; Matrix of space-time covariates.}
 }
 

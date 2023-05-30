@@ -5,9 +5,10 @@
 
 # Simulate spatial and spatio-temporal random felds:
 GeoSimCopula <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=6371, sparse=FALSE,copula="Gaussian",X=NULL)
+     local=c(1,1),method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=6371, sparse=FALSE,copula="Gaussian",seed=NULL,X=NULL)
 {
 
+if(!is.null(seed))  set.seed(seed)
 if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
 
 if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
@@ -70,10 +71,17 @@ if(model=="Binomial") {
 if(model=="BinomialNeg") {
  simcop=qnbinom(unif, size=n, prob=pnorm(mm))
 }
+if(model=="BinomialNegZINB") {
+ simcop=qzinegbin(unif, size=n, #prob = pnorm(mm), 
+        munb=   n*(1-pnorm(mm))/pnorm(mm),#,n/pnorm(mm)-n,
+        pstr0 = as.numeric(param$pmu))
+}
 if(model=="Poisson") {
  simcop=qpois(unif, lambda=exp(mm))
 }
-
+if(model=="PoissonZIP") {
+ simcop=qzipois(unif, lambda=exp(mm), pstr0 = as.numeric(param$pmu) ) # require package VGAM
+}
 ####################################
 ############ positive real  RF #####
 ####################################

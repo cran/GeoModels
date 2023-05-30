@@ -5,7 +5,7 @@
 
 # Simulate spatial and spatio-temporal random felds:
 GeoSim <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="cholesky",model='Gaussian', n=1, param, anisopars=NULL, radius=6371, sparse=FALSE,X=NULL)
+     local=c(1,1),method="cholesky",model='Gaussian', n=1, param, anisopars=NULL, radius=6371, sparse=FALSE,seed=NULL,X=NULL)
 {
 ####################################################################
 ############ internal function #####################################
@@ -82,7 +82,6 @@ forGaussparam<-function(model,param,bivariate)
         if(!bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,numcoord*numtime))}}  ## in the case of no covariates
         if( bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,ns[1]+ns[2]))}}
 
-
         if(!bivariate) {
                                sel=substr(names(nuisance),1,4)=="mean";
                                num_betas=sum(sel);mm=NULL
@@ -127,6 +126,9 @@ forGaussparam<-function(model,param,bivariate)
 ############# END internal functions ###############################
 ####################################################################
 
+if(!is.null(seed))  set.seed(seed)
+        #assign(x = ".Random.seed", value = seed, envir = .GlobalEnv)
+    
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
@@ -225,9 +227,8 @@ forGaussparam<-function(model,param,bivariate)
     if(model %in% c("LogLogistic","Logistic")) k=4
     if(model %in% c("Binomial"))   k=max(round(n))
     if(model %in% c("BinomialLogistic"))   k=2*max(round(n))
-    if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB")){ k=99999;
-                                                 if(model %in% c("Geometric")) {model="BinomialNeg";n=1}
-                                               }
+    if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB"))
+                 { k=99999;if(model %in% c("Geometric")) {model="BinomialNeg";n=1}}
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
     if(model %in% c("PoissonGamma")) {k=2+2*round(param$shape);npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
