@@ -18,7 +18,7 @@ if(!fit$bivariate)
 {
 ## extracting mean parameters
 namescorr <- CorrParam(fit$corrmodel) 
-namesnuis <- NuisParam(fit$model,fit$bivariate,num_betas)
+namesnuis <- NuisParam2(fit$model,fit$bivariate,num_betas)
 param <- c(fit$param, fit$fixed)
 namesparam<- names(param)
 paramcorr <- param[namescorr]
@@ -163,7 +163,7 @@ if(fit$bivariate)
  ns=fit$ns
 
 namescorr <- CorrParam(fit$corrmodel) 
-namesnuis <- NuisParam(fit$model,fit$bivariate,num_betas)
+namesnuis <- NuisParam2(fit$model,fit$bivariate,num_betas)
 param <- c(fit$param, fit$fixed)
 namesparam<- names(param)
 paramcov <- param[namescorr]

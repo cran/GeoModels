@@ -264,18 +264,18 @@ shape=2
 ## regression parameters
 mean = 1;mean1= -0.2
 # correlation parameters
-sill = 1;nugget = 0;power2=4
+nugget = 0;power2=4
 scale = 0.3;smooth=0    
 
 ## simulation
 param=list(shape=shape,nugget=nugget,mean=mean,mean1=mean1, 
-  scale=scale,sill=sill,power2=power2,smooth=smooth)
+  scale=scale,power2=power2,smooth=smooth)
 
 data = GeoSim(coordx=coords,corrmodel=corrmodel, param=param,
                 model=model,X=X)$data
 
 #####starting and fixed parameters
-fixed=list(nugget=nugget,power2=power2,smooth=smooth,sill=sill)
+fixed=list(nugget=nugget,power2=power2,smooth=smooth)
 start=list(mean=mean,mean1=mean1, scale=scale,shape=shape)
 
 ## estimation with pairwise likelihood

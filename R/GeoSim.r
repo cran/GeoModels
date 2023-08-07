@@ -150,6 +150,16 @@ if(!is.null(seed))  set.seed(seed)
     if(is.null(coordx_dyn)){
     unname(coordx);unname(coordy)}
 
+if(!bivariate) {
+    if(is.null(param$sill))
+
+if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
+        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
+        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
+        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) param$sill=1
+else param$sill=1
+}
 
 ################################################################################
 ################ starting spatial and spatiotemporal case#######################

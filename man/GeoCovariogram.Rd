@@ -139,17 +139,16 @@ coords=cbind(x,y)
 # Set the model's parameters:
 corrmodel = "exponential"
 mean = 0
-sill = 1
 nugget = 0
 scale = 0.2/3
 
-param=list(mean=mean,sill=sill, nugget=nugget, scale=scale)
+param=list(mean=mean, nugget=nugget, scale=scale)
 # Simulation of the Gaussian RF:
 data = GeoSim(coordx=coords, corrmodel=corrmodel, model=model,param=param,n=n)$data
 
-start=list(mean=0,scale=scale,sill=sill)
+start=list(mean=0,scale=scale)
 fixed=list(nugget=nugget)
-# Maximum composite-likelihood fitting of the BinomGaussian random field:
+# Maximum composite-likelihood fitting of the Binomial random field:
 fit = GeoFit(data,coordx=coords, corrmodel=corrmodel,model=model,
              likelihood="Marginal",type='Pairwise',start=start,n=n,
              optimizer="BFGS", fixed=fixed,neighb=4)
@@ -179,13 +178,12 @@ coords=cbind(x,y)
 # Set the model's parameters:
 corrmodel = "Wend0"
 mean = 0
-sill = 1
 nugget = 0
 scale = 0.4
 power2=4
 
 
-param=list(mean=mean,sill=sill, nugget=nugget, scale=scale,shape=shape,power2=power2)
+param=list(mean=mean, nugget=nugget, scale=scale,shape=shape,power2=power2)
 # Simulation of the Gaussian RF:
 data = GeoSim(coordx=coords, corrmodel=corrmodel, model=model,param=param)$data
 
@@ -193,7 +191,7 @@ start=list(mean=0,scale=scale,shape=shape)
 I=Inf
 lower=list(mean=-I,scale=0,shape=0)
 upper=list(mean= I,scale=I,shape=I)
-fixed=list(nugget=nugget,sill=sill,power2=power2)
+fixed=list(nugget=nugget,power2=power2)
 
 fit = GeoFit(data,coordx=coords, corrmodel=corrmodel,model=model,
              likelihood="Marginal",type='Pairwise',start=start,

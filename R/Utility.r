@@ -316,7 +316,7 @@ if(CkModel(model)==11&&(all(n<1)||!all(is.numeric(n))))
 
         if(!is.null(fixed)){ 
             namfixed <- names(fixed)
-        if(!all(namfixed %in% c(NuisParam(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula),CorrelationPar(CkCorrModel(corrmodel))))){
+        if(!all(namfixed %in% c(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula),CorrelationPar(CkCorrModel(corrmodel))))){
                 error <- 'some names of the fixed parameters is/are not correct\n'
                 return(list(error=error))}
         if(!CheckParamRange(unlist(fixed))){
@@ -423,7 +423,7 @@ if(CkModel(model)==11&&(all(n<1)||!all(is.numeric(n))))
                 return(list(error=error)) }}}
 
 
-                if(!all(namstart %in% c(NuisParam(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula), CorrelationPar(CkCorrModel(corrmodel))))){
+                if(!all(namstart %in% c(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula), CorrelationPar(CkCorrModel(corrmodel))))){
                 error <- 'some names of the starting parameters is/are not correct\n'
                 return(list(error=error))}
 
@@ -622,14 +622,14 @@ if(CkModel(model)==11&&(all(n<1)||!all(is.numeric(n))))
         biv<-CheckBiv(CkCorrModel(corrmodel))
  
        
-             if(length(param)!=length(c(unique(c(NuisParam("Gaussian",biv,num_betas,NULL),
-                    NuisParam(model,biv,num_betas,copula))),
+             if(length(param)!=length(c(unique(c(NuisParam2("Gaussian",biv,num_betas,NULL),
+                    NuisParam2(model,biv,num_betas,copula))),
                     CorrelationPar(CkCorrModel(corrmodel)))))
              {
             error <- "some parameters are missing or does not match with the declared model\n"
             return(list(error=error))}
 
-        if(!all( names(param) %in% c(unique(c(NuisParam("Gaussian",biv,num_betas,copula),NuisParam(model,biv,num_betas,copula))),
+        if(!all( names(param) %in% c(unique(c(NuisParam2("Gaussian",biv,num_betas,copula),NuisParam2(model,biv,num_betas,copula))),
                                       CorrelationPar(CkCorrModel(corrmodel))))){
             error <- 'some names of the parameters are not correct\n'
             return(list(error=error))}
@@ -963,7 +963,10 @@ CorrelationPar <- function(corrmodel)
   }
   #############################################################  
   #############################################################
-NuisParam <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
+
+
+ #############################################################
+NuisParam2 <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
 {
   param <- NULL
 if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
@@ -976,7 +979,7 @@ if(!bivariate)      {
   else {mm='mean' 
         for(i in 1:(num_betas-1)) mm=c(mm,paste("mean",i,sep=""))}
 
-  if( (model %in% c('Gaussian' ,'Gauss' ,'Binomial','Gaussian_misp_Binomial', 'BinomialLogistic','Binomial2','BinomialNeg',
+  if( (model %in% c('Gaussian' ,'Gauss' ,'Binomial','Gaussian_misp_Binomial', 'BinomialLogistic','Binomial2','BinomialNeg',"Bernoulli",
           'Gaussian_misp_BinomialNeg','Poisson','Gaussian_misp_Poisson',
       'Geom','Geometric','Wrapped','PoisBin','PoisBinNeg','LogGaussian','LogGauss','Logistic')))
   {
@@ -1085,6 +1088,18 @@ if((model %in% c('Beta','Kumaraswamy'))) {
     ###################  
   return(param)
 }
+
+NuisParam <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
+{
+
+    a=NuisParam2(model,bivariate,num_betas,copula)
+    if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
+        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
+        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
+        'Beta2','Kumaraswamy2','Beta','Kumaraswamy'))  a=a[ !a == 'sill']
+return(a)
+}
 ####################################################################################
 #########################################################################################
 #########################################################################################
@@ -1189,7 +1204,7 @@ if(method1=="euclidean")
         else
         { if(is.list(X))  num_betas=c(ncol(X[[1]]),ncol(X[[2]]))
             else  num_betas=c(ncol(X),ncol(X)) }}
-    namesnuis <- NuisParam(model,bivariate,num_betas,copula)
+    namesnuis <- NuisParam2(model,bivariate,num_betas,copula)
 
     ltimes=length(coordt)
 
@@ -1495,7 +1510,7 @@ if(method1=="euclidean")
 # START code for the simulation procedure
     if(fcall=="Simulation"){
         neighb=NULL;likelihood=2
-        namesnuis <- sort(unique(c(namesnuis,NuisParam("Gaussian",bivariate,num_betas,copula))))
+        namesnuis <- sort(unique(c(namesnuis,NuisParam2("Gaussian",bivariate,num_betas,copula))))
         param <- unlist(param)
         numparam <- length(param)
         namesparam <- names(param)

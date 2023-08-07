@@ -2190,31 +2190,25 @@ double biv_tukey_hh(double corr,double data_i,double data_j,double mui,double mu
     double sill,double hl,double hr)
            
 {
-
   double res = 0.0,A=0.0,B=0.0,hl_i,hr_i,hl_j,hr_j;
   double  Lhl_i=1.0,Lhr_i=1.0,Lhl_j=1.0,Lhr_j=1.0;
   double z_i = (data_i - mui)/sqrt(sill);
   double z_j = (data_j - muj)/sqrt(sill);
   hl_i = inverse_lamb(z_i,hl);
   hl_j = inverse_lamb(z_j,hl);
-
   hr_i = inverse_lamb(z_i,hr);
   hr_j = inverse_lamb(z_j,hr);
-
-
   Lhl_i = (1 + LambertW(hl*z_i*z_i));
   Lhl_j = (1 + LambertW(hl*z_j*z_j));
   Lhr_i = (1 + LambertW(hr*z_i*z_i));
   Lhr_j = (1 + LambertW(hr*z_j*z_j));
-
-
 if(fabs(corr)>1e-30){
 if(z_i>=0&&z_j>=0)
 {res=dbnorm(hr_i,hr_j,0,0,1,corr)*hr_i*hr_j/(z_i*z_j*Lhr_i*Lhr_j);}
-if(z_i>=0&&z_j<0)
+if( (z_i>=0&&z_j<0) || (z_i<0&&z_j>=0))
 {res=dbnorm(hr_i,hl_j,0,0,1,corr)*hr_i*hl_j/(z_i*z_j*Lhr_i*Lhl_j);}
-if(z_i<0&&z_j>=0)
-{res=dbnorm(hl_i,hr_j,0,0,1,corr)*hl_i*hr_j/(z_i*z_j*Lhl_i*Lhr_j);}
+//if(z_i<0&&z_j>=0)
+//{res=dbnorm(hl_i,hr_j,0,0,1,corr)*hl_i*hr_j/(z_i*z_j*Lhl_i*Lhr_j);}
 if(z_i<0&&z_j<0)
 {res=dbnorm(hl_i,hl_j,0,0,1,corr)*hl_i*hl_j/(z_i*z_j*Lhl_i*Lhl_j);}
 }

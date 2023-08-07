@@ -71,8 +71,8 @@ GeoCovmatrix(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel,
 
 
 \value{
-  Returns an object of class \code{CovMat}.
-  An object of class \code{CovMat} is a list containing
+  Returns an object of class \code{GeoCovmatrix}.
+  An object of class \code{GeoCovmatrix} is a list containing
   at most the following components:
   \item{bivariate}{Logical:\code{TRUE} if the Gaussian random field is bivariaete
        otherwise  \code{FALSE};}
@@ -578,7 +578,7 @@ matrix6$covmatrix[1:10,1:10]
 ###
 ###############################################################
 
-param=list(sill=1,scale=0.3,nugget=0,shape=4,mean=0,smooth=1,power2=5)
+param=list(scale=0.3,nugget=0,shape=4,mean=0,smooth=1,power2=5)
 # Simulation of a spatial Gaussian random field:
 matrix7 = GeoCovmatrix(coordx=coords,  corrmodel="GenWend", param=param, 
                      sparse=TRUE,model="Weibull")
@@ -593,7 +593,7 @@ matrix7$nozero
 ###
 ###############################################################
 
-param=list(sill=1,scale=0.2,nugget=0,power2=4)
+param=list(scale=0.2,nugget=0,power2=4)
 # Simulation of a spatial Gaussian random field:
 matrix8 = GeoCovmatrix(coordx=coords,  corrmodel="Wend0", param=param,n=5, 
                      model="Binomial")

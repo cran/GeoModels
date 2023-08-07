@@ -193,6 +193,16 @@ return(simu)
        num_betas2=sum(sel2)
      num_betas=c(num_betas1,num_betas2)
     }
+if(!bivariate) {
+    if(is.null(param$sill))
+
+if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
+        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
+        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
+        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) param$sill=1
+else param$sill=1
+}
 
     k=1
 #################################

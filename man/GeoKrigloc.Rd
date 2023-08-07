@@ -215,7 +215,7 @@ corrmodel="Exp_Exp",
 ##  four location to predict
 loc_to_pred=matrix(runif(8),4,2)
 ## three temporal instants to predict
-time=c(0.5,1.2,3.7)
+time=c(0.5,1.5,3.5)
 
 
 pr=GeoKrig(data=data,loc=loc_to_pred,time=time,
