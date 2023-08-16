@@ -461,8 +461,6 @@ data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,X=X)$data
 
 
 
-
-
 ################################################################
 ###
 ### Example 0. Maximum independence composite likelihood fitting of
@@ -564,7 +562,7 @@ fit <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                     neighb=3,likelihood="Conditional",type="Pairwise",X=X,
                     optimizer="Nelder-Mead",
                     start=start,fixed=fixed)
-print(fit$param)
+print(unlist(fit$param))
 
 
 
@@ -601,7 +599,7 @@ start=list(scale=c_supp,skew=skew,tail=tail,mean=mean,sill=sill)
 fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                     neighb=3,likelihood="Marginal",type="Pairwise",
                     start=start,fixed=fixed)
-print(fit1$param)
+print(unlist(fit1$param))
 
 
 ################################################################
@@ -707,8 +705,8 @@ print(fit)
 
 # Define the spatial-coordinates of the points:
 set.seed(89)
-x <- runif(200, 0, 1)
-y <- runif(200, 0, 1)
+x <- runif(20, 0, 1)
+y <- runif(20, 0, 1)
 coords=cbind(x,y)
 # parameters
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,

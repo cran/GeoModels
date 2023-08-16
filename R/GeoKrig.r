@@ -6,7 +6,7 @@
 GeoKrig= function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, loc, maxdist=NULL,
                maxtime=NULL, method="cholesky", model="Gaussian", n=1,nloc=NULL, mse=FALSE, lin_opt=TRUE, param, anisopars=NULL,
                radius=6371, sparse=FALSE,taper=NULL, tapsep=NULL, time=NULL, type="Standard",type_mse=NULL, type_krig="Simple",weigthed=TRUE,
-               which=1, copula=NULL,X=NULL,Xloc=NULL)
+               which=1, copula=NULL,X=NULL,Xloc=NULL,Mloc=NULL)
 
 {
 ######################################
@@ -106,7 +106,7 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     covmatrix = GeoCovmatrix(coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coordx_dyn,
          corrmodel=corrmodel, distance= distance,grid=grid,maxdist= maxdist,maxtime=maxtime,model=model,n=n,
           param=param, anisopars=anisopars, radius=radius,sparse=sparse,taper=taper,tapsep=tapsep,type=type,copula=copula,X=X)
-
+    covmatrix$param=unlist(covmatrix$param)
     ###########
     bivariate = covmatrix$bivariate;
     if(bivariate) tloc=1
@@ -119,10 +119,11 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!spacetime_dyn) dimat=covmatrix$numcoord*covmatrix$numtime
     if(spacetime_dyn)  dimat =sum(covmatrix$ns)
     dimat2=numloc*tloc
-
-
+   
+ 
     MM=NULL
-    if(length(param$mean)==dimat) 
+
+    if(length(param$mean)>1) 
     {
       MM=param$mean     ## in the case of non constant  external mean
       param$mean=0
@@ -149,10 +150,16 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     else {
     if(spacetime_dyn) Xloc=as.matrix(Xloc)
     }
+
+
+
     nuisance = param[covmatrix$namesnuis]
+ 
     sel=substr(names(nuisance),1,4)=="mean"
     betas=as.numeric(nuisance[sel])   ## mean paramteres
 
+
+      
     if(bivariate) {
                  sel1=substr(names(nuisance),1,6)=="mean_1"
                  betas1=as.numeric(nuisance[sel1])   ## mean1 paramteres
@@ -161,11 +168,12 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
                }
     other_nuis=as.numeric(nuisance[!sel])
 
-
+    
     ################################################
     ################################################
     if(type %in% c("Tapering","tapering")) {
-      covmatrix_true =  GeoCovmatrix(coordx, coordy, coordt, coordx_dyn, corrmodel, distance, grid, maxdist, maxtime, model, n, param,anisopars,
+      covmatrix_true =  GeoCovmatrix(coordx, coordy, coordt, coordx_dyn, corrmodel,
+       distance, grid, maxdist, maxtime, model, n, param,anisopars,
       radius, sparse, NULL, NULL, "Standard",X)
        }
     ############
@@ -174,7 +182,7 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     cdistance=distance
     corrmodel = CkCorrModel(covmatrix$corrmodel)
     distance = CheckDistance(covmatrix$distance)
-    corrparam = unlist(covmatrix$param[covmatrix$namescorr])# selecting the correlation parametrs
+    corrparam = covmatrix$param[covmatrix$namescorr]# selecting the correlation parametrs
     if(bivariate) if(!(which==1 || which==2) ) stop("which  parameter must be 1 or 2")
     pred = NULL
     varpred=varpred2=vv=vv2=NULL
@@ -204,7 +212,6 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 ########################################################################################
 ########################################################################################
 ########################################################################################
-
 if(covmatrix$model %in% c(1,10,18,21,12,26,24,27,38,29,20,34,39,28,40,9,20))    ## contnuos model
 {
     
@@ -228,12 +235,15 @@ if(covmatrix$model %in% c(1,10,18,21,12,26,24,27,38,29,20,34,39,28,40,9,20))    
     ################################
     ## standard kriging  ##############
     ################################
+
+
        if(!bivariate) {
                       if(is.null(MM)) {mu=X%*%betas;
                                        muloc=Xloc%*%betas}
-                      else {mu=MM                        # for non constant mean external
-                            muloc=mean(MM)}
+                      else {mu=MM                        # for non constant external mean 
+                            muloc=Mloc}
                       }
+                      
        if(bivariate) { mu=c(X11%*%matrix(betas1),X22%*%matrix(betas2))
                        if(!is.null(Xloc))
                          muloc=c(X11_loc%*%matrix(betas1),X22_loc%*%matrix(betas2))
@@ -650,6 +660,7 @@ if(type_krig=='Simple'||type_krig=='simple')  {
                ############################ optimal linear predictors #######################
                if(covmatrix$model %in% c(1,12,27,38,29,10,18,39,37,28,40,34,9,20))   ####gaussian, StudenT, two piece  skew gaussian bimodal tukeyh tukey hh
               {
+
 
                      pp = c(muloc)      +  krig_weights %*% (c(dataT)-c(mu))
               }

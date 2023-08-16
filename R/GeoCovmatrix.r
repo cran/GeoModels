@@ -732,14 +732,16 @@ return(varcov)
     ## setting zero mean and nugget if no mean or nugget is fixed
     if(!bivariate){
     if(is.null(param$mean)) param$mean<-0
-    if(is.null(param$nugget)) param$nugget<-0  }
+    if(is.null(param$nugget)) param$nugget<-0  
+    #if(length(param$mean)>1) MM=fixed$mean
+}
     else{
     if(is.null(param$mean_1)) param$mean_1<-0
     if(is.null(param$mean_2)) param$mean_2<-0
     if(is.null(param$nugget_1)) param$nugget_1<-0
     if(is.null(param$nugget_2)) param$nugget_2<-0 }
 
-
+    
 
     if(is.null(coordx_dyn)){
     unname(coordx);unname(coordy)}
@@ -925,7 +927,7 @@ else
                    numcoordx = initparam$numcoordx,
                    numcoordy = initparam$numcoordy,
                    numtime = initparam$numtime,
-                   param = initparam$param,
+                   param = param,
                    radius = initparam$radius,
                    setup=setup,
                    spacetime = initparam$spacetime,

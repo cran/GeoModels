@@ -262,6 +262,14 @@ if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(l
                                           initparam$coordy=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
                                         }   
 
+if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
+        "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
+        "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", 
+        "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
+        "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
+        "Kumaraswamy")) {  if(!is.null(ff$sill)) ff$sill=NULL}
+
+
     ### Set the output object:
     GeoFit <- list(      anisopars=anisopars,
                          bivariate=initparam$bivariate,

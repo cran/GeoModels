@@ -42,15 +42,13 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
  
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
 if(!bivariate){
-
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')){
-if(is.null(fixed$sill)) fixed$sill=1
-else                    fixed$sill=1
-}
+                        if(is.null(fixed$sill)) fixed$sill=1
+                        else                    fixed$sill=1}
 }
 #############################################################################
 
@@ -84,10 +82,10 @@ else                    fixed$sill=1
 
 
     ## moving sill from starting to fixed parameters if necessary
-        if(sum(initparam$namesparam=='sill')==1){
-    if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11)) 
-    {initparam$param=initparam$param[initparam$namesparam!='sill'];initparam$namesparam=names(initparam$param)
-    a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
+  #      if(sum(initparam$namesparam=='sill')==1){
+  #  if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11)) 
+  #  {initparam$param=initparam$param[initparam$namesparam!='sill'];initparam$namesparam=names(initparam$param)
+  #  a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
 
   
     if(!is.null(initparam$error))   stop(initparam$error)
@@ -276,6 +274,12 @@ if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(l
                                           initparam$coordy=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
                                         }   
 
+if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
+        "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
+        "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", 
+        "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
+        "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
+        "Kumaraswamy")) {  if(!is.null(ff$sill)) ff$sill=NULL}
 
     ### Set the output object:
     GeoFit <- list(      anisopars=anisopars,
