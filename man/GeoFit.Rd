@@ -617,14 +617,14 @@ coords <- cbind(x,y)
 mean=0.1; mean1=0.8; mean2=-0.5 # regression parameters
 X=cbind(rep(1,N),runif(N),runif(N)) # marix covariates
 corrmodel <- "Wend0"
-param=list(mean=mean,mean1=mean1,mean2=mean2,sill=1,nugget=0,scale=0.2,power2=4)
+param=list(mean=mean,mean1=mean1,mean2=mean2,nugget=0,scale=0.2,power2=4)
 # Simulation of the spatial Binomial-Gaussian RF:
 data <- GeoSim(coordx=coords, corrmodel=corrmodel, model="Binomial", n=10,X=X,
              param=param)$data
 
 
 ## estimating the marginal parameters using independence cl
-fixed <- list(sill=1)
+fixed <- NULL
 start <- list(mean=mean,mean1=mean1,mean2=mean2)
 
 # Maximum conditional pairwise likelihood:
@@ -634,7 +634,7 @@ fit <- GeoFit(data=data, coordx=coords,n=10, X=X,
                   
 print(fit)
 ## estimating marginal  and dependnce
-fixed <- list(nugget=0,power2=4,sill=1)
+fixed <- list(nugget=0,power2=4)
 start <- list(mean=mean,mean1=mean1,mean2=mean2,scale=0.2)
 
 # Maximum conditional pairwise likelihood:
@@ -705,8 +705,8 @@ print(fit)
 
 # Define the spatial-coordinates of the points:
 set.seed(89)
-x <- runif(20, 0, 1)
-y <- runif(20, 0, 1)
+x <- runif(300, 0, 1)
+y <- runif(300, 0, 1)
 coords=cbind(x,y)
 # parameters
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,

@@ -293,6 +293,7 @@ param[sel]=0.1
 ###
 param=as.numeric(param)
 
+#print(model)
  ###
    if(!onlyvar){
   ##############################.  spatial or space time ############################################
@@ -301,10 +302,15 @@ param=as.numeric(param)
       
          optimizer="optimize"  
          if(is.na(lower)||is.na(upper))  {
-            if(model %in% c(2,14,16,45,11)) {lower=-5;upper=5}
+            if(model %in% c(2,14,16,45,11,30,36)) {lower=-5;upper=5}
             else                            {lower=-1e+10;upper=1e+10}
            }
+         else{
+             if(model %in% c(2,14,16,45,11,30,36)) {lower=-5;upper=5}
+         }  
 
+
+#print(lower);print(upper)
      CompLikelihood <- optimize(f= compindloglik2,    
                               data=data, fixed=fixed, fan=fname,  lower=lower, n=n,
                                namesnuis=namesnuis,namesparam=namesparam, maximum = FALSE,

@@ -55,7 +55,7 @@ if(space){
                 X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i],
                 model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[i]],copula=copula)
                 res1=c(res1,pr$pred)
-                res2=c(res2,pr$mse)
+                if(mse) res2=c(res2,pr$mse)
 
          #   setTxtProgressBar(pb, i)
          #   close(pb)
@@ -77,7 +77,7 @@ if(spacetime)
                X=neigh$X[[i]],Xloc= Xloc[i+(Nloc)*(j-1),],
              corrmodel=corrmodel,distance=distance, model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[k]],copula=copula)
             res1=c(res1,pr$pred)
-            res2=c(res2,pr$mse)
+            if(mse) res2=c(res2,pr$mse)
             k=k+1
          #    setTxtProgressBar(pb, k)
           #         close(pb)
@@ -95,7 +95,7 @@ neigh=GeoNeighborhood(data, coordx=coords,distance=distance,loc=loc,maxdist=maxd
                 X=neigh$X,,Xloc= Xloc[i,],which=which,
                 model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[i]],copula=copula)
                 res1=c(res1,pr$pred)
-                res2=c(res2,pr$mse)
+               if(mse) res2=c(res2,pr$mse)
                # setTxtProgressBar(pb, i)
                # close(pb)
               

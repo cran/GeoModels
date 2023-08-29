@@ -76,10 +76,16 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
 
 
    ## in the case on external fixed mean
-  MM=NULL
-  if(is.na(initparam$fixed['mean'])&length(c(initparam$X))==1) {MM=fixed$mean;initparam$mean=1e-07}
+  #MM=NULL
+  #if(is.na(initparam$fixed['mean'])&length(c(initparam$X))==1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
   
+  
+  ## in the case on external fixed mean
+  MM=NULL
+  if(!is.null(fixed))
+     if(length(fixed$mean)>1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
 
+  
 
     ## moving sill from starting to fixed parameters if necessary
   #      if(sum(initparam$namesparam=='sill')==1){

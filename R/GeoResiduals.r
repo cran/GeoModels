@@ -32,6 +32,7 @@ paramcorr <- param[namescorr]
 nuisance <- param[namesnuis]
 sel=substr(names(nuisance),1,4)=="mean"
 beta2=as.numeric(nuisance[sel])
+beta2=beta2[!is.na(beta2)]
 
 ## names of estimated and fixed parameters
 nm=names(fit$param)
@@ -43,6 +44,7 @@ copula=fit$copula
 #################################
 if(extmean) mu=mmext
 else mu=fit$X%*%beta2  
+
 #################################
 #### computing residuals ########
 #################################

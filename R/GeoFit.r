@@ -72,7 +72,7 @@ else                    fixed$sill=1
     coordt=unname(coordt);
     if(is.null(coordx_dyn)){
     coordx=unname(coordx);coordy=unname(coordy)}
-
+    #fixedtemp=initparam$fixed['mean']
     initparam <- WlsStart(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, "Fitting", fixed, grid,#10
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
@@ -122,8 +122,7 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb'))&is.null(lower)&i
 ## in the case on external fixed mean
   MM=NULL
   if(!is.null(fixed))
-      if(is.na(initparam$fixed['mean'])&length(c(initparam$X))==1) {MM=fixed$mean}
-
+     if(length(fixed$mean)>1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
     ###################################################################################
     ###################################################################################
 #updating with aniso parameters
