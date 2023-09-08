@@ -33,7 +33,7 @@ Nloc=nrow(loc)
 Tloc=length(time)
 if(bivariate)  Tloc=1
 
-if(length(param$mean)>1) M=param$mean
+if(length(param$mean)>1) M=param$mean #### non constant mean
 
 
 
@@ -43,17 +43,15 @@ if(space){
          neigh=GeoNeighborhood(data, coordx=coords,distance=distance,loc=loc,neighb=neighb,maxdist=maxdist,X=X,M=M)
          res1=res2=NULL
          #  pb <- txtProgressBar(min = 0, max = Nloc, style = 3)
-         
-         
          for(i in 1: Nloc)
           {
               #update mean
          if(!is.null(M)) param$mean=neigh$M[[i]]
         #    Sys.sleep(0.1)
-                  #print(loc[i,]);print(neigh$coordx[[i]]);print(Mloc[i]);print(param)
-            pr=GeoKrig(loc=loc[i,],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
+            
+            pr=GeoKrig(loc=loc[i,], data=neigh$data[[i]],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
                 X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i],
-                model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[i]],copula=copula)
+                model=model, param=param,anisopars=anisopars, mse=mse,copula=copula)
                 res1=c(res1,pr$pred)
                 if(mse) res2=c(res2,pr$mse)
 
@@ -65,17 +63,21 @@ if(space){
 ######################################################################
 if(spacetime)
 {  
+
        ### computing spatio-temporal neighborhood
          neigh=GeoNeighborhood(data, coordx=coords,coordt=coordt,distance=distance,neighb=neighb,
-                  loc=loc,time=time,maxdist=maxdist,maxtime=maxtime,X=X)
+                  loc=loc,time=time,maxdist=maxdist,maxtime=maxtime,X=X,M=M)
          res1=res2=NULL
          k=1
+        
         # pb <- txtProgressBar(min = 0, max = Nloc*Tloc, style = 3)
          for(i in 1: Nloc){
           for(j in 1: Tloc){
-            pr=GeoKrig(loc=loc[i,],time=time[j],coordx=neigh$coordx[[i]],coordt=neigh$coordt[[j]],n=n,
-               X=neigh$X[[i]],Xloc= Xloc[i+(Nloc)*(j-1),],
-             corrmodel=corrmodel,distance=distance, model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[k]],copula=copula)
+             if(!is.null(M)) param$mean=neigh$M[[k]]
+            pr=GeoKrig(data=neigh$data[[k]],coordx=neigh$coordx[[k]],coordt=neigh$coordt[[k]],loc=loc[i,],time=time[j], #ok
+               X=neigh$X[[k]],  Mloc=Mloc[i+(Nloc)*(j-1)], #ok
+               Xloc= Xloc[i+(Nloc)*(j-1),],
+             corrmodel=corrmodel,distance=distance, model=model, param=param,anisopars=anisopars, mse=mse,copula=copula,n=n)
             res1=c(res1,pr$pred)
             if(mse) res2=c(res2,pr$mse)
             k=k+1

@@ -125,13 +125,13 @@ data_all = GeoSim(coordx=coords, coordt=coordt,corrmodel="Exp_Exp",
 ##  two location to predict
 loc_to_pred=matrix(runif(4),2,2)
 ## three temporal instants to predict
-time=c(1,2,3)
+time=c(1,2)
 
 plot(coords,xlim=c(0,1),ylim=c(0,1))
 points(loc_to_pred,pch=20)
 
 neigh=GeoNeighborhood(data_all, coordx=coords,  coordt=coordt,
-                  loc=loc_to_pred,time=time,maxdist=0.4,maxtime=1)
+                  loc=loc_to_pred,time=time,neighb=3,maxtime=0.5)
 
 # first spatio-temporal neighborhoods 
 # with  associated data

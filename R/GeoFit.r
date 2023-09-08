@@ -43,11 +43,11 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
             if(all(neighb<1))  stop("neighb must be an integer >=1")
           }
     if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements")}
-
+    if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector")}
+     
 
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
 if(!bivariate){
-
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
@@ -57,6 +57,17 @@ if(is.null(fixed$sill)) fixed$sill=1
 else                    fixed$sill=1
 }
 }
+
+##### all parameters are estimated
+allest=FALSE 
+if(!bivariate){   
+if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))==length(start)) && is.null(fixed))
+{fixed=list(nugget=0);tempstart=start;start$nugget=NULL;allest=TRUE}
+}
+######if(bivariate){}
+
+
+
 #############################################################################
     checkinput <- CkInput(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, "Fitting",
                              fixed, grid, likelihood, maxdist, maxtime, model, n,
@@ -73,11 +84,32 @@ else                    fixed$sill=1
     if(is.null(coordx_dyn)){
     coordx=unname(coordx);coordy=unname(coordy)}
     #fixedtemp=initparam$fixed['mean']
+ 
     initparam <- WlsStart(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, "Fitting", fixed, grid,#10
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
                          type, varest, vartype, weighted, winconst, winstp,winconst_t, winstp_t, copula,X,memdist,nosym)#32
-    
+   
+  ### fixing initparam if all parameters are estimated
+  if(allest)
+{
+   if(!bivariate){  
+    bb=initparam$num_betas
+    ccpp=CorrParam(corrmodel)
+    aabb=NuisParam2(model,bivariate,bb,copula=copula)
+    ### 
+    initparam$namescorr=ccpp; initparam$namesnuis=aabb; 
+    initparam$param=unlist(tempstart);initparam$namesparam=names(initparam$param);initparam$fixed=NULL;
+    oo=double(length(ccpp)); names(oo)=ccpp; oo[names(oo)!="kl"]=1;initparam$flagcorr=oo
+    oo=double(length(aabb)); names(oo)=aabb; oo[names(oo)!="kl"]=1;initparam$flagnuis=oo
+   }
+    #if(!bivariate){ 
+}
+
+    if(type=="Independence"){
+     if(sum(NuisParam(model, bivariate=initparam$bivariate, num_betas=initparam$num_betas-1) %in% names(unlist(start)))==0) stop("No marginal parameters to estimate")
+     }
+
         ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
         if(sum(initparam$namesparam=='sill')==1)
         {
@@ -111,7 +143,7 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb'))&is.null(lower)&i
       ll<-as.numeric(lower);uu<-as.numeric(upper)
       if(length(ll)!=npar||length(uu)!=npar)
            stop("lower and upper bound must be of the same length of starting values\n") 
-      if(sum(names(initparam$param)==names(upper))<npar || sum(names(initparam$param)==names(lower))<npar){
+      if(sum(sort(names(initparam$param))==sort(names(upper)))<npar || sum(sort(names(initparam$param))==sort(names(lower)))<npar){
            stop("the names of  parameters in the lower and/or  upper bounds do not match with starting parameters names .\n") }
       ll[ll==0]=.Machine$double.eps ## when 0 we don't want exactly zero
       uu[uu==Inf]=1e+12
@@ -150,6 +182,12 @@ a=list(param=param,fixed=fixed,namesparam=namesparam,namesfixed=namesfixed,lower
 return(a)
 }
 ########
+
+
+
+
+
+
 aniso=FALSE
 if(!is.null(anisopars)) {
                  aniso=TRUE; namesaniso=c("angle","ratio")
@@ -202,6 +240,7 @@ if(!is.null(anisopars)) {
       }
  if(likelihood=='Marginal'&&type=="Independence")
    {
+
 
 
       fitted<-CompIndLik2 (initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
@@ -258,7 +297,7 @@ if(likelihood!="Full") {if(is.null(neighb)&&is.numeric(maxdist)&&likelihood=="Ma
                                                     } 
                        }
 if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
-                                          initparam$coordy=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
+                                          initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
                                         }   
 
 if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 

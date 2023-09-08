@@ -64,6 +64,8 @@ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
                       {if(is.null(time)) stop("At least one temporal instants is needed for space-time kriging ")  } 
 
      if(!is.null(Mloc)&&  !is.null(Xloc)) stop("Mloc or Xloc should be considered ") 
+
+     #if(!is.null(param$mean1)&&!is.null(Mloc) 
     
       loc_orig=loc
       if(!is.null(anisopars)) {  loc=GeoAniso(loc,c(anisopars$angle,anisopars$ratio))}
@@ -73,7 +75,6 @@ spacetime<-CheckST(CkCorrModel(corrmodel))
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
 
-
 if(!is.null(Mloc))
   { 
     if(!is.vector(Mloc)) stop("Mloc must be a vector")
@@ -82,6 +83,7 @@ if(space){
     if(nrow(loc)!=length(Mloc)) stop("Lenght of the  mean vector fixed does not match the number of locations to predict")
   }
 if(spacetime){
+    
     if(length(Mloc)==1) Mloc=rep(Mloc,nrow(loc)*length(time))
     if(nrow(loc)*length(time)!=length(Mloc)) stop("Lenght of the  mean vector fixed does not match the number of locations to predict")
   }
@@ -139,14 +141,14 @@ Mtemp=NULL
           param=param, anisopars=anisopars, radius=radius,sparse=sparse,taper=taper,tapsep=tapsep,type=type,copula=copula,X=X)
     covmatrix$param=unlist(covmatrix$param)
     ###########
-  
+   
     bivariate = covmatrix$bivariate;
     if(bivariate) tloc=1
     spacetime = covmatrix$spacetime;
 
     spacetime_dyn=FALSE
     if(!is.null(covmatrix$coordx_dyn)) spacetime_dyn=TRUE
-
+  
     ##############
     if(!spacetime_dyn) dimat=covmatrix$numcoord*covmatrix$numtime
     if(spacetime_dyn)  dimat =sum(covmatrix$ns)
@@ -161,9 +163,10 @@ Mtemp=NULL
                 param$mean=0
                  }
     }
+
     ###############
     ###############
-   
+ 
      if(model %in% c("Weibull","Gamma","LogLogistic")) {
           if(is.null(Xtemp)) X=matrix(rep(1,dimat))
           else               X=Xtemp
@@ -188,9 +191,9 @@ Mtemp=NULL
     }
 
 
-
+    
     nuisance = param[covmatrix$namesnuis]
- 
+    nuisance=Filter(Negate(is.null),nuisance)
     sel=substr(names(nuisance),1,4)=="mean"
     betas=as.numeric(nuisance[sel])   ## mean paramteres
 
@@ -207,11 +210,14 @@ Mtemp=NULL
     
     ################################################
     ################################################
+
     if(type %in% c("Tapering","tapering")) {
       covmatrix_true =  GeoCovmatrix(coordx, coordy, coordt, coordx_dyn, corrmodel,
        distance, grid, maxdist, maxtime, model, n, param,anisopars,
       radius, sparse, NULL, NULL, "Standard",X)
        }
+
+         
     ############
     tapmod=NULL
     cmodel=corrmodel
@@ -245,6 +251,8 @@ Mtemp=NULL
                           X11_loc=Xloc[(1:(nrow(Xloc)/2)),]
                           X22_loc=Xloc[(nrow(Xloc)/2+1):nrow(Xloc),]}
   }
+
+
 ########################################################################################
 ########################################################################################
 ########################################################################################

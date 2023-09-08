@@ -453,6 +453,8 @@ else            lname="comploglik2MM"
 }
 
 
+
+
 coords=cbind(coordx,coordy)
 
 if(!onlyvar){

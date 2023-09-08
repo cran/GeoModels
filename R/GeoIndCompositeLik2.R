@@ -293,7 +293,7 @@ param[sel]=0.1
 ###
 param=as.numeric(param)
 
-#print(model)
+
  ###
    if(!onlyvar){
   ##############################.  spatial or space time ############################################

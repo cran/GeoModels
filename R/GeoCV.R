@@ -43,7 +43,7 @@ if(fit$missp)  ### misspecification
 ############################################################
 if(space)
 {
-    print(space);print(spacetime);print(bivariate);print(local);print(estimation);print(K)
+    
 N=length(fit$data)
 coords=cbind(fit$coordx,fit$coordy)
 data=fit$data
@@ -85,18 +85,18 @@ if(!is.null(fit$anisopars))
  
 if(!local) {pr=GeoKrig(data=fit$data[sel_data], coordx=coords[sel_data,],  
 	            corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coords[-sel_data,], #ok
-	            model=fit$model, n=fit$n, mse=FALSE,#ok
+	            model=fit$model, n=fit$n, mse=TRUE,#ok
               param=param, anisopars=fit_s$anisopars,
                radius=fit$radius, sparse=sparse, X=X,Xloc=Xloc) #ok
-             print("1")}
+             }
 
 if(local) {pr=GeoKrigloc(data=fit$data[sel_data], coordx=coords[sel_data,],  
               corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coords[-sel_data,], #ok
-              model=fit$model, n=fit$n, mse=FALSE,#ok
+              model=fit$model, n=fit$n, mse=TRUE,#ok
               neighb=neighb,maxdist=maxdist,
               param=param, anisopars=fit_s$anisopars,
               radius=fit$radius, sparse=sparse, X=X,Xloc=Xloc) #ok
-              print("2")}
+              }
 
 pred[[i]]=as.numeric(pr$pred)
 err=data_to_pred-pr$pred  
@@ -301,9 +301,7 @@ if(estimation) {
 #####################################
 if(!local) {
            pr_st=pr_mse=list()
-
            for(j in 1:length(utt_1) ){
-         
             if(is.null(Xnew)) {Xnew_loc[j]=list(NULL)}
                pr=GeoKrig(data=datanew,   coordt=utt, coordx_dyn=coordx_dynnew,  #ok
                    corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coordx_dynnew_loc[[j]], #ok

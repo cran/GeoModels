@@ -5,7 +5,7 @@
 
    
 GeoVarestbootstrap=function(fit,K=100,sparse=FALSE,GPU=NULL,  local=c(1,1),optimizer="Nelder-Mead",
-  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, memdist=TRUE, M=30,L=500,seed=1)
+  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, M=30,L=500,seed=1)
 {
 
 if(length(fit$coordt)==1) fit$coordt=NULL
@@ -95,12 +95,12 @@ else{
 res_est=GeoFit( data=data_sim$data, start=fit$param,fixed=fit$fixed,#start=as.list(fit$param),fixed=as.list(fit$fixed),
    coordx=coords, coordt=fit$coordt, coordx_dyn=fit$coordx_dyn,
    copula=fit$copula,sensitivity=FALSE,anisopars=fit$anisopars,est.aniso=fit$est.aniso,
-   lower=lower,upper=upper,memdist=memdist,neighb=fit$neighb,
+   lower=lower,upper=upper,memdist=TRUE,neighb=fit$neighb,
    corrmodel=fit$corrmodel, model=model, sparse=FALSE,n=fit$n,
    GPU=GPU,local=local,  maxdist=fit$maxdist, maxtime=fit$maxtime, optimizer=optimizer,
    grid=fit$grid, likelihood=fit$likelihood, type=fit$type,
    X=fit$X, distance=fit$distance, radius=fit$radius)
-
+#print(unlist(res_est$param))
 
 
 if(res_est$convergence=='Successful'){
@@ -119,7 +119,7 @@ invG=var(res); G=try(solve(invG),silent=TRUE);if(!is.matrix(G)) print("Bootstrap
 stderr=sqrt(diag(invG))
 
 
-if((fit$likelihood=="Marginal"&&(fit$type=="Pairwise"))||fit$likelihood=="Conditional"&&(fit$type=="Pairwise"))
+if((fit$likelihood=="Marginal"&&(fit$type=="Independence"))||(fit$likelihood=="Marginal"&&(fit$type=="Pairwise"))||fit$likelihood=="Conditional"&&(fit$type=="Pairwise"))
 {
 
 H=fit$sensmat

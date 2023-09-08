@@ -3161,6 +3161,9 @@ double hyp2f1_neg_c_equal_bc(double a, double b, double x)
 }
 
 
+/*#############################################################################*/
+/*################## hyperfeometric function 2F1 ##############################*/
+/*#############################################################################*/
 
 double hypergeo(double a,double b,double c,double x)
 {
@@ -4557,8 +4560,8 @@ return(res);
 double biv_cop(double rho,int type_cop,int cond,
              double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2)
              {
-double dens=0.0,rho1=0.0;
-double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2,s1,s2;
+double dens=0.0,rho1=0.0,nu=0.0;
+double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0,s1,s2;
 
 
 
@@ -4753,7 +4756,6 @@ if(type_cop==1)  {
     { dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);}
     else                            // discrete                  
      { 
-      
         dens= log( pbnorm22(a1,g1,rho1) -   pbnorm22(a2,g1,rho1) - pbnorm22(a1,g2,rho1) + pbnorm22(a2,g2,rho1) );
       // Rprintf("%f %f %f %f--%f--%f\n ",a1,a2,g1,g2,rho1,dens);
         }
@@ -4761,7 +4763,7 @@ if(type_cop==1)  {
 /******************copula gaussiana*************************/             
 if(type_cop==2) 
 {
-    double nu;
+  
     if(model==50||model==42) nu=nuis[5];   // for beta2 regression
     if(model==16||model==11||model==30) nu=nuis[2];   // for pois binom binomneg 
     if(model==21||model==22||model==26) nu=nuis[3];   // gammma weibull 

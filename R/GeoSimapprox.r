@@ -63,27 +63,34 @@ return(dims*dimt)
 
 
 #########################################################
-tbm2d<- function(coord, a0, nu0, mu, sill, L, model, nugget){
+tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
   # Preparing parameters to use
   # =============================================
 
 
-  #if(model == "Matern"){
+  if(corrmodel == "Matern"){ model=0
+                             a0=as.numeric(param['scale'])
+                             nu0=as.numeric(param['smooth'])
+                             mu=NULL
+                             sill=as.numeric(param['sill']) 
+                             nugget = as.numeric(param['nugget'])
+                           }
+
+  if(corrmodel == "GenWend"){ model=1
+                             a0=as.numeric(param['scale'])
+                             nu0=as.numeric(param['smooth'])
+                             mu=as.numeric(param['power2'])
+                             sill=as.numeric(param['sill']) 
+                             nugget = as.numeric(param['nugget'])
+                           }
+
 
     a_frecuency = a0
     nu_frecuency = nu0
-     mu_frecuency = mu
+    mu_frecuency = mu
   parametersg <- list("C" = 1, "a" = a_frecuency, "nu1" = nu_frecuency, "mu" =    mu_frecuency )
   parameters <- list("C" = sill*(1-nugget), "a" = a0 , "nu1" = nu0, "mu" =  mu_frecuency )
-  #}
-  #if(model == "GenWend"){
-  #   a_frecuency = a0
-  #  nu_frecuency = nu0
-  #  mu_frecuency = mu
-  #model=1
-  #parametersg <- list("C" = 1, "a" = a_frecuency, "nu1" = nu_frecuency, "mu" =  mu_frecuency)
-  #parameters <- list("C" = sill, "a" = a0 , "nu1" = nu0, "mu" = mu)
-  #}
+
   d <- 1
   n <- dim(coord)[1]
   sequen <- c(seq(0,n-0.5, by = ceiling(1e6/2)),n)
@@ -109,11 +116,11 @@ tbm2d<- function(coord, a0, nu0, mu, sill, L, model, nugget){
   # Simulation at target locations with c code
   # ==========================================
   AMatrix <- sqrt(f$matrix_out)
-  simu <- .C("simu_on_coords", Ndim = as.integer(dim(coord)[1]) ,Mcoords = as.integer(dim(coord)[1]),
+  simu <- .C("simu_on_coords", Ndim = as.integer(n) ,Mcoords = as.integer(n),
              Mu = as.integer(dim(u)[1]) , coords = as.double(coord_n),
              amatrix = as.double(AMatrix),
              matrix_phi = as.double(phi), matrix_u = as.double(u),
-             matrix_out = as.double(rep(0, d*dim(coord)[1])),
+             matrix_out = as.double(rep(0, d*n)),
              PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
   simu <- matrix(simu$matrix_out, m, 1)/sqrt(L)
   simu = simu + rnorm(m, 0, sqrt(sill*nugget))
@@ -121,16 +128,12 @@ tbm2d<- function(coord, a0, nu0, mu, sill, L, model, nugget){
 }
 
 ######################################################################
-simu_approx=function(coords,coordt,method,corrmodel,param,M,L)
+simu_approx=function(coords,coordt,method,corrmodel,param,M,L,bivariate)
 {
 ## Turning Bands
 if(method=="TB")    
 {  
-   if(corrmodel=="Matern")  {model=0; mu=NULL}
-   if(corrmodel=="GenWend") {model=1; mu=as.numeric(param['power2'])}
-   
-   simu=tbm2d(coords, as.numeric(param['scale']), as.numeric(param['smooth']), mu, as.numeric(param['sill']), 
-                                                       L=L,  model = model, nugget = as.numeric(param['nugget']))
+   simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate) 
    simu=c(simu[,1])  
 }     
 ## Vecchia
@@ -360,7 +363,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
      
-      simD=simu_approx(coords,coordt,method,corrmodel,param,M,L)
+      simD=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -369,9 +372,11 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   while(KK<=npoi) {
   for(i in 1:k) {
 
-    simd=simu_approx(coords,coordt,method,corrmodel,param,M,L)
-   
-    ####################################################################### 
+
+    ################# here the approximated simulation  ##################################################
+    simd=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
+    ######################################################################################################
+
     namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
     nuisance<-param[namesnuis]
     if(i==1&&(model=="SkewGaussian"||model=="SkewGauss")&&bivariate) param["pcol"]=0
@@ -440,11 +445,9 @@ if(model %in% c("PoissonWeibull"))   {
  #### simulation for discrete random field based on indipendent copies  of GRF ######
  ###############################################################################################
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
-
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
-    
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L)
+      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -487,8 +490,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-  
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L)
+      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim

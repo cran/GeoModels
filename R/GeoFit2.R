@@ -22,8 +22,7 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
     if(!is.null(copula))
      { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
 
-    if(type=='Independence'&&likelihood!='Marginal') stop("Independence likelihood must be coupled with 
-        Marginal likelihood")
+    if(type=='Independence') stop("use Geofit for indipendence composite likelihood \n")
     ### Check the parameters given in input:
       if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
@@ -50,6 +49,11 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
                         if(is.null(fixed$sill)) fixed$sill=1
                         else                    fixed$sill=1}
 }
+
+
+
+
+       
 #############################################################################
 
     checkinput <- CkInput(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, "Fitting",
@@ -277,7 +281,7 @@ if(length(initparam$param)==1) optimizer="optimize"
 if(aniso) anisopars=as.list(c(fitted$par,ff)[namesaniso])
 
 if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
-                                          initparam$coordy=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
+                                          initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
                                         }   
 
 if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
