@@ -37,6 +37,9 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
             neighb=round(neighb)
             if(all(neighb<1))  stop("neighb must be an integer >=1")
           }
+    if(type=='Pairwise') 
+    
+    if(is.null(neighb)||is.null(maxdist)) stop("neighb and/or maxdist and/or  maxtime must be fixed")
     if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements")}
  
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
@@ -46,6 +49,7 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')){
+    if(!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")
                         if(is.null(fixed$sill)) fixed$sill=1
                         else                    fixed$sill=1}
 }
@@ -411,11 +415,12 @@ print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
     if(!is.null(x$copula)) {cat('\nCopula:', x$copula,'\n')}
     cat('\nSetting:', x$likelihood, method, '\n')
     cat('\nModel:', model, '\n')
+    cat('\nDistance:', x$distance, '\n')
     cat('\nType of the likelihood objects:', x$type, x$method,'\n')
     cat('\nCovariance model:', x$corrmodel, '\n')
     cat('\nOptimizer:', x$optimizer, '\n')
     cat('\nNumber of spatial coordinates:', x$numcoord, '\n')
-    cat('Number of dependent temporal realisations:', x$numtime, '\n')
+        if(x$spacetime) cat('Number of dependent temporal realisations:', x$numtime, '\n')
     cat('Type of the random field:', biv, '\n')
     cat('Number of estimated parameters:', length(x$param), '\n')
     cat('\nType of convergence:', x$convergence, '')

@@ -999,7 +999,7 @@ print.GeoCovmatrix <- function(x, digits = max(3, getOption("digits") - 3), ...)
     cat('\n Type of the random field:', biv, '\n')
     cat('\n Number of  parameters:', length(x$param), '\n')
     cat('\nParameters:\n')
-    print.default(x$param, digits = digits, print.gap = 2,
+    print.default(unlist(x$param), digits = digits, print.gap = 2,
                   quote = FALSE)
     cat('\n##################################################################\n')
     invisible(x)

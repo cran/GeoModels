@@ -158,8 +158,11 @@ The associated parameters in the argument \code{param} are
      \eqn{U(.,.,.)} is the Kummer hypergeometric function.
      If \eqn{h} is the geodesic distance then \eqn{\kappa \in (0,0.5]}
 
+    \item \eqn{Kummer{\_}Matern} It is a rescaled version of the  \eqn{Kummer} model  
+     that is \eqn{h} must be divided by \eqn{2(\kappa(1+\alpha)^{0.5}}.  When  \eqn{\alpha} goes to infinity it is the Matern model. 
+
     \item \eqn{Stable} defined as:
-    \deqn{R(h) = e^{-h^{\alpha}}}{R(h)=exp(-h ^\alpha)}
+    \deqn{R(h) = e^{-h^{\alpha}}}{R(h)=exp(-h ^{\alpha})}
     If \eqn{h} is the geodesic distance then \eqn{\alpha \in (0,1]}.
 
     \item \eqn{Wave} defined as:
@@ -186,7 +189,8 @@ The associated parameters in the argument \code{param} are
      The cases \eqn{\kappa=0,1,2} correspond to the \eqn{Wend0}, \eqn{Wend1} and \eqn{Wend2} respectively. 
 
     \item \eqn{GenWend_{\_}Matern} (Generalized Wendland Matern in  Bevilacqua et al. (2022)). It is defined as a rescaled version of the Generalized Wendland that is \eqn{h} must be divided by 
-    \eqn{(\Gamma(\beta+2\kappa+1)/\Gamma(\beta))^{1/(1+2\kappa)}}
+    \eqn{(\Gamma(\beta+2\kappa+1)/\Gamma(\beta))^{1/(1+2\kappa)}. When  eqn{\beta} goes to infinity it is the Matern model.
+    }
 
      
 
@@ -198,6 +202,10 @@ The associated parameters in the argument \code{param} are
 
 
      \item \eqn{Hypergeometric} (Parsimonious Hypegeometric model in Alegria and Emery (2022)) defined as the model \eqn{Hypergeometric2} with the restriction \eqn{\beta=\alpha}. 
+
+
+     \item \eqn{Hypergeometric{\_}Matern} It is a rescaled version of the  Parsimonious  \eqn{Hypergeometric} model  
+     that is \eqn{h} must be divided by \eqn{2\beta}.  When  \eqn{\beta} goes to infinity it is the Matern model. 
 
       \item \eqn{Multiquadric} defined as:
     \deqn{R(h) = (1-\alpha0.5)^{2\beta}/(1+(\alpha0.5)^{2}-\alpha cos(h))^{\beta}, \quad h \in [0,\pi]}

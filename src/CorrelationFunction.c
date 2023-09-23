@@ -63,6 +63,7 @@ double CheckCor(int *cormod, double *par)
             if(scale<=0 ||smooth<0) rho=-2;
       break;
       case 24: //kummer
+      case 25:  
         R_power1=par[0];
         scale=par[1];
         smooth=par[2];
@@ -553,17 +554,17 @@ double CorFct(int *cormod, double h, double u, double *par, int c11, int c22)
   rho=CorFunHyperg2(h,R_power, R_power1, smooth, scale);
         break;
 case 22: // hyperg correlation 1 parameter
-        R_power=par[0];
+        R_power=1/par[0];
         scale=par[1];
         smooth=par[2];
         //Rprintf("%f %f %f\n",R_power,smooth,scale);
        rho=CorFunHyperg(h,R_power, smooth, scale);
         break;
 case 23: // hyperg correlation 1 parameter with matern
-        R_power=par[0];
+        R_power=1/par[0];
         scale=par[1];
         smooth=par[2];
-  rho=CorFunHyperg(h,R_power, smooth, scale/(2*R_power));
+  rho=CorFunHyperg(h,R_power, smooth, scale*2*R_power);
         break;
 /*######*/
     case 19: // original   Generalised wend correlation
@@ -577,6 +578,12 @@ case 23: // hyperg correlation 1 parameter with matern
         scale=par[1];
         smooth=par[2];
   rho=CorKummer(h, R_power1, smooth, scale);
+        break;
+    case 25: //    kummer matern
+        R_power1=par[0];
+        scale=par[1];
+        smooth=par[2];
+  rho=CorKummer(h, R_power1, smooth, scale*2*sqrt(smooth*(R_power1+1)));
         break;
     case 6: // Bevilacqua Generalised wend correlation function  "better"  parametrization
         R_power1=1/par[0];
@@ -1877,7 +1884,7 @@ double CorFunW2(double lag,double scale,double smoo)
 /* generalized wendland function*/
 double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale)  // mu alpha beta
 {
-    double rho=0.0,x=0.0;double d=2.0;
+    double rho=0.0,x=0.0;int d=2;
 
     x=lag/scale;
     if(x<1e-32) {rho=1; return(rho);}
@@ -1910,32 +1917,14 @@ double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,dou
          *R_pow(1-x*x,R_power-smooth+R_power1-d/2-1)*hypergeo(R_power-smooth,R_power1-smooth,R_power-smooth+R_power1-d/2, 1-x*x));
       }
   else {rho=0;}
-   /*/second version
 
-        x=lag;
-        double *param;
-        param=(double *) Calloc(3,double);
-        param[0]=R_power1;param[1]=smooth;param[2]=scale;  //mu,alpha //beta
-        rho=wendintegral(x,param);
-        Free(param);*/
     return(rho);
 }
 
-
-/* kummer function*/
-double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
-{
-  double rho=0.0,x=0.0;
-    x=lag/scale;
-    if(x<1e-32) rho=1;
-    else
-    rho=(gammafn(smooth+R_power)/(gammafn(smooth)))*kummer(R_power,1-smooth,smooth*x*x);
-    return(rho);
-}    
-/* generalized wendland function*/
+/* pasimoniuos hypergeometric correlation  function*/
 double CorFunHyperg(double lag,double R_power,double smooth,double scale)  // mu alpha beta
 {
-    double rho=0.0,x=0.0;double d=2.0;
+    double rho=0.0,x=0.0;int d=2;
 
     x=lag/scale;
     if(x<1e-32) {rho=1; return(rho);}
@@ -1968,16 +1957,22 @@ double CorFunHyperg(double lag,double R_power,double smooth,double scale)  // mu
          *R_pow(1-x*x,2*R_power-smooth-d/2-1)*hypergeo(R_power-smooth,R_power-smooth,2*R_power-smooth-d/2, 1-x*x));
       }
   else {rho=0;}
-   /*/second version
-
-        x=lag;
-        double *param;
-        param=(double *) Calloc(3,double);
-        param[0]=R_power1;param[1]=smooth;param[2]=scale;  //mu,alpha //beta
-        rho=wendintegral(x,param);
-        Free(param);*/
-    return(rho);
+  
+return(rho);
 }
+
+
+/* kummer function*/
+double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
+{
+  double rho=0.0,x=0.0;
+    x=lag/scale;
+    if(x<1e-32) rho=1;
+    else
+    rho=(gammafn(smooth+R_power)/(gammafn(smooth)))*kummer(R_power,1-smooth,smooth*x*x);
+    return(rho);
+}    
+
 
 /* generalized wendland function*/
 double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu alpha beta

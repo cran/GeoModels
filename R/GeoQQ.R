@@ -150,6 +150,7 @@ if(model %in% c("Gamma"))
 #######################################  OK
 if(model %in% c("LogGaussian"))
 { 
+
    q_t = qlnorm(probabilities, exp(MM)-VV/2, sqrt(VV))
    q_t1 = qlnorm(probabilities1, exp(MM)-VV/2, sqrt(VV))
    plot(q_t,q_e,xlab=xlab,ylab=ylab,main = "LogGaussian qq-plot",...)
@@ -473,13 +474,9 @@ if(model %in% c("Gamma"))
 #######################################  OK 
 if(model %in% c("LogGaussian"))
 {
+
 ll=seq(min(dd),max(dd),  (max(dd)-min(dd))/100 )
-   qtpsas=function(x,MM,VV){
-   q=x*exp(VV/2);
-   a=-0.5*(log(q)-MM)^2/VV-log(q)-log(sqrt(VV))-0.5*log(2*pi)+VV/2;
-   return(exp(a))
-   }
-   d_l = dlnorm(ll,MM,VV)
+   d_l = dlnorm(ll,MM-VV/2, sqrt(VV))
    if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),xlab="",main="LogGaussian Histogram",ylim=ylim,breaks=breaks,...)
    lines(ll,d_l,...) 
 }

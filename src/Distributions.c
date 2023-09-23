@@ -75,6 +75,20 @@ double poch(double a, double m)
 
 
 
+double onef2(double a,double b,double c,double z)
+{
+double term,s1=0.0;int k=0;
+while(k<1000)
+{
+term=exp(log(poch(a,k))-(log(poch(b,k))+log(poch(c,k))) + k*log(z)-lgammafn(k+1));
+s1=s1+term;
+if(fabs(term)<MACHEP)  {break;}
+k++;
+}
+return(s1);
+}
+
+
 
 double log_hyp1F1_reg(int n,int m,double z){
 
@@ -4791,7 +4805,8 @@ double one_log_SkewGauss(double z,double m, double vari, double skew)
   double skew2  = R_pow(skew,2);
   double q=z-m;
   double ss=skew2+vari;
-  res=log(2)-0.5*log(ss)+dnorm(q/(sqrt(ss)),0,1,1)+pnorm( (skew*q)/(sqrt(vari)*sqrt(ss)),0,1,1,1);
+  double y=q/sqrt(ss);
+  res=-0.5*log(ss)+ log(2)+dnorm(y,0,1,1)+pnorm( (skew*y)/(sqrt(vari)),0,1,1,1);
   return(res);
 }
 
@@ -4877,8 +4892,9 @@ double one_log_loggaussian(double z,double m, double sill)
 double one_log_weibull(double z,double m, double shape)
 {
   double  res;
-  double c1=exp(m)/(gammafn(1+1/shape));
-  res=log(shape)-shape*log(c1)+(shape-1)*log(z)-R_pow(z/c1,shape);
+  double scale1=exp(m)/(gammafn(1+1/shape));
+  //res=log(shape)   - shape*log(scale1) +(shape-1)*log(z)-R_pow(z/scale1,shape);
+  res=log(shape) -log(scale1)  +  (shape-1)*(log(z)-log(scale1))   -    R_pow(z/scale1,shape);
   return(res);
 }
 double one_log_gamma(double z,double m, double shape)

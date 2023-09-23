@@ -96,6 +96,7 @@ indloglik<- function(fan,data,mm,nuis){
 
 if(fan== "Ind_Pair_Gamma")                 {
                                               shape=nuis[2]
+                                         
                                               res=sum(dgamma(data, shape=shape/2, scale = 1/(shape/(2*exp(mm))), log = TRUE))
                                             }
 if(fan== "Ind_Pair_Weibull")              {
@@ -164,7 +165,7 @@ return(-res)
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)
         if((is.null(MM))) Mean=c(X%*%mm)
         else Mean=c(MM)
-        Mean=c(X%*%mm)
+        
     
         result=indloglik(fan,data,Mean,other_nuis)
         return(result)

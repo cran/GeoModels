@@ -16,6 +16,10 @@ if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TR
 if(!(method=="cholesky"||method=="Vecchia"||method=="TB")) stop("The method of simulation is not correct")
 
 if(!is.numeric(seed)) stop(" seed must be numeric")
+
+
+if(is.numeric(alpha)) if(!(alpha<1&&alpha>0) ) stop(" alpha must be  numeric between 0 and 1")
+
 model=fit$model
 
 print("Parametric bootstrap can be time consuming ...")
@@ -100,11 +104,11 @@ res_est=GeoFit( data=data_sim$data, start=fit$param,fixed=fit$fixed,#start=as.li
    GPU=GPU,local=local,  maxdist=fit$maxdist, maxtime=fit$maxtime, optimizer=optimizer,
    grid=fit$grid, likelihood=fit$likelihood, type=fit$type,
    X=fit$X, distance=fit$distance, radius=fit$radius)
-#print(unlist(res_est$param))
 
 
-if(res_est$convergence=='Successful'){
- 
+
+if(res_est$convergence=='Successful'&&res_est$logCompLik<1.0e8) 
+ {
  res=rbind(res,unlist(res_est$param))
  k=k+1
 setTxtProgressBar(pb, k)

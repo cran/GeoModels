@@ -94,8 +94,8 @@ if(!dyn){  # not dynamic
 
     Tloc=length(time); TT=length(coordt)   
     out= nbor(coords,loc,distance,maxdist,neighb)
-    if(!is.null(M)) { Mma=matrix(M,nrow=TT,ncol=NN)}
-    if(!is.null(X)) { Xxa=list(); for(i in 1:ncol(X)) {Xxa[[i]]=matrix(X[,i],nrow=TT,ncol=NN)}}
+    if(!is.null(M)) { Mma=matrix(M,nrow=TT,ncol=NN,byrow=T)}
+    if(!is.null(X)) { Xxa=list(); for(i in 1:ncol(X)) {Xxa[[i]]=matrix(X[,i],nrow=TT,ncol=NN,byrow=T)}}
   
 
 
@@ -122,10 +122,11 @@ if(!dyn){  # not dynamic
           pp=order(coordt[sel_t])
           sel_tt[[k]]=coordt[sel_t][pp]
           if(!is.null(data)) data_sel[[k]]=(data[sel_t,sel_s])[pp,]
-          if(!is.null(M))   { MM[[k]]=as.numeric( (Mma[sel_t,sel_s])[pp,] ) }
+          if(!is.null(M))   { QQ=Mma[sel_t,sel_s]; MM[[k]]=as.numeric(t(QQ[pp,]))  }
           if(!is.null(X))   {   
                               KK=NULL
-                              for(l in 1:ncol(X)) { KK=cbind(KK,as.numeric( (Xxa[[l]][sel_t,sel_s])[pp,] )) }
+                              for(l in 1:ncol(X)) 
+                                  { AA=Xxa[[l]]; QQ=AA[sel_t,sel_s]; KK=cbind(KK,as.numeric( t(QQ[pp,] ))) }
                               XX[[k]]=KK       
                             }
        k=k+1

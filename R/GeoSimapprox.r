@@ -5,12 +5,12 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL)
+     local=c(1,1),method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,seed=NULL,X=NULL)
 {
 ####################################################################
 ############ internal function #####################################
 ####################################################################
-    RFfct1<- function(numcoord,numtime,grid,spacetime,bivariate,
+    RFfct1<- function(numcoord,numtime,spacetime,bivariate,
           dime,nuisance,simd,X,ns)
     {
         if(!bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,numcoord*numtime))}}  ## in the case of no covariates
@@ -18,13 +18,16 @@ GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrm
 
 
         if(!bivariate) {
-                               sel=substr(names(nuisance),1,4)=="mean";
+                              sel=substr(names(nuisance),1,4)=="mean";
                                num_betas=sum(sel);mm=NULL
-                               if(num_betas==1) mm=nuisance$mean
-                               if(num_betas>1)  mm=c(mm,as.numeric((nuisance[sel])))
-                        
-                               sim <- X%*%mm+simd
-                              }
+                               if(num_betas==1) {mm=nuisance$mean;
+                                                 sim = X*mm+simd
+                                                }
+                               if(num_betas>1)  { mm=c(mm,as.numeric((nuisance[sel])));
+                                                  sim = X%*%mm+simd
+                                                }
+                               
+                }
                 if(bivariate)  {
                   sel1=substr(names(nuisance),1,6)=="mean_1";
                   sel2=substr(names(nuisance),1,6)=="mean_2";
@@ -153,6 +156,10 @@ return(simu)
 ############# END internal functions ###############################
 ####################################################################
 
+    if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
+    if(!is.null(seed))  set.seed(seed)
+
+      
 
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(!(method=="Vecchia"||method=="TB")) stop("The method of simulation is not correct\n")
@@ -189,6 +196,13 @@ return(simu)
     {  sel=substr(names(param),1,4)=="mean";
        num_betas=sum(sel)   ## number of covariates
     }
+
+
+        if(!length(param$mean)>1){
+    if( !all(names(unlist(param)) %in% c(CorrParam(corrmodel), NuisParam(model,bivariate,num_betas=num_betas))) )
+       stop("only nuisance and correlation parameters must be included in param\n")
+    }
+    
    if(bivariate)
     {  sel1=substr(names(param),1,6)=="mean_1";
        num_betas1=sum(sel1)
@@ -225,15 +239,13 @@ else param$sill=1
            if(num_betas==1)  mm<-param$mean
            if(num_betas>1)   mm<- X%*%as.numeric((param[sel]))
            param$mean=0;if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
-
+        
 
         if((model %in% c("SkewGaussian","SkewGauss","TwoPieceGaussian","Logistic",
           "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
-                    "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))   ##
-        {
-          vv<-param$sill; param$sill=1
-        }
+                    "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))  {vv<-param$sill; param$sill=1}
+
         if(model%in% c("SkewGaussian","SkewGauss","SkewStudentT","TwoPieceTukeyh","TwoPieceBimodal",
                "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss"))
                { sk<-param$skew
@@ -372,7 +384,6 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   while(KK<=npoi) {
   for(i in 1:k) {
 
-
     ################# here the approximated simulation  ##################################################
     simd=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
     ######################################################################################################
@@ -382,9 +393,9 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     if(i==1&&(model=="SkewGaussian"||model=="SkewGauss")&&bivariate) param["pcol"]=0
     ####################################
    
-    sim<- RFfct1(numcoord,numtime,grid,spacetime,bivariate,
+    sim<- RFfct1(numcoord,numtime,spacetime,bivariate,
                   dime,nuisance,simd,X,ns)
-    
+     
     ####################################
     ####### starting cases #############
     ####################################
@@ -642,6 +653,8 @@ if(model %in% c("Gamma","Weibull"))   {
            }
       if(model %in% c("Gamma"))
       {
+
+
       if(!bivariate) sim=exp(mm)*rowSums(sim)/k
 
       if(bivariate){

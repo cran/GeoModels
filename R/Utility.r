@@ -67,6 +67,7 @@ CkCorrModel <- function(corrmodel)
                              Hypergeometric=22,HyperGeometric=22, hypergeometric=22,
                              Hypergeometric_Matern=23,HyperGeometric_Matern=23, hypergeometric_Matern=23,
                              Kummer=24,Kummer=24,
+                             Kummer_Matern=25,Kummer_matern=25,
              # spatial-temporal non-separable models
                              gneiting=42,Gneiting=42,  #ok
                              iacocesare=44,Iacocesare=44, #ok
@@ -810,7 +811,7 @@ CorrelationPar <- function(corrmodel)
         param <- c('power2','scale','smooth')
         return(param)}  
     # Generalised wend correlation model abnd reparametrized version and kummer correlation model
-     if(corrmodel %in% c(19,6,7,24)) {
+     if(corrmodel %in% c(19,6,7,24,25)) {
         param <- c('power2', 'scale','smooth')
         return(param)}
     # sine power on sphere 

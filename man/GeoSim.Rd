@@ -127,23 +127,22 @@ par(opar)
 
 ################################################################
 ###
-### Example 2. Simulation of a spatial binomial RF 
+### Example 2. Simulation of a spatial geometric RF 
 ### with  underlying exponential correlation
 ### on a regular grid
 ###
 ################################################################
 
 # Define the spatial-coordinates of the points:
-x <- runif(500);y <- runif(500)
+x <- runif(800);y <- runif(800)
 coords <- cbind(x,y)
 set.seed(251)
-n=5
 # Simulation of a spatial Binomial RF:
 sim <- GeoSim(coordx=coords, corrmodel="Wend0",
-             model="Binomial",n=n,sparse=TRUE,
+             model="BinomialNeg",n=1,sparse=TRUE,
              param=list(nugget=0,mean=0,scale=.2,power2=4))
 
-quilt.plot(coords,sim$data,nlevel=n+1,col=terrain.colors(n+1),zlim=c(0,n)) 
+quilt.plot(coords,sim$data,nlevel=max(sim$data),col=terrain.colors(max(sim$data+1))) 
 
 
 ################################################################

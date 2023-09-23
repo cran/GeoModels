@@ -155,7 +155,7 @@ if(model %in% c("Gaussian","SkewGaussian","Logistic","Tukeyh","Tukeyh2","Tukeygh
 if(!sum(names(fit$param)=="mean")) fit$param["mean"]=0
 if(!sum(names(fit$param)=="sill")) fit$param["sill"]=1}
 
-if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
+if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",  "LogGaussian", 
         "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
         "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", 
         "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 

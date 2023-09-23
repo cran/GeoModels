@@ -27,6 +27,12 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
 
     if(type=='Independence'&&likelihood!='Marginal') stop("Independence likelihood must be coupled with 
         Marginal likelihood")
+     
+     if(type=='Pairwise'){ 
+     if(is.null(coordt)) {if(is.null(neighb)&&is.null(maxdist)) stop("neighb or maxdist must be fixed")}
+     else                {if((is.null(neighb)||is.null(maxdist))&&is.null(maxtime)) stop("neighb or maxdist and maxtime must be fixed")}
+     }
+
     if((likelihood=='Marginal'&&type=="Independence")) {anisopars=NULL;est.aniso=c(FALSE,FALSE)}
     ### Check the parameters given in input:
       if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
@@ -52,7 +58,8 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
-        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')){
+        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) {
+if(!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")    
 if(is.null(fixed$sill)) fixed$sill=1
 else                    fixed$sill=1
 }
@@ -428,11 +435,12 @@ print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
     if(!is.null(x$copula)) {cat('\nCopula:', x$copula,'\n')}
     cat('\nSetting:', x$likelihood, method, '\n')
     cat('\nModel:', model, '\n')
+    cat('\nDistance:', x$distance, '\n')
     cat('\nType of the likelihood objects:', x$type, x$method,'\n')
     cat('\nCovariance model:', x$corrmodel, '\n')
     cat('\nOptimizer:', x$optimizer, '\n')
     cat('\nNumber of spatial coordinates:', x$numcoord, '\n')
-    cat('Number of dependent temporal realisations:', x$numtime, '\n')
+    if(x$spacetime) cat('Number of dependent temporal realisations:', x$numtime, '\n')
     cat('Type of the random field:', biv, '\n')
     cat('Number of estimated parameters:', length(x$param), '\n')
     cat('\nType of convergence:', x$convergence, '')

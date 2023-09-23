@@ -91,7 +91,7 @@ forGaussparam<-function(model,param,bivariate)
                                if(num_betas>1)  { mm=c(mm,as.numeric((nuisance[sel])));
                                                   sim = X%*%mm+simd
                                                 }
-                               
+                                   
                               }
                 if(bivariate)  {
                   sel1=substr(names(nuisance),1,6)=="mean_1";
@@ -168,6 +168,11 @@ else param$sill=1
     { 
       sel=substr(names(param),1,4)=="mean";
       num_betas=sum(sel)   ## number of covariates
+
+        if(!length(param$mean)>1){
+    if( !all(names(unlist(param)) %in% c(CorrParam(corrmodel), NuisParam2(model,bivariate,num_betas=num_betas))) )
+       stop("only nuisance and correlation parameters must be included in param\n")
+    }
     
     k=1
 #################################
@@ -367,6 +372,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     #######################################################################
     nuisance<-param[ccov$namesnuis]
     sim<-RFfct1(ccov,dime,nuisance,simd,ccov$X,ns)
+    
     ####################################
     ####### starting cases #############
     ####################################

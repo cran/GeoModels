@@ -24,13 +24,9 @@ comploglik2MM <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fix
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
         res=double(1)
 ################################
-
-
-
 if(!type_cop) { # not copula models
          if(aniso){     ### anisotropy
              anisopar<-param[namesaniso]
-          
              coords1=GeoAniso (coords, anisopars=anisopar)
              c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
         result=dotCall64::.C64(as.character(fan),
@@ -40,6 +36,7 @@ if(!type_cop) { # not copula models
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
          }  
       else{      ### not anisotropy
+        #print(length(Mean));print(length(data1));print(length(data2));print(length(colidx));print(length(rowidx));
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
@@ -102,6 +99,7 @@ if(!type_cop) { # not copula models
         }
          else
          {
+          #print(length(Mean));print(length(data1));print(length(data2));print(length(colidx));print(length(rowidx));
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
@@ -753,6 +751,7 @@ if(!onlyvar){
     }
 
     if(optimizer=='nlminb'||optimizer=='multinlminb'){
+
      
         CompLikelihood$par <- CompLikelihood$par
         names(CompLikelihood$par)<- namesparam

@@ -475,12 +475,13 @@ coords=cbind(coordx,coordy)
     }
 
     if(optimizer=='nlminb'||optimizer=='multinlminb' ){
+     
         CompLikelihood$par <- CompLikelihood$par
         names(CompLikelihood$par)<- namesparam
         CompLikelihood$value <- -CompLikelihood$objective
         if(CompLikelihood$convergence == 0) { CompLikelihood$convergence <- 'Successful' }
         else {CompLikelihood$convergence <- "Optimization may have failed" }
-        if(CompLikelihood$objective==-1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
+        #if(CompLikelihood$objective==-1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
     }
     if(optimizer=='optimize'){
     param<-CompLikelihood$minimum
