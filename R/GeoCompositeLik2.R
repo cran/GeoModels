@@ -86,10 +86,11 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
 
 ############################################
 if(!type_cop) { # not copula models 
+
+    
         if(aniso){
             anisopar<-param[namesaniso]
-               #print(anisopar)
-            coords1=GeoAniso (coords, anisopars=anisopar)
+            coords1=GeoAniso(coords, anisopars=anisopar)
           c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
           result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
@@ -99,7 +100,7 @@ if(!type_cop) { # not copula models
         }
          else
          {
-          #print(length(Mean));print(length(data1));print(length(data2));print(length(colidx));print(length(rowidx));
+  
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
@@ -565,6 +566,8 @@ if(!onlyvar){
     if(optimizer=='nlminb'){
 
     # tt1 <- proc.time() 
+
+
      CompLikelihood <-nlminb(objective=eval(as.name(lname)),start=param,colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
                                 control = list( iter.max=100000),
                               lower=lower,upper=upper,

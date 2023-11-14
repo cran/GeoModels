@@ -142,9 +142,75 @@ Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.rese
 
 
 library(GeoModels)
+
 ################################################################
 ###
-### Example 1. Parametric test of Gaussianity
+### Example 1. Test on the parameter
+### of a regression model using standard likelihood
+###
+###############################################################
+set.seed(342)
+model="Gaussian" 
+# Define the spatial-coordinates of the points:
+NN=150
+x = runif(NN, 0, 1)
+y = runif(NN, 0, 1)
+coords = cbind(x,y)
+# Parameters
+mean=1; mean1=-1.25;  # regression parameters
+nugget=0; sill=1
+
+# matrix covariates
+X=cbind(rep(1,nrow(coords)),runif(nrow(coords)))
+
+# model correlation 
+corrmodel="Wend0"
+power2=4;c_supp=0.2
+
+# simulation
+param=list(power2=power2,mean=mean,mean1=mean1,
+              sill=sill,scale=c_supp,nugget=nugget)
+data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param,X=X)$data
+
+I=Inf
+##### H1: (regressian mean)
+fixed=list(nugget=nugget,power2=power2)
+start=list(mean=mean,mean1=mean1,scale=c_supp,sill=sill)
+
+lower=list(mean=-I,mean1=-I,scale=0,sill=0)
+upper=list(mean=I,mean1=I,scale=I,sill=I)
+# Maximum pairwise composite-likelihood fitting of the RF:
+fitH1 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
+                   likelihood="Full",type="Standard",varest=TRUE,
+                   lower=lower,upper=upper,
+                   optimizer="nlminb",X=X,
+                    start=start,fixed=fixed)
+
+unlist(fitH1$param)
+
+##### H0: (constant mean i.e beta1=0)
+fixed=list(power2=power2,nugget=nugget,mean1=0)
+start=list(mean=mean,scale=c_supp,sill=sill)
+lower=list(mean=-I,scale=0,sill=0)
+upper=list(mean=I,scale=I,sill=I)
+# Maximum pairwise composite-likelihood fitting of the RF:
+fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
+                    likelihood="Full",type="Standard",varest=TRUE,
+                      lower=lower,upper=upper,
+                   optimizer="nlminb",X=X,
+                    start=start,fixed=fixed)
+
+
+#  Wald statistic and likelihood ratio statistic test
+#  rejecting null  hypothesis beta1=0
+GeoTests(fitH1, fitH0 ,statistic='Wald')
+GeoTests(fitH1, fitH0 , statistic='Wilks')
+
+
+
+################################################################
+###
+### Example 2. Parametric test of Gaussianity
 ### using SinhAsinh random fields using standard likelihood
 ###
 ###############################################################
@@ -158,7 +224,7 @@ coords = cbind(x,y)
 # Parameters
 mean=0; nugget=0; sill=1
 ### skew and tail parameters
-skew=0;tail=1   ## H0 is Gaussianity
+skew=0.6;tail=1.7   ## H0 is Gaussianity
 # underlying model correlation 
 corrmodel="Wend0"
 power2=4;c_supp=0.2
@@ -169,7 +235,7 @@ param=list(power2=power2,skew=skew,tail=tail,
 data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
 
 
-##### H1
+##### H1: SinhAsinh model
 fixed=list(power2=power2,nugget=nugget,mean=mean)
 start=list(scale=c_supp,skew=skew,tail=tail,sill=sill)
 
@@ -196,13 +262,10 @@ fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                    optimizer="nlminb",
                     start=start,fixed=fixed)
 
-
-#  Wald statistic test
-GeoTests(fitH1, fitH0 ,statistic='Wald')
-# likelihood ratio statistic test
-GeoTests(fitH1, fitH0 , statistic='Wilks')
-
-
+#  Wald statistic and likelihood ratio statistic test
+#  rejecting null  hypothesis tail=1,skew=0
+GeoTests(fitH1, fitH0,statistic='Wald')
+GeoTests(fitH1, fitH0,statistic='Wilks')
 
 }
 \keyword{spatial}

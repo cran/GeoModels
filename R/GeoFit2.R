@@ -39,8 +39,10 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
           }
     if(type=='Pairwise') 
     
-    if(is.null(neighb)||is.null(maxdist)) stop("neighb and/or maxdist and/or  maxtime must be fixed")
-    if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements")}
+    if(is.null(neighb)||is.null(maxdist)) stop("neighb and/or maxdist and/or  maxtime must be fixed\n")
+    if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements\n")}
+    if(!is.character(optimizer)) stop("invalid optimizer\n")
+     if(!is.character(distance)) stop("invalid distance\n")
  
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
 if(!bivariate){
@@ -168,13 +170,14 @@ initparam$param=aa[sel]
 update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,estimate_aniso)
 {
  un_anisopars=unlist(anisopars); namesaniso=names(un_anisopars)  
- kk=unlist(anisopars)*estimate_aniso
+ anisostart=unlist(anisopars)[estimate_aniso]
+ anisofixed=unlist(anisopars)[!estimate_aniso]
+ if(length(anisostart)==0) anisostart=NULL
+ if(length(anisofixed)==0) anisofixed=NULL
  ll=c(0,1)
  uu=c(pi,1e+25);
  lwr=c(lower,ll[estimate_aniso])
  upr=c(upper,uu[estimate_aniso])
- anisostart=kk[kk>0]
- anisofixed=kk[kk==0]
  param=c(param,anisostart)
  fixed=c(fixed,anisofixed)
  namesparam=names(param);namesfixed=names(fixed)
@@ -183,6 +186,7 @@ update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,es
   if(!estimate_aniso[1]& estimate_aniso[2]) fixed["angle"]=un_anisopars['angle']
   if(!estimate_aniso[1]&!estimate_aniso[2]) {fixed["angle"]=un_anisopars['angle'];fixed["ratio"]=un_anisopars['ratio']}
     }
+   
 a=list(param=param,fixed=fixed,namesparam=namesparam,namesfixed=namesfixed,lower=lwr,upper=upr)
 return(a)
 }

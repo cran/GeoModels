@@ -153,14 +153,27 @@ if(model %in% c("Gaussian","SkewGaussian","Logistic","Tukeyh","Tukeyh2","Tukeygh
  "TwoPieceStudentT","TwoPieceGaussian","TwoPieceTukeyh",
  "TwoPieceBimodal","Gaussian_misp_SkewStudentT","SkewStudentT")){
 if(!sum(names(fit$param)=="mean")) fit$param["mean"]=0
-if(!sum(names(fit$param)=="sill")) fit$param["sill"]=1}
+if(!sum(names(fit$param)=="sill")) fit$param["sill"]=1
+
+   sel=substr(names(unlist(fit$fixed)),1,4)=="mean"
+            if(sum(sel)>=1) fit$fixed=fit$fixed[!sel]
+}
+
+
 
 if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",  "LogGaussian", 
         "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
         "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", 
         "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
         "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
-        "Kumaraswamy")) {  if(!sum(names(fit$param)=="mean")) fit$param["mean"]=0}
+        "Kumaraswamy")) {  if(!sum(names(fit$param)=="mean")) fit$param["mean"]=0
+                          
+            sel=substr(names(unlist(fit$fixed)),1,4)=="mean"
+            if(sum(sel)>=1) fit$fixed=fit$fixed[!sel]
+
+    
+                          
+}
 
 
 

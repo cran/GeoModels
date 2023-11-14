@@ -22,7 +22,7 @@ void Comp_Pair_Gauss2mem(int *cormod, double *data1,double *data2,int *NN,
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
     if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
-
+//Rprintf("%d %f\n",npairs[0],nugget);
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
   //Rprintf("%f %f %f  %d\n",lags[i],data1[i],data2[i],*npairs);

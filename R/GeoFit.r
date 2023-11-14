@@ -23,14 +23,14 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
     }
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
-     { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
+     { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong\n")}
 
     if(type=='Independence'&&likelihood!='Marginal') stop("Independence likelihood must be coupled with 
-        Marginal likelihood")
+        Marginal likelihood\n")
      
      if(type=='Pairwise'){ 
-     if(is.null(coordt)) {if(is.null(neighb)&&is.null(maxdist)) stop("neighb or maxdist must be fixed")}
-     else                {if((is.null(neighb)||is.null(maxdist))&&is.null(maxtime)) stop("neighb or maxdist and maxtime must be fixed")}
+     if(is.null(coordt)) {if(is.null(neighb)&&is.null(maxdist)) stop("neighb or maxdist must be fixed\n")}
+     else                {if((is.null(neighb)||is.null(maxdist))&&is.null(maxtime)) stop("neighb or maxdist and maxtime must be fixed\n")}
      }
 
     if((likelihood=='Marginal'&&type=="Independence")) {anisopars=NULL;est.aniso=c(FALSE,FALSE)}
@@ -46,10 +46,13 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
     if(!is.null(X)) X=as.matrix(X)
     if(is.numeric(neighb)) {
             neighb=round(neighb)
-            if(all(neighb<1))  stop("neighb must be an integer >=1")
+            if(all(neighb<1))  stop("neighb must be an integer >=1\n")
           }
-    if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements")}
-    if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector")}
+    if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements\n")}
+    if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector\n")}
+
+    if(!is.character(optimizer)) stop("invalid optimizer\n")
+    if(!is.character(distance)) stop("invalid distance\n")
      
 
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
@@ -169,28 +172,24 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))
 update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,estimate_aniso)
 {
  un_anisopars=unlist(anisopars); namesaniso=names(un_anisopars)  
- kk=unlist(anisopars)*estimate_aniso
+ anisostart=unlist(anisopars)[estimate_aniso]
+ anisofixed=unlist(anisopars)[!estimate_aniso]
+ if(length(anisostart)==0) anisostart=NULL
+ if(length(anisofixed)==0) anisofixed=NULL
  ll=c(0,1)
  uu=c(pi,1e+25);
  lwr=c(lower,ll[estimate_aniso])
  upr=c(upper,uu[estimate_aniso])
- anisostart=kk[kk>0]
- anisofixed=kk[kk==0]
  param=c(param,anisostart)
  fixed=c(fixed,anisofixed)
- namesparam=names(param)
- namesfixed=names(fixed)
+ namesparam=names(param);namesfixed=names(fixed)
  if(sum(!is.na(fixed[namesaniso]))){ # updating fixed values
   if(!estimate_aniso[2]& estimate_aniso[1]) fixed["ratio"]=un_anisopars['ratio']
   if(!estimate_aniso[1]& estimate_aniso[2]) fixed["angle"]=un_anisopars['angle']
   if(!estimate_aniso[1]&!estimate_aniso[2]) {fixed["angle"]=un_anisopars['angle'];fixed["ratio"]=un_anisopars['ratio']}
     }
-
-a=list(param=param,fixed=fixed,namesparam=namesparam,namesfixed=namesfixed,lower=lwr,upper=upr)
-return(a)
-}
 ########
-
+}
 
 
 

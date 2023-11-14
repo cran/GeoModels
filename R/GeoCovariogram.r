@@ -185,6 +185,7 @@ fitted$fixed=unlist(fitted$fixed)
         sel=substr(names(nuisance),1,4)=="mean"
         mm=nuisance[sel]
         nuisance=nuisance[!sel]
+        
 
         }
       if(bivariate){
@@ -235,13 +236,13 @@ else                                     nui['nugget']=nuisance['nugget']
 
     # Gaussian random field:
     if(gaussian){
-    
-        if(bivariate){  covariance11 <- correlation[(0*length(lags_m)+1):(1*length(lags_m))]
-                        covariance12 <- correlation[(1*length(lags_m)+1):(2*length(lags_m))]
-                        covariance22 <- correlation[(3*length(lags_m)+1):(4*length(lags_m))]
-                        variogram11  <- correlation[(4*length(lags_m)+1):(5*length(lags_m))]
-                        variogram12  <- correlation[(5*length(lags_m)+1):(6*length(lags_m))]
-                        variogram22  <- correlation[(7*length(lags_m)+1):(8*length(lags_m))]
+    llm=length(lags_m)
+        if(bivariate){  covariance11 <- correlation[(0*llm+1):(1*llm)]
+                        covariance12 <- correlation[(1*llm+1):(2*llm)]
+                        covariance22 <- correlation[(3*llm+1):(4*llm)]
+                        variogram11  <- correlation[(4*llm+1):(5*llm)]
+                        variogram12  <- correlation[(5*llm+1):(6*llm)]
+                        variogram22  <- correlation[(7*llm+1):(8*llm)]
                            }
         else { 
 
@@ -511,6 +512,7 @@ covariance=sill*vs*corr;variogram=sill*vs*(1-corr)
                         vs=exp(mm)^2*(gamma(1+2/nuisance["shape"])/gamma(1+1/nuisance["shape"])^2-1)
                         auxcorr= (gamma(1+1/nuisance['shape']))^2/((gamma(1+2/nuisance['shape']))-(gamma(1+1/nuisance['shape']))^2)
                         cc=auxcorr*(Re(hypergeo::hypergeo(-1/nuisance['shape'], -1/nuisance['shape'], 1,correlation^2)) -1)
+
                         covariance=vs*cc;variogram=vs*(1-cc)  }
                     }
 ##########################################
@@ -775,7 +777,7 @@ covariance=sill*vs*corr;variogram=sill*vs*(1-corr)
                   theta=30,main=vario.main, cex.axis=.8,
                    cex.lab=.8)  #zlim=c(0,max(variogram))
 
-            vvv=nuisance["nugget"]+nuisance["sill"]
+            vvv=nuisance["sill"]
             ########
             if(gamma)         vvv=2*exp(mm["mean"])^2/nuisance["shape"]
             if(weibull)       vvv=exp(mm["mean"])^2*(gamma(1+2/nuisance["shape"])/gamma(1+1/nuisance["shape"])^2-1)
