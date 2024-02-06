@@ -5,7 +5,7 @@
 GeoCV=function(fit, K=100, estimation=FALSE, 
    optimizer="Nelder-Mead",lower=NULL, upper=NULL,
     n.fold=0.05, local=FALSE,neighb=NULL,maxdist=NULL,maxtime=NULL,
-        sparse=FALSE, type_krig="Simple", which=1,seed=1)
+        sparse=FALSE, type_krig="Simple", which=1)
 {
 
 if(n.fold>0.99||n.fold<0.01) stop("n.fold must be beween 0.01 and 0.99")
@@ -52,7 +52,7 @@ Mloc=NULL
 if(length(fit$fixed$mean)>1)  tempM=fit$fixed$mean
 if(!is.null(X)) tempX=fit$X
 
-set.seed(round(seed))
+#set.seed(round(seed))
 pb <- txtProgressBar(min = 0, max = K, style = 3)
 while(i<=K){
 Sys.sleep(0.1)
@@ -156,7 +156,7 @@ data_tot=cbind(cc,data_tot,fit$X)
 }
 
 
-set.seed(round(seed))
+#set.seed(round(seed))
 pb <- txtProgressBar(min = 0, max = K, style = 3)
 
 while(i<=K){
@@ -289,7 +289,7 @@ if(!is.null(X)) {
                 if(!is.list(fit$X)){X1=fit$X[1:ns[1],];X2=fit$X[(ns[1]+1):(ns[1]+ns[2]),]}
                 if( is.list(fit$X)){X1=fit$X[[1]];X2=fit$X[[2]]}
                 }
-set.seed(round(seed))
+#set.seed(round(seed))
 
 pb <- txtProgressBar(min = 0, max = K, style = 3)
 #param=as.list(c(fit$param,fit$fixed))

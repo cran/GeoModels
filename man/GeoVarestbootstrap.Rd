@@ -7,7 +7,7 @@
 \usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE,
 GPU=NULL,local=c(1,1),optimizer="Nelder-Mead",
                      lower=NULL, upper=NULL, 
-                     method="cholesky",alpha=0.95, M=30,L=500,seed=1)}
+                     method="cholesky",alpha=0.95, M=30,L=500)}
 \arguments{
   \item{fit}{A fitted object obtained from the
     \code{\link{GeoFit}}.}
@@ -26,7 +26,6 @@ GPU=NULL,local=c(1,1),optimizer="Nelder-Mead",
          \item{alpha}{ Numeric; The level of the confidence interval. }
          \item{M}{Numeric; the number of neighboords in the Vecchia method.} 
       \item{L}{Numeric; the number of lines in the  turning band method.} 
-        \item{seed}{Numeric; The seed used in the  n-fold  kriging cross-validation. Default is 1.}
      }
 \details{ The function update a \code{GeoFit} object  estimating stderr estimation 
 and confidence interval using parametric bootstrap.}

@@ -55,12 +55,20 @@ double CheckCor(int *cormod, double *par)
         if(scale<=0 || R_power<3.5) rho=-2;
         break;
     case 19: // Generalised wendland
+               R_power1=par[0];
+        scale=par[1];
+        smooth=par[2];
+       //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
+      
+            if(scale<=0 ||smooth<-0.5||R_power1>(1.5+smooth) ) rho=-2;
+      break;
     case 6:
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
        //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
-            if(scale<=0 ||smooth<0) rho=-2;
+    
+            if(scale<=0 ||smooth<-0.5||R_power1>(1.5+smooth) ) rho=-2;
       break;
       case 24: //kummer
       case 25:  
@@ -2015,7 +2023,6 @@ double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu
       }
   else {rho=0;}
    /*/second version
-
         x=lag;
         double *param;
         param=(double *) Calloc(3,double);

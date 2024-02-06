@@ -1784,11 +1784,11 @@ if(spacetime)   #  space time  case
 
 
  # ###    deleting symmetric indexes with associate distances #unuseful
-  if(nosym){
-     aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-     sol$rowidx=c(aa$xy[,1])
-     sol$colidx=c(aa$xy[,2])
-     sol$lags=c(aa$d)}
+  if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
+             sol$rowidx=c(aa$xy[,1])
+             sol$colidx=c(aa$xy[,2])
+             sol$lags=c(aa$d)
+           }
 
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;

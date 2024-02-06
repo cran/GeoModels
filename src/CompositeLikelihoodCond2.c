@@ -1,5 +1,7 @@
 #include "header.h"
 
+
+ // if(CheckCor(cormod,par)==-2){rho[0]=-2;return;}
 /******************************************************************************************/
 /******************************************************************************************/
 /********************* SPATIAL CASE *****************************************************/
@@ -13,6 +15,7 @@ void Comp_Cond_Gauss2mem(int *cormod, double *data1,double *data2,int *NN,
     double  weights=1.0,sill,nugget,corr,bl,l2;
     sill=nuis[1];nugget=nuis[0];
     if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    //if(CheckCor(cormod,par)==-2){*res=LOW; return;}
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                       corr=CorFct(cormod,lags[i],0,par,0,0);

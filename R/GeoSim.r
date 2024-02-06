@@ -371,8 +371,9 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     }
     #######################################################################
     nuisance<-param[ccov$namesnuis]
-    sim<-RFfct1(ccov,dime,nuisance,simd,ccov$X,ns)
     
+    sim<-RFfct1(ccov,dime,nuisance,simd,ccov$X,ns)
+
     ####################################
     ####### starting cases #############
     ####################################
@@ -719,7 +720,7 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
     if(model %in% c("Tukeyh2"))   {
        sim=c(t(sim))
        sel=sim>0
-      # print(t1l);print(t2l)
+
        bb=sim*exp(t1l*sim^2/2)*as.numeric(sel);  bb[bb==0]=1
        aa=sim*exp(t2l*sim^2/2)*as.numeric(!sel); aa[aa==0]=1
        sim= mm+sqrt(vv)*(aa*bb)
@@ -875,6 +876,7 @@ while(KK<=npoi) {
     ####################################
 
     sim<-RFfct1(ccov,dime,nuisance,simd,ccov$X,ns)
+
     if(model %in% c("Weibull","SkewGaussian","Binomial","Poisson","LogGaussian","Gamma")) {
      dd[,,i]=t(sim)
      }

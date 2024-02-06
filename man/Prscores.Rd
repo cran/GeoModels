@@ -2,8 +2,8 @@
 \alias{Prscores}
 \encoding{UTF-8}
 \title{
-Computation of three predictive scores: RMSE, LSCORE, CRPS
-for spatial, spatiotemporal and bivariate Gaussian RF.}
+Computation of three predictive scores: RMSE, LSCORE, CRPS based on drop-one 
+cross-validation prediction for spatial, spatiotemporal and bivariate Gaussian RF.}
 \description{
   The function computes RMSE, LSCORE, CRPS predictive scores.
 }

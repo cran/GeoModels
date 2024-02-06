@@ -130,25 +130,107 @@ tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
   return(simu)
 }
 
+######################## space time case: separable with Circ embeeding+ftt ##########################
+
+CE_Space_Time <- function(coords, time.seq, param,corrmodel,distance){
+
+  time.seq <- time.seq - time.seq[1]
+  Ns <- nrow(coords)
+  Nt <- length(time.seq)
+  Nt.ext <- (2*(Nt-1))
+  N0 <- Ns*Ns*Nt.ext
+  
+#################################################
+###### main separable models ####################
+#################################################
+if(corrmodel=="Matern_Matern"){
+  param_s <- list(nugget = 0, sill = 1, scale = param$scale_s, smooth = param$smooth_s)
+  param_t <- list(nugget = 0, sill = 1, scale = param$scale_t, smooth = param$smooth_t) 
+  corrmodel="Matern"   
+  }
+if(corrmodel=="GenWend_GenWend"){
+  param_s <- list(nugget = 0,sill = 1, scale = param$scale_s, smooth = param$smooth_s,power2=param$power2_s)
+  param_t <- list(nugget = 0,sill = 1, scale = param$scale_t, smooth = param$smooth_t,power2=param$power2_t)  
+  corrmodel="GenWend"                            
+  }
+if(corrmodel=="GenWend_Matern_GenWend_Matern"){
+  param_s <- list(nugget = 0,sill = 1, scale = param$scale_s, smooth = param$smooth_s,power2=param$power2_s)
+  param_t <- list(nugget = 0,sill = 1, scale = param$scale_t, smooth = param$smooth_t,power2=param$power2_t)  
+  corrmodel="GenWend_Matern"                         
+  }
+if(corrmodel=="Kummer_Kummer"){
+  param_s <- list(nugget = 0,sill = 1, scale = param$scale_s, smooth = param$smooth_s,power2=param$power2_s)
+  param_t <- list(nugget = 0,sill = 1, scale = param$scale_t, smooth = param$smooth_t,power2=param$power2_t)  
+  corrmodel="Kummer"                            
+  }
+if(corrmodel=="Kummer_Matern_Kummer_Matern"){
+  param_s <- list(nugget = 0,sill = 1, scale = param$scale_s, smooth = param$smooth_s,power2=param$power2_s)
+  param_t <- list(nugget = 0,sill = 1, scale = param$scale_t, smooth = param$smooth_t,power2=param$power2_t)  
+  corrmodel="Kummer_Matern"                         
+  }
+#################################################
+################################################# 
+  cova.mat.s <- GeoCovmatrix(coordx = coords, corrmodel = corrmodel, param = param_s,distance=distance)$covmatrix
+  cova.mat.s <- (1 - param$nugget)*cova.mat.s
+  diag(cova.mat.s) <- 1
+  ## cholesky decomposition
+  
+  chol.s <- t(chol(cova.mat.s))
+
+  auxiliar.seq <- c(time.seq, rev(time.seq[-c(1,Nt)]))
+  cova.mat.t <- (1 - param$nugget)*GeoModels::GeoCorrFct(x = auxiliar.seq, 
+                                                              corrmodel = corrmodel, 
+                                                              param = param_t)
+  cova.mat.t[auxiliar.seq == 0] <- 1
+  spectrum.t <- sqrt(Re( fft(cova.mat.t) ))
+  
+  X <- complex(real = rep(0, Ns*Nt.ext), imaginary = rep(0, Ns*Nt.ext) ) 
+  for(t in 1:Nt.ext){
+    Z0 <- complex(real = rnorm(Ns), imaginary = rnorm(Ns) ) 
+    X[1:Ns + Ns*(t-1)] <- (spectrum.t[t]*chol.s)%*%Z0
+  }
+  
+  X <- matrix(X, ncol = Ns, byrow = T)
+  X <- apply(X, 2, function(x) fft(x, T)/sqrt(Nt.ext))
+  X <- sqrt(param$sill)*X[1:Nt,]
+  
+  result <-  c(t(Re(X)))
+  
+  return(result)
+}
+
+
+
 ######################################################################
-simu_approx=function(coords,coordt,method,corrmodel,param,M,L,bivariate)
+simu_approx=function(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
 {
-## Turning Bands
-if(method=="TB")    
+##### spatial case 
+if(!spacetime){    
+   ## Turning Bands
+   if(method=="TB")    
 {  
    simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate) 
    simu=c(simu[,1])  
 }     
 ## Vecchia
 if(method=="Vecchia"){ 
-if(corrmodel=="Matern") model1="matern_isotropic"
-simu=GpGp::fast_Gp_sim(covparms=c(as.numeric(param['sill']),
+   if(corrmodel=="Matern") model1="matern_isotropic"
+   simu=GpGp::fast_Gp_sim(covparms=c(as.numeric(param['sill']),
                                   as.numeric(param['scale']),
                                   as.numeric(param['smooth']),
                                   as.numeric(param['nugget'])), 
                                   covfun_name = model1, coords, m = M)
+                      }
 }
+##### spacetime case ######
+if(spacetime)  {
 
+if(method=="Vecchia") print("ciao") 
+
+if(method=="CE"){
+    simu=CE_Space_Time(coords=coords,
+          time.seq=coordt, param=param,corrmodel= corrmodel,distance=distance)}
+}
 return(simu)
 }
 
@@ -156,13 +238,11 @@ return(simu)
 ############# END internal functions ###############################
 ####################################################################
 
-    if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
     if(!is.null(seed))  set.seed(seed)
 
-      
 
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
-    if(!(method=="Vecchia"||method=="TB")) stop("The method of simulation is not correct\n")
+    if(!(method=="Vecchia"||method=="TB"||method=="CE")) stop("The method of simulation is not correct\n")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
     model=gsub("[[:blank:]]", "",model)
     distance=gsub("[[:blank:]]", "",distance)
@@ -184,6 +264,11 @@ return(simu)
     ##############################################################################
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
     spacetime<-CheckST(CkCorrModel(corrmodel))
+    space=!spacetime&&!bivariate
+    if(space)    if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
+    if(spacetime)if(!(corrmodel=="Matern_Matern"||corrmodel=="GenWend_GenWend"||corrmodel=="GenWend_Matern_GenWend_Matern")) stop("Not implemented for this correlation model  \n")
+    if(bivariate)if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")
+
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
    ################################################################################
     unname(coordt);
@@ -212,8 +297,7 @@ return(simu)
     }
 if(!bivariate) {
     if(is.null(param$sill))
-
-if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
+    if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
@@ -230,12 +314,10 @@ else param$sill=1
        {
         if(spacetime_dyn){
                        env <- new.env()
-                       #coords=do.call(rbind,args=c(coordx_dyn),envir = env)
                        if(is.list(X))  X=do.call(rbind,args=c(X),envir = env)
                      }
 
   if(!bivariate){
-  
            if(num_betas==1)  mm<-param$mean
            if(num_betas>1)   mm<- X%*%as.numeric((param[sel]))
            param$mean=0;if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
@@ -244,7 +326,7 @@ else param$sill=1
         if((model %in% c("SkewGaussian","SkewGauss","TwoPieceGaussian","Logistic",
           "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
-                    "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))  {vv<-param$sill; param$sill=1}
+                    "StudentT","SkewStudentT","TwoPieceStudentT")))  {vv<-param$sill; param$sill=1}
 
         if(model%in% c("SkewGaussian","SkewGauss","SkewStudentT","TwoPieceTukeyh","TwoPieceBimodal",
                "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss"))
@@ -263,7 +345,8 @@ else param$sill=1
             vv1<-param$sill_1;param$sill_1=1-param$nugget_1;
             vv2<-param$sill_2;param$sill_2=1-param$nugget_2;vv=c(vv1,vv2)
             sk1<-param$skew_1;sk2<-param$skew_2;sk=c(sk1,sk2)
-        }}
+        }
+      }
 #################################
   if(model %in% c("Tukeygh","SinhAsinh"))  {
          if(!bivariate){
@@ -335,8 +418,6 @@ else param$sill=1
      #if(model %in% c("Beta")) {  k=round(param$shape1)+round(param$shape2)
        #  if(!bivariate) {  mm<-param$mean;param$mean=0
         #     vv<-param$sill;param$sill=1 }}
-
-
   ################################################################################
   ################################################################################
    ns=NULL
@@ -357,9 +438,6 @@ else param$sill=1
    cumu=NULL;#s=0 # for negative binomial  case
  #########################################
 
-#### 
-
-
 
 numtime=1
 if(!is.null(coordt)) numtime=length(coordt)
@@ -375,7 +453,9 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
      
-      simD=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
+      simD=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+
+      
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -385,7 +465,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   for(i in 1:k) {
 
     ################# here the approximated simulation  ##################################################
-    simd=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
+    simd=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
     ######################################################################################################
 
     namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
@@ -458,7 +538,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
+      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -501,7 +581,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate)
+      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim

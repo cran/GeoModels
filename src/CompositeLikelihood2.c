@@ -2022,16 +2022,14 @@ void Comp_Pair_Weibull_st2mem(int *cormod, double *data1,double *data2,int *NN,
     double corr,zi,zj,weights=1.0,bl=0.0;
   double nugget=nuis[0];
      if(nugget<0||nugget>=1||nuis[2]<0) {*res=LOW;  return;}
-
+    //Rprintf("%d\n",npairs[0]);
        for(i=0;i<npairs[0];i++){
              if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                                 zi=data1[i];
                                 zj=data2[i];
-
                                     corr=CorFct(cormod,lags[i],lagt[i],par,0,0);
                                    // if(*weigthed) weights=CorFunBohman(lags,maxdist[0]);
                                       bl=biv_Weibull((1-nugget)*corr,zi,zj,mean1[i],mean2[i],nuis[2]);
-
                                       *res+= weights*log(bl);
                          }}
     if(!R_FINITE(*res))*res = LOW;

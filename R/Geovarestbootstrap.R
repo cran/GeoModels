@@ -5,7 +5,7 @@
 
    
 GeoVarestbootstrap=function(fit,K=100,sparse=FALSE,GPU=NULL,  local=c(1,1),optimizer="Nelder-Mead",
-  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, M=30,L=500,seed=1)
+  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, M=30,L=500)
 {
 
 if(length(fit$coordt)==1) fit$coordt=NULL
@@ -15,7 +15,7 @@ if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TR
 
 if(!(method=="cholesky"||method=="Vecchia"||method=="TB")) stop("The method of simulation is not correct")
 
-if(!is.numeric(seed)) stop(" seed must be numeric")
+
 
 
 if(is.numeric(alpha)) if(!(alpha<1&&alpha>0) ) stop(" alpha must be  numeric between 0 and 1")
@@ -39,7 +39,7 @@ if(sum(fit$X[1:dimat]==1)==dimat&&!dim(fit$X)[2]>1) fit$X=NULL
 
 
 k=1;res=NULL
-set.seed(seed)
+
 
   pb <- txtProgressBar(min = 0, max = K, style = 3)
   coords=cbind(fit$coordx,fit$coordy)
@@ -151,6 +151,5 @@ aa=qnorm(1-(1-alpha)/2)*stderr
 pp=as.numeric(fit$param)
 low=pp-aa; upp=pp+aa
 fit$conf.int=rbind(low,upp)
-#set.seed(sample(1:10000,1))
 return(fit)
 }
