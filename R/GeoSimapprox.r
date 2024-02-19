@@ -2,10 +2,9 @@
 ### File name: GeoSimapprox.r
 ####################################################
 
-
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,seed=NULL,X=NULL)
+     local=c(1,1),max.ext=1,method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,seed=NULL,X=NULL)
 {
 ####################################################################
 ############ internal function #####################################
@@ -13,6 +12,7 @@ GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrm
     RFfct1<- function(numcoord,numtime,spacetime,bivariate,
           dime,nuisance,simd,X,ns)
     {
+      
         if(!bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,numcoord*numtime))}}  ## in the case of no covariates
         if( bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,ns[1]+ns[2]))}}
 
@@ -202,7 +202,7 @@ if(corrmodel=="Kummer_Matern_Kummer_Matern"){
 
 
 ######################################################################
-simu_approx=function(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
 {
 ##### spatial case 
 if(!spacetime){    
@@ -221,6 +221,11 @@ if(method=="Vecchia"){
                                   as.numeric(param['nugget'])), 
                                   covfun_name = model1, coords, m = M)
                       }
+ ## Circulant embeeding                    
+  if(method=="CE")
+        { simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X) 
+        }
+
 }
 ##### spacetime case ######
 if(spacetime)  {
@@ -247,10 +252,13 @@ return(simu)
     model=gsub("[[:blank:]]", "",model)
     distance=gsub("[[:blank:]]", "",distance)
     method=gsub("[[:blank:]]", "",method)
+    numxgrid=numygrid=NULL
 
     if(grid) { xgrid=coordx;ygrid=coordy;
                numxgrid=length(xgrid);numygrid=length(ygrid) 
-               coords=as.matrix(expand.grid(xgrid,ygrid))
+               #if(method=="CE")  coords=matrix(c(0,0,0,0),2,2)
+               #else            
+                coords=as.matrix(expand.grid(xgrid,ygrid))
              }
     else
     {   coords=coordx
@@ -265,6 +273,7 @@ return(simu)
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
     spacetime<-CheckST(CkCorrModel(corrmodel))
     space=!spacetime&&!bivariate
+    if(space) if(method=="CE"&&!grid) {stop("CE method works only for regular grid\n")}
     if(space)    if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
     if(spacetime)if(!(corrmodel=="Matern_Matern"||corrmodel=="GenWend_GenWend"||corrmodel=="GenWend_Matern_GenWend_Matern")) stop("Not implemented for this correlation model  \n")
     if(bivariate)if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")
@@ -453,9 +462,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
      
-      simD=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
-
-      
+      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -465,14 +472,13 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   for(i in 1:k) {
 
     ################# here the approximated simulation  ##################################################
-    simd=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+    simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
     ######################################################################################################
 
     namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
     nuisance<-param[namesnuis]
     if(i==1&&(model=="SkewGaussian"||model=="SkewGauss")&&bivariate) param["pcol"]=0
     ####################################
-   
     sim<- RFfct1(numcoord,numtime,spacetime,bivariate,
                   dime,nuisance,simd,X,ns)
      
@@ -538,7 +544,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -581,7 +587,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim
@@ -817,7 +823,6 @@ if(model %in% c("Beta","Kumaraswamy","Kumaraswamy2"))   {
 
 if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2","SinhAsinh"))
 {
-
 
   if(model %in% c("Gaussian")) {sim=c(sim);byrow=FALSE}
   if(model %in% c("LogGaussian","LogGauss"))   {

@@ -1,4 +1,4 @@
-8c5dc776e715adbda4ac1738fdd96b68 *DESCRIPTION
+852b5d12b4f0034aabc870fdd5f66a2b *DESCRIPTION
 dab26d4361c208bfa5be6158de0b18db *NAMESPACE
 78f0d38ebedb5213e406480e2d99b651 *R/GeoAniso.R
 2af9020dbb66ce95cbc6bb3255342551 *R/GeoCV.R
@@ -25,12 +25,13 @@ c462cd40be05f4d5a27d02da9baf7b5c *R/GeoResiduals.r
 fa104bfedece50d71ad2f3b47fcb749c *R/GeoScatterplot.R
 5cc0d58e835d3787159d0c6f8d3a5857 *R/GeoSim.r
 9a84cdc2f6d7f2f4b97a9686e2ec5b00 *R/GeoSimCopula.R
-adf784b45317487444dde3707e999a84 *R/GeoSimapprox.r
+42b7c54348a42fc664eade4d366b6133 *R/GeoSimapprox.r
 fb7eda298c59b3626474ddae9b153655 *R/GeoSpoutlier.R
 d8f704b960b19c96eafefdf90683a2ab *R/GeoTest.r
 375e98815ab4d9ba9bb817fb6fbaecf6 *R/GeoVariogram.r
 bb0b759929e3e99dfb5d8fa4fe8a0eff *R/GeoWls.r
 33fd5143d66b7b11c56c9deadad0fdc8 *R/Geovarestbootstrap.R
+6aada062805649206a3b561d9cd4b3aa *R/SimCE.R
 8f6794d9a6354135281ee32b901472b2 *R/Utility.r
 9b9c5b201d5348f91918b262a4699577 *data/anomalies.rda
 ec5301ecfb2600e1e5555d5a53e9b706 *data/austemp.rda
@@ -76,7 +77,7 @@ e99c97387320d43f36394e64b6172fdb *man/GeoPit.Rd
 c6bad9edefbc410ca8932762272ddd98 *man/GeoScatterplot.Rd
 50e7a4c58f45f69bc82fc6702df8adba *man/GeoSim.Rd
 38c6432c0093d0f6313b0e934a077622 *man/GeoSimCopula.Rd
-f295ea1c2780527de3c570f975bac5bf *man/GeoSimapprox.Rd
+8b35a1b191738e3213a83948adb29a09 *man/GeoSimapprox.Rd
 15f056796be17569d239f8d67113e801 *man/GeoTests.Rd
 1d602723806e15695d6ae4a2a6aea5dd *man/GeoVarestbootstrap.Rd
 ef9871150a4e310c0c24bf0c48315f03 *man/GeoVariogram.Rd
@@ -87,6 +88,7 @@ f3c01bd7047ac3e86b8f21440d72ea95 *man/MatDecomp.Rd
 f23bfe58c8ffbff4d3eda7bd1ed2d8e7 *man/NuisParam.rd
 f3497398e312ace3440a6e492d9dcadb *man/NuisParam2.Rd
 a98d3e36ee1dac1a60b2ac4d1fdead33 *man/Prscores.Rd
+dccc625809db8e4120ca8468cc811566 *man/SimCE.Rd
 d3a0fab100a7a2f04e89ede2ab6a5a7f *man/StartParam.Rd
 9cfa8f41b7b4699d42b936531b203ff4 *man/WlsStart.Rd
 1b340438022e4211552c6b7b68c1329a *man/austemp.Rd

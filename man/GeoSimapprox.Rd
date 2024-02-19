@@ -4,13 +4,12 @@
 \title{Fast simulation of Gaussian and non Gaussian Random Fields.}
 \description{
   Simulation of Gaussian and some non Gaussian spatial, spatio-temporal and spatial bivariate 
- random fields using approximate methods of simulation. It works only for some specific models
- (see Examples). 
+ random fields using approximate methods of simulation (circulant embeeding and turning bands)n(see Examples). 
 }
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
-grid=FALSE,local=c(1,1),
+grid=FALSE,local=c(1,1),max.ext=1,
 method="TB",M=30, L=1000,model='Gaussian',
 n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
 }
@@ -42,6 +41,7 @@ n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
     are interpreted as spatial or spatial-temporal realisations on a set
     of non-equispaced spatial sites (irregular grid).}
           \item{local}{Numeric; number of local work-items of the GPU}
+      \item{max.ext}{Numeric; The maximum extension of the simulation window (for the spatial CE method).}
      \item{method}{String; the type of approximation method. Default is \code{TB}  that is the 
      turning band method. The other possible choice is \code{Vecchia} that is the Vechia method for the Matern model
      and \code{CE} (circular embeeding) for the space time  case .} 
@@ -89,9 +89,13 @@ n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
 
 \references{
 
-J. Guiness (2018) Permutation and Grouping Methods for Sharpening Gaussian Process Approximations \emph{Technometrics} 60(4) 415-429.
+T. Gneiting, H. Sevcikova, D. B. Percival, M. Schlather and Y. Jiang (2006)
+Fast and Exact Simulation of Large Gaussian Lattice Systems in R2: Exploring the Limits
+\emph{Journal of Computational and Graphical Statistics} 15 (3)
 
-D. Arroyo, X. Emery (2020) An R Implementation of a Continuous Spectral Algorithm for Simulating Vector Gaussian Random Fields in Euclidean Spaces ACM Transactions on Mathematical SoftwareVolume 47(1)
+D. Arroyo, X. Emery (2020) An R Implementation of a Continuous Spectral Algorithm for Simulating Vector Gaussian Random Fields in Euclidean Spaces \emph{ACM Transactions on Mathematical Software}  47(1)
+
+J. Guiness (2018) Permutation and Grouping Methods for Sharpening Gaussian Process Approximations \emph{Technometrics} 60(4) 415-429.
 
 }
 
@@ -104,11 +108,31 @@ Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.rese
 \examples{
 library(GeoModels)
 
+
 ################################################################
 ###
 ### Example 1. Simulation of a large spatial Gaussian RF 
-###            with  matern  covariance model
+###            with  Matern  covariance model
+###            using circulant embeeding method
+###            It works only for regular grid
+###            for any typpe of correlation model
+###############################################################
+set.seed(68)
+x = seq(0,1,0.005)
+y = seq(0,1,0.005)
+param=list(smooth=1.5,mean=0,sill=1,scale=0.2/3,nugget=0)
+# Simulation of a spatial Gaussian RF with Matern correlation function
+data1 <- GeoSimapprox(coordx=x,coordy=y, grid=TRUE,corrmodel="Matern", model="Gaussian",
+                      method="CE",param=param)$data
+fields::image.plot( matrix(data1, length(x), length(y), byrow = TRUE) )
+
+################################################################
+###
+### Example 2. Simulation of a large spatial Gaussian RF 
+###            with  Matern  covariance model
 ###            using Turning band method
+###            It works for (ir)regular grid
+###            for the Matern model
 ###############################################################
 set.seed(68)
 x = runif(15000)
@@ -123,9 +147,11 @@ quilt.plot(coords,data1)
 
 ################################################################
 ###
-### Example 2. Simulation of a large spatial Gaussian RF 
+### Example 3. Simulation of a large spatial Gaussian RF 
 ###            with  matern  covariance model
 ###            using Vecchia's method
+###            It works  for (ir)regular grid
+###            for the Matern model
 ###############################################################
 set.seed(68)
 x = runif(8000)
@@ -141,9 +167,11 @@ quilt.plot(coords,data1)
 
 ################################################################
 ###
-### Example 3. Simulation of a large spacetime Gaussian RF 
+### Example 4. Simulation of a large spacetime Gaussian RF 
 ###            with separable matern  covariance model
 ###            using  Circular embeeding method
+###            It works  for regular time grid
+###            and separable spacetime models
 ###############################################################
 set.seed(68)
 coordt <- (0:100)
@@ -162,9 +190,9 @@ dim(data)
 
 ################################################################
 ###
-### Example 4. Simulation of a large spacetime Gaussian RF 
+### Example 5. Simulation of a large spacetime Gaussian RF 
 ###            with separable GenWend covariance model
-###            using  Circular embeeding method
+###            using  Circular embeeding method in time
 ###############################################################
 set.seed(68)
 # Simulation of a spatial Gaussian RF with Matern correlation function
