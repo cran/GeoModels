@@ -2615,7 +2615,7 @@ double dis=0.0;
 	      h++;
 	      }}}
 
-if(*spt) {
+if(spt[0]) {
   int t=0,v=0,i=0,j=0,h=0;
 double dis=0.0, dit=0.0;
  //Rprintf("%d %d %d\n",*ntime,*nloc,*tloc);
@@ -2623,13 +2623,13 @@ double dis=0.0, dit=0.0;
         for(v=0;v<(*tloc);v++){
            for(t=0;t<*ntime;t++){
             // Rprintf("%f %d \n",time[v],*nloc);
-
                       dit=fabs(coordt[t]-time[v]);
                 for(i=0;i<ns[t];i++){
                    dis=dist(type[0],coordx[(i+NS[t])],locx[j],
                                     coordy[(i+NS[t])],locy[j],radius[0]);
-                 //  Rprintf("%f %d %f %f\n",cc[h],*cormod,dis,dit,par[0]);
+            
        cc[h]=CorFct(cormod,dis,dit,par,0,0);
+    // Rprintf("%f %d %f %f\n",cc[h],*cormod,dis,dit,par[0]);
         h++;}}}}
 }
 if(biv[0]) {

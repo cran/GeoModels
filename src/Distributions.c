@@ -4084,6 +4084,22 @@ if(r>0&&t>0)
 return(dens);
 
 }
+/* binary misspecified negative binomial*/
+double biv_binegbinary (int NN, int u, int v,double pu,double pv, double p11)
+{
+double res=0.0;double u_0,v_0,p00;
+
+u_0=pow(pu,NN);
+v_0=pow(pv,NN);
+p00=pow(p11,NN);
+
+if(u==0&&v==0)  res=p00;
+if(u==0&&v>0)   res=u_0-p00;
+if(v==0&&u>0)   res=v_0-p00;
+if(u>0&&v>0)    res=1-(u_0-p00+v_0);
+return(res);
+}
+
 
 
 

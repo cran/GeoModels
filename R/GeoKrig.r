@@ -524,9 +524,8 @@ if(covmatrix$model==26) {  # weibull
                         
                         sh=as.numeric(covmatrix$param['shape'])
                         bcorr=    (gamma(1+1/sh))^2/((gamma(1+2/sh))-(gamma(1+1/sh))^2)
-                        
                         corri=bcorr*((1-cc^2)^(1+2/sh)*Re(hypergeo::hypergeo(1+1/sh,1+1/sh ,1 ,cc^2)) -1)
-
+                    
          }
 if(covmatrix$model==24) {  # loglogistic
                         sh=as.numeric(covmatrix$param['shape'])

@@ -84,6 +84,8 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
         res=double(1)
 
 
+
+
 ############################################
 if(!type_cop) { # not copula models 
 
@@ -188,7 +190,9 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==1,likelihood==4,type==2)) fname <- 'Comp_Diff_Gauss'
     
     namesaniso=c("angle","ratio")
-  
+   
+
+
 
    if(length(n)==1) n=rep(n,dimat)
 ####################### conditional ##############################################
@@ -263,6 +267,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==16,likelihood==1,type==2)){ fname <- 'Comp_Cond_BinomnegGauss'
                                               if(varest & vartype==2) hessian <- TRUE}
+    if(all(model==54,likelihood==1,type==2)){ fname <- 'Comp_Cond_BinomnegBinary'
+                                              if(varest & vartype==2) hessian <- TRUE}
     if(all(model==27,likelihood==1,type==2)){ fname <- 'Comp_Cond_TWOPIECET'
                                               if(varest & vartype==2) hessian <- TRUE} 
     if(all(model==39,likelihood==1,type==2)){ fname <- 'Comp_Cond_TWOPIECEBIMODAL'
@@ -311,6 +317,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==14,likelihood==3,type==2)){ fname <- 'Comp_Pair_BinomnegGauss'
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==16,likelihood==3,type==2)){ fname <- 'Comp_Pair_BinomnegGauss'
+                                              if(varest & vartype==2) hessian <- TRUE}
+    if(all(model==54,likelihood==3,type==2)){ fname <- 'Comp_Pair_BinomnegBinary'
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==15,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisbinGauss'
                                               if(varest & vartype==2) hessian <- TRUE}

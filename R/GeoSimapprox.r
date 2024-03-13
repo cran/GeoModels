@@ -207,11 +207,7 @@ simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmo
 ##### spatial case 
 if(!spacetime){    
    ## Turning Bands
-   if(method=="TB")    
-{  
-   simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate) 
-   simu=c(simu[,1])  
-}     
+   if(method=="TB") { simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate); simu=c(simu[,1])}     
 ## Vecchia
 if(method=="Vecchia"){ 
    if(corrmodel=="Matern") model1="matern_isotropic"
@@ -222,20 +218,14 @@ if(method=="Vecchia"){
                                   covfun_name = model1, coords, m = M)
                       }
  ## Circulant embeeding                    
-  if(method=="CE")
-        { simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X) 
-        }
-
+  if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X) 
+        
 }
 ##### spacetime case ######
 if(spacetime)  {
-
-if(method=="Vecchia") print("ciao") 
-
-if(method=="CE"){
-    simu=CE_Space_Time(coords=coords,
-          time.seq=coordt, param=param,corrmodel= corrmodel,distance=distance)}
-}
+  if(method=="Vecchia") print("ciao") 
+  if(method=="CE")simu=CE_Space_Time(coords=coords,time.seq=coordt, param=param,corrmodel= corrmodel,distance=distance)
+    }
 return(simu)
 }
 
@@ -244,7 +234,6 @@ return(simu)
 ####################################################################
 
     if(!is.null(seed))  set.seed(seed)
-
 
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(!(method=="Vecchia"||method=="TB"||method=="CE")) stop("The method of simulation is not correct\n")
@@ -256,9 +245,7 @@ return(simu)
 
     if(grid) { xgrid=coordx;ygrid=coordy;
                numxgrid=length(xgrid);numygrid=length(ygrid) 
-               #if(method=="CE")  coords=matrix(c(0,0,0,0),2,2)
-               #else            
-                coords=as.matrix(expand.grid(xgrid,ygrid))
+               coords=as.matrix(expand.grid(xgrid,ygrid))
              }
     else
     {   coords=coordx
@@ -270,26 +257,39 @@ return(simu)
     spacetime_dyn=FALSE
     ##############################################################################
     ##############################################################################
+
+
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
     spacetime<-CheckST(CkCorrModel(corrmodel))
+
     space=!spacetime&&!bivariate
-    if(space) if(method=="CE"&&!grid) {stop("CE method works only for regular grid\n")}
-    if(space)    if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
-    if(spacetime)if(!(corrmodel=="Matern_Matern"||corrmodel=="GenWend_GenWend"||corrmodel=="GenWend_Matern_GenWend_Matern")) stop("Not implemented for this correlation model  \n")
-    if(bivariate)if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")
+
+
+
+    if(space)    {if(method=="CE"&&!grid) stop("CE method works only for regular grid\n")
+                  if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
+                 } 
+    
+    if(spacetime)
+       {if(!(corrmodel %in% c("Matern_Matern","GenWend_GenWend","GenWend_Matern_GenWend_Matern")))
+          stop("Not implemented for this correlation model  \n")
+        }
+      
+    if(bivariate) {if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")}
 
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
    ################################################################################
     unname(coordt);
     if(is.null(coordx_dyn)){
     unname(coordx);unname(coordy)}
+
+
   ################################################################################
   ################ setting parameters for each model #############################
   ################################################################################
      if(!bivariate)
-    {  sel=substr(names(param),1,4)=="mean";
-       num_betas=sum(sel)   ## number of covariates
-    }
+    {  sel=substr(names(param),1,4)=="mean";  num_betas=sum(sel)   }    ## number of covariates
+    
 
 
         if(!length(param$mean)>1){
@@ -305,19 +305,13 @@ return(simu)
      num_betas=c(num_betas1,num_betas2)
     }
 if(!bivariate) {
-    if(is.null(param$sill))
-    if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
-        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
-        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) param$sill=1
-else param$sill=1
+    if(is.null(param$sill)) param$sill=1
 }
 
     k=1
 #################################
     if(model %in% c("SkewGaussian","SkewGauss","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',#"Binomial","BinomialNeg","BinomialNegZINB",
-                    "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonWeibull",
+                    "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
                      "TwoPieceBimodal", "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
                     "Gamma","Weibull","LogLogistic","Logistic","BinomialLogistic"))
        {
@@ -328,12 +322,15 @@ else param$sill=1
 
   if(!bivariate){
            if(num_betas==1)  mm<-param$mean
-           if(num_betas>1)   mm<- X%*%as.numeric((param[sel]))
+           if(num_betas>1)   { BB=param[sel];
+                               if(!is.null(BB$sill)) BB$sill=NULL
+                               mm= X%*%as.numeric(BB) }
            param$mean=0;if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
         
 
         if((model %in% c("SkewGaussian","SkewGauss","TwoPieceGaussian","Logistic",
-          "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonWeibull",
+          "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma",
+          "PoissonGammaZIP","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
                     "StudentT","SkewStudentT","TwoPieceStudentT")))  {vv<-param$sill; param$sill=1}
 
@@ -412,9 +409,9 @@ else param$sill=1
                                                  if(model %in% c("Geometric")) {model="BinomialNeg";n=1}
                                                }
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
-    if(model %in% c("PoissonZIP","BinomialNegZINB")) {param$nugget=param$nugget1}
+    if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {
                              if(!bivariate) k=round(param$shape)
                              if(bivariate)  k=max(param$shape_1,param$shape_2)
@@ -493,7 +490,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
         dim(sim) <- simdim
          }
     ####################################
-    if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","Beta","Kumaraswamy","Kumaraswamy2",
+    if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","PoissonGammaZIP","Beta","Kumaraswamy","Kumaraswamy2",
               "LogGaussian","TwoPieceTukeyh",
                 "Gamma","LogLogistic","Logistic","StudentT",
                 "SkewStudentT","TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","TwoPieceBimodal")) {
@@ -515,7 +512,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
    if(sum(apply(sel,2,prod))==0) break  ## stopping rule
  }
   ####################################
- if(model %in% c("PoissonGamma"))   {
+ if(model %in% c("PoissonGamma","PoissonGammaZIP"))   {
    if(KK==1){sim3=NULL;for(i in 3:k)  {sim3=cbind(sim3,dd[,,i]^2)}}
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
@@ -541,7 +538,7 @@ if(model %in% c("PoissonWeibull"))   {
  ###############################################################################################
  #### simulation for discrete random field based on indipendent copies  of GRF ######
  ###############################################################################################
- if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
+ if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonGammaZIP","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
       a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)

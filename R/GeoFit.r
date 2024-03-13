@@ -58,7 +58,7 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
 bivariate<-CheckBiv(CkCorrModel(corrmodel))    
 if(!bivariate){
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson","Binary_misp_BinomialNeg",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) {
@@ -123,7 +123,7 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
         ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
         if(sum(initparam$namesparam=='sill')==1)
         {
-          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11)) 
+          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11,54)) 
           {initparam$param=initparam$param[initparam$namesparam!='sill'];initparam$namesparam=names(initparam$param)
            a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
      
@@ -144,7 +144,7 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))
        if(sum(unlist(lower)>unlist((upper)))>0) stop("some values of the lower bound is greater of the upper bound \n")
 
  if(sum(names(lower)=='sill')==1){
-          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11)) 
+          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11,54)) 
             {lower=lower[names(lower)!='sill'];upper=upper[names(upper)!='sill']; }}
     #setting alphabetic order
       lower=lower[order(names(lower))]
@@ -268,6 +268,7 @@ if(!is.null(anisopars)) {
     if(model=="Gaussian_misp_PoissonZIP"){model="PoissonZIP";missp=TRUE}
     if(model=="Gaussian_misp_StudentT"){model="StudentT";missp=TRUE}
     if(model=="Gaussian_misp_SkewStudentT"){model="SkewStudentT";missp=TRUE}
+    if(model=="Binary_misp_BinomialNeg"){model="BinomialNeg";missp=TRUE}
     ##################
     numtime=1
     if(initparam$spacetime) numtime=length(coordt)
@@ -308,7 +309,7 @@ if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(l
                                         }   
 
 if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
-        "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
+        "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric",  "Binary_misp_BinomialNeg",
         "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", 
         "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
         "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
@@ -433,6 +434,7 @@ print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
   if(x$model=='BinomialNeg_TwoPieceGaussian'||x$model=='BinomialNeg_TwoPieceGauss'){ process <- 'Negative Binomial TwoPiece Gaussian';model <- 'BinomialNeg_TwoPieceGauss'}
   if(x$model=='Binomial2'){ process <- 'Binomial';model <- 'Binomial2'}     
   if(x$model=='BinomialNeg'){ process <- 'BinomialNeg'; model <- 'BinomialNeg'}
+  if(x$model=='Binary_misp_BinomialNeg'){ process <- 'BinomialNeg'; model <- 'Misspecified Binary BinomialNeg'}
   if(x$model=='BinomialNegLogistic'){ process <- 'BinomialNegLogistic'; model <- 'BinomialNegLogistic'}
   if(x$model=='BinomialNegZINB'){ process <- 'BinomialNegZINB'; model <- 'BinomialNegZINB'}
   if(x$model=='Geom'||x$model=='Geometric'){ process <- 'Geometric';model <- 'Geometric'}

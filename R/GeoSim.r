@@ -64,7 +64,7 @@ forGaussparam<-function(model,param,bivariate)
      if(!bivariate) param[which(names(param) %in% c("df"))] <- NULL
      if(bivariate)  param[which(names(param) %in% c("df_1","df_2"))] <- NULL
    }
-    if(model %in% c("PoissonZIP","BinomialNegZINB"))  {
+    if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP"))  {
      if(!bivariate) param[which(names(param) %in% c("pmu","nugget1","nugget2"))] <- NULL
     # if(bivariate)  param[which(names(param) %in% c("df_1","df_2"))] <- NULL
    }
@@ -151,14 +151,7 @@ if(!is.null(seed))  set.seed(seed)
     unname(coordx);unname(coordy)}
 
 if(!bivariate) {
-    if(is.null(param$sill))
-
-if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
-        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
-        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) param$sill=1
-else param$sill=1
+    if(is.null(param$sill))  param$sill=1
 }
 
 ################################################################################
@@ -177,7 +170,7 @@ else param$sill=1
     k=1
 #################################
     if(model %in% c("SkewGaussian","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',#"Binomial","BinomialNeg","BinomialNegZINB",
-                    "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonWeibull",
+                    "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
                      "TwoPieceBimodal", "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
                     "Gamma","Weibull","LogLogistic","Logistic","BinomialLogistic"))
        {
@@ -190,12 +183,14 @@ else param$sill=1
   
 
            if(num_betas==1)  mm<-param$mean
-           if(num_betas>1)   mm<- X%*%as.numeric((param[sel]))
+           if(num_betas>1)   { BB=param[sel];
+                               if(!is.null(BB$sill)) BB$sill=NULL
+                               mm= X%*%as.numeric(BB) }
            param$mean=0;if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
 
 
         if((model %in% c("SkewGaussian","TwoPieceGaussian","Logistic",
-          "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonWeibull",
+          "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
                     "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))   ##
         {
@@ -245,9 +240,9 @@ else param$sill=1
     if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB"))
                  { k=99999;if(model %in% c("Geometric")) {model="BinomialNeg";n=1}}
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
-    if(model %in% c("PoissonZIP","BinomialNegZINB")) {param$nugget=param$nugget1}
+    if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {k=round(param$shape)}
     if(model %in% c("Beta"))  {k=round(param$shape1)+round(param$shape2);}
     if(model %in% c("Kumaraswamy","Kumaraswamy2"))  k=4
@@ -285,7 +280,7 @@ ccov = GeoCovmatrix(coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coor
 
 
 
- if(model%in% c("PoissonZIP","BinomialNegZINB"))
+ if(model%in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP"))
   {
     II=diag(nrow(ccov$covmatrix));
   II[lower.tri(II)] <- (1-param$nugget2)/(1-param$nugget1)
@@ -384,7 +379,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
         dim(sim) <- simdim
          }
     ####################################
-    if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","Beta","Kumaraswamy","Kumaraswamy2",
+    if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonGammaZIP","PoissonWeibull","PoissonZIP","Beta","Kumaraswamy","Kumaraswamy2",
               "LogGaussian","TwoPieceTukeyh",
                 "Gamma","LogLogistic","Logistic","StudentT",
                 "SkewStudentT","TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","TwoPieceBimodal")) {
@@ -406,7 +401,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
    if(sum(apply(sel,2,prod))==0) break  ## stopping rule
  }
   ####################################
- if(model %in% c("PoissonGamma"))   {
+ if(model %in% c("PoissonGamma","PoissonGammaZIP"))   {
    if(KK==1){sim3=NULL;for(i in 3:k)  {sim3=cbind(sim3,dd[,,i]^2)}}
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
@@ -432,7 +427,7 @@ if(model %in% c("PoissonWeibull"))   {
  ###############################################################################################
  #### simulation for discrete random field based on indipendent copies  of GRF ######
  ###############################################################################################
- if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
+ if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonGammaZIP","PoissonWeibull","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
 
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     
@@ -810,9 +805,9 @@ if(bivariate){
                                                  if(model %in% c("Geometric")) {model="BinomialNeg";n=1}
                                                }
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
-    if(model %in% c("PoissonZIP","BinomialNegZINB")) {param$nugget=param$nugget1}
+    if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {  k=max(param$shape_1,param$shape_2)}
     if(model %in% c("StudentT"))  k=round(1/param$df)+1
 

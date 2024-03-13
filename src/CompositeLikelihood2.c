@@ -353,6 +353,36 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))*res = LOW;
     return;
 }
+/******************************************************/
+void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU)
+{
+    int i=0,  uu=0,vv=0;
+    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
+    double p1=0.0,p2=0.0;//probability of marginal success
+    double p11=0.0;//probability of joint success
+    double nugget=nuis[0];
+       if( nugget>=1||nugget<0){*res=LOW; return;}
+    
+
+    for(i=0;i<npairs[0];i++){
+if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
+                  ai=mean1[i];aj=mean2[i];
+                  corr=CorFct(cormod,lags[i],0,par,0,0);
+                p11=pbnorm22(ai,aj,(1-nugget)*corr);
+                p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
+                u=data1[i];v=data2[i];
+                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
+                uu=(int) u;vv=(int) v;
+                bl=log(biv_binegbinary(NN[0],uu,vv,p1,p2,p11));
+
+            *res+= weights*bl;
+                }}
+    if(!R_FINITE(*res))*res = LOW;
+    return;
+}
+
 /*********************************************************/
 void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,

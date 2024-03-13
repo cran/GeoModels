@@ -465,6 +465,8 @@ double appellF4(double a,double b,double c,double d,double x,double y);
 double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a);
 double biv_PoissonZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2);
 double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,double nugget1,double nugget2,double mup);
+
+
 double biv_wrapped(double alfa,double u, double v, double mi, double mj, double nugget,double sill,double corr);
 
 double biv_Weibull(double corr,double zi,double zj,double mui, double muj, double shape);
@@ -481,6 +483,7 @@ double biv_LogLogistic(double corr,double zi,double zj,double mui, double muj, d
 double biv_Logistic(double corr,double zi,double zj,double mui, double muj, double sill);
 
 double biv_binomneg (int NN, int u, int v, double p01,double p10,double p11);
+double biv_binegbinary(int NN, int u, int v,double pu,double pv, double p11);
 double biv_binom222(int n1,int n2, int u, int v, double p01,double p10,double p11);
 double bin_aux(int a,int NN,int u,int v,double p1, double p2,double p11);
 double aux_biv_binomneg (int NN, int u, int v, double x,double y,double p11);

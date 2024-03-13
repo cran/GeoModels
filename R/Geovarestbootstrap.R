@@ -13,7 +13,7 @@ if(length(fit$coordt)==1) fit$coordt=NULL
 if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
 if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
 
-if(!(method=="cholesky"||method=="Vecchia"||method=="TB")) stop("The method of simulation is not correct")
+if(!(method=="cholesky"||method=="Vecchia"||method=="TB"||method=="CE")) stop("The method of simulation is not correct")
 
 
 
@@ -59,8 +59,9 @@ data_sim = GeoSim(coordx=coords,coordt=fit$coordt,
      X=fit$X,n=fit$n,method=method,
 	 distance=fit$distance,radius=fit$radius)
     }
-     if(method=="TB"||method=="Vecchia")   
+     if(method=="TB"||method=="Vecchia"||method=="CE")   
      {
+  
  data_sim = GeoSimapprox(coordx=coords,coordt=fit$coordt,
      coordx_dyn=fit$coordx_dyn, anisopars=fit$anisopars,
      corrmodel=fit$corrmodel,model=fit$model,
@@ -69,6 +70,7 @@ data_sim = GeoSim(coordx=coords,coordt=fit$coordt,
      X=fit$X,n=fit$n,method=method,
      M=M, L=L,
      distance=fit$distance,radius=fit$radius)
+
     }
 }
 else{
@@ -104,6 +106,8 @@ res_est=GeoFit( data=data_sim$data, start=fit$param,fixed=fit$fixed,#start=as.li
    GPU=GPU,local=local,  maxdist=fit$maxdist, maxtime=fit$maxtime, optimizer=optimizer,
    grid=fit$grid, likelihood=fit$likelihood, type=fit$type,
    X=fit$X, distance=fit$distance, radius=fit$radius)
+
+
 
 
 
