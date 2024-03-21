@@ -186,6 +186,9 @@ extern void Comp_Pair_Pois2mem(int *cormod, double *data1,double *data2,int *NN,
 extern void Comp_Pair_PoisGamma2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU);
+extern void Comp_Pair_PoisGammaZIP2mem(int *cormod, double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU);
 extern void Comp_Pair_Gauss_misp_PoisGamma2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU);
@@ -442,6 +445,9 @@ extern void Comp_Cond_Gauss_misp_PoisGamma2mem(int *cormod, double *data1,double
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                         double *nuis, int *local,int *GPU);
 extern void Comp_Cond_PoisGamma2mem(int *cormod, double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+                             double *nuis, int *local,int *GPU);
+extern void Comp_Cond_PoisGammaZIP2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                              double *nuis, int *local,int *GPU);
 extern void Comp_Cond_Pois2mem(int *cormod, double *data1,double *data2,int *NN,
@@ -943,6 +949,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_BinomNNGauss_misp2mem",         (DL_FUNC) &Comp_Pair_BinomNNGauss_misp2mem,         12},
     {"Comp_Pair_Gauss_misp_PoisGamma2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_PoisGamma2mem,         12},
     {"Comp_Pair_PoisGamma2mem",         (DL_FUNC) &Comp_Pair_PoisGamma2mem,         12},
+    {"Comp_Pair_PoisGammaZIP2mem",         (DL_FUNC) &Comp_Pair_PoisGammaZIP2mem,         12},
     {"Comp_Pair_Pois2mem",         (DL_FUNC) &Comp_Pair_Pois2mem,         12},
     {"Comp_Pair_BinomGauss2mem",         (DL_FUNC) &Comp_Pair_BinomGauss2mem,         12},
     {"Comp_Pair_BinomLogi2mem",         (DL_FUNC) &Comp_Pair_BinomLogi2mem,         12},
@@ -1025,6 +1032,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_BinomNNGauss_misp2mem",         (DL_FUNC) &Comp_Cond_BinomNNGauss_misp2mem,         12},
     {"Comp_Cond_Gauss_misp_PoisGamma2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisGamma2mem,         12},
     {"Comp_Cond_PoisGamma2mem",         (DL_FUNC) &Comp_Cond_PoisGamma2mem,         12},
+    {"Comp_Cond_PoisGammaZIP2mem",         (DL_FUNC) &Comp_Cond_PoisGammaZIP2mem,         12},
     {"Comp_Cond_Pois2mem",         (DL_FUNC) &Comp_Cond_Pois2mem,         12},
     {"Comp_Cond_BinomGauss2mem",         (DL_FUNC) &Comp_Cond_BinomGauss2mem,         12},
     {"Comp_Cond_BinomLogi2mem",         (DL_FUNC) &Comp_Cond_BinomLogi2mem,         12},

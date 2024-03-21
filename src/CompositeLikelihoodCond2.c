@@ -563,6 +563,36 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
+
+void Comp_Cond_PoisGammaZIP2mem(int *cormod, double *data1,double *data2,int *NN,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU)
+{
+
+    int i=0, uu,vv;
+    double weights=1.0,corr,mui,muj,bl,l2=0.0,u,v;
+   double nugget1=nuis[0];double nugget2=nuis[1];
+    double mup=nuis[2]; double shape=nuis[3];
+
+
+      if(nugget1<0||nugget1>=1||nugget2<0||nugget2>=1){*res=LOW; return;}
+      for(i=0;i<npairs[0];i++){
+if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
+                    mui=exp(mean1[i]);muj=exp(mean2[i]);
+                     corr=CorFct(cormod,lags[i],0,par,0,0);
+                        u=data1[i];v=data2[i];
+                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
+                          uu=(int) u;vv=(int) v;
+                    l2=one_log_PoisgammaZIP(vv,muj,mup,shape);
+                        if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
+                      bl=log(biv_PoissonGammaZIP(corr,uu,vv,mui, muj,mup,nugget1,nugget2,shape))-l2;
+                      *res+= bl*weights;
+                    }}
+
+    if(!R_FINITE(*res))  *res = LOW;
+    return;
+}
+
 /*********************************************************/
 void Comp_Cond_Pois2mem(int *cormod, double *data1,double *data2,int *NN,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,

@@ -4022,6 +4022,7 @@ return(dens);
 }
 
 
+
 double biv_Mis_PoissonZIP(double corr,double data_i, double data_j,
                              double mean_i, double mean_j,double mup,double nugget1,double nugget2)
 {
@@ -4348,7 +4349,27 @@ return(dens);
 
 
 
+double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape)
+{
+double dens=0.0,p,p00,p10,p01,p11;
+p=pnorm(mup,0,1,1,0);
+p00=pbnorm22(mup,mup,(1-nugget2)*corr);
+p01=p-p00;
+p10=p01;
+p11=1-2*p+p00;
 
+
+if(r==0&&t==0)
+     dens=p00  + p01*exp(-mean_i) + p10*exp(-mean_j)+p11*biv_PoissonGamma((1-nugget1)*corr,0, 0, mean_i, mean_j,shape);
+if(r==0&&t>0)
+      dens=      p01*  exp(-mean_j+t*log(mean_j)-lgammafn(t+1))  + p11*biv_PoissonGamma((1-nugget1)*corr,0, t, mean_i, mean_j,shape);
+if(r>0&&t==0)
+      dens=      p10*  exp(-mean_i+r*log(mean_i)-lgammafn(r+1))  + p11*biv_PoissonGamma((1-nugget1)*corr,r, 0, mean_i, mean_j,shape);
+if(r>0&&t>0)
+      dens=      p11*biv_PoissonGamma((1-nugget1)*corr,r, t, mean_i, mean_j,shape);
+return(dens);
+
+}
 
 
 
@@ -4991,6 +5012,20 @@ double one_log_PoisZIP(int z,double lambda, double mup)
           }
   if(z>0){
     res=log1p(-p)+dpois(z,lambda,1);   
+         }
+  return(res);
+}
+
+double one_log_PoisgammaZIP(int z,double lambda, double mup,double shape)
+{
+  double  res=0.0;
+  double  p=pnorm(mup,0,1,1,0);
+  double pp=lambda/(lambda+shape);
+ if(z==0){
+    res=log(p+(1-p)*dnbinom(0, shape, pp,0));
+          }
+  if(z>0){
+    res=log1p(-p)+dnbinom(z, shape, pp,1);
          }
   return(res);
 }

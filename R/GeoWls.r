@@ -188,7 +188,7 @@ if(initparam$numstart==initparam$numparam)       ### checking if numparam = nums
           "Gaussian_misp_StudentT","Gaussian_misp_Poisson","Gaussian_misp_Tukeygh",
           "Binomial","Geometric","PoisBin","BinomialNeg","Binary_misp_BinomialNeg","Binomial2","PoisBinNeg","Poisson","BinomialNegZINB","BinomialLogistic","Gaussian_misp_Binomial",
           "Gaussian_misp_BinomialNeg","PoissonZIP1","BinomialNegZINB1",
-          "Gaussian_misp_SkewStudentT","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma",
+          "Gaussian_misp_SkewStudentT","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma","PoissonGammaZIP1",
           "TwoPieceStudentT",'Wrapped',"TwoPieceGaussian","TwoPieceGauss","TwoPieceTukeyh","TwoPieceBimodal")) & 
           (type %in% c('Standard','Pairwise','Tapering','Tapering1','Independence')))
         {

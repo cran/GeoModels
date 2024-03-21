@@ -11,7 +11,7 @@ GeoSimapprox(coordx, coordy=NULL, coordt=NULL,
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
 grid=FALSE,local=c(1,1),max.ext=1,
 method="TB",M=30, L=1000,model='Gaussian',
-n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
+n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,nrep=1)
 }
 \arguments{
   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
@@ -56,8 +56,9 @@ n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
       \item{anisopars}{ A list of two elements "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
     \item{radius}{Numeric; a value indicating  the radius of the sphere when using the great 
     circle distance. Default value is the radius of the earth in Km (i.e. 6371)}  
-       \item{seed}{Numeric; an integer used in set.seed function to reproduce the simulation.}
   \item{X}{Numeric; Matrix of space-time covariates.}
+    \item{spobj}{An object of class sp or spacetime}
+    \item{nrep}{Numeric; Numbers of indipendent replicates.}
 }
 
 
@@ -82,9 +83,9 @@ n=1,param,anisopars=NULL, radius=6371,seed=NULL,X=NULL)
   \item{numtime}{The number the temporal realisations of the RF;}
   \item{param}{The vector of  parameters' estimates;}
   \item{radius}{The radius of the sphere if coordinates are passed in lon/lat format;}
-  \item{randseed}{The seed used for the random simulation;}
   \item{spacetime}{\code{TRUE} if spatio-temporal and \code{FALSE} if
   spatial RF;}
+    \item{nrep}{The number of indipendent replicates;}
 }
 
 \references{

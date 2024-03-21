@@ -279,6 +279,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==43,likelihood==1,type==2)){ fname <- 'Comp_Cond_PoisZIP'
                                               if(varest & vartype==2) hessian <- TRUE}
+    if(all(model==57,likelihood==1,type==2)){ fname <- 'Comp_Cond_PoisGammaZIP'
+                                              if(varest & vartype==2) hessian <- TRUE}                                          
     if(all(model==44,likelihood==1,type==2)){ fname <- 'Comp_Cond_Gauss_misp_PoisZIP'
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==45,likelihood==1,type==2)){ fname <- 'Comp_Cond_BinomnegGaussZINB'
@@ -383,6 +385,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==46,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisGamma'
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==43,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisZIP'
+                                              if(varest & vartype==2) hessian <- TRUE}
+    if(all(model==57,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisGammaZIP'
                                               if(varest & vartype==2) hessian <- TRUE}
     if(all(model==44,likelihood==3,type==2)){ fname <- 'Comp_Pair_Gauss_misp_PoisZIP'
                                               if(varest & vartype==2) hessian <- TRUE}

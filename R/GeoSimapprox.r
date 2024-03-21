@@ -4,56 +4,12 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),max.ext=1,method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,seed=NULL,X=NULL)
+     local=c(1,1),max.ext=1,method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1)
 {
 ####################################################################
-############ internal function #####################################
+############  starting internal function ###########################
 ####################################################################
-    RFfct1<- function(numcoord,numtime,spacetime,bivariate,
-          dime,nuisance,simd,X,ns)
-    {
-      
-        if(!bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,numcoord*numtime))}}  ## in the case of no covariates
-        if( bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,ns[1]+ns[2]))}}
 
-
-        if(!bivariate) {
-                              sel=substr(names(nuisance),1,4)=="mean";
-                               num_betas=sum(sel);mm=NULL
-                               if(num_betas==1) {mm=nuisance$mean;
-                                                 sim = X*mm+simd
-                                                }
-                               if(num_betas>1)  { mm=c(mm,as.numeric((nuisance[sel])));
-                                                  sim = X%*%mm+simd
-                                                }
-                               
-                }
-                if(bivariate)  {
-                  sel1=substr(names(nuisance),1,6)=="mean_1";
-                  sel2=substr(names(nuisance),1,6)=="mean_2";
-                  num_betas1=sum(sel1);mm1=NULL;
-                  num_betas2=sum(sel2);mm2=NULL;
-
-                   if(num_betas1==1) mm1=nuisance$mean_1
-                   if(num_betas1>1)  mm1=c(mm1,as.numeric((nuisance[sel1])))
-                   if(num_betas2==1) mm2=nuisance$mean_2
-                   if(num_betas2>1)  mm2=c(mm2,as.numeric((nuisance[sel2])))
-
-
-                  X11=as.matrix(X[1:ns[1],]);
-                  X22=as.matrix(X[(ns[1]+1):(ns[2]+ns[1]),]);
-                   if(is.null(ns))  {sim <- c(X11%*%mm1,
-                                              X22%*%mm2) + simd }
-                  else            sim <- c(rep(as.numeric(nuisance['mean_1']),ns[1]),
-                                         rep(as.numeric(nuisance['mean_2']),ns[2])) + simd
-                  }
-
-            if(!spacetime&&!bivariate) sim <- c(sim)
-            else sim <- matrix(sim, nrow=numtime, ncol=numcoord,byrow=TRUE)
-       #   }
-
-        return(sim)
-    }
 ###############################
 ddim<-function(coordx,coordy,coordt)
 {
@@ -63,14 +19,42 @@ else                 dims=length(coordx)*length(coordy)
 if(!is.null(coordt)) dimt=length(coordt)
 return(dims*dimt)
 }
-
-
-#########################################################
+###############################
+RFfct1<- function(numcoord,numtime,spacetime,bivariate,dime,nuisance,simd,X,ns)
+    {
+        if(!bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,numcoord*numtime))}}  ## in the case of no covariates
+        if( bivariate) {if(is.null(dim(X))) {X=as.matrix(rep(1,ns[1]+ns[2]))}}
+        if(!bivariate) {
+                              sel=substr(names(nuisance),1,4)=="mean";
+                               num_betas=sum(sel);mm=NULL
+                               if(num_betas==1) {mm=nuisance$mean;
+                                                 sim = X*mm+simd
+                                                }
+                               if(num_betas>1)  { mm=c(mm,as.numeric((nuisance[sel])));
+                                                  sim = X%*%mm+simd
+                                                }            
+                       }
+        if(bivariate)  {
+                  sel1=substr(names(nuisance),1,6)=="mean_1";
+                  sel2=substr(names(nuisance),1,6)=="mean_2";
+                  num_betas1=sum(sel1);mm1=NULL;
+                  num_betas2=sum(sel2);mm2=NULL;
+                  if(num_betas1==1) mm1=nuisance$mean_1; if(num_betas1>1)  mm1=c(mm1,as.numeric((nuisance[sel1])))
+                  if(num_betas2==1) mm2=nuisance$mean_2; if(num_betas2>1)  mm2=c(mm2,as.numeric((nuisance[sel2])))
+                  X11=as.matrix(X[1:ns[1],]);
+                  X22=as.matrix(X[(ns[1]+1):(ns[2]+ns[1]),]);
+                  if(is.null(ns))  {sim <- c(X11%*%mm1,X22%*%mm2) + simd }
+                  else            sim <- c(rep(as.numeric(nuisance['mean_1']),ns[1]),
+                                         rep(as.numeric(nuisance['mean_2']),ns[2])) + simd
+                  }
+            if(!spacetime&&!bivariate) sim <- c(sim)
+            else sim <- matrix(sim, nrow=numtime, ncol=numcoord,byrow=TRUE)
+        return(sim)
+    }
+################### turning bands ######################################
 tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
   # Preparing parameters to use
   # =============================================
-
-
   if(corrmodel == "Matern"){ model=0
                              a0=as.numeric(param['scale'])
                              nu0=as.numeric(param['smooth'])
@@ -86,11 +70,7 @@ tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
                              sill=as.numeric(param['sill']) 
                              nugget = as.numeric(param['nugget'])
                            }
-
-
-    a_frecuency = a0
-    nu_frecuency = nu0
-    mu_frecuency = mu
+    a_frecuency = a0;nu_frecuency = nu0;mu_frecuency = mu
   parametersg <- list("C" = 1, "a" = a_frecuency, "nu1" = nu_frecuency, "mu" =    mu_frecuency )
   parameters <- list("C" = sill*(1-nugget), "a" = a0 , "nu1" = nu0, "mu" =  mu_frecuency )
 
@@ -129,17 +109,12 @@ tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
   simu = simu + rnorm(m, 0, sqrt(sill*nugget))
   return(simu)
 }
-
 ######################## space time case: separable with Circ embeeding+ftt ##########################
-
 CE_Space_Time <- function(coords, time.seq, param,corrmodel,distance){
 
   time.seq <- time.seq - time.seq[1]
-  Ns <- nrow(coords)
-  Nt <- length(time.seq)
-  Nt.ext <- (2*(Nt-1))
-  N0 <- Ns*Ns*Nt.ext
-  
+  Ns <- nrow(coords); Nt <- length(time.seq)
+  Nt.ext <- (2*(Nt-1)); N0 <- Ns*Ns*Nt.ext
 #################################################
 ###### main separable models ####################
 #################################################
@@ -174,9 +149,7 @@ if(corrmodel=="Kummer_Matern_Kummer_Matern"){
   cova.mat.s <- (1 - param$nugget)*cova.mat.s
   diag(cova.mat.s) <- 1
   ## cholesky decomposition
-  
   chol.s <- t(chol(cova.mat.s))
-
   auxiliar.seq <- c(time.seq, rev(time.seq[-c(1,Nt)]))
   cova.mat.t <- (1 - param$nugget)*GeoModels::GeoCorrFct(x = auxiliar.seq, 
                                                               corrmodel = corrmodel, 
@@ -189,18 +162,15 @@ if(corrmodel=="Kummer_Matern_Kummer_Matern"){
     Z0 <- complex(real = rnorm(Ns), imaginary = rnorm(Ns) ) 
     X[1:Ns + Ns*(t-1)] <- (spectrum.t[t]*chol.s)%*%Z0
   }
-  
   X <- matrix(X, ncol = Ns, byrow = T)
   X <- apply(X, 2, function(x) fft(x, T)/sqrt(Nt.ext))
   X <- sqrt(param$sill)*X[1:Nt,]
-  
   result <-  c(t(Re(X)))
-  
   return(result)
 }
 
-
-
+######################################################################
+############## main  internal function  ##############################
 ######################################################################
 simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
 {
@@ -218,8 +188,7 @@ if(method=="Vecchia"){
                                   covfun_name = model1, coords, m = M)
                       }
  ## Circulant embeeding                    
-  if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X) 
-        
+  if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X)        
 }
 ##### spacetime case ######
 if(spacetime)  {
@@ -233,8 +202,6 @@ return(simu)
 ############# END internal functions ###############################
 ####################################################################
 
-    if(!is.null(seed))  set.seed(seed)
-
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(!(method=="Vecchia"||method=="TB"||method=="CE")) stop("The method of simulation is not correct\n")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
@@ -242,6 +209,27 @@ return(simu)
     distance=gsub("[[:blank:]]", "",distance)
     method=gsub("[[:blank:]]", "",method)
     numxgrid=numygrid=NULL
+
+
+    spacetime_dyn=FALSE
+##############################################################################
+###### extracting sp object informations if necessary              ###########
+##############################################################################
+bivariate<-CheckBiv(CkCorrModel(corrmodel))
+spacetime<-CheckST(CkCorrModel(corrmodel))
+space=!spacetime&&!bivariate
+if(!is.null(spobj)) {
+   if(space||bivariate){
+        a=sp2Geo(spobj,NULL); coordx=a$coords 
+       if(!a$pj) {if(distance!="Chor") distance="Geod"}
+    }
+   if(spacetime){
+        a=sp2Geo(spobj,NULL); coordx=a$coords ; coordt=a$coordt 
+        if(!a$pj) {if(distance!="Chor") distance="Geod"}
+     }
+}
+###############################################################
+###############################################################
 
     if(grid) { xgrid=coordx;ygrid=coordy;
                numxgrid=length(xgrid);numygrid=length(ygrid) 
@@ -254,17 +242,12 @@ return(simu)
     coords_orig=coords
     if(!(is.null(anisopars))) coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))    
 
-    spacetime_dyn=FALSE
+
     ##############################################################################
     ##############################################################################
 
 
-    bivariate<-CheckBiv(CkCorrModel(corrmodel))
-    spacetime<-CheckST(CkCorrModel(corrmodel))
-
-    space=!spacetime&&!bivariate
-
-
+    
 
     if(space)    {if(method=="CE"&&!grid) stop("CE method works only for regular grid\n")
                   if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
@@ -274,51 +257,37 @@ return(simu)
        {if(!(corrmodel %in% c("Matern_Matern","GenWend_GenWend","GenWend_Matern_GenWend_Matern")))
           stop("Not implemented for this correlation model  \n")
         }
-      
     if(bivariate) {if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")}
-
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
    ################################################################################
     unname(coordt);
     if(is.null(coordx_dyn)){
     unname(coordx);unname(coordy)}
-
-
+   if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
   ################################################################################
   ################ setting parameters for each model #############################
   ################################################################################
-     if(!bivariate)
-    {  sel=substr(names(param),1,4)=="mean";  num_betas=sum(sel)   }    ## number of covariates
-    
-
-
+     if(!bivariate) {  sel=substr(names(param),1,4)=="mean";  num_betas=sum(sel) }    ## number of covariates
         if(!length(param$mean)>1){
     if( !all(names(unlist(param)) %in% c(CorrParam(corrmodel), NuisParam(model,bivariate,num_betas=num_betas))) )
        stop("only nuisance and correlation parameters must be included in param\n")
     }
     
    if(bivariate)
-    {  sel1=substr(names(param),1,6)=="mean_1";
-       num_betas1=sum(sel1)
-       sel2=substr(names(param),1,6)=="mean_2";
-       num_betas2=sum(sel2)
-     num_betas=c(num_betas1,num_betas2)
+    {  sel1=substr(names(param),1,6)=="mean_1"; num_betas1=sum(sel1)
+       sel2=substr(names(param),1,6)=="mean_2"; num_betas2=sum(sel2)
+       num_betas=c(num_betas1,num_betas2)
     }
-if(!bivariate) {
-    if(is.null(param$sill)) param$sill=1
-}
+if(!bivariate) { if(is.null(param$sill)) param$sill=1}
 
-    k=1
+
 #################################
     if(model %in% c("SkewGaussian","SkewGauss","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',#"Binomial","BinomialNeg","BinomialNegZINB",
                     "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
                      "TwoPieceBimodal", "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
                     "Gamma","Weibull","LogLogistic","Logistic","BinomialLogistic"))
        {
-        if(spacetime_dyn){
-                       env <- new.env()
-                       if(is.list(X))  X=do.call(rbind,args=c(X),envir = env)
-                     }
+        if(spacetime_dyn){env <- new.env();if(is.list(X))  X=do.call(rbind,args=c(X),envir = env)}
 
   if(!bivariate){
            if(num_betas==1)  mm<-param$mean
@@ -384,7 +353,6 @@ if(!bivariate) {
      }
 #################################
    if(model %in% c("Wrapped"))  {
-        k=2;
         if(!bivariate){
             if(num_betas==1) mm<-2*atan(param$mean)+pi;
             if(num_betas>1)  mm<-2*atan(X%*%as.numeric((param[sel])))+pi;
@@ -398,10 +366,17 @@ if(!bivariate) {
             if(num_betas2>1) {for(i in 1:(num_betas2-1)) param[[paste("mean_2",i,sep="")]]=0}
         }}
 
-    npoi=1
+
+SIM=list()
+###################################################
+### starting number of replicates
+###################################################
+for( L in 1:nrep){
+
+    k=1;npoi=1
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
-    if(model %in% c("Weibull")) k=2
+    if(model %in% c("Weibull","Wrapped")) k=2
     if(model %in% c("LogLogistic","Logistic")) k=4
     if(model %in% c("Binomial"))   k=max(round(n))
     if(model %in% c("BinomialLogistic"))   k=2*max(round(n))
@@ -450,7 +425,7 @@ if(!is.null(coordt)) numtime=length(coordt)
 if(spacetime_dyn) numtime=1
   numcoord=nrow(coords);
   dime<-numcoord*numtime
-  xx=double(dime)
+
 
 #########################################################
 KK=1;sel=NULL;ssp=double(dime)
@@ -880,7 +855,16 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
                          sim_temp[[k]]=c(sim)[indx] }
     sim=sim_temp
     }
-##################################################################
+
+
+    SIM[[L]]=sim
+} 
+######################################################################
+##########  end of replicates ########################################
+######################################################################
+
+if(nrep==1) SIM=SIM[[1]] 
+
     #######################################
     if(bivariate)   numtime=1
 
@@ -892,7 +876,7 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
     coordt = coordt,
     coordx_dyn =coordx_dyn,
     corrmodel = corrmodel,
-    data = sim,
+    data = SIM,
     distance = distance,
     grid = grid,
     model = model,
@@ -902,7 +886,7 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
     numtime = numtime,
     param = param,
     radius = radius,
-    randseed=.Random.seed,
+    nrep=nrep,
     spacetime = spacetime,
     X=X)
 #}

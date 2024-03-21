@@ -452,6 +452,7 @@ double one_log_gammagem(double z,double shape,double n);
 double one_log_bomidal(double z,double m, double sill,double nu,double delta, double eta);
 double one_log_BinomnegZIP(int z,double n, double mu, double mup);
 double one_log_PoisZIP(int z,double lambda, double mup);
+double one_log_PoisgammaZIP(int z,double lambda, double mup,double shape);
 double one_log_loglogistic(double z,double m, double shape);
 double one_log_logistic(double z,double m, double sill);
 double one_log_negbinom_marg(int u,int N, double p);
@@ -464,6 +465,8 @@ double biv_Poisson(double corr,int r, int t, double mean_i, double mean_j);
 double appellF4(double a,double b,double c,double d,double x,double y);
 double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a);
 double biv_PoissonZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2);
+double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape);
+
 double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,double nugget1,double nugget2,double mup);
 
 

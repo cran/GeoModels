@@ -10,7 +10,7 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
                           optimizer='Nelder-Mead', parallel=FALSE,
                          radius=6371,  sensitivity=FALSE,sparse=FALSE, start=NULL, taper=NULL, tapsep=NULL, 
                          type='Pairwise', upper=NULL, varest=FALSE, vartype='SubSamp', weighted=FALSE, winconst=NULL, winstp=NULL, 
-                         winconst_t=NULL, winstp_t=NULL,X=NULL,nosym=FALSE)
+                         winconst_t=NULL, winstp_t=NULL,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
 {
 
 ###########  first preliminary check  ###############
@@ -44,7 +44,27 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
     if(!is.character(optimizer)) stop("invalid optimizer\n")
      if(!is.character(distance)) stop("invalid distance\n")
  
-bivariate<-CheckBiv(CkCorrModel(corrmodel))    
+##############################################################################
+###### extracting sp object informations if necessary              ###########
+##############################################################################
+bivariate<-CheckBiv(CkCorrModel(corrmodel))
+spacetime<-CheckST(CkCorrModel(corrmodel))
+space=!spacetime&&!bivariate
+if(!is.null(spobj)) {
+   if(space||bivariate){
+        a=sp2Geo(spobj,spdata); coordx=a$coords 
+       if(!a$pj) {if(distance!="Chor") distance="Geod"}
+    }
+   if(spacetime){
+        a=sp2Geo(spobj,spdata); coordx=a$coords ; coordt=a$coordt 
+        if(!a$pj) {if(distance!="Chor") distance="Geod"}
+     }
+   if(!is.null(a$Y)&&!is.null(a$X)) {data=a$Y ; X=a$X }
+}
+###############################################################
+###############################################################  
+
+       
 if(!bivariate){
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",

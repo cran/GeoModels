@@ -12,7 +12,7 @@
 \usage{
 GeoSim(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="Eucl",
       GPU=NULL, grid=FALSE, local=c(1,1),method="cholesky", model='Gaussian', n=1, param,
-      anisopars=NULL,radius=6371, sparse=FALSE, seed=NULL,X=NULL)
+      anisopars=NULL,radius=6371, sparse=FALSE,X=NULL,spobj=NULL,nrep=1)
 }
 \arguments{
   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
@@ -55,8 +55,10 @@ GeoSim(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="E
   \item{sparse}{Logical; if \code{TRUE} then  cholesky decomposition is performed
   using sparse matrices algorithms (spam packake). It should be used
   with compactly supported covariance models.\code{FALSE} is the default.}
-   \item{seed}{Numeric; an integer used in set.seed function to reproduce the simulation.}
   \item{X}{Numeric; Matrix of space-time covariates.}
+  \item{spobj}{An object of class sp or spacetime}
+   \item{nrep}{Numeric; Numbers of indipendent replicates.}
+  
 }
 
 
@@ -81,9 +83,9 @@ GeoSim(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="E
   \item{numtime}{The number the temporal realisations of the RF;}
   \item{param}{The vector of  parameters' estimates;}
   \item{radius}{The radius of the sphere if coordinates are passed in lon/lat format;}
-  \item{randseed}{The seed used for the random simulation;}
   \item{spacetime}{\code{TRUE} if spatio-temporal and \code{FALSE} if
   spatial RF;}
+  \item{nrep}{The number of indipendent replicates;}
 }
 
 

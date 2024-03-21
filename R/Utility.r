@@ -587,9 +587,15 @@ CkInput <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distanc
             return(list(error=error))}
        biv<-CheckBiv(CkCorrModel(corrmodel))
  
+
+       #print(model)
        a1=unique(c(NuisParam2("Gaussian",biv,num_betas,NULL),
                     NuisParam2(model,biv,num_betas,copula)))
        a2=CorrelationPar(CkCorrModel(corrmodel))
+      # print(a1)
+      # print(a2)
+      # print(length(c(a1,a2))) ;print(length(param))
+     
              if(length(param)!= length(c(a1,a2)))
              {
             error <- "some parameters are missing or does not match with the declared model\n"
@@ -711,6 +717,7 @@ CkModel <- function(model)
                          Binary_misp_BinomialNeg=54,
                          BinomialNegZINB1=56,
                          PoissonGammaZIP=57,
+                         PoissonGammaZIP1=58,
                          )
     return(CkModel)
   }
@@ -954,9 +961,10 @@ if(!bivariate)      {
   {
     param <- c(mm, 'nugget', 'sill')
     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
-    return(param)}
+    return(param)
+}
 
- if( (model %in% c('PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB','PoissonGammaZIP')))
+ if( (model %in% c('PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB')))
   {
     param <- c(mm, 'nugget1','nugget2','pmu','sill')
     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
@@ -970,19 +978,21 @@ if(!bivariate)      {
     return(param)
   }
 
- if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1','PoissonGammaZIP1')))
+ if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1')))
   {
     param <- c(mm, 'nugget','pmu','sill')
     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
     return(param)
   }
+
  if( (model %in% c('PoissonGammaZIP1','Gaussian_misp_PoissonGammaZIP1')))
   {
     param <- c(mm, 'nugget','pmu','sill','shape')
     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
     return(param)
   }
-if(model %in% c("Weibull","weibull",'Gamma','gamma','LogLogistic',"Loglogistic","PoissonGamma","PoissonGammaZIP","PoissonWeibull","Gaussian_misp_PoissonGamma")){
+
+if(model %in% c("Weibull","weibull",'Gamma','gamma','LogLogistic',"Loglogistic","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma")){
       param <- c(mm, 'nugget', 'sill','shape')
      if(!is.null(copula))  if(copula=="Clayton") param=c(param,'nu')
       return(param)} 
@@ -1076,7 +1086,7 @@ NuisParam <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
     a=NuisParam2(model,bivariate,num_betas,copula)
     if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-        "PoissonGammaZIP","PoissonGamma",
+        "PoissonGammaZIP","PoissonGamma","PoissonGammaZIP1","Binary_misp_BinomialNeg",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy'))  a=a[ !a == 'sill']
@@ -1303,7 +1313,7 @@ if(method1=="euclidean")
                  }
         }
 
-if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                                                        #discrete
+if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                                                        #discrete
             mu=0
             if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
                            if(is.list(fixed)) 
@@ -1316,6 +1326,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
 
             if(model==45) nuisance <- c(mu, 0, 0,0,1)
             if(model==53||model==56) nuisance <- c(mu, 0,0,1)
+            if(model==58) nuisance <- c(mu, 0,0,0,1)
         }
  if(model %in% c(43,44)) nuisance <- c(0, 0, 0,0, 1)
  if(model %in% c(57)) nuisance <- c(0, 0, 0,0, 0,1)
@@ -1384,7 +1395,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
 
     }
 }  ### end continous models
-     if(model %in% c(2,11,14,15,16,19,17,30,49,51,52,54,43,45,53,56,57)) {  # discrete models
+     if(model %in% c(2,11,14,15,16,19,17,30,49,51,52,54,43,45,53,56,57,58)) {  # discrete models
 
         if(any(type==c(1, 3, 7,8,4)))# Checks the type of likelihood
             if(is.list(fixed)) {
@@ -1400,6 +1411,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
      if(model %in% c(43,45)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,1)
      if(model %in% c(57)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,0,1)
      if(model %in% c(53,56)) nuisance <- c(0,rep(1,num_betas-1) , 0,0,1)
+     if(model %in% c(58)) nuisance <- c(0,rep(1,num_betas-1) , 0,0,0,1)
 
         }
      #
@@ -1454,7 +1466,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
 
                 if(!bivariate) {   # univariate case
                        if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57,58)))
                        if(any(namesstart == 'mean'))  start <- start[!namesstart == 'mean']
                        if(num_betas>1)
                        for(i in 1:(num_betas-1)) 
@@ -1462,7 +1474,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
                          if(any(namesstart == paste("mean",i,sep="")))  {
                               namesstart <- names(start) 
                               if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57,58)))
                                                  start <- start[!namesstart == paste("mean",i,sep="")]
                             }
                        }
@@ -1547,7 +1559,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,57)){                 
         numparam <- length(param)
         namesparam <- names(param)
 
-        if(!bivariate) if(any(model!=c(43,45,53,56,57)))  namessim <- c("mean","sill","nugget","scale",namescorr[!namescorr=="scale"])
+        if(!bivariate) if(any(model!=c(43,45,53,56,57,58)))  namessim <- c("mean","sill","nugget","scale",namescorr[!namescorr=="scale"])
        
        # if(any(model==c(43,45)))  namessim <- c("mean","sill","nugget1","nugget2","scale",namescorr[!namescorr=="scale"])
        if(bivariate)  namessim <- c("mean_1","mean_2","scale",namescorr[!namescorr=="scale"])  

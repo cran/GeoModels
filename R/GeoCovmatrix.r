@@ -51,7 +51,7 @@ MatLogDet<-function(mat.decomp,method)    {
 
 GeoCovmatrix <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
                        maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=6371,
-                       sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL)
+                       sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
 
 {
   ########################################################################################################
@@ -599,7 +599,7 @@ if(model %in% c(24,26,21,22)){
 ###############################################################
 ################################ start discrete #models ########
 ###############################################################
-if(model %in% c(2,11,30,16,14,43,45,46)){ #  binomial (negative)Gaussian type , Poisson (inflated)
+if(model %in% c(2,11,30,16,14,43,45,46,57,58)){ #  binomial (negative)Gaussian type , Poisson (inflated)
 
 if(model==2||model==11)
 {if(length(n)==1) n=rep(n,dime)}
@@ -703,14 +703,31 @@ return(varcov)
   #############################################################################################
   #################### end internal function ##################################################
   #############################################################################################
-    # Check the user input
 
-    spacetime<-CheckST(CkCorrModel(corrmodel))
-    bivariate<-CheckBiv(CkCorrModel(corrmodel))
-    space=!(spacetime||bivariate)
-    if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
-    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
-    ## setting zero mean and nugget if no mean or nugget is fixed
+
+ if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
+ if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
+
+bivariate<-CheckBiv(CkCorrModel(corrmodel))
+spacetime<-CheckST(CkCorrModel(corrmodel))
+space=!spacetime&&!bivariate
+
+##############################################################################
+###### extracting sp object informations if necessary              ###########
+##############################################################################
+
+if(!is.null(spobj)) {
+   if(space||bivariate){
+        a=sp2Geo(spobj,NULL); coordx=a$coords 
+       if(!a$pj) {if(distance!="Chor") distance="Geod"}
+    }
+   if(spacetime){
+        a=sp2Geo(spobj,NULL); coordx=a$coords ; coordt=a$coordt 
+        if(!a$pj) {if(distance!="Chor") distance="Geod"}
+     }
+}
+#######################################################
+     ## setting zero mean and nugget if no mean or nugget is fixed
     if(!bivariate){
     if(is.null(param$mean)) param$mean<-0
     if(is.null(param$nugget)) param$nugget<-0  
@@ -769,7 +786,7 @@ if(!bivariate){
 
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
+        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB', 'PoissonGammaZIP','PoissonGammaZIP1','PoissonGamma',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')){
 if(is.null(param$sill)) param$sill=1
@@ -794,7 +811,8 @@ else                    param$sill=1
   
     if(!is.null(anisopars)) {  coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))}
 #######################################
-    
+
+  
     checkinput <- CkInput(coords[,1], coords[,2], coordt, coordx_dyn, corrmodel, NULL, distance, "Simulation",
                              NULL, grid, NULL, maxdist, maxtime,  model=model, n,  NULL,
                               param, radius, NULL, taper, tapsep,  "Standard", NULL, NULL, NULL,copula,X)
