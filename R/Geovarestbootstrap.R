@@ -5,7 +5,7 @@
 
    
 GeoVarestbootstrap=function(fit,K=100,sparse=FALSE,GPU=NULL,  local=c(1,1),optimizer="Nelder-Mead",
-  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, M=30,L=500)
+  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, M=30,L=3000)
 {
 
 if(length(fit$coordt)==1) fit$coordt=NULL
@@ -47,7 +47,7 @@ k=1;res=NULL
   pp=NULL
 ######## simulation ##########################################
 if(is.null(fit$copula)){     ### non copula models
-   cat("Performing simulation....\n")
+   cat("Performing",K,"simulations....\n")
     if(method=="cholesky")
     { 
 
@@ -91,9 +91,10 @@ res_est=GeoFit( data=data_sim$data[[k]], start=fit$param,fixed=fit$fixed,
 if(res_est$convergence=='Successful'&&res_est$logCompLik<1.0e8) 
  {
  res=rbind(res,unlist(res_est$param))
- k=k+1
+
 setTxtProgressBar(pb, k)
-}               
+}   
+ k=k+1            
 close(pb)
 }
 
@@ -132,5 +133,6 @@ aa=qnorm(1-(1-alpha)/2)*stderr
 pp=as.numeric(fit$param)
 low=pp-aa; upp=pp+aa
 fit$conf.int=rbind(low,upp)
+fit$pvalues=2*pnorm(-abs(pp/stderr))
 return(fit)
 }

@@ -161,17 +161,14 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
       initparam$upper <- uu;initparam$lower <- ll
      }}
 
-     
 ###############################################################################################
-    fitted_ini<-CompIndLik2(initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
+fitted_ini<-CompIndLik2(initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordt,
                                    coordx_dyn,unname(initparam$data), 
                                    initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid,
                                     initparam$lower,initparam$model,initparam$n ,
                                      initparam$namescorr,initparam$namesnuis,
                                    initparam$namesparam,initparam$numparam,optimizer,onlyvar,parallel, initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,names(upper),varest, initparam$ns, unname(initparam$X),sensitivity,copula,MM)
-
-
 ######################################################
 ######updating starting and names  parameters 
 ######################################################
@@ -183,7 +180,6 @@ aa[sel]=fitted_ini$par      #replacing
 sel=match(names(aa),initparam$namesparam);sel=sel[!is.na(sel)]  
 initparam$param=aa[sel]   
 ######################################################
-
 
 
 #updating with aniso parameters
@@ -211,8 +207,6 @@ a=list(param=param,fixed=fixed,namesparam=namesparam,namesfixed=namesfixed,lower
 return(a)
 }
 
-
-
 aniso=FALSE
 if(!is.null(anisopars)) {
                  aniso=TRUE;namesaniso=c("angle","ratio")
@@ -222,6 +216,7 @@ if(!is.null(anisopars)) {
                   initparam$namesparam=qq$namesparam; initparam$namesfixed=qq$namesfixed
                   initparam$lower=qq$lower; initparam$upper=qq$upper
                        }
+          
    # Full likelihood:
     if(likelihood=='Full')
           # Fitting by log-likelihood maximization:
@@ -313,6 +308,7 @@ if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(l
                                         }   
 
 conf.int=NULL
+pvalues=NULL
 if(likelihood=="Full"&&type=="Standard") 
 {if(varest){
    alpha=0.05 
@@ -320,6 +316,7 @@ if(likelihood=="Full"&&type=="Standard")
    pp=as.numeric(fitted$par)
    low=pp-aa; upp=pp+aa
    conf.int=rbind(low,upp)
+     pvalues= 2*pnorm(-abs(pp/fitted$stderr))
    }
 }
 
@@ -370,6 +367,7 @@ if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",
                          neighb=initparam$neighb,
                          numpairs=initparam$numpairs,
                          missp=missp,
+                         pvalues=pvalues,
                          radius = radius,
                          spacetime = initparam$spacetime,
                          stderr = fitted$stderr,

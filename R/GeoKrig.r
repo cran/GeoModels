@@ -14,7 +14,8 @@ getInv=function(covmatrix,b){
 if(!covmatrix$sparse){
                U =MatDecomp(covmatrix$covmatrix,method);Inv=0
                if(is.logical(U)){print(" Covariance matrix is not positive definite");stop()}
-               Invc=backsolve(U, backsolve(U, b, transpose = TRUE)) ## R^-1 %*% c
+               #Invc=backsolve(U, backsolve(U, b, transpose = TRUE)) ## R^-1 %*% c
+               Invc=forwardsolve(U, forwardsolve(U, b),transpose=T) ## R^-1 %*% c
                return(list(a=Invc,bb=Inv))
              }
 if(covmatrix$sparse){
@@ -628,10 +629,15 @@ else pred=c(pp)
 ####################################################################################################################################
 if(covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46))
 {
+
      if(type=="Standard"||type=="standard") {
-     mu0 = Xloc%*%betas;
-     if(!bivariate) mu  = X%*%betas
-     if(bivariate)  mu  = c(X11%*%betas1,X22%*%betas2)
+     
+      if(!bivariate){
+               if(is.null(MM)) {mu=X%*%betas; mu0=Xloc%*%betas}
+               else {mu=MM;mu0=Mloc}        
+      }
+
+     if(bivariate)  {mu  = c(X11%*%betas1,X22%*%betas2)}
      kk=0
      if(covmatrix$model %in% c(2,11))    ### binomial
      { if(is.null(nloc)) {kk=rep(round(mean(n)),dimat2)}

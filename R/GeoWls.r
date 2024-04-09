@@ -193,12 +193,9 @@ if(initparam$numstart==initparam$numparam)       ### checking if numparam = nums
           (type %in% c('Standard','Pairwise','Tapering','Tapering1','Independence')))
         {
 
-
-  ###################################
 if(!initparam$bivariate)   ###spatial or temporal univariate case
 {  
-       
-          if(is.na(fixed["mean"])&is.na(fixed["mean2"]))
+  if(is.na(fixed["mean"])&is.na(fixed["mean2"]))
           {
               if(is.na(start["mean"])) {initparam$param <- c(initparam$fixed["mean"], initparam$param)}
               else {initparam$param <- c(start["mean"], initparam$param)}
@@ -210,14 +207,12 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
               if(initparam$numfixed > 0) {initparam$fixed <- fixed}
               else {initparam$fixed <- NULL}
           }
-          else {initparam$fixed['mean'] <- fixed["mean"]} 
+   else {initparam$fixed['mean'] <- fixed["mean"]} 
          ###################################
-if(num_betas>1)
+   if(num_betas>1)
         {
-           
           for(i in 1:(num_betas-1))
-         {
-            if(is.na(fixed[paste("mean",i,sep="")]))
+         { if(is.na(fixed[paste("mean",i,sep="")]))
                 {
               if(is.na(start[paste("mean",i,sep="")])) {initparam$param <- c(initparam$fixed[paste("mean",i,sep="")], initparam$param)}
               else {initparam$param <- c(start[paste("mean",i,sep="")], initparam$param)}
@@ -228,13 +223,10 @@ if(num_betas>1)
               initparam$numfixed <- initparam$numfixed-1}
             else {initparam$fixed[paste("mean",i,sep="")] <- fixed[paste("mean",i,sep="")]} 
          }
-          if(initparam$numfixed > 0) {initparam$fixed <- fixed}
-          else {initparam$fixed <- NULL}
-        }
-
-            
+        if(initparam$numfixed > 0) {initparam$fixed <- fixed}
+        else {initparam$fixed <- NULL}
+        }    
 }     ## end univariate case
-  ###################################
   ###################################
      if(initparam$bivariate)    ## bivariate case
      {           ###bivariate case
@@ -249,7 +241,6 @@ if(num_betas>1)
               if(initparam$numfixed > 0) {initparam$fixed <- fixed}
               else {initparam$fixed <- NULL}}
               else { initparam$fixed['mean_1'] <- fixed["mean_1"] }
-
               if(is.na(fixed["mean_2"])){
               initparam$namesparam<-names(initparam$namesparam)
               if(is.na(start["mean_2"])) {initparam$param <- c(initparam$fixed["mean_2"], initparam$param)}
@@ -274,7 +265,8 @@ if(num_betas>1)
             initparam$flagnuis[paste("mean_1",i,sep="")] <- 1
             initparam$numfixed <- initparam$numfixed-1}
             else {initparam$fixed[paste("mean_1",i,sep="")] <- fixed[paste("mean_1",i,sep="")]} 
-         }}
+         }
+      }
            if(num_betas[2]>1){
           for(i in 1:(num_betas[2]-1)) {
             if(is.na(fixed[paste("mean_2",i,sep="")]))

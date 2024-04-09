@@ -50,7 +50,7 @@ where \eqn{\mathbf{\theta} \in \Theta}{theta in Theta} is a
  hypothesis tests for testing the null hypothesis \eqn{H_0:
  \psi=\psi_0}{H_0: psi=psi_0} against the alternative \eqn{H_1:
  \psi \neq \psi_0}{H_1: psi <> psi_0}. Composite likelihood versions
-of 'Wald' and 'score' statistics have the usual asymptotic
+of 'Wald'  statistis have the usual asymptotic
 chi-square distribution with \eqn{q'} degree of freedom. The Wald-type statistic is
 \deqn{W=(\hat{\psi}-\psi_0)^T (G^{\psi \psi})^{-1}(\hat{\theta})(\hat{\psi}-\psi_0),}{%
 W=(hat{psi}-psi_0)^T (G^{psi psi})^{-1} (hat{theta})(hat{psi}-psi_0),}
@@ -90,9 +90,9 @@ freedom. Note that in this case the distribution of the likelihood ratio
  statistic is a chi-square random variable with \eqn{\nu}{nu} degree of
  freedom. This statistic can be called from the routine assigning the
  value: \code{WilksS}. For the adjustments suggested by Chandler and
- Bate (2007) and Pace, Salvan and Sartori (2011) we refere to the articles (see
- \bold{References}), these versions can be called from the routine assigning
- respectively the values: \code{WilksCB} and \code{WilksPSS}.
+ Bate (2007)  we refere to the article (see
+ \bold{References}). This versions can be called from the routine assigning
+ respectively the values: \code{WilksCB}.
 
 }
 
@@ -114,9 +114,6 @@ freedom. Note that in this case the distribution of the likelihood ratio
 
 Chandler, R. E., and Bate, S. (2007). Inference for Clustered Data Using the
 Independence log-likelihood. \emph{Biometrika}, \bold{94}, 167--183.
-
-Pace, L., Salvan, A. and Sartori, N. (2011). Adjusting Composite
-Likelihood Ratio Statistics. \emph{Statistica Sinica}, \bold{21}, 129--148.
 
 Rotnitzky, A. and Jewell, N. P. (1990). Hypothesis Testing of Regression
 Parameters in Semiparametric Generalized Linear Models for Cluster
@@ -146,13 +143,13 @@ library(GeoModels)
 ################################################################
 ###
 ### Example 1. Test on the parameter
-### of a regression model using standard likelihood
+### of a regression model using conditional composite likelihood
 ###
 ###############################################################
 set.seed(342)
 model="Gaussian" 
 # Define the spatial-coordinates of the points:
-NN=150
+NN=1500
 x = runif(NN, 0, 1)
 y = runif(NN, 0, 1)
 coords = cbind(x,y)
@@ -165,7 +162,7 @@ X=cbind(rep(1,nrow(coords)),runif(nrow(coords)))
 
 # model correlation 
 corrmodel="Wend0"
-power2=4;c_supp=0.2
+power2=4;c_supp=0.15
 
 # simulation
 param=list(power2=power2,mean=mean,mean1=mean1,
@@ -181,8 +178,8 @@ lower=list(mean=-I,mean1=-I,scale=0,sill=0)
 upper=list(mean=I,mean1=I,scale=I,sill=I)
 # Maximum pairwise composite-likelihood fitting of the RF:
 fitH1 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
-                   likelihood="Full",type="Standard",varest=TRUE,
-                   lower=lower,upper=upper,
+              likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
+                   lower=lower,upper=upper,neighb=3,
                    optimizer="nlminb",X=X,
                     start=start,fixed=fixed)
 
@@ -191,20 +188,28 @@ unlist(fitH1$param)
 ##### H0: (constant mean i.e beta1=0)
 fixed=list(power2=power2,nugget=nugget,mean1=0)
 start=list(mean=mean,scale=c_supp,sill=sill)
-lower=list(mean=-I,scale=0,sill=0)
-upper=list(mean=I,scale=I,sill=I)
+lower0=list(mean=-I,scale=0,sill=0)
+upper0=list(mean=I,scale=I,sill=I)
 # Maximum pairwise composite-likelihood fitting of the RF:
 fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
-                    likelihood="Full",type="Standard",varest=TRUE,
-                      lower=lower,upper=upper,
+            likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
+                      lower=lower0,upper=upper0,neighb=3,
                    optimizer="nlminb",X=X,
                     start=start,fixed=fixed)
+unlist(fitH0$param)
 
+# not run
+##fitH1=GeoVarestbootstrap(fitH1,K=100,optimizer="nlminb",
+##                     lower=lower, upper=upper)
+##fitH0=GeoVarestbootstrap(fitH0,K=100,optimizer="nlminb",
+##                     lower=lower0, upper=upper0)
 
-#  Wald statistic and likelihood ratio statistic test
+#  Composite likelihood Wald and ratio statistic statistic tests
 #  rejecting null  hypothesis beta1=0
-GeoTests(fitH1, fitH0 ,statistic='Wald')
-GeoTests(fitH1, fitH0 , statistic='Wilks')
+##GeoTests(fitH1, fitH0 ,statistic='Wald')
+##GeoTests(fitH1, fitH0 , statistic='WilksS')
+##GeoTests(fitH1, fitH0 , statistic='WilksCB')
+
 
 
 
@@ -214,22 +219,22 @@ GeoTests(fitH1, fitH0 , statistic='Wilks')
 ### using SinhAsinh random fields using standard likelihood
 ###
 ###############################################################
-set.seed(34)
+set.seed(99)
 model="SinhAsinh" 
 # Define the spatial-coordinates of the points:
-NN=150
+NN=200
 x = runif(NN, 0, 1)
 y = runif(NN, 0, 1)
 coords = cbind(x,y)
 # Parameters
 mean=0; nugget=0; sill=1
 ### skew and tail parameters
-skew=0.6;tail=1.7   ## H0 is Gaussianity
+skew=0;tail=1   ## H0 is Gaussianity
 # underlying model correlation 
 corrmodel="Wend0"
 power2=4;c_supp=0.2
 
-# simulation
+# simulation from Gaussian  model (H0)
 param=list(power2=power2,skew=skew,tail=tail,
              mean=mean,sill=sill,scale=c_supp,nugget=nugget)
 data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
@@ -239,10 +244,10 @@ data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
 fixed=list(power2=power2,nugget=nugget,mean=mean)
 start=list(scale=c_supp,skew=skew,tail=tail,sill=sill)
 
-lower=list(scale=0,skew=-1 ,tail=0.5,sill=0)
-upper=list(scale=2,skew=1,tail=1.5,sill=5)
+lower=list(scale=0,skew=-I, tail=0,sill=0)
+upper=list(scale=I,skew= I,tail=I,sill=I)
 # Maximum pairwise composite-likelihood fitting of the RF:
-fitH1 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
+fitH1 = GeoFit2(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                    likelihood="Full",type="Standard",varest=TRUE,
                    lower=lower,upper=upper,
                    optimizer="nlminb",
@@ -262,8 +267,10 @@ fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                    optimizer="nlminb",
                     start=start,fixed=fixed)
 
-#  Wald statistic and likelihood ratio statistic test
-#  rejecting null  hypothesis tail=1,skew=0
+unlist(fitH0$param)
+
+#  Standard likelihood Wald and ratio statistic statistic tests
+#  not rejecting null  hypothesis tail=1,skew=0 (Gaussianity)
 GeoTests(fitH1, fitH0,statistic='Wald')
 GeoTests(fitH1, fitH0,statistic='Wilks')
 

@@ -297,7 +297,8 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
 {
   ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
   if(sparse) simD=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R1) [,iord1] )
-    else     simD=crossprod(sqrtvarcov1,ss) 
+    else     #simD=crossprod(sqrtvarcov1,ss) 
+             simD=sqrtvarcov1%*%ss
 
       ccov1=ccov
       ccov1$covmatrix=ccov_with_nug
@@ -318,7 +319,8 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
      #                  }
     #### simulating N(0,1) with matrix decomposition using sparse or dense matrices without nugget!
       if(sparse)   simd=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R) [,iord] )
-      else         simd=crossprod(sqrtvarcov,ss) 
+      else         #simd=crossprod(sqrtvarcov,ss) 
+                   simd=sqrtvarcov%*%ss
 
     #######################################################################
     nuisance<-param[ccov$namesnuis]
@@ -388,7 +390,8 @@ if(model %in% c("PoissonWeibull"))   {
       ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
 
       if(sparse)   a=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R1) [,iord1] )
-      else         a=crossprod(sqrtvarcov1,ss) 
+      else         #a=crossprod(sqrtvarcov1,ss) 
+                       a=sqrtvarcov1%*%ss
 
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
@@ -435,7 +438,8 @@ if(model %in% c("BinomialLogistic"))   {
       ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
 
       if(sparse)   a=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R1) [,iord1] )
-      else         a=crossprod(sqrtvarcov1,ss) 
+      else         #a=crossprod(sqrtvarcov1,ss) 
+                   a=sqrtvarcov1%*%ss
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim
@@ -831,7 +835,8 @@ while(KK<=npoi) {
 
     #### simulating with matrix decomposition using sparse or dense matrices without nugget!
     if(sparse) simd=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R) [,iord] )
-    else     simd=crossprod(sqrtvarcov,ss) 
+    else     #simd=crossprod(sqrtvarcov,ss)
+             simd=sqrtvarcov%*%ss 
 
     #######################################################################
     nuisance<-param[ccov$namesnuis]

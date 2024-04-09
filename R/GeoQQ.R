@@ -15,6 +15,7 @@ else copula=NULL
 fit$param=unlist(fit$param)
 fit$fixed=unlist(fit$fixed)
 pp=c(fit$param,fit$fixed)
+
 MM=as.numeric(pp["mean"])
 if(!is.null(as.numeric(pp["sill"]))) VV=as.numeric(pp["sill"])
 
@@ -149,7 +150,7 @@ if(model %in% c("LogGaussian"))
 
    q_t = qlnorm(probabilities, exp(MM)-VV/2, sqrt(VV))
    q_t1 = qlnorm(probabilities1, exp(MM)-VV/2, sqrt(VV))
-   plot(q_t,q_e,xlab=xlab,ylab=ylab,main = "LogGaussian qq-plot",xlab=xlab,ylab=ylab,...)
+   plot(q_t,q_e,main = "LogGaussian qq-plot",xlab=xlab,ylab=ylab,...)
 }
 #######################################  OK
 if(model %in% c("LogLogistic"))
@@ -159,14 +160,14 @@ cc=gamma(1+1/shape)*gamma(1-1/shape)
 q_t = actuar::qllogis(probabilities,shape = shape,scale=exp(MM)/cc)
 q_t1 = actuar::qllogis(probabilities1,shape = shape,scale=exp(MM)/cc)
 q_e=quantile(dd,probabilities)
-plot(q_t,q_e,xlab=xlab,ylab=ylab,main = "LogLogistic qq-plot",xlab=xlab,ylab=ylab,...)
+plot(q_t,q_e,main = "LogLogistic qq-plot",xlab=xlab,ylab=ylab,...)
 }
 if(model %in% c("Logistic"))
 {
 q_t = qlogis(probabilities, location = MM, scale = sqrt(VV))
 q_t1 = qlogis(probabilities1,location = MM, scale = sqrt(VV))
 q_e=quantile(dd,probabilities)
-plot(q_t,q_e,xlab=xlab,ylab=ylab,main = "Logistic qq-plot",xlab=xlab,ylab=ylab,...)
+plot(q_t,q_e,main = "Logistic qq-plot",xlab=xlab,ylab=ylab,...)
 }
 #######################################  OK
 if(model %in% c("SinhAsinh"))

@@ -673,8 +673,9 @@ void Comp_Pair_PoisGamma2mem(int *cormod, double *data1,double *data2,int *NN,
     double weights=1.0,corr,mui,muj,bl;
     double nugget=nuis[0];
 
+    //Rprintf("%f %f\n",exp(mean1[1]),exp(mean2[1]));
       if(nugget<0||nugget>=1){*res=LOW; return;}
-  // Rprintf("%d   \n",npairs[0]);
+
       for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     mui=exp(mean1[i]);muj=exp(mean2[i]);

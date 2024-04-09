@@ -4,7 +4,7 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),max.ext=1,method="TB",M=30, L=1000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1)
+     local=c(1,1),max.ext=1,method="TB",M=30, L=2000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1)
 {
 ####################################################################
 ############  starting internal function ###########################
@@ -47,66 +47,70 @@ RFfct1<- function(numcoord,numtime,spacetime,bivariate,dime,nuisance,simd,X,ns)
                   else            sim <- c(rep(as.numeric(nuisance['mean_1']),ns[1]),
                                          rep(as.numeric(nuisance['mean_2']),ns[2])) + simd
                   }
+
+
             if(!spacetime&&!bivariate) sim <- c(sim)
+
             else sim <- matrix(sim, nrow=numtime, ncol=numcoord,byrow=TRUE)
         return(sim)
     }
 ################### turning bands ######################################
+#########################################################
 tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
-  # Preparing parameters to use
-  # =============================================
-  if(corrmodel == "Matern"){ model=0
-                             a0=as.numeric(param['scale'])
-                             nu0=as.numeric(param['smooth'])
-                             mu=NULL
-                             sill=as.numeric(param['sill']) 
-                             nugget = as.numeric(param['nugget'])
-                           }
 
-  if(corrmodel == "GenWend"){ model=1
-                             a0=as.numeric(param['scale'])
-                             nu0=as.numeric(param['smooth'])
-                             mu=as.numeric(param['power2'])
-                             sill=as.numeric(param['sill']) 
-                             nugget = as.numeric(param['nugget'])
-                           }
-    a_frecuency = a0;nu_frecuency = nu0;mu_frecuency = mu
-  parametersg <- list("C" = 1, "a" = a_frecuency, "nu1" = nu_frecuency, "mu" =    mu_frecuency )
-  parameters <- list("C" = sill*(1-nugget), "a" = a0 , "nu1" = nu0, "mu" =  mu_frecuency )
+  N=1; n <- dim(coord)[1]; d <- 2
+    if(corrmodel == "Matern"){
+       CC=1; N=1
+       a <- as.numeric(param['scale']);  nu1 <- as.numeric(param['smooth'])
+       a0 = a; nu0 =nu1
+       parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0 )
+       P <- 1;  vtype = 0
+}
 
-  d <- 1
-  n <- dim(coord)[1]
-  sequen <- c(seq(0,n-0.5, by = ceiling(1e6/2)),n)
-  if(n>500000) sequen=c(sequen[1],sequen[length(sequen)])
-  coord_n <- coord[(sequen[1]+1):sequen[2], ]
-  m <- dim(coord_n)[1]
-  # Generate random frequencies and random phases
-  # =============================================
-  S <- ceiling(1e7*runif(3))
-  set.seed(S[1])
-  G <- matrix(rgamma(d*L,nu_frecuency,scale=1),d*L,2)   
-  set.seed(S[2])
-  u <- matrix(rnorm(2*d*L),d*L,2)/sqrt(G*2)/a_frecuency/(2*pi) 
-  set.seed(S[3])
-  phi <- 2*pi*runif(d*L)
-  # Spectral density using C code
-  # ================================
-  f <- .C("spectral_density", L=as.integer(d*L),model=as.integer(model),p=as.integer(length(parameters$a)),
-          matrix = as.double(u), matrix_out =as.double(rep(0, 0.5*length(u)*length(parameters$a))),
-          C=as.double(parameters$C), a = as.double(parameters$a), nu1 = as.double(parameters$nu1),
-          Cg=as.double(parametersg$C), ag = as.double(parametersg$a), nu1g = as.double(parametersg$nu1),
-          PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-  # Simulation at target locations with c code
-  # ==========================================
-  AMatrix <- sqrt(f$matrix_out)
-  simu <- .C("simu_on_coords", Ndim = as.integer(n) ,Mcoords = as.integer(n),
-             Mu = as.integer(dim(u)[1]) , coords = as.double(coord_n),
-             amatrix = as.double(AMatrix),
-             matrix_phi = as.double(phi), matrix_u = as.double(u),
-             matrix_out = as.double(rep(0, d*n)),
-             PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-  simu <- matrix(simu$matrix_out, m, 1)/sqrt(L)
-  simu = simu + rnorm(m, 0, sqrt(sill*nugget))
+  if (corrmodel=="Bi_matern"||corrmodel=="Bi_Matern"){
+    corrmodel <- "Matern"
+    a <- matrix(0,2,2)
+    a[1,1] <- as.numeric(param['scale_1'])
+    a[2,2] <- as.numeric(param['scale_2'])
+    a[1,2] <- a[2,1] <- as.numeric(param['scale_12'])
+    
+    nu1 <- matrix(0,2,2)
+    nu1[1,1] <- as.numeric(param['smooth_1'])
+    nu1[2,2] <- as.numeric(param['smooth_2'])
+    nu1[1,2] <- nu1[2,1] <- as.numeric(param['smooth_12'])
+    
+    
+    CC <- matrix(0,2,2)
+    CC[1,1] <- CC[2,2] <- 1
+    CC[1,2] <- CC[2,1] <- as.numeric(param['pcol'])
+    a0 <- min(a)
+    nu0 <- min(nu1)
+    parameters <- list("C" = CC, "a" = a,"nu1" = nu1,"nu2" =matrix(0,2,2) )
+    P<-2; vtype = 0  
+
+  }
+   parametersg <- list("a" = a0,"nu1" = nu0)
+
+      A <- matrix(0, P, P*L*N); B <- matrix(0, P, P*L*N)
+      #S <- ceiling(1e7*runif(3)); set.seed(S[1])
+      G <- matrix(rgamma(P*L*N, nu0, scale = 1),P*L*N,d); #set.seed(S[2])
+      u <- matrix(rnorm(P*L*N*d), P*L*N, d)/sqrt(G*2)/a0/(2*pi); #set.seed(S[3])
+      phi <- 2*pi*runif(P*L*N)
+      sequen <- c(seq(0,n-0.5, by = ceiling(1e6/P/N)),n)
+
+    m = c()
+   for (i in 1:(length(sequen)-1)){ m1 <- sequen[i+1]-sequen[i]; m = c(m1,m)} 
+
+
+simu11 = as.numeric( rep(0,N*P*sum(m)*(length(sequen)-1)))
+
+result <- .C("for_c", d_v = as.integer(d),a_v = as.double(c(a)),nu1_v = as.double(c(nu1)),C_v=as.double(c(1)) ,
+             nu2_v = as.double(c(a)), P = as.integer(P),N=as.integer(N),L=as.integer(L),model =  as.integer(CkCorrModel(corrmodel)),
+             u = as.double(c(u)),a0 = as.double(a0),nu0 = as.double(nu0),A = as.double(c(A)),B = as.double(c(B))
+             ,sequen = as.integer(c(sequen)), largo_sequen = as.integer(length(sequen)),n=as.integer(n),
+             coord = as.double(coord),phi = as.double(phi),vtype=as.integer(vtype),m1 = as.integer(m),simu1 = as.double(simu11),
+             L1 = as.double(L))
+  simu =  matrix(result$simu1,n,P)
   return(simu)
 }
 ######################## space time case: separable with Circ embeeding+ftt ##########################
@@ -177,7 +181,12 @@ simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmo
 ##### spatial case 
 if(!spacetime){    
    ## Turning Bands
-   if(method=="TB") { simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate); simu=c(simu[,1])}     
+   if(method=="TB") { 
+        simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate); 
+        if(!bivariate) simu=c(simu[,1])
+        else simu=c(simu)
+  
+    }     
 ## Vecchia
 if(method=="Vecchia"){ 
    if(corrmodel=="Matern") model1="matern_isotropic"
@@ -187,7 +196,7 @@ if(method=="Vecchia"){
                                   as.numeric(param['nugget'])), 
                                   covfun_name = model1, coords, m = M)
                       }
- ## Circulant embeeding                    
+ ## Circulant embeeding           for regular grid          
   if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X)        
 }
 ##### spacetime case ######
@@ -241,13 +250,8 @@ if(!is.null(spobj)) {
     }         
     coords_orig=coords
     if(!(is.null(anisopars))) coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))    
-
-
     ##############################################################################
     ##############################################################################
-
-
-    
 
     if(space)    {if(method=="CE"&&!grid) stop("CE method works only for regular grid\n")
                   if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
@@ -257,28 +261,34 @@ if(!is.null(spobj)) {
        {if(!(corrmodel %in% c("Matern_Matern","GenWend_GenWend","GenWend_Matern_GenWend_Matern")))
           stop("Not implemented for this correlation model  \n")
         }
-    if(bivariate) {if(!(corrmodel=="Bi_Matern_Matern")) stop("Not implemented for this correlation model  \n")}
+    if(bivariate) {
+         if(!(corrmodel=="Bi_matern")) stop("Not implemented for this correlation model  \n")}
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
    ################################################################################
     unname(coordt);
     if(is.null(coordx_dyn)){
     unname(coordx);unname(coordy)}
-   if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
+  
   ################################################################################
   ################ setting parameters for each model #############################
   ################################################################################
      if(!bivariate) {  sel=substr(names(param),1,4)=="mean";  num_betas=sum(sel) }    ## number of covariates
-        if(!length(param$mean)>1){
+     else
+    {  sel1=substr(names(param),1,6)=="mean_1"; num_betas1=sum(sel1)
+       sel2=substr(names(param),1,6)=="mean_2"; num_betas2=sum(sel2)
+       num_betas=c(num_betas1,num_betas2)
+    }  
+
+ 
+     if(!length(param$mean)>1){
     if( !all(names(unlist(param)) %in% c(CorrParam(corrmodel), NuisParam(model,bivariate,num_betas=num_betas))) )
        stop("only nuisance and correlation parameters must be included in param\n")
     }
     
-   if(bivariate)
-    {  sel1=substr(names(param),1,6)=="mean_1"; num_betas1=sum(sel1)
-       sel2=substr(names(param),1,6)=="mean_2"; num_betas2=sum(sel2)
-       num_betas=c(num_betas1,num_betas2)
-    }
+    if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
 if(!bivariate) { if(is.null(param$sill)) param$sill=1}
+else   { if(is.null(param$sill_1)) param$sill_1=1
+         if(is.null(param$sill_2)) param$sill_2=1}
 
 
 #################################
@@ -371,7 +381,7 @@ SIM=list()
 ###################################################
 ### starting number of replicates
 ###################################################
-for( L in 1:nrep){
+for( LL in 1:nrep){
 
     k=1;npoi=1
 ################################# how many random fields ################
@@ -387,9 +397,8 @@ for( L in 1:nrep){
     if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
     if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
-    if(model %in% c("Gamma"))  {
-                             if(!bivariate) k=round(param$shape)
-                             if(bivariate)  k=max(param$shape_1,param$shape_2)
+    if(model %in% c("Gamma"))  {if(!bivariate) k=round(param$shape)
+                                #if(bivariate)  k=max(param$shape_1,param$shape_2)
                                }
     if(model %in% c("Beta"))  {k=round(param$shape1)+round(param$shape2);}
     if(model %in% c("Kumaraswamy","Kumaraswamy2"))  k=4
@@ -413,71 +422,64 @@ for( L in 1:nrep){
    else { dime=ddim(coordx,coordy,coordt)
           if(bivariate) {ns=c(length(coordx),length(coordx))/2}
         }
-   
    if(!bivariate) dd=array(0,dim=c(dime,1,k))
    if(bivariate)  dd=array(0,dim=c(dime,2,k))
    cumu=NULL;#s=0 # for negative binomial  case
  #########################################
-
-
 numtime=1
 if(!is.null(coordt)) numtime=length(coordt)
 if(spacetime_dyn) numtime=1
   numcoord=nrow(coords);
   dime<-numcoord*numtime
-
-
+if(bivariate) numtime=2
 #########################################################
 KK=1;sel=NULL;ssp=double(dime)
-
 if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
-     
       simD=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
 }
 
-  while(KK<=npoi) {
-  for(i in 1:k) {
 
-    ################# here the approximated simulation  ##################################################
-    simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
-    ######################################################################################################
+while(KK<=npoi) {
+for(i in 1:k) {
 
-    namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
-    nuisance<-param[namesnuis]
-    if(i==1&&(model=="SkewGaussian"||model=="SkewGauss")&&bivariate) param["pcol"]=0
-    ####################################
-    sim<- RFfct1(numcoord,numtime,spacetime,bivariate,
+################# here the approximated simulation  ##################################################
+simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+######################################################################################################
+
+namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
+nuisance<-param[namesnuis]
+if(i==1&&(model=="SkewGaussian"||model=="SkewGauss")&&bivariate) param["pcol"]=0
+####################################
+sim<- RFfct1(numcoord,numtime,spacetime,bivariate,
                   dime,nuisance,simd,X,ns)
      
-    ####################################
-    ####### starting cases #############
-    ####################################
-
-    if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
+####################################
+####### starting cases #############
+####################################
+if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
 
         simdim <- dim(sim)
         sim <- as.numeric(sim>0)
         dim(sim) <- simdim
          }
-    ####################################
-    if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","PoissonGammaZIP","Beta","Kumaraswamy","Kumaraswamy2",
+####################################
+if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonZIP","PoissonGammaZIP","Beta","Kumaraswamy","Kumaraswamy2",
               "LogGaussian","TwoPieceTukeyh",
                 "Gamma","LogLogistic","Logistic","StudentT",
                 "SkewStudentT","TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","TwoPieceBimodal")) {
        if(!bivariate) dd[,,i]=t(sim)
        if(bivariate)  dd[,,i]=t(sim)
      }
-     ####################################
-    if(model %in% c("BinomialNeg","BinomialNegZINB")){
+ ####################################
+if(model %in% c("BinomialNeg","BinomialNegZINB")){
                  cumu=rbind(cumu,c(t(sim)));
                  if(sum(colSums(cumu)>=n)==dime) {break;}### ## stopping rule
                }
-
     }
  ####################################
   if(model %in% c("poisson","Poisson","PoissonZIP"))   {
@@ -496,20 +498,17 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
    if(sum(apply(sel,2,prod))==0) break  ## stopping rule
  }
 if(model %in% c("PoissonWeibull"))   {
-
   if(KK==1){sim3=NULL;for(i in 3:k){sim3=cbind(sim3,dd[,,i]^2)}}
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
    ssp=ssp+c(pois1)
    sel=rbind(sel,ssp<=c(exp(mm)*(rowSums(sim3)/2)^(1/param$shape)/(gamma(1+1/param$shape))))
-   #sel=rbind(sel,ssp<=c(exp(mm)*rowSums(sim3)^(1/param$shape)/((k-2)*gamma(1+1/param$shape))))
    if(sum(apply(sel,2,prod))==0) break  ## stopping rule
  }
 
  KK=KK+1
 }
-
- ####### end for #########################
+####### end for #########################
  ###############################################################################################
  #### simulation for discrete random field based on indipendent copies  of GRF ######
  ###############################################################################################
@@ -586,7 +585,6 @@ if(model %in% c("BinomialLogistic"))   {
 if(model %in% c("SkewGaussian","SkewGauss","SkewStudentT","StudentT","TwoPieceGaussian","TwoPieceGauss",
   "TwoPieceTukeyh","TwoPieceBimodal","TwoPieceStudentT"))   {
 
-
 if(model %in% c("SkewGaussian","SkewGauss"))   {
          if(!bivariate) aa=mm+sk*c(abs(dd[,,1]))+sqrt(vv)*c(t(simDD))
         if(bivariate)  {aa=cbind(mm[1]+sk[1]*abs(dd[,,1][,1])+sqrt(vv[1])*dd[,,2][,1],
@@ -661,9 +659,6 @@ if(model %in% c("TwoPieceStudentT"))   {
         else                        sim <- array(aa, c(numxgrid,numygrid, numtime))
             }
 }
-
-
-
 #########################################################################################################
 #### simulation for continuos random field  (on the positive real line) based on indipendent copies  of GRF ######
 #########################################################################################################
@@ -695,13 +690,12 @@ if(model %in% c("LogLogistic","Logistic"))   {
 
 #######################################
 if(model %in% c("Gamma","Weibull"))   {
-
       sim=sim1=sim2=NULL;
     if(!bivariate) for(i in 1:k)  sim=cbind(sim,dd[,,i]^2)
     if(bivariate)  {for(i in 1:k)  sim1=cbind(sim1,dd[,,i][,1]^2)
                     for(i in 1:k)  sim2=cbind(sim2,dd[,,i][,2]^2)
                    }
-     ######################################################
+######################################################
       if(model %in% c("Weibull"))
            {
              if(!bivariate)   sim=exp(mm)*(rowSums(sim)/2)^(1/param$shape)/(gamma(1+1/param$shape))
@@ -711,8 +705,6 @@ if(model %in% c("Gamma","Weibull"))   {
            }
       if(model %in% c("Gamma"))
       {
-
-
       if(!bivariate) sim=exp(mm)*rowSums(sim)/k
 
       if(bivariate){
@@ -732,7 +724,7 @@ if(model %in% c("Gamma","Weibull"))   {
                              exp(mm[2])*rowSums(sim2)/param$shape_2)}
 
         }
-  }
+      }
 #############################################
 ############### formatting data #############
 #############################################
@@ -788,11 +780,9 @@ if(model %in% c("Beta","Kumaraswamy","Kumaraswamy2"))   {
         if(spacetime) mm=matrix(mm,nrow=nrow(sim),ncol=ncol(sim),byrow=TRUE)
         sim=(sim+mm)%%(2*pi)
       }
-
  ###########################################################
  #### simulation based on a transformation of ONE standard (bivariate) GRF ######
  ###########################################################
-
 if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2","SinhAsinh"))
 {
 
@@ -818,8 +808,7 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
      if(tl)  sim= mm+sqrt(vv)*sim*exp(tl*sim^2/2)
      byrow=TRUE
    }
-
-    if(model %in% c("Tukeyh2"))   {
+  if(model %in% c("Tukeyh2"))   {
        sim=c(t(sim))
        sel=sim>0
        bb=sim*exp(t1l*sim^2/2)*as.numeric(sel);  bb[bb==0]=1
@@ -853,11 +842,13 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
                        { if(k==1) {indx=1:(sum(ns[1:k]))}
                          if(k>1)    {indx=(sum(ns[1:(k-1)])+1):(sum(ns[1:k]))}
                          sim_temp[[k]]=c(sim)[indx] }
-    sim=sim_temp
+                      sim=sim_temp
     }
+##################################################################
+##################################################################
+##################################################################
 
-
-    SIM[[L]]=sim
+    SIM[[LL]]=sim
 } 
 ######################################################################
 ##########  end of replicates ########################################

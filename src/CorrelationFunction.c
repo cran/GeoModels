@@ -2163,7 +2163,7 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy, double *coo
     double psj=0.0,dd=0.0,ai=0.0,aj=0.0,p1=0.0,p2=0.0,p=0,corr=0.0,p00=0,p11=0,bi,bj;
 
 
-        for(i=0;i<(ncoord[0]-1);i++){
+    for(i=0;i<(ncoord[0]-1);i++){
       for(j=(i+1);j<ncoord[0];j++){
 
         dd=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],*REARTH);
@@ -2180,7 +2180,7 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy, double *coo
          rho[h]=fmin2(nn[i],nn[j])*(psj-p1*p2);} 
       if(*model==14)       rho[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);
       if(*model==16)       rho[h]=cov_binom_neg(nn[0],psj,p1,p2);
-      if(*model==45)
+      if(*model==45)     //BinomialNegZINB
       {
 
            p=pnorm(nuis[2],0,1,1,0);
@@ -2211,12 +2211,10 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy, double *coo
            ai=exp(mean[i]);aj=exp(mean[j]);
           // Rprintf("%f\n",nuis[1]);
            dd=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj); // it's the  covariance poisson
-
            p=pnorm(nuis[2],0,1,1,0);
            psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
            p1=1-2*p+psj;
           rho[h]=p1*dd +  ai*aj*(p1-pow((1-p),2));
-         // Rprintf("%f %f  %f %f  \n",rho[h],ai,aj,nuis[0]);
        }
 
             h++;

@@ -44,9 +44,6 @@ if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong"
 #### corr parameters
 paramcorr=param[CorrParam(corrmodel)]
 
-
-
-
     
 SIM=list()
 ###################################################
@@ -139,7 +136,8 @@ simcop=actuar::qllogis(unif,shape = p2,scale=exp(mm)/cc)
 if(model=="LogGaussian")
 { 
     vv=as.numeric(param$sill)
-   simcop = qlnorm(unif, exp(mm)-vv/2, sqrt(vv))
+   simcop = qlnorm(unif, mm-vv/2, sqrt(vv))
+     #simcop = qlnorm(unif, 1+mm, sqrt(vv))
 }
 ##############################
 ##############################

@@ -2,7 +2,7 @@
 \alias{GeoFit}
 \alias{print.GeoFit}
 \encoding{UTF-8}
-\title{Max-Likelihood-Based Fitting of Gaussian and non Gaussian random fieldss.}
+\title{Max-Likelihood-Based Fitting of Gaussian and non Gaussian random fields.}
 \description{
   Maximum weighted composite-likelihood fitting for Gaussian  and some Non-Gaussian  
   univariate spatial, spatio-temporal and bivariate spatial random fieldss
@@ -445,7 +445,6 @@ library(GeoModels)
 set.seed(3)
 N=300  # number of location sites
 x <- runif(N, 0, 1)
-set.seed(6)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
 
@@ -506,9 +505,8 @@ print(fit1)
 ###############################################################
 # Define the spatial-coordinates of the points:
 set.seed(3)
-N=100  # number of location sites
+N=250  # number of location sites
 x <- runif(N, 0, 1)
-set.seed(6)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
 
@@ -700,7 +698,6 @@ time <- seq(1, 9, 1)
 
 # Define the spatial-coordinates of the points:
 x <- runif(20, 0, 1)
-set.seed(42)
 y <- runif(20, 0, 1)
 coords=cbind(x,y)
 

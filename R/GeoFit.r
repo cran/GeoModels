@@ -81,6 +81,7 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson","Binary_misp_BinomialNeg",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
+        "PoissonGamma","PoissonGammaZIP",
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) {
 if(!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")    
 if(is.null(fixed$sill)) fixed$sill=1
@@ -336,6 +337,7 @@ if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",
         "Kumaraswamy")) {  if(!is.null(ff$sill)) ff$sill=NULL}
 
 conf.int=NULL
+pvalues=NULL
 if(likelihood=="Full"&&type=="Standard") 
 {if(varest){
    alpha=0.05 
@@ -343,8 +345,10 @@ if(likelihood=="Full"&&type=="Standard")
    pp=as.numeric(fitted$par)
    low=pp-aa; upp=pp+aa
    conf.int=rbind(low,upp)
+   pvalues= 2*pnorm(-abs(pp/fitted$stderr))
    }
 }
+
     ### Set the output object:
     GeoFit <- list(      anisopars=anisopars,
                          bivariate=initparam$bivariate,
@@ -385,6 +389,7 @@ if(likelihood=="Full"&&type=="Standard")
                          neighb=initparam$neighb,
                          numpairs=initparam$numpairs,
                          missp=missp,
+                         pvalues=pvalues,
                          radius = radius,
                          spacetime = initparam$spacetime,
                          stderr = fitted$stderr,

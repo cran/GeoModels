@@ -187,9 +187,8 @@ LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         decompvarcov <- MatDecomp(varcov,mdecomp)
         if(is.logical(decompvarcov)) return(llik)  
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
-        llik <- 0.5*(const+logdetvarcov+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
-        #llik <- 0.5*(const+logdetvarcov +  
-         #    sum(stdata * backsolve(decompvarcov, forwardsolve(decompvarcov, stdata, transpose = TRUE, upper.tri = TRUE))))
+        llik <- 0.5*(const+logdetvarcov+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
+        #llik <- 0.5*(const+logdetvarcov+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
         return(llik)
     }
     LogNormDenStand22 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
@@ -202,7 +201,7 @@ LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
        # invarcov <- MatInv(decompvarcov,mdecomp)
        # llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
-         llik <- 0.5*(const+logdetvarcov+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
+         llik <- 0.5*(const+logdetvarcov+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
         return(llik)
     }
     ######### CVV mdecomp:
@@ -257,7 +256,8 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
        # invarcov <- MatInv(decompvarcov,mdecomp)
        # llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
-         llik <- 0.5*(const+logdetvarcov+2*det+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
+         llik <- 0.5*(const+logdetvarcov+2*det+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
+          #  llik <- 0.5*(const+logdetvarcov+2*det+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
         return(llik)
     }
 
@@ -281,7 +281,7 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         IL=sign(stdata)*vv
         IW=1/(stdata*(1+VGAM::lambertW(delta*stdata^2)))
         llik <- 0.5*( const*log(sill)/log(2*pi) + 
-                      const + logdetvarcov + sum((backsolve(decompvarcov, IL, transpose = TRUE))^2)
+                      const + logdetvarcov + sum((forwardsolve(decompvarcov, IL, transpose = FALSE))^2)
                       - 2*sum(log(IL*IW)))
         return(llik)
     }
@@ -319,7 +319,7 @@ jac=qq[with(qq, order(qq$a)), ]
 tau_inv=sign(stdata)*c(g$g1)
 
 llik <- 0.5*( const*log(sill)/log(2*pi) + 
-                      const + logdetvarcov + sum((backsolve(decompvarcov, c(tau_inv), transpose = TRUE))^2)- 2*sum(log(jac$jac1)))
+                      const + logdetvarcov + sum((forwardsolve(decompvarcov, c(tau_inv), transpose = FALSE))^2)- 2*sum(log(jac$jac1)))
         return(llik)
     }
 
@@ -343,7 +343,7 @@ llik <- 0.5*( const*log(sill)/log(2*pi) +
         C=delta*sqrt((1+Z^2)/(stdata^2+1))
         llik <- 0.5*( const + const*log(sill)/log(2*pi)
                       +logdetvarcov - 2*sum(log(C))
-                      +sum((backsolve(decompvarcov, Z, transpose = TRUE))^2))
+                      +sum((forwardsolve(decompvarcov, Z, transpose = FALSE))^2))
         return(llik)
     }
        
@@ -362,7 +362,7 @@ llik <- 0.5*( const*log(sill)/log(2*pi) +
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
         #invarcov <- MatInv(decompvarcov,mdecomp)
         #llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
-        llik <- 0.5*(const+logdetvarcov+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
+        llik <- 0.5*(const+logdetvarcov+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
         return(llik)
 
         

@@ -80,7 +80,6 @@ if(show.range)  {
 if (fitted$model %in% c("Weibull", "Poisson", "Binomial", "Gamma", 
         "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
         "Gaussian_misp_Poisson", "PoissonZIP", "Gaussian_misp_PoissonZIP", "PoissonGammaZIP","PoissonGammaZIP1",
-        "PoissonGamma",
         "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
         "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
         "Kumaraswamy")) { fitted$param$sill=1}
@@ -189,7 +188,7 @@ fitted$fixed=unlist(fitted$fixed)
         param <- c(fitted$fixed,fitted$param)[CorrelationPar(CkCorrModel(fitted$corrmodel))]
         nuisance <- c(fitted$fixed,fitted$param)[NuisParam2(fitted$model,FALSE,num_betas)]
     }
-
+    
      #############################################
      # computing the spatio-temporal distances where to compute the fitted model
      #############################################

@@ -1501,7 +1501,7 @@ double KK1,KK2,KK3,rr;
 double biv_two_piece_bimodal(double rho,double zi,double zj,double sill,double nu,double delta,double eta,
              double p11,double mui,double muj)
 {
-double res;
+double res=0.0;
 double alpha=2*(delta+1)/nu;
 double etamas=1+eta;
 double etamos=1-eta;
@@ -1686,7 +1686,7 @@ return(sum*K);}
 
 double corr_tukeygh(double rho,double eta,double tail)
 {   
-    double mu,rho2,a,eta2,tail2,u,A1,A2,A3,cova,vari,rho1;    
+    double mu,rho2,a,eta2,tail2,u,A1,A2,A3,cova,vari,rho1=0.0;    
 if(fabs(rho)<1e-16){return(0.0);}
     else{
 
@@ -3376,7 +3376,7 @@ double kk=0, dens=0,a=0,b=0,rho2=1-rho*rho;
 double biv_two_pieceGaussian(double rho,double zi,double zj,double sill,double eta,
              double p11,double mui,double muj)
 {
-double res;  
+double res=0.0;  
 double etamas=1+eta;
 double etamos=1-eta;
 double zistd=(zi-mui)/sqrt(sill);
@@ -3730,13 +3730,11 @@ double biv_half_Tukeyh(double rho,double ti,double tj,double tail)
 double biv_two_pieceTukeyh(double rho,double zi,double zj,double sill,double eta,double tail,
              double p11,double mui,double muj)
 {
-double res;  
+double res=0.0;  
 double etamas=1+eta;
 double etamos=1-eta;
 double zistd=(zi-mui)/sqrt(sill);
 double zjstd=(zj-muj)/sqrt(sill);
-
-
 /*if(rho)   {*/
 //if(zi>=mui&&zj>=muj)
     if(zistd>=0&&zjstd>=0)
@@ -3759,9 +3757,6 @@ return(res/sill);
 }
 
 /*******************************************************************************/
-
-
-
 
 double  binomialCoeff(int n, int k) 
 { 
@@ -3825,7 +3820,7 @@ double Prt(double corr,int r, int t, double mean_i, double mean_j){
 
 double Prt(double corr,int r, int t, double mean_i, double mean_j){
     double rho2= pow(corr,2);
-    double prt,q1,q2,term =0, term1 =0, res0=0.0,res00=0.0,sum = 0.0, sum1 = 0,aux2=0, aux3=0, aux4=0,aux=0, aux1=0;
+    double prt=0.0,q1,q2,term =0, term1 =0, res0=0.0,res00=0.0,sum = 0.0, sum1 = 0,aux2=0, aux3=0, aux4=0,aux=0, aux1=0;
     double auxi= mean_i/(1-rho2);
     double auxj= mean_j/(1-rho2);
     int n,k=0,m=0, iter1=4000, iter2=4000;
@@ -4122,7 +4117,7 @@ double PG00(double corr,int r, int t, double mean_i, double mean_j, double a){ /
     double auxi= 1/(1+beta_i);
     double auxj= 1/(1+beta_j);
 
-    int iter1=1000;  int iter2=1000;
+    int iter1=800;  int iter2=600;
     while(k<iter1){
         l=0;
         while(l<iter2){
@@ -4157,7 +4152,7 @@ double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a){
 
     double auxi= 1/(beta_i+1);
     double auxj= 1/(beta_j+1);
-    int iter1=1000;  int iter2=1000; int iter3=1000;
+    int iter1=800;  int iter2=600; int iter3=400;
 
     while(k<iter1){
       l1=0;
@@ -4223,7 +4218,7 @@ double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
 
 
     int n, l=0, l1=0 ;
-    int iter1=1000;  int iter2=1000;
+    int iter1=800;  int iter2=600;
     n= r-t;
 
     double aux1= R_pow(beta_i,a)*R_pow(auxi,n+a)*exp(lgammafn(n+a)-lgammafn(n+1)-lgammafn(a));
@@ -4231,7 +4226,6 @@ double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
     while(l<iter1){
         l1=0;
         while(l1<iter2){
-
 
             aa= R_pow(beta_i,l1+a)*R_pow(beta_j,l1+a-1)*R_pow(rho2,l+l1)*R_pow(1-rho2,a+n)*R_pow(auxi*auxj,l+l1+a)*R_pow(1+beta_i-rho2,-n);
             bb= lgammafn(n+l+l1+a)+lgammafn(l+l1+a+1)-lgammafn(n+l+1)-lgammafn(l+2)-lgammafn(l1+1)-lgammafn(a)-lgammafn(l1+a);
@@ -4269,7 +4263,7 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
     double auxj= 1/(beta_j+1);
 
     int n, k=0, l=0, l1=0 ;
-    int iter1=1000;  int iter2=1000; int iter3=1000;
+    int iter1=800;  int iter2=600; int iter3=500;
     n= r-t;
 
     while(l<iter1){
@@ -4291,10 +4285,8 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
                 k++;
             }
 
-
             aa1= R_pow(beta_i,l1+a)*R_pow(beta_j,l1+a-1)*R_pow(rho2,l+l1)*R_pow(1-rho2,t+n+a)*R_pow(auxi*auxj,t+l+l1+a-1)*R_pow(1+beta_i-rho2,-n-1);
             bb1= lgammafn(t+l)+lgammafn(t+n+l+l1+a)+lgammafn(t+l+l1+a)-lgammafn(t+n+l+1)-lgammafn(t+l+1)-lgammafn(l1+1)-lgammafn(l+1)-lgammafn(t)-lgammafn(a)-lgammafn(l1+a);
-
 
             term2 = aa1*hypergeo(n+1,1-l1-a,t+n+l+1,-rho2/(1+beta_i-rho2))*hypergeo(1,1-l1-a,t+l+1,-1/beta_j)*exp( bb1 );
 
@@ -4317,7 +4309,7 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
 double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a)
 {
 double dens=0.0;
-if(fabs(corr)>1e-6){
+if(fabs(corr)>1e-120){
   if(r==t)
   {    if(r==0) dens=PG00(corr,r,r,mean_i,mean_j,a);
        if(r>0)  dens=PGrr(corr,r,r,mean_i,mean_j,a);
@@ -4335,14 +4327,13 @@ else{
   }
 }
 else{
-    //double lambda_i=exp(mean_i); double lambda_j=exp(mean_j);
     double beta_i= a/mean_i;
     double beta_j= a/mean_j;
     double dens1= r*log(1/(1+beta_i))+a*log(beta_i/(1+beta_i))+lgammafn(a+r)-lgammafn(r+1)-lgammafn(a);
     double dens2= t*log(1/(1+beta_j))+a*log(beta_j/(1+beta_j))+lgammafn(a+t)-lgammafn(t+1)-lgammafn(a);
     dens=exp(dens1+dens2);
 }
-//Rprintf("%f \n",dens);
+Rprintf("%f \n",dens);
 return(dens);
 
 }
@@ -4360,17 +4351,16 @@ p11=1-2*p+p00;
 
 
 if(r==0&&t==0)
-     dens=p00  + p01*exp(-mean_i) + p10*exp(-mean_j)+p11*biv_PoissonGamma((1-nugget1)*corr,0, 0, mean_i, mean_j,shape);
+dens=p00  + p01* R_pow(shape/(mean_i+ shape ),shape) + p10*R_pow(shape/(mean_j+ shape ),shape)+p11*biv_PoissonGamma((1-nugget1)*corr,0, 0, mean_i, mean_j,shape);
 if(r==0&&t>0)
-      dens=      p01*  exp(-mean_j+t*log(mean_j)-lgammafn(t+1))  + p11*biv_PoissonGamma((1-nugget1)*corr,0, t, mean_i, mean_j,shape);
+dens=      p01*   dnbinom(0, shape,   mean_j /(mean_j+ shape ),0)  + p11*biv_PoissonGamma((1-nugget1)*corr,0, t, mean_i, mean_j,shape);
 if(r>0&&t==0)
-      dens=      p10*  exp(-mean_i+r*log(mean_i)-lgammafn(r+1))  + p11*biv_PoissonGamma((1-nugget1)*corr,r, 0, mean_i, mean_j,shape);
+dens=      p10*   dnbinom(0, shape,   mean_i /(mean_i+ shape ),0)  + p11*biv_PoissonGamma((1-nugget1)*corr,r, 0, mean_i, mean_j,shape);
 if(r>0&&t>0)
-      dens=      p11*biv_PoissonGamma((1-nugget1)*corr,r, t, mean_i, mean_j,shape);
+dens=      p11*biv_PoissonGamma((1-nugget1)*corr,r, t, mean_i, mean_j,shape);
 return(dens);
 
 }
-
 
 
 
@@ -4657,8 +4647,8 @@ switch(model) // Correlation functions are in alphabetical order
    break;
      case 24: // lognormal
       rho1=(1-nuis[0])*rho; 
-      b1=exp(mu1)-nuis[1]/2;
-      b2=exp(mu2)-nuis[1]/2;
+      b1=mu1-nuis[1]/2;
+      b2=mu2-nuis[1]/2;
       a1=plnorm(z1,b1, sqrt(nuis[1]),1,0);
       a2=plnorm(z2,b2, sqrt(nuis[1]),1,0);
       g1=dlnorm(z1,b1, sqrt(nuis[1]),0);
@@ -4800,8 +4790,6 @@ switch(model) // Correlation functions are in alphabetical order
        }
 
 /******************copula gaussiana*************************/
-
-
 if(type_cop==1)  { 
    if(!(model==16||model==11||model==30))   // continous  
     { dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);}
@@ -4811,7 +4799,7 @@ if(type_cop==1)  {
       // Rprintf("%f %f %f %f--%f--%f\n ",a1,a2,g1,g2,rho1,dens);
         }
 }
-/******************copula gaussiana*************************/             
+/******************copula clayton*************************/             
 if(type_cop==2) 
 {
   
@@ -4838,7 +4826,7 @@ return(dens);
 double one_log_SkewGauss(double z,double m, double vari, double skew)
 {
     
-  double  res;
+  double  res=0.0;
   double skew2  = R_pow(skew,2);
   double q=z-m;
   double ss=skew2+vari;
@@ -4860,7 +4848,7 @@ return(dens);
 
 double one_log_tukeyhh(double z,double m, double sill, double h1,double h2)
 {
-  double  res;
+  double  res=0.0;
  if(z>=m){
     res=one_log_tukeyh(z,m,sill,h2);
           }
@@ -4869,33 +4857,27 @@ double one_log_tukeyhh(double z,double m, double sill, double h1,double h2)
          }
   return(res);
 }
-
 double one_log_T(double z,double m, double sill, double df)
 {
-  double  res;
+  double  res=0.0;
   double q=(z-m)/sqrt(sill);
     res=lgammafn(0.5*(df+1))-(0.5*(df+1))*log1p(q*q/df)-log(sqrt(M_PI*df))-lgammafn(df/2)-0.5*log(sill);
   return(res);
 }
 
-
 double one_log_sas(double z,double m, double skew, double tail,  double vari)
 {
-  double  res,S,b;
+  double  res=0.0,S,b;
   double x=(z-m)/(sqrt(vari));
-
     b=tail*asinh(x)-skew;
     S=sinh(b);
        res= tail*sqrt(1+S*S)*dnorm(S,0,1,0)/(sqrt(1+x*x)*sqrt(vari));
   return(log(res));
 }
 
-
-
-
 double one_log_beta(double z, double shape1,double shape2,double min,double  max)
 {
-  double  res;
+  double  res=0.0;
   double q=(z-min)/(max-min);
   res=(shape1/2-1)*log(q)+(shape2/2-1)*log1p(-q)+lgammafn(0.5*(shape1+shape2))-lgammafn(shape1/2)-lgammafn(shape2/2)-log(max-min);
   return(res);
@@ -4903,7 +4885,7 @@ double one_log_beta(double z, double shape1,double shape2,double min,double  max
 
 double one_log_kumma2(double z,double m, double shape1,double shape2,double min,double  max)
 {
-  double  res,k;
+  double  res=0.0,k;
   double q=(z-min)/(max-min);k=1-pow(q,shape2);
   double m1=1/(1+exp(-m));
   double shapei=log(0.5)/log1p(-pow(m1,shape2));
@@ -4913,7 +4895,7 @@ double one_log_kumma2(double z,double m, double shape1,double shape2,double min,
 
 double one_log_kumma(double z,double m, double shape1,double shape2,double min,double  max)
 {
-  double  res,k;
+  double  res=0.0,k;
   double q=(z-min)/(max-min);k=1-pow(q,shape2);
   res=log(shape1)+log(shape2)+(shape2-1)*log(q)+(shape1-1)*log(k)-log(max-min);
   return(res);
@@ -4921,14 +4903,14 @@ double one_log_kumma(double z,double m, double shape1,double shape2,double min,d
 
 double one_log_loggaussian(double z,double m, double sill)
 {
-  double  res;
+  double  res=0.0;
   double q=z*exp(sill/2);
   res=-0.5*R_pow((log(q)-m),2)/sill-log(q)-log(sqrt(sill))-0.5*log(2*M_PI)+sill/2;
   return(res);
 }
 double one_log_weibull(double z,double m, double shape)
 {
-  double  res;
+  double  res=0.0;
   double scale1=exp(m)/(gammafn(1+1/shape));
   //res=log(shape)   - shape*log(scale1) +(shape-1)*log(z)-R_pow(z/scale1,shape);
   res=log(shape) -log(scale1)  +  (shape-1)*(log(z)-log(scale1))   -    R_pow(z/scale1,shape);
@@ -4936,14 +4918,14 @@ double one_log_weibull(double z,double m, double shape)
 }
 double one_log_gamma(double z,double m, double shape)
 {
-  double  res;
+  double  res=0.0;
   res=(shape/2)*log(shape/(2*exp(m)))+(shape/2-1)*log(z)-(shape/(2*exp(m)))*z-log(gammafn(shape/2));
   return(res);
 }
 /************************************************************************/
 double one_log_two_pieceTukey(double z,double m, double sill,double tail, double eta)
 {
-  double  res;
+  double  res=0.0;
   double y=(z-m)/sqrt(sill);
  if(y>=0)res=one_log_tukeyh(y/(1-eta),0,1,tail);       
  if(y<0) res=one_log_tukeyh(y/(1+eta),0,1,tail); 
@@ -4951,7 +4933,7 @@ double one_log_two_pieceTukey(double z,double m, double sill,double tail, double
 }
 double one_log_two_pieceT(double z,double m, double sill, double df, double eta)
 {
-  double  res;
+  double  res=0.0;
   double y=(z-m)/sqrt(sill);
  if(y>=0) res=one_log_T(y/(1-eta),0,1,df);       
  if(y<0)  res=one_log_T(y/(1+eta),0,1,df); 
@@ -4959,7 +4941,7 @@ double one_log_two_pieceT(double z,double m, double sill, double df, double eta)
 }
 double one_log_two_pieceGauss(double z,double m, double sill, double eta)
 {
-  double  res;
+  double  res=0.0;
   double y=(z-m)/sqrt(sill);
  if(y>=0) res=dnorm(y/(1-eta),0,1,1);       
  if(y<0)  res=dnorm(y/(1+eta),0,1,1); 
@@ -4971,14 +4953,14 @@ double one_log_two_pieceGauss(double z,double m, double sill, double eta)
 /************************************************************************/
 double one_log_gammagem(double z,double shape,double n)
 {
-  double  res;
+  double  res=0.0;
   res=(shape/2)*log(n/2)+(shape/2-1)*log(z)-0.5*n*z-lgammafn(shape/2);
   return(res);
 }
 
 double one_log_bomidal(double z,double m, double sill,double nu,double delta, double eta)
 {
-  double  res;
+  double  res=0.0;
   double q=(z-m)/sqrt(sill);
   double alpha=2*(delta+1)/nu;
   double nn=R_pow(2,1-alpha/2);

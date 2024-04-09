@@ -4,13 +4,13 @@
 \title{Fast simulation of Gaussian and non Gaussian Random Fields.}
 \description{
   Simulation of Gaussian and some non Gaussian spatial, spatio-temporal and spatial bivariate 
- random fields using approximate methods of simulation (circulant embeeding and turning bands)n(see Examples). 
+ random fields using approximate methods of simulation (circulant embeeding and turning bands) (see Examples). 
 }
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
 grid=FALSE,local=c(1,1),max.ext=1,
-method="TB",M=30, L=1000,model='Gaussian',
+method="TB",M=30, L=2000,model='Gaussian',
 n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,nrep=1)
 }
 \arguments{
@@ -136,8 +136,8 @@ fields::image.plot( matrix(data1, length(x), length(y), byrow = TRUE) )
 ###            for the Matern model
 ###############################################################
 set.seed(68)
-x = runif(15000)
-y = runif(15000)
+x = runif(10000)
+y = runif(10000)
 coords=cbind(x,y)
 param=list(smooth=0.5,mean=0,sill=1,scale=0.1,nugget=0)
 # Simulation of a spatial Gaussian RF with Matern correlation function
@@ -155,8 +155,8 @@ quilt.plot(coords,data1)
 ###            for the Matern model
 ###############################################################
 set.seed(68)
-x = runif(8000)
-y = runif(8000)
+x = runif(6000)
+y = runif(6000)
 coords=cbind(x,y)
 param=list(smooth=0.5,mean=0,sill=1,scale=0.1,nugget=0)
 # Simulation of a spatial Gaussian RF with Matern correlation function
@@ -171,7 +171,7 @@ quilt.plot(coords,data1)
 ### Example 4. Simulation of a large spacetime Gaussian RF 
 ###            with separable matern  covariance model
 ###            using  Circular embeeding method
-###            It works  for regular time grid
+###            It works  for (large) regular time grid
 ###            and separable spacetime models
 ###############################################################
 set.seed(68)
@@ -187,8 +187,6 @@ data <- GeoSimapprox(coordx=coords, coordt=coordt, corrmodel="Matern_Matern",
                      model="Gaussian",method="CE",param=param)$data
 dim(data)
 
-
-
 ################################################################
 ###
 ### Example 5. Simulation of a large spacetime Gaussian RF 
@@ -203,6 +201,9 @@ param<-list(nugget=0,mean=0,scale_s=0.2,scale_t=3,sill=1,
 data <- GeoSimapprox(coordx=coords, coordt=coordt, corrmodel="GenWend_GenWend",
                      model="Gaussian",method="CE",param=param)$data
 dim(data)
+
+
+
 
 
 

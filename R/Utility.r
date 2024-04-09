@@ -580,23 +580,18 @@ CkInput <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distanc
             error <- "separability parameter of spacetime taper must be between 0  and 1\n"
             if(!is.numeric(tapsep)) return(list(error=error))
             else if(tapsep<0||tapsep>1) return(list(error=error))}
-          } 
+          }  ## end tapering
 
         if(is.null(param) || !is.list(param)){
             error <- 'insert the parameters as a list\n'
             return(list(error=error))}
        biv<-CheckBiv(CkCorrModel(corrmodel))
  
-
-       #print(model)
        a1=unique(c(NuisParam2("Gaussian",biv,num_betas,NULL),
                     NuisParam2(model,biv,num_betas,copula)))
        a2=CorrelationPar(CkCorrModel(corrmodel))
-      # print(a1)
-      # print(a2)
-      # print(length(c(a1,a2))) ;print(length(param))
-     
-             if(length(param)!= length(c(a1,a2)))
+  
+        if(length(param)!= length(c(a1,a2)))
              {
             error <- "some parameters are missing or does not match with the declared model\n"
             return(list(error=error))}
@@ -1106,7 +1101,10 @@ StartParam <- function(coordx, coordy, coordt,coordx_dyn, corrmodel, data, dista
                       typereal, varest, vartype, weighted, winconst, winstp,winconst_t, winstp_t,copula, X,memdist,nosym)
 {
 
-    ### START Includes internal functions:
+
+####################################  
+### START internal functions:
+#################################### 
     replicates=1
     # Check if the correlation is bivariate
     CheckBiv <- function(corrmodel)
@@ -1145,16 +1143,12 @@ newtap<- function(coords,numcoord, coordt,numtime, distance,maxdist,maxtime,spac
 
       if(distance==0) method1="euclidean"
       if(distance==2||distance==1) method1="greatcircle"
-
-
 if(method1=="greatcircle"){
       gb=spam::nearest.dist( x=coords,method = method1,
              delta = maxdist*360/(radius*2*pi), upper = NULL,miles=FALSE, R=radius)
       if(distance==2) gb@entries=radius*gb@entries             ##GC
       if(distance==1) gb@entries=2*radius*sin(0.5*gb@entries)  ##CH
       }
-
-      
 if(method1=="euclidean")
       gb=spam::nearest.dist( x=coords,method = method1,
                          delta = maxdist, upper =NULL,miles=FALSE, R=1)
@@ -1170,10 +1164,10 @@ if(method1=="euclidean")
     nozero=numpairs/(numcoord)^2
   return(list(colidx=colidx,rowidx=rowidx,numpairs=numpairs,nozero=nozero))
     }
-################################################################################################
+####################################
+### END Includes internal functions
+####################################
 
-
-    ### END Includes internal functions
     # Set the correlation and  if the correlation is space-time(T or F) or bivariate (T o F)  or univariate (case spacetime=F and bivariate=F)p
     corrmodel<-CkCorrModel(corrmodel)
     
@@ -1248,10 +1242,6 @@ if(method1=="euclidean")
        numcoord <- numcoordx <- numcoordy <- length(coordx)
     }
 
- 
-
-
-
 
    if(!space && is.null(coordx_dyn)) {coordx=rep(coordx,ltimes);coordy=rep(coordy,ltimes);}
     
@@ -1274,7 +1264,6 @@ if(method1=="euclidean")
    
         type <- CkType(type)
   
-
  
      #if((!bivariate&&num_betas==1)||(bivariate&&num_betas==c(1,1)))
      if((!bivariate&&num_betas==1)||(bivariate&all(num_betas==c(1,1))))
@@ -1440,11 +1429,6 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
             numfixed <- length(namesfixed)
 
             flag[pmatch(namesfixed, namesflag)] <- 0
-              
-
-           
-
-
             param <- param[-pmatch(namesfixed, namesparam)]
                           numparamcorr <- numparamcorr-sum(namesfixed %in% namescorr)
             namesparam <- names(param)
@@ -1453,7 +1437,6 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
         }
         else {
         }
-
 
         flagcorr <- flag[namescorr]
         flagnuis <- flag[namesnuis]

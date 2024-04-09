@@ -23,6 +23,7 @@ comploglik2MM <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fix
         Mean=MM   ### for non constant fixed mean
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
         res=double(1)
+       # print(head(MM))
 ################################
 if(!type_cop) { # not copula models
          if(aniso){     ### anisotropy
@@ -36,7 +37,7 @@ if(!type_cop) { # not copula models
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
          }  
       else{      ### not anisotropy
-        #print(length(Mean));print(length(data1));print(length(data2));print(length(colidx));print(length(rowidx));
+;
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
