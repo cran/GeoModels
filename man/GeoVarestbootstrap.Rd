@@ -56,7 +56,7 @@ library(GeoModels)
 set.seed(342)
 model="Gaussian" 
 # Define the spatial-coordinates of the points:
-NN=5000
+NN=3500
 x = runif(NN, 0, 1)
 y = runif(NN, 0, 1)
 coords = cbind(x,y)
@@ -74,7 +74,8 @@ smooth=0.5;scale=0.1; nugget=0;
 # simulation
 param=list(smooth=smooth,mean=mean,mean1=mean1,
               sill=sill,scale=scale,nugget=nugget)
-data = GeoSimapprox(coordx=coords, corrmodel=corrmodel,model=model, param=param,X=X)$data
+data = GeoSim(coordx=coords, corrmodel=corrmodel,
+                model=model, param=param,X=X)$data
 
 I=Inf
 

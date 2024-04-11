@@ -25,15 +25,20 @@ MatSqrt<-function(mat.decomp,method)    {
         return(varcov.sqrt)
     }
 ### inverse a square matrix given a decomposition
-MatInv<-function(mat.decomp,method)    {
-
-        if(method=="cholesky")  varcov.inv <- chol2inv(mat.decomp)
-        if(method=="svd")
-        {
-              tol = sqrt(.Machine$double.eps)
-              e <- mat.decomp$d;e[e > tol] <- 1/e[e > tol]
-              varcov.inv<-mat.decomp$v %*% diag(e,nrow=length(e)) %*% t(mat.decomp$u)
-        }
+#MatInv<-function(mat.decomp,method)    {
+#        if(method=="cholesky")  varcov.inv <- chol2inv(mat.decomp)
+#        if(method=="svd")
+#        {
+#              tol = sqrt(.Machine$double.eps)
+#              e <- mat.decomp$d;e[e > tol] <- 1/e[e > tol]
+#              varcov.inv<-mat.decomp$v %*% diag(e,nrow=length(e)) %*% t(mat.decomp$u)
+#        }
+#        return(varcov.inv)
+#    }
+### inverse a square matrix given a decomposition
+MatInv<-function(mtx)    {
+     varcov.inv <- try(FastGP::rcppeigen_invert_matrix(mtx))
+            if (inherits(varcov.inv , "try-error")) return (FALSE)
         return(varcov.inv)
     }
 ### determinant a square matrix given a decomposition

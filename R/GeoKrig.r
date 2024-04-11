@@ -808,7 +808,7 @@ if(nrow(varcov)!=length(data)) stop("The dimension of the covariance  matrix and
 data=c(unname(data))
 if(!matrix$sparse){
 decompvarcov = MatDecomp(varcov,method)
-inv = MatInv(decompvarcov,method)
+inv = MatInv(varcov)
 }
 
 if(matrix$sparse){

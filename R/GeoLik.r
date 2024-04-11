@@ -51,7 +51,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordt,coordx_dyn,corrmodel,data,
         decompvarcov <- MatDecomp(varcov,mdecomp)
         if(is.logical(decompvarcov)) return(llik)       
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
-        ivarcov <- MatInv(decompvarcov,mdecomp)
+        ivarcov <- MatInv(varcov)
         sumvarcov <- sum(ivarcov)
         p <- ivarcov-array(rowSums(ivarcov),c(dimat,1))%*%colSums(ivarcov)/sumvarcov
         llik <- 0.5*(const+logdetvarcov+log(sumvarcov)+crossprod(t(crossprod(stdata,p)),stdata))
@@ -69,7 +69,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordt,coordx_dyn,corrmodel,data,
         decompvarcov <- MatDecomp(ident,mdecomp)
         if(is.logical(decompvarcov)) return(llik)       
         logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
-        ivarcov <- MatInv(decompvarcov,mdecomp)
+        ivarcov <- MatInv(ident)
         sumvarcov <- sum(ivarcov)
         p <- ivarcov-array(rowSums(ivarcov),c(dimat,1))%*%colSums(ivarcov)/sumvarcov
         llik <- 0.5*(const+ logdetvarcov +log(sumvarcov)+crossprod(t(crossprod(stdata,p)),stdata))
@@ -216,7 +216,7 @@ LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         # decomposition of the covariance matrix:
         decompvarcov <- MatDecomp(varcov,mdecomp)
         if(is.logical(decompvarcov)) return(llik)  
-        invarcov <- MatInv(decompvarcov,mdecomp)
+        invarcov <- MatInv(varcov)
         D=diag(1/diag(invarcov))
         M=crossprod(invarcov,D);C=tcrossprod(M,M)
         llik <- mean(crossprod(t(crossprod(stdata,C)),stdata))
@@ -234,7 +234,7 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         # decomposition of the covariance matrix:
         decompvarcov <- MatDecomp(ident,mdecomp)
         if(is.logical(decompvarcov)) return(llik)
-        invarcov <- MatInv(decompvarcov,mdecomp)
+        invarcov <- MatInv(ident)
         D=diag(1/diag(invarcov))
         M=crossprod(invarcov,D);C=tcrossprod(M,M)
         llik <- mean(crossprod(t(crossprod(stdata,C)),stdata))
@@ -1221,7 +1221,7 @@ names(Likelihood$score)=namesparam
             varcov[lower.tri(varcov,diag=yesdiag)]<-varian
             decompvarcov <- MatDecomp(varcov,mdecomp)
             if(is.logical(decompvarcov)) {stop("Covariance Matrix is not positive definite")}
-            invar <- MatInv(decompvarcov,mdecomp)
+            invar <- MatInv(varcov)
             fish<-double(numfish)
             # Restricted likelihood case
             if(type==3) P<-invar-array(rowSums(invar),c(dimat,1))%*%colSums(invar)/sum(invar)
