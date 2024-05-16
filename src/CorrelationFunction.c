@@ -600,13 +600,13 @@ case 23: // hyperg correlation 1 parameter with matern
         sep=exp(  (lgammafn(2*smooth+R_power1+1)-lgammafn(R_power1))/ (1+2*smooth) );
         rho=CorFunW_gen(h, R_power1, smooth,  scale * sep);
         break;
-     case 7: // Bevilacqua Generalised wend correlation function  first parametrization
+     /*case 7: // Bevilacqua Generalised wend correlation function  first parametrization
         R_power1=par[0];
         scale=par[1];
         smooth=par[2];
         sep=exp(  (lgammafn(2*smooth+R_power1+1)-lgammafn(R_power1))/ (1+2*smooth) );
         rho=CorFunW_gen(h, R_power1, smooth,  scale * sep);
-        break;
+        break;*/
      case 20://  smoke correlation function
       scale=par[0];
       smooth=par[1];
@@ -2008,20 +2008,19 @@ double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu
          else rho=0;
          return(rho);
     }
-      if(smooth==3) {
+    if(smooth==3) {
        if(x<1) rho=R_pow(1-x,R_power1+3)*( 1+R_pow(x,1)*(R_power1+3)+
                     R_pow(x,2)*(2*R_pow(R_power1,2) +12*R_power1 +15 )/5 +
                     R_pow(x,3)*(R_pow(R_power1,3)+9*R_pow(R_power1,2)+ 23*R_power1+15)/15);
          else rho=0;
          return(rho);
     }
-      /*first version  */
+
     if(x<=1)
-         {
-        rho=exp((lgammafn(smooth)+lgammafn(2*smooth+R_power1+1))-(lgammafn(2*smooth)+lgammafn(smooth+R_power1+1)))
-         *R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
-      }
-  else {rho=0;}
+    {rho=exp((lgammafn(smooth)+lgammafn(2*smooth+R_power1+1))-(lgammafn(2*smooth)+
+            lgammafn(smooth+R_power1+1)))*R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
+    }
+    else rho=0;
    /*/second version
         x=lag;
         double *param;
@@ -2030,6 +2029,7 @@ double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu
         rho=wendintegral(x,param);
         Free(param);*/
     return(rho);
+     
 }
 double CorFunWend0_tap(double lag,double scale,double smoo)
 {

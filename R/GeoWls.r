@@ -306,7 +306,7 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
                          weighted=FALSE)
   {
     ### Check first if the model is not binary:
-    if(substr(model,1,6)=='Binary'||substr(model,1,6)=='Binomial') stop("The weighted least squares method can not be used with binary data")
+    #if(substr(model,1,6)=='Binary'||substr(model,1,6)=='Binomial') stop("The weighted least squares method can not be used with binary data")
 
     call <- match.call()
     ### Check the parameters given in input:
@@ -495,7 +495,7 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
     ### Removes the global variobales:
      .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)  
     ### Set the output:
-    GeoWLS <- list(bins=bins,
+    GeoWLS <- list(      bins=bins,
                          bint=bint,
                          centers=centers,
                          coordx = initparam$coordx,

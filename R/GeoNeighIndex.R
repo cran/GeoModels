@@ -3,47 +3,6 @@ GeoNeighIndex<-function(coordx,coordy=NULL,coordx_dyn=NULL,coordt=NULL,
                               distance="Eucl",neighb=4,maxdist=NULL,maxtime=1,radius=6371,bivariate=FALSE)
 {
 
-fxy <- function(x,y, tol = 15){
- 
- 
-  xx = atan(x)/(pi/2)
-  yy = atan(y)/(pi/2)
-
- 
-  xdig = (as.numeric(strsplit(as.character(xx), "")[[1]][-(1:2)]))
-  ydig = (as.numeric(strsplit(as.character(yy), "")[[1]][-(1:2)]))
-  # length(xdig);length(ydig);
-  if (length(xdig) < tol){
-    xdig = (as.numeric(strsplit(as.character(xx-10^(-tol)), "")[[1]][-(1:2)]))
-  }
-  if (length(ydig) < tol){
-    ydig = (as.numeric(strsplit(as.character(yy-10^-(tol)), "")[[1]][-(1:2)]))
-  }
- 
-  xdig = xdig[1:tol]
-  ydig = ydig[1:tol]
- 
-  if (length(xdig) > tol){print(c(x,y))}
-  if (length(ydig) > tol){print(c(x,y))}
- 
- 
-  if (y>=x){
-   
-    z = paste0(c('0.',as.vector(rbind(xdig,ydig))), collapse = "")
-  }else{
-    z = paste0(c('0.',as.vector(rbind(ydig,xdig))), collapse = "")
-   
-  }  
-  bol = (z)
-  if(is.na(bol))
-  {
-    cat("\n input: \n",c(x,y),"\n")
-    cat("xdig: \n",c(xdig),"\n")
-    cat("ydig: \n",c(ydig),"\n\n")
-  }
-  return(bol )
-}
-fxy <- Vectorize(fxy)
 #########################################
 indices <- function(X,Y)
  {
@@ -58,7 +17,6 @@ indices <- function(X,Y)
          
             return(list(xy = res,d = res_d[,2]))
  }
-
 ##########################################
 nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)  
   {
@@ -67,12 +25,10 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
                #nearest = RANN::nn2(x,y,k = K,treetype = c("kd"))} ### case neighboord
                nearest = nabor::knn(x,y,k = K)} ### case neighboord
             else     {
-                    
                      K=min(K-1,nrow(x)) # case of  maxdist 
                     # nearest = RANN::nn2(x,y,searchtype = c("radius"),
                      #          treetype = c("kd"),radius = maxdist,k=K  )
                        nearest = nabor::knn(x,y,radius = maxdist,k=K  )
-
                      }
             #########  cases geod (2) or chordal (1) distances :  to improve this  code!!
             if(distance==2||distance==1){
@@ -84,10 +40,9 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
                   a=fields::rdist.earth.vec(x1=matrix(x[i,],ncol=2),
                                             x2=matrix(x[sel1,],ncol=2), miles = FALSE, R = 1)
                   mm[i,][1:length(a)]=a
-                
                  }
               mm[,1]=0 # just to be sure
-             if(distance==2)  mm=radius*mm   # geodesic
+             if(distance==2)  mm=radius*mm              # geodesic
              if(distance==1)  mm=2*radius*sin(0.5*mm)   # chordal  
              nearest$nn.dists=mm
              }
@@ -100,12 +55,10 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
                                  }
          return(list (lags=lags, rowidx = rowidx, colidx = colidx))
    }
-#########################
-
+##############################################################
 spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
                          ,numtime,maxtime=1,maxdist=NULL,distance="Eucl",radius=6371)
 {
-  
   ##############
   m_s=list();m_t=m_st=NULL;
   ##############         
@@ -119,8 +72,7 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
       # i = 1
       # repito las coordenadas numtime veces en elementos de una lista
       m_s[[i]]=data.frame(cbind(aa+N*(i-1),0,inf$lags))
-      
-    }
+      }
   }
 
   if(!is.null(coordx_dyn))
@@ -145,8 +97,6 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
     ## second way
       a=sort(unique(c(nabor::knn(coordt,coordt,k=round(maxtime)+1)$nn.dists)))
    nn=a[a>0]
-
-
   tnn=length(nn)   
   # sol <- NULL
   m_t <- list()
@@ -160,7 +110,6 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
       m_t[[contador]] =data.frame(cbind( m_s[[k]][,1], m_s[[k+j]][,1], rep(nn[j],bb),rep(0,bb)) )
       m_st[[contador]]=data.frame(cbind( m_s[[k]][,1], m_s[[k+j]][,2], rep(nn[j],bb), m_s[[k]][,4]) )
       contador  <- contador +1
-     
     }
   }
   ######
@@ -171,53 +120,9 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
   final=data.table::rbindlist(list(SS,TT,ST))
   return(as.matrix(final))
 }
-
-#spacetime_index=function(coords,coordx_dyn,N,K,coordt,numtime,maxtime,maxdist,distance,radius)
-#  {
-##############
-#m_s=list();m_t=m_st=NULL;
-##############         
-## building marginal spatial indexes
-#if(is.null(coordx_dyn)) 
-#   {
-#        
-#         inf=nn2Geo(coords,coords,K+1,distance,maxdist,radius)
-#         aa=cbind(inf$rowidx,inf$colidx)   ## spatial index (fixed coordinates)
-#         for(i in 1:numtime) {
-#                  m_s[[i]]=cbind(aa+N*(i-1),0,inf$lags)
-#                  }
-#   }
-#if(!is.null(coordx_dyn))
-#  {        ns=lengths(coordx_dyn)/2 
-#           for(i in 1:numtime){
-#                  inf=nn2Geo(coordx_dyn[[i]],coordx_dyn[[i]],K+1,distance,maxdist,radius)
-#                  aa=cbind(inf$rowidx,inf$colidx)
-#                  m_s[[i]]=cbind( aa+ns[i]*(i-1),0,inf$lags)    ## spatial index (dynamic coordinates)
-#                  }
- # }
-         ## building  temporal  and spatiotemporal indexes
-         
-         ## temporal distances (not zero distance)
-  #       nn=sort(unique(c(RANN::nn2(coordt,coordt,k=maxtime+1,treetype = c("kd"))$nn.dists)))[-1]  
-  #       tnn=length(nn)   
-  #       for(j in 1:tnn){
-  #        for(k in 1:(numtime-tnn)){
-  #          bb=nrow(m_s[[k]])
-  #         m_t =rbind(m_t, cbind( m_s[[k]][,1], m_s[[k+j]][,1], rep(nn[j],bb)) )
-  #         m_st=rbind(m_st,cbind( m_s[[k]][,1], m_s[[k+j]][,2], rep(nn[j],bb), m_s[[k]][,4]) )
-  #       }}
-  ##      ######
-    #    TT=cbind(m_t,rep(0,nrow(m_t)))  
-    #    SS=do.call(rbind,args=c(m_s));
-     #   ST=m_st
-      #  ##final space-time indexes and distances
-       # final=rbind(SS,TT,ST)
-       # return(final)
-  #}
-
+##############################################################
 bivariate_index=function(coords,coordx_dyn,N,K,maxdist,distance,radius)
   {
-
  if(length(K)==1)  K1=K2=K3=K
  if(length(K)==3) {K1=K[1];K2=K[2];K3=K[3]}
 if(is.null(coordx_dyn)) 
@@ -244,7 +149,7 @@ if(!is.null(coordx_dyn))
 ##final bivariate  indexes and distances
 return(SS)
   }
-
+##############################################################
 ######################################
 ######### start ######################
 ######################################

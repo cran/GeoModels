@@ -64,7 +64,9 @@ if(!is.null(spobj)) {
 ###############################################################
 ###############################################################  
 
-       
+if(!bivariate)
+   if(!sum(names(unlist(append(start,fixed)))=="nugget")) fixed$nugget=0
+  
 if(!bivariate){
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
@@ -101,14 +103,6 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
                          type, varest, vartype, weighted, winconst, winstp,winconst_t, winstp_t, copula,X,memdist,nosym)#32
-
-   
-
-
-   ## in the case on external fixed mean
-  #MM=NULL
-  #if(is.na(initparam$fixed['mean'])&length(c(initparam$X))==1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
-  
   
   ## in the case on external fixed mean
   MM=NULL

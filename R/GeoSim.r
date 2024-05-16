@@ -260,8 +260,13 @@ SIM=list()
 ###################################################
 ### starting number of replicates
 ###################################################
+progressr::handlers(global = TRUE)
+progressr::handlers("txtprogressbar")
+pb <- progressr::progressor(along = 1:nrep)
 for( L in 1:nrep){
     k=1;  npoi=1
+
+    if(nrep>1) pb(sprintf("L=%g", L))
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
     if(model %in% c("Weibull","Wrapped")) k=2

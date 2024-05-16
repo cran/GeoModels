@@ -1406,7 +1406,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
      #
 }
 
- if(!is.null(copula))if(copula=="Clayton") nuisance=c(nuisance,2)
+ if(!is.null(copula)) {if(copula=="Clayton") nuisance=c(nuisance,2)}
 # Update the parameter vector     
   
       
@@ -1716,7 +1716,6 @@ if(space)   #  spatial case
   x=cbind(coordx, coordy)
 
   sol=GeoNeighIndex(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius)
-#tt0 <- proc.time()-tt0;print(tt0[3])
   
  ###    deleting symmetric indexes with associate distances
  if(nosym){
@@ -1742,7 +1741,6 @@ if(weighted)  mmm=max(sol$lags)
     as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1)) 
   
 } 
-
 
 
 ##############################################   
@@ -1822,7 +1820,6 @@ if(is.null(coordt)) coordt=1
 
  }
 }
-
 ########################################################################################
 ########################################################################################
 ########################################################################################

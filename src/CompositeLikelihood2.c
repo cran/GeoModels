@@ -2601,7 +2601,7 @@ void Comp_Pair_BinomnegGaussCop2mem(int *cormod, double *data1,double *data2,int
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                       corr=CorFct(cormod,lags[i],0,par,0,0);
                        if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,NN[i],NN[i+npairs[0]]);
+           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,NN[0],NN[0]);
                        *res+= bl*weights;
                     }}
     if(!R_FINITE(*res))  *res = LOW;

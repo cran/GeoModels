@@ -1848,7 +1848,7 @@ return(res);
 }
 
 
-
+/*
 double biv_gamma2(double rho,double x,double y,double shape1, double shape2, double rate)
 {
 double  ss,yr,xr,xi;  
@@ -1897,18 +1897,18 @@ else
 }
   return(res);
 }
-
+*/
                 
 
 
 double biv_skew(double corr,double z1,double z2,double mi,double mj,double vari,double skew,double nugget)
 {
-   double aux1=0.0, aux2=0.0, pdf1=0,pdf2=0,cdf1=0,cdf2=0,zi,zj;
+   double  aux2=0.0, pdf1=0,pdf2=0,cdf1=0,cdf2=0,zi,zj;
     zi=z1-mi;
     zj=z2-mj;
     double dens=0.0,lim1,lim2,a11,a12,bb;
     double skew2  = R_pow(skew,2);
-    double vari2  = R_pow(vari,1);
+    double vari2  = vari;
     double skew4  = R_pow(skew,4);
     double skew3  = skew2*skew;
     double vari4  = R_pow(vari,2);
@@ -1918,39 +1918,29 @@ double biv_skew(double corr,double z1,double z2,double mi,double mj,double vari,
     double s2v2=skew2*vari2;
     double pp1=skew*vari2*corr1;
     double pp =skew*vari2*corr;
-
+    double ff=pp1+pp;
+    double mm=pp1-pp;
+    double aux1  =  vari2 + skew2 ;
                                       // pdf 1
-                                       aux1  =  vari2 + skew2 ;
+                                      
                                        aux2  =   corr1*vari2 + corr*skew2;
                                        pdf1  =  d22norm(zi, zj,aux1,aux1,aux2);
                                   /***************************/
-                                   
                                        bb= vari4*corr12+2*s2v2*corr*corr1+skew4*corr2-vari4-2*s2v2-skew4;                          
-                                       lim1  =((pp1-pp)*zj+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
-                                       lim2  =((pp1-pp)*zi+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zj)/bb;
-                                       
-
+                                       lim1  =((mm)*zj+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
+                                       lim2  =((mm)*zi+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zj)/bb;
                                        a11   = (vari4*corr12+s2v2*corr2-vari4-s2v2)/bb;
                                        a12   = (vari4*corr*corr12+(s2v2*corr2-s2v2)*corr1-vari4*corr)/bb;
-                                       
-
                                        cdf1  =  cdf_norm(lim1,lim2,a11,a12) ;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                                        // pdf 2
-                                       aux1  =  vari2 + skew2 ;
                                        aux2  =  vari2 * corr1 - skew2 * corr ;
                                        pdf2  =  d22norm(zi, zj,aux1,aux1,aux2);
-
-
                                        bb= vari4*corr12-2*s2v2*corr*corr1+skew4*corr2-vari4-2*s2v2-skew4;
-                                       lim1  =  (( pp1+pp)*zj+(-pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
-                                       lim2  = -((-pp1-pp)*zi+( pp*corr1-skew3*corr2+skew*vari2+skew3)*zj)/bb;
-
-                       
+                                       lim1  =  (( ff)*zj+(-pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
+                                       lim2  = -(-(ff)*zi+( pp*corr1-skew3*corr2+skew*vari2+skew3)*zj)/bb;
                                        a11   =  (vari4*corr12+s2v2*corr2-vari4-s2v2)/bb;
                                        a12   = -(vari4*corr*corr12+(s2v2-s2v2*corr2)*corr1-vari4*corr)/bb;
-                                     
-
                                        cdf2  =  cdf_norm(lim1,lim2,a11,a12) ;
  
 dens = 2*(pdf1 * cdf1 + pdf2 * cdf2);
@@ -2096,12 +2086,13 @@ double dNnorm(int N,double **M, double *dat)
 return(pdf);
 }
 
+/*
 void mult_pmnorm( int *nvar , double *lower , double *upper , int *infin , double *corr , int *maxpts , double *abseps , double *releps , double *esterror , double *result , int *fail )
 { 
   F77_CALL(sadmvn)( nvar, lower, upper, infin, corr, maxpts, abseps, releps, esterror, result, fail ) ;
-} 
+} */
 
-// compute the trivariate normal cdf  for bernoulli  RF :
+/*
 double ptnorm(int which,int *cormod, double h0,double h1,double h2, double u0, double u1,double u2, 
                  double *nuis, double *par, double thr)
 {  
@@ -2171,7 +2162,7 @@ double p3norm(int *cormod, double h0,double h1,double h2, double u0, double u1,d
   Free(lower);Free(upper);Free(infin);
   return(res2);
 }
-
+*/
 
 
 // cdf of  a bivariate Gausssian distribution
@@ -4333,7 +4324,7 @@ else{
     double dens2= t*log(1/(1+beta_j))+a*log(beta_j/(1+beta_j))+lgammafn(a+t)-lgammafn(t+1)-lgammafn(a);
     dens=exp(dens1+dens2);
 }
-Rprintf("%f \n",dens);
+//Rprintf("%f \n",dens);
 return(dens);
 
 }
@@ -4602,12 +4593,19 @@ double biv_cop(double rho,int type_cop,int cond,
              double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2)
              {
 double dens=0.0,rho1=0.0,nu=0.0;
-double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0,s1,s2;
+double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0;
 
 
+/**
+ * 
+ * g1 and g2 are marginal pdfs
+ * a1 and a2 are marginal cdfs
 
+*/
 switch(model) // Correlation functions are in alphabetical order
     {
+
+/******* models on the real line ****************/
     case 1: // gaussian
       rho1=(1-nuis[0])*rho;
       b1=(z1-mu1)/sqrt(nuis[1]);
@@ -4636,7 +4634,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dlogis(z2, mu2, sqrt(nuis[1]),0);
    break;
    case 12: // t student
-    Rprintf("%f %f \n",1/nuis[0],nuis[1]);
+    //Rprintf("%f %f \n",1/nuis[0],nuis[1]);
       rho1=(1-nuis[1])*rho; 
       b1=(z1-mu1)/sqrt(nuis[2]);
       b2=(z2-mu2)/sqrt(nuis[2]);
@@ -4645,6 +4643,7 @@ switch(model) // Correlation functions are in alphabetical order
       g1=dt(b1,1/nuis[0],0)/sqrt(nuis[2]); //marginal 1
       g2=dt(b2,1/nuis[0],0)/sqrt(nuis[2]); //marginal 2
    break;
+/******* models on the  positive real line ****************/
      case 24: // lognormal
       rho1=(1-nuis[0])*rho; 
       b1=mu1-nuis[1]/2;
@@ -4681,68 +4680,7 @@ switch(model) // Correlation functions are in alphabetical order
       g1=dweibull(z1,nuis[2],exp(mu1)/(gammafn(1+1/nuis[2])),0);
       g2=dweibull(z2,nuis[2],exp(mu2)/(gammafn(1+1/nuis[2])),0);
    break;
-      case 30: // Poisson
-      rho1=(1-nuis[0])*rho; 
-      s1=exp(mu1);s2=exp(mu2);
-      b2=dpois(z2,s2,0);
-      a1=qnorm(ppois(z1,  s1,1,0),0,1,1,0);
-      a2=qnorm(ppois(z1-1,s1,1,0),0,1,1,0);
-      g1=qnorm(ppois(z2,  s2,1,0),0,1,1,0);      
-      g2=qnorm(ppois(z2-1,s2,1,0),0,1,1,0);  
-      if(z1==0) {a2=-99;}
-      if(z2==0) {g2=-99;}
-   break;
-      case 43: // Poisson inflated
-      rho1=(1-nuis[0])*rho; 
-      s1=exp(mu1);s2=exp(mu2);
-      b2=dpois(z2,s2,0);
-      a1=qnorm(ppoisinflated(z1,  s1,nuis[1]),0,1,1,0);
-      a2=qnorm(ppoisinflated(z1-1,s1,nuis[1]),0,1,1,0);
-      g1=qnorm(ppoisinflated(z2,  s2,nuis[1]),0,1,1,0);      
-      g2=qnorm(ppoisinflated(z2-1,s2,nuis[1]),0,1,1,0);  
-      if(z1==0) {a2=-99;}
-      if(z2==0) {g2=-99;}
-   break;
-     case 11: // binomial     /// 
-      rho1=(1-nuis[0])*rho;
-      s1=pnorm(mu1,0,1,1,0);
-      s2=pnorm(mu2,0,1,1,0);
-      b2=dbinom(z2,NN2,s2,0);
-      a1=qnorm(pbinom(z1,  NN1,s1,1,0),0,1,1,0);
-      a2=qnorm(pbinom(z1-1,NN1,s1,1,0),0,1,1,0);
-      g1=qnorm(pbinom(z2,  NN2,s2,1,0),0,1,1,0);      
-      g2=qnorm(pbinom(z2-1,NN2,s2,1,0),0,1,1,0);
-      if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
-      if(z1==0){a2=-99;}  
-      if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
-      if(z2==0){g2=-99;}  
-   break;
-       case 16: // binomial neg     /// ok 
-      rho1=(1-nuis[0])*rho;
-      s1=pnorm(mu1,0,1,1,0);
-      s2=pnorm(mu2,0,1,1,0);
-      b2=dnbinom(z2,NN2,s2,0);
-      a1=qnorm(pnbinom(z1,  NN1,s1,1,0),0,1,1,0);
-      a2=qnorm(pnbinom(z1-1,NN1,s1,1,0),0,1,1,0);
-      g1=qnorm(pnbinom(z2,  NN2,s2,1,0),0,1,1,0);      
-      g2=qnorm(pnbinom(z2-1,NN2,s2,1,0),0,1,1,0);
-      if(z1==0) {a2=-99;}
-      if(z2==0) {g2=-99;}
-   break;
-    case 45: // binomial neg  inflated   /// ok 
-      rho1=(1-nuis[0])*rho;
-      s1=pnorm(mu1,0,1,1,0);
-      s2=pnorm(mu2,0,1,1,0);
-      b2=dnbinom(z2,NN2,s2,0);
-      a1=qnorm(pbneginflated(z1,  NN1,s1,nuis[1]),0,1,1,0);
-      a2=qnorm(pbneginflated(z1-1,NN1,s1,nuis[1]),0,1,1,0);
-      g1=qnorm(pbneginflated(z2,  NN2,s2,nuis[1]),0,1,1,0);      
-      g2=qnorm(pbneginflated(z2-1,NN2,s2,nuis[1]),0,1,1,0);
-      if(z1==0) {a2=-99;}
-      if(z2==0) {g2=-99;}
-   break;
-
-
+/******* models on the a bounded support ****************/
    case 28: //Beta
       rho1=(1-nuis[0])*rho; 
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]);
@@ -4779,15 +4717,84 @@ switch(model) // Correlation functions are in alphabetical order
       mu2=1/(1+exp(-mu2));
       b1=(z1- nuis[3])/(nuis[4]-nuis[3]);
       b2=(z2- nuis[3])/(nuis[4]-nuis[3]);
-      s1=log(1-R_pow(  mu1    ,nuis[2]))/log(0.5) ;
-      s2=log(1-R_pow(  mu2    ,nuis[2]))/log(0.5) ;
-      a1= cdf_kuma(b1, nuis[2],1/s1 );
-      a2= cdf_kuma(b2, nuis[2],1/s2 );
-      g1= pdf_kuma(b1, nuis[2],1/s1 )/(nuis[4]-nuis[3]);
-      g2= pdf_kuma(b2, nuis[2],1/s2 )/(nuis[4]-nuis[3]);
+      mu1=log(1-R_pow(  mu1    ,nuis[2]))/log(0.5) ;
+      mu2=log(1-R_pow(  mu2    ,nuis[2]))/log(0.5) ;
+      a1= cdf_kuma(b1, nuis[2],1/mu1 );
+      a2= cdf_kuma(b2, nuis[2],1/mu2 );
+      g1= pdf_kuma(b1, nuis[2],1/mu1 )/(nuis[4]-nuis[3]);
+      g2= pdf_kuma(b2, nuis[2],1/mu2 )/(nuis[4]-nuis[3]);
 
    break;
+
+/************ discrete models *****************************/
+         case 30: // Poisson
+      rho1=(1-nuis[0])*rho; 
+      mu1=exp(mu1);mu2=exp(mu2);
+      b2=dpois(z2,mu2,0);
+      a1=qnorm(ppois(z1,  mu1,1,0),0,1,1,0);
+      a2=qnorm(ppois(z1-1,mu1,1,0),0,1,1,0);
+      g1=qnorm(ppois(z2,  mu2,1,0),0,1,1,0);      
+      g2=qnorm(ppois(z2-1,mu2,1,0),0,1,1,0);  
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
+   break;
+      case 43: // Poisson inflated
+      rho1=(1-nuis[0])*rho; 
+      mu1=exp(mu1);mu2=exp(mu2);
+      b2=dpois(z2,mu2,0);
+      a1=qnorm(ppoisinflated(z1,  mu1,nuis[1]),0,1,1,0);
+      a2=qnorm(ppoisinflated(z1-1,mu1,nuis[1]),0,1,1,0);
+      g1=qnorm(ppoisinflated(z2,  mu2,nuis[1]),0,1,1,0);      
+      g2=qnorm(ppoisinflated(z2-1,mu2,nuis[1]),0,1,1,0);  
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
+   break;
+     case 11: // binomial     /// 
+      rho1=(1-nuis[0])*rho;
+      mu1=pnorm(mu1,0,1,1,0);
+      mu2=pnorm(mu2,0,1,1,0);
+      b2=dbinom(z2,NN2,mu2,0);
+      a1=qnorm(pbinom(z1,  NN1,mu1,1,0),0,1,1,0);
+      a2=qnorm(pbinom(z1-1,NN1,mu1,1,0),0,1,1,0);
+      g1=qnorm(pbinom(z2,  NN2,mu2,1,0),0,1,1,0);      
+      g2=qnorm(pbinom(z2-1,NN2,mu2,1,0),0,1,1,0);
+      if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
+      if(z1==0){a2=-99;}  
+      if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
+      if(z2==0){g2=-99;}  
+   break;
+       case 16: // binomial neg     /// ok 
+      rho1=(1-nuis[0])*rho;
+      mu1=pnorm(mu1,0,1,1,0);
+      mu2=pnorm(mu2,0,1,1,0);
+      b2=dnbinom(z2,NN2,mu2,0);
+      a1=qnorm(pnbinom(z1,  NN1,mu1,1,0),0,1,1,0);
+      a2=qnorm(pnbinom(z1-1,NN1,mu1,1,0),0,1,1,0);
+      g1=qnorm(pnbinom(z2,  NN2,mu2,1,0),0,1,1,0);      
+      g2=qnorm(pnbinom(z2-1,NN2,mu2,1,0),0,1,1,0);
+      //Rprintf("%f %f %d %d %f %f  %f\n",mu1,mu2,NN1,NN2,a1,a2,rho1);
+      /*if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}*/
+        //if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
+      if(z1==0){a2=-99;}  
+      //if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
+      if(z2==0){g2=-99;}  
+   break;
+    case 45: // binomial neg  inflated   /// ok 
+      rho1=(1-nuis[0])*rho;
+      mu1=pnorm(mu1,0,1,1,0);
+      mu2=pnorm(mu2,0,1,1,0);
+      b2=dnbinom(z2,NN2,mu2,0);
+      a1=qnorm(pbneginflated(z1,  NN1,mu1,nuis[1]),0,1,1,0);
+      a2=qnorm(pbneginflated(z1-1,NN1,mu1,nuis[1]),0,1,1,0);
+      g1=qnorm(pbneginflated(z2,  NN2,mu2,nuis[1]),0,1,1,0);      
+      g2=qnorm(pbneginflated(z2-1,NN2,mu2,nuis[1]),0,1,1,0);
+      if(z1==0) {a2=-99;}
+      if(z2==0) {g2=-99;}
+   break;
        }
+/*********************** end cases ***************/
+
 
 /******************copula gaussiana*************************/
 if(type_cop==1)  { 
@@ -4795,8 +4802,9 @@ if(type_cop==1)  {
     { dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);}
     else                            // discrete                  
      { 
-        dens= log( pbnorm22(a1,g1,rho1) -   pbnorm22(a2,g1,rho1) - pbnorm22(a1,g2,rho1) + pbnorm22(a2,g2,rho1) );
-      // Rprintf("%f %f %f %f--%f--%f\n ",a1,a2,g1,g2,rho1,dens);
+        dens= log( pbnorm22(a1,g1,rho1) -   pbnorm22(a2,g1,rho1) 
+                        - pbnorm22(a1,g2,rho1) + pbnorm22(a2,g2,rho1) );
+      
         }
 }
 /******************copula clayton*************************/             
@@ -4809,9 +4817,11 @@ if(type_cop==2)
     if(model==24) nu=nuis[2];   // loggaussian
     if(model==12) nu=nuis[3]; //t
     if(model==25) nu=nuis[2]; //logistic
-
+   //Rprintf("%f---%f %f\n",nu,g1,g2);
     dens= biv_unif_CopulaClayton(a1,a2,rho1,nu)+ log(g1)+log(g2);
 }
+
+
 
 if(cond)  {
                if(!(model==16||model==11||model==30))     dens=dens-log(g2);
