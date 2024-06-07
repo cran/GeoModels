@@ -14,6 +14,8 @@ if(!covmatrix$sparse){
                vec=forwardsolve(U, b)
                Invc=forwardsolve(U, vec,transpose=T) ## R^-1 %*% c
                Inv=FastGP::rcppeigen_invert_matrix(covmatrix$covmatrix)
+               diagInv=diag(Inv)
+
              }
 if(covmatrix$sparse){
                cc=covmatrix$covmatrix
@@ -24,9 +26,12 @@ if(covmatrix$sparse){
                vec=  spam::forwardsolve(U, b)
                Invc= spam::backsolve(U, vec) ## R^-1 %*% c
                Inv= spam::solve.spam(U)
+               diagInv=diag(Inv)
+
+                #backsolve(U, forwardsolve(U, b))
              
         }
-     return(list(a=Invc,b=Inv))
+     return(list(a=Invc,b=Inv,c=diagInv))
 }
 ################################################
 if(!inherits(matrix,"GeoCovmatrix"))  stop("A GeoCovmatrix object is needed as input\n")
@@ -99,16 +104,15 @@ cc=getInv2(matrix,data)
 
 temp=cc$a# inv%*%data
 inv=cc$b   #inv
-vv=diag(inv)
+vv=cc$c    # diag inv
 
 D=diag(1/vv,dime,dime)
-DD=sqrt(D)
+DD=diag(sqrt(1/vv),dime,dime)
 
 z=crossprod(D,temp)
 zz=crossprod(DD,temp)
 
-#z=Rfast::Crossprod(D,temp)
-#zz=Rfast::Crossprod(DD,temp)
+
 
 MAD=median(z)
 RMSE=sqrt((1/dime)*crossprod(z,z))

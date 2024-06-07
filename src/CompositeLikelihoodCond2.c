@@ -818,7 +818,7 @@ void Comp_Cond_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *
     double p11=0.0;//probability of joint success
     double nugget=nuis[0];
        if( nugget>=1||nugget<0){*res=LOW; return;}
-       Rprintf("%d\n",NN[0]);
+       //Rprintf("%d\n",NN[0]);
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){

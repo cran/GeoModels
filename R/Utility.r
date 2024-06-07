@@ -318,6 +318,8 @@ CkInput <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distanc
            # print(namfixed)
            # print(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula))
            # print(CorrelationPar(CkCorrModel(corrmodel)))
+
+     
         if(!all(namfixed %in% c(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula),CorrelationPar(CkCorrModel(corrmodel))))){
                 error <- 'some names of the fixed parameters is/are not correct\n'
                 return(list(error=error))}
@@ -1155,10 +1157,17 @@ if(method1=="euclidean")
     
       numpairs=length(gb@entries)
  ##loading only good distances..
-      .C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
-       as.double(gb@entries),as.integer(numpairs),as.double(srange[2]),
-       as.double(1),as.double(1),as.integer(1), # to change for spacetime sparse
-       as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1)) 
+   dotCall64::.C64("SetGlobalVar2",
+        SIGNATURE = c("integer","integer",
+             "double","integer","double",
+            "double","double","integer",
+            "integer","integer","integer","integer"),  
+       numcoord,  numtime,  
+       gb@entries,numpairs,srange[2],
+       1,1,1, # to change for spacetime sparse
+       spacetime,bivariate,1,1, INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+   
     colidx=gb@colindices
     rowidx=gb@rowpointers
     nozero=numpairs/(numcoord)^2
@@ -1318,7 +1327,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
             if(model==58) nuisance <- c(mu, 0,0,0,1)
         }
  if(model %in% c(43,44)) nuisance <- c(0, 0, 0,0, 1)
- if(model %in% c(57)) nuisance <- c(0, 0, 0,0, 0,1)
+ if(model %in% c(57)) nuisance <-    c(0, 0, 0,0, 0,1)
 
 }
 
@@ -1398,7 +1407,8 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
        
   
      if(model %in% c(43,45)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,1)
-     if(model %in% c(57)) nuisance <- c(0,rep(1,num_betas-1) ,0, 0,0,0,1)
+     if(model %in% c(57)) nuisance <-    c(0,rep(1,num_betas-1) ,0, 0,0,0,1)
+
      if(model %in% c(53,56)) nuisance <- c(0,rep(1,num_betas-1) , 0,0,1)
      if(model %in% c(58)) nuisance <- c(0,rep(1,num_betas-1) , 0,0,0,1)
 
@@ -1438,18 +1448,21 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
         else {
         }
 
+
+
         flagcorr <- flag[namescorr]
         flagnuis <- flag[namesnuis]
         # Update the parameters with starting values:
         if(!is.null(start)){
             start <- unlist(start)
             namesstart <- names(start)
+
             #if(any(type == c(1, 3, 7))){
                  if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
 
                 if(!bivariate) {   # univariate case
                        if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57,58)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58)))
                        if(any(namesstart == 'mean'))  start <- start[!namesstart == 'mean']
                        if(num_betas>1)
                        for(i in 1:(num_betas-1)) 
@@ -1457,7 +1470,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
                          if(any(namesstart == paste("mean",i,sep="")))  {
                               namesstart <- names(start) 
                               if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,57,58)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58)))
                                                  start <- start[!namesstart == paste("mean",i,sep="")]
                             }
                        }
@@ -1769,10 +1782,18 @@ if(spacetime)   #  space time  case
   mmm=1;ttt=1
 if(weighted) { mmm=max(sol$lags) ;ttt=max(sol$lagt)}
 
-  ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
-    as.double(sol$lags),as.integer(nn),as.double(mmm),
-    as.double(sol$lagt),as.integer(nn),as.double(ttt),
-    as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1)) 
+
+  ss=dotCall64::.C64("SetGlobalVar2",
+        SIGNATURE = c("integer","integer",
+             "double","integer","double",
+              "double","integer","double",
+            "integer","integer","integer","integer"),  
+       numcoord,  numtime, 
+        sol$lags,nn,mmm, 
+      sol$lagt,nn,ttt,
+       spacetime,bivariate,1,1, INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
 } 
 ##############################################  
 if(bivariate)   # bivariate case 
@@ -1780,13 +1801,13 @@ if(bivariate)   # bivariate case
   
   K=neighb
   x=cbind(coordx, coordy)
+ 
   sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
   ###    deleting symmetric indexes with associate distances
-  if(nosym){
-  aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-  sol$rowidx=c(aa$xy[,1])
-  sol$colidx=c(aa$xy[,2])
-  sol$lags=c(aa$d)}
+  if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
+             sol$rowidx=c(aa$xy[,1])
+             sol$colidx=c(aa$xy[,2])
+             sol$lags=c(aa$d)}
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
              #gb$first=sol$first
@@ -1798,10 +1819,17 @@ if(bivariate)   # bivariate case
 if(weighted) { mmm=max(sol$lags)}
   
   
-  ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(2),  
-    as.double(sol$lags),as.integer(nn),as.double(mmm),
-    as.double(1),as.integer(nn),as.double(1),
-    as.integer(spacetime),as.integer(bivariate),as.integer(sol$first),as.integer(sol$second)) 
+  ss=dotCall64::.C64("SetGlobalVar2",
+        SIGNATURE = c("integer","integer",
+             "double","integer","double",
+              "double","integer","double",
+            "integer","integer","integer","integer"),  
+       numcoord,  2,  sol$lags,nn,mmm, 
+       1,nn,1,spacetime,bivariate,sol$first,sol$second,
+        INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+  
   
 } #### end bivariate case
 
@@ -1817,9 +1845,10 @@ if(weighted) { mmm=max(sol$lags)}
 # end neighboord case
 ##############################################
 if(is.null(coordt)) coordt=1
+}}
 
- }
-}
+
+
 ########################################################################################
 ########################################################################################
 ########################################################################################

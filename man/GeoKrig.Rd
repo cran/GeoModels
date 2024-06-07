@@ -209,7 +209,7 @@ loc_to_pred=as.matrix(expand.grid(xx,xx))
 #       model=model,param=param,data=data,mse=TRUE)
 
 ## second option using object GeoFit
-pr=GeoKrig(loc=loc_to_pred,estobj=fit,mse=TRUE)
+pr=GeoKrig(fit,loc=loc_to_pred,mse=TRUE)
 
 
 colour = rainbow(100)
@@ -354,7 +354,7 @@ par(opar)
 
 ################################################################
 ###
-### Example 3. Spatio temporal simple kriging of n locations
+### Example 4. Spatio temporal simple kriging of n locations
 ### sites and m temporal instants for a Gaussian random fields
 ### with estimated double Wendland correlation.
 ###
@@ -404,6 +404,69 @@ image.plot(xx, xx, matrix(pr$pred,ncol=length(xx)),col=colour,
 image.plot(xx, xx, matrix(pr$mse,ncol=length(xx)),col=colour,
            main = paste("Std err Time at time 2"),ylab="")
 
+
 par(opar)
+
+
+################################################################
+###
+### Example r. Spatial bivariate  simple cokriging of n locations
+### sites  for a bivariate Gaussian random fields
+### with estimated Matern correlation.
+###
+###############################################################
+#set.seed(6)
+#NN=1500 # number of spatial locations 
+#x = runif(NN, 0, 1); 
+#y = runif(NN, 0, 1) 
+#coords=cbind(x,y) 
+
+## setting parameters
+#mean_1 = 2; mean_2= -1
+#nugget_1 =0;nugget_2=0
+#sill_1 =0.5; sill_2 =1; 
+
+### correlation parameters
+#CorrParam("Bi_Matern")
+#scale_1=0.2/3; scale_2=0.15/3; scale_12=0.5*(scale_2+scale_1) 
+#smooth_1=smooth_2=smooth_12=0.5
+#pcol = -0.4
+#param= list(nugget_1=nugget_1,nugget_2=nugget_2,
+#          sill_1=sill_1,sill_2=sill_2,
+#          mean_1=mean_1,mean_2=mean_2,
+#          smooth_1=smooth_1, smooth_2=smooth_2,smooth_12=smooth_12,
+#          scale_1=scale_1, scale_2=scale_2,scale_12=scale_12,
+#          pcol=pcol)
+
+## simulation
+#data = GeoSim(coordx=coords, corrmodel="Bi_Matern",model=model,param=param)$data
+
+#fixed=list(mean_1=mean_1,mean_2=mean_2, nugget_1=nugget_1,nugget_2=nugget_2, 
+#       smooth_1=smooth_1, smooth_2=smooth_2,smooth_12=smooth_12)
+
+#start=list( sill_1=sill_1,sill_2=sill_2,
+#        scale_1=scale_1,scale_2=scale_2,scale_12=scale_12, pcol=pcol)
+
+## estimation with maximum likelihood 
+#fit = GeoFit(data=data,coordx=coords, corrmodel="Bi_Matern",
+ #likelihood="Full",type="Standard",optimizer="BFGS",
+  #likelihood="Marginal",type="Pairwise",optimizer="BFGS",neighb=5,
+  #start=start,fixed=fixed)
+
+###### co-kriging for the fist component ##############
+#xx=seq(0,1,0.022)
+#loc_to_pred=as.matrix(expand.grid(xx,xx))
+#pr1 = GeoKrig(fit,which=1,mse=TRUE,loc=loc_to_pred)
+
+#opar=par(no.readonly = TRUE)
+#par(mfrow=c(1,2))
+#zlim=c(-2.5,2.5)
+#colour = rainbow(100)
+#quilt.plot(coords,data[1,] ,col=colour,main = paste(" Fist component"))   
+#quilt.plot(loc_to_pred,pr1$pred,col=colour,
+#           main = paste(" Kriging first component"),ylab="")
+#par(opar)
+
+
 }
 \keyword{Composite}

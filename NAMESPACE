@@ -4,8 +4,10 @@ S3method(print,GeoFit)
 S3method(print,GeoCovmatrix) 
 S3method(print,GeoWLS)
 S3method(plot,GeoVariogram)
+S3method(plot,GeoCorrFct)
 importFrom("grDevices", dev.cur,gray.colors)
-importFrom("graphics", abline, lines, par, persp,plot,points,image,plot.default)
+importFrom("graphics", abline, lines, par, persp,plot,points,image,plot.default,box,
+axis,plot.new,plot.window,title)
 importFrom("graphics", "hist")
 importFrom("stats", median, nlminb, dist, fft, quantile, qqnorm, qbinom,qpois,qnbinom,  pweibull, pgamma, plnorm, nlm, optim, optimize, integrate, pchisq,pnorm,qnorm,dnorm,dpois,dbeta,dnbinom,dbinom,dweibull,dgamma,dlnorm,pbinom, plogis, pnbinom, ppois,
 pbeta,dt,dlogis,qlnorm,qgamma,qweibull, qbeta,qlogis,lm, rnorm, runif, rgamma, pt,qt,qunif,uniroot, var,cor)

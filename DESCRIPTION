@@ -2,7 +2,7 @@ Package: GeoModels
 Type: Package
 Title: Procedures for Gaussian and Non Gaussian Geostatistical (Large)
         Data Analysis
-Version: 2.0.2
+Version: 2.0.3
 Date: 2024-05-10
 Authors@R: c(person("Moreno", "Bevilacqua", role = c("aut", "cre"),
                email = "moreno.bevilacqua89@gmail.com",comment = c(ORCID = "0000-0001-8384-840X")),
@@ -20,9 +20,9 @@ Repository: CRAN
 URL: https://vmoprojs.github.io/GeoModels-page/
 BugReports: https://github.com/vmoprojs/GeoModels/issues
 NeedsCompilation: yes
-Packaged: 2024-05-16 16:26:18 UTC; morenobevilacqua
+Packaged: 2024-06-07 07:47:44 UTC; morenobevilacqua
 Author: Moreno Bevilacqua [aut, cre] (<https://orcid.org/0000-0001-8384-840X>),
   Víctor Morales-Oñate [aut] (<https://orcid.org/0000-0003-1922-6571>),
   Christian Caamaño-Carrillo [aut]
     (<https://orcid.org/0000-0001-7241-3099>)
-Date/Publication: 2024-05-16 16:40:59 UTC
+Date/Publication: 2024-06-07 12:20:15 UTC

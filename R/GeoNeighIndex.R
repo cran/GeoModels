@@ -25,12 +25,22 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
                #nearest = RANN::nn2(x,y,k = K,treetype = c("kd"))} ### case neighboord
                nearest = nabor::knn(x,y,k = K)} ### case neighboord
             else     {
+
+
+
+  if(distance==2||distance==1){
+                                   prj=mapproj::mapproject(x[,1], x[,2], projection="sinusoidal") 
+                                   x1=y1=radius*cbind(prj$x,prj$y)
+                                   K=round(nrow(x)/2 )
+                                   nearest = nabor::knn(x1,y1,radius = maxdist,k=K)
+                               }     
+else{
+
                      K=min(K-1,nrow(x)) # case of  maxdist 
-                    # nearest = RANN::nn2(x,y,searchtype = c("radius"),
-                     #          treetype = c("kd"),radius = maxdist,k=K  )
-                       nearest = nabor::knn(x,y,radius = maxdist,k=K  )
+                       nearest = nabor::knn(x,y,radius = maxdist,k=K  )}
                      }
             #########  cases geod (2) or chordal (1) distances :  to improve this  code!!
+     
             if(distance==2||distance==1){
                   nn=nrow(x); 
                   nnd=ncol(nearest$nn.dists)
@@ -40,7 +50,9 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
                   a=fields::rdist.earth.vec(x1=matrix(x[i,],ncol=2),
                                             x2=matrix(x[sel1,],ncol=2), miles = FALSE, R = 1)
                   mm[i,][1:length(a)]=a
+                
                  }
+
               mm[,1]=0 # just to be sure
              if(distance==2)  mm=radius*mm              # geodesic
              if(distance==1)  mm=2*radius*sin(0.5*mm)   # chordal  
@@ -48,7 +60,7 @@ nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)
              }
             ########################################### 
             sol = indices(nearest$nn.idx,nearest$nn.dists)
-            if(is.null(maxdist)) lags <- sol$d;rowidx <- sol$xy[,1];colidx <- sol$xy[,2]
+            if(is.null(maxdist)) {lags <- sol$d;rowidx <- sol$xy[,1];colidx <- sol$xy[,2]}
             if(!is.null(maxdist)){
                                     sel = sol$xy[,2]>0
                                     lags=sol$d[sel];rowidx <- sol$xy[,1][sel];colidx <- sol$xy[,2][sel]
@@ -63,7 +75,6 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
   m_s=list();m_t=m_st=NULL;
   ##############         
   ## building marginal spatial indexes
- # tt0 <- proc.time()
   if(is.null(coordx_dyn)) 
   {
     inf=nn2Geo(coords,coords,K+1,distance,maxdist,radius)
@@ -74,25 +85,17 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
       m_s[[i]]=data.frame(cbind(aa+N*(i-1),0,inf$lags))
       }
   }
-
-  if(!is.null(coordx_dyn))
+#######
+  if(!is.null(coordx_dyn)) ## spatial index (dynamic coordinates)
   {        ns=lengths(coordx_dyn)/2 
   for(i in 1:numtime){
     inf=nn2Geo(coordx_dyn[[i]],coordx_dyn[[i]],K+1,distance,maxdist,radius)
     aa=cbind(inf$rowidx,inf$colidx)
-    m_s[[i]]=cbind( aa+ns[i]*(i-1),0,inf$lags)    ## spatial index (dynamic coordinates)
+    m_s[[i]]=cbind( aa+ns[i]*(i-1),0,inf$lags)    
   }
   }
   ## building  temporal  and spatiotemporal indexes
   
-  ## temporal distances (not zero distance)
-  #nn=sort(unique(c(RANN::nn2(coordt,coordt,k=round(maxtime)+1,treetype = c("kd"))$nn.dists)))[-1]  
-  #nn=sort(unique(c(nabor::knn(coordt,coordt,k=round(maxtime)+1))$nn.dists))[-1]  
-
-   ## first way
-    #qq=c(nabor::knn(coordt,coordt,k=length(coordt),radius=maxtime)$nn.dists)
-    #qq=qq[is.finite(qq)];a=sort(unique(qq)); 
-    #nn=a[a>0]
 
     ## second way
       a=sort(unique(c(nabor::knn(coordt,coordt,k=round(maxtime)+1)$nn.dists)))
@@ -123,28 +126,69 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
 ##############################################################
 bivariate_index=function(coords,coordx_dyn,N,K,maxdist,distance,radius)
   {
- if(length(K)==1)  K1=K2=K3=K
+ 
  if(length(K)==3) {K1=K[1];K2=K[2];K3=K[3]}
+ else   K1=K2=K3=K
+
+ 
+ if(length(maxdist)==3) {maxdist1=maxdist[1];maxdist2=maxdist[2];maxdist3=maxdist[3]}
+else  maxdist1=maxdist2=maxdist3=maxdist
+
+
+
+
 if(is.null(coordx_dyn)) 
    {  
-         inf1=nn2Geo(coords[1:(N/2),],  coords[1:(N/2),],  K1+1,distance,maxdist,radius)
-         inf2=nn2Geo(coords[(N/2+1):N,],coords[(N/2+1):N,],K2+1,distance,maxdist,radius)
-         inf3=nn2Geo(coords[1:(N/2),],  coords[(N/2+1):N,],K3+1,distance,maxdist,radius)
+   
+
+       print(N)
+        cm=coords[1:(N/2),]
+       
+         inf1=nn2Geo(cm,cm,K1+1,distance,maxdist1,radius)
+         inf2=nn2Geo(cm,cm,K3+1,distance,maxdist3,radius)
+         inf3=nn2Geo(cm,cm,K2+1,distance,maxdist2,radius)
+         inf4=inf3
           aa1=cbind(inf1$rowidx,  inf1$colidx,0,0,inf1$lags)
           aa2=cbind(inf2$rowidx+N/2,inf2$colidx+N/2,1,1,inf2$lags)
           aa3=cbind(inf3$rowidx  ,inf3$colidx+N/2,0,1,inf3$lags)
-          SS= cbind(rbind(aa1,aa2,aa3))            
+          aa4=cbind(inf4$rowidx+N/2  ,inf4$colidx,1,0,inf4$lags)
+
+          #aa5=cbind(rep(1:(N/2),K1),rep(1:(N/2),K1)+N,0,1,0)
+          # aa6=cbind(rep(1:(N/2),K1)+N,rep(1:(N/2),K1),1,0,0)
+           a5 =nabor::knn(cm,k = K2)
+           aa5=cbind(a5$nn.idx[,1],a5$nn.idx[,1]+N/2,0,1,0)
+           aa6=cbind(a5$nn.idx[,1]+N/2,a5$nn.idx[,1],1,0,0)
+     
+          SS= cbind(rbind(aa1,aa2,aa3,aa4,aa5,aa6))  
+
+          
+      # inf=nn2Geo(A0, A0,K2+1,distance,maxdist2,radius)
+      # sel=!inf$lags
+      # inf$lags[sel];inf$rowidx[sel];inf$colidx[sel]
+      # aa5=cbind(inf$rowidx ,inf$colidx,    1,0,inf$lags)[1:(2*N),]
+     #  print(A0)
+     #  print(aa5)
+        
+
+         # aa1=cbind(inf1$rowidx     ,inf1$colidx,    0,0,inf1$lags)
+         # aa2=cbind(inf2$rowidx+N/2 ,inf2$colidx+N/2,1,1,inf2$lags)
+         # aa3=cbind(inf3$rowidx     ,inf3$colidx+N/2,0,1,inf3$lags)
+         # aa4=cbind(inf4$rowidx+N/2,inf4$colidx,    1,0,inf4$lags)
+         # SS= as.matrix(rbind(aa1,aa2,aa3,aa4))     
+        
    }
 if(!is.null(coordx_dyn))
   {       
      ns=lengths(coordx_dyn)/2
-    inf1=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[1]],  K1+1,distance,maxdist,radius)
-    inf2=nn2Geo(coordx_dyn[[2]],  coordx_dyn[[2]],  K2+1,distance,maxdist,radius)
-    inf3=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[2]],  K3+1,distance,maxdist,radius)
-          aa1=cbind(inf1$rowidx,  inf1$colidx,0,0,inf1$lags)
+    inf1=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[1]],  K1+1,distance,maxdist1,radius)
+    inf2=nn2Geo(coordx_dyn[[2]],  coordx_dyn[[2]],  K3+1,distance,maxdist3,radius)
+    inf3=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[2]],  K2+1,distance,maxdist2,radius)
+    inf4=nn2Geo(coordx_dyn[[2]],  coordx_dyn[[1]],  K2+1,distance,maxdist2,radius)
+          aa1=cbind(inf1$rowidx,      inf1$colidx,0,0,inf1$lags)
           aa2=cbind(inf2$rowidx+ns[1],inf2$colidx+ns[1],1,1,inf2$lags)
-          aa3=cbind(inf3$rowidx  ,inf3$colidx+ns[1],0,1,inf3$lags)
-          SS= cbind(rbind(aa1,aa2,aa3))   
+          aa3=cbind(inf3$rowidx  ,    inf3$colidx+ns[1],0,1,inf3$lags)
+          aa4=cbind(inf4$rowidx+ns[1],inf4$colidx,1,0,inf4$lags)
+          SS= as.matrix(rbind(aa1,aa2,aa3,aa4))   
   }
 ##final bivariate  indexes and distances
 return(SS)
@@ -198,7 +242,9 @@ if(spatial)   #  spatial case
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
              gb$lags=sol$lags
-             gb$lagt=NULL
+            # gb$lagt=NULL
+             gb$maxdist=maxdist
+             gb$neighb=neighb
 } #### end spatial case 
 
 ##############################################   
@@ -213,12 +259,15 @@ if(spacetime)   #  space time  case
 } 
 if(bivariate)  { #space bivariate  case
    sol=bivariate_index(coords,coordx_dyn,numcoord,K,maxdist,distance,radius)
+
    gb=list(); gb$colidx=sol[,2];
              gb$rowidx=sol[,1] ;
              gb$lags=sol[,5]
-             gb$lagt=NULL
+             #gb$lagt=NULL
              gb$first=sol[,3]
              gb$second=sol[,4]
+             gb$maxdist=maxdist
+             gb$neighb=neighb
 } 
 return(gb)
 }

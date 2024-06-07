@@ -175,13 +175,9 @@ WlsStart <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distan
     if(is.null(fixed)) fixed <- NA else fixed <- unlist(fixed)
     ### Checks if all the starting values have been passed by the user:
  #print(initparam$numstart);print(initparam$numparam)
- #print("wls")
- #print(initparam$numstart)
- #print(initparam$numparam)
+
 if(initparam$numstart==initparam$numparam)       ### checking if numparam = numstart
 {        
-
-
 ###### continuos and discrete models   
         if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
           'Tukeygh','Tukeyh','Tukeyh2','Kumaraswamy','Kumaraswamy2','Weibull','SkewGaussian','SkewGauss','SinhAsinh','StudentT','SkewStudentT',
@@ -288,7 +284,6 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
         else  paramrange <- list(lower=NULL, upper=NULL)
         initparam$lower<-paramrange$lower
         initparam$upper<-paramrange$upper
-               
         return(initparam)
 
 }### end checking if numparam = numstart

@@ -104,19 +104,33 @@ tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
 
 simu11 = as.numeric( rep(0,N*P*sum(m)*(length(sequen)-1)))
 
+
 #result <- .C("for_c", d_v = as.integer(d),a_v = as.double(c(a)),nu1_v = as.double(c(nu1)),C_v=as.double(c(CC)) ,
-#             nu2_v = as.double(c(a)), P = as.integer(P),N=as.integer(N),L=as.integer(L),model =  as.integer(CkCorrModel(corrmodel)),
+#             nu2_v = as.double(c(parameters$nu2)), P = as.integer(P),N=as.integer(N),L=as.integer(L),model =  as.integer(CkCorrModel(corrmodel)),
 #             u = as.double(c(u)),a0 = as.double(a0),nu0 = as.double(nu0),A = as.double(c(A)),B = as.double(c(B))
 #             ,sequen = as.integer(c(sequen)), largo_sequen = as.integer(length(sequen)),n=as.integer(n),
 #             coord = as.double(coord),phi = as.double(phi),vtype=as.integer(vtype),m1 = as.integer(m),simu1 = as.double(simu11),
 #             L1 = as.double(L))
-result <- .C("for_c", d_v = as.integer(d),a_v = as.double(c(a)),nu1_v = as.double(c(nu1)),C_v=as.double(c(CC)) ,
-             nu2_v = as.double(c(parameters$nu2)), P = as.integer(P),N=as.integer(N),L=as.integer(L),model =  as.integer(CkCorrModel(corrmodel)),
-             u = as.double(c(u)),a0 = as.double(a0),nu0 = as.double(nu0),A = as.double(c(A)),B = as.double(c(B))
-             ,sequen = as.integer(c(sequen)), largo_sequen = as.integer(length(sequen)),n=as.integer(n),
-             coord = as.double(coord),phi = as.double(phi),vtype=as.integer(vtype),m1 = as.integer(m),simu1 = as.double(simu11),
-             L1 = as.double(L))
-  simu =  matrix(result$simu1,n,P)
+
+
+
+result=dotCall64::.C64("for_c",
+         SIGNATURE = c("integer","double","double", "double",
+                     "double","integer","integer","integer","integer",
+                     "double","double","double","double","double",
+                     "integer","integer","integer",
+                     "double","double","integer","integer","double",
+                     "double"), 
+                         d,c(a),c(nu1), c(CC), c(parameters$nu2),P,N,L,CkCorrModel(corrmodel),
+                         c(u),a0,nu0,c(A),c(B),c(sequen),length(sequen),n,coord,phi,vtype,m,
+                         simu1=dotCall64::numeric_dc(length(simu11)),L,
+         INTENT =    c("r","r","r","r","r","r","r","r","r", "r",
+                       "r","r","r","r","r","r","r","r","r", "r",
+                       "r", "rw","r"),
+             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
+
+
+  simu =  matrix(result,n,P)
   return(simu)
 }
 ######################## space time case: separable with Circ embeeding+ftt ##########################
@@ -161,9 +175,9 @@ if(corrmodel=="Kummer_Matern_Kummer_Matern"){
   ## cholesky decomposition
   chol.s <- t(chol(cova.mat.s))
   auxiliar.seq <- c(time.seq, rev(time.seq[-c(1,Nt)]))
-  cova.mat.t <- (1 - param$nugget)*GeoModels::GeoCorrFct(x = auxiliar.seq, 
+  cova.mat.t <- (1 - param$nugget)*GeoCorrFct(x = auxiliar.seq, 
                                                               corrmodel = corrmodel, 
-                                                              param = param_t)
+                                                              param = param_t)$corr
   cova.mat.t[auxiliar.seq == 0] <- 1
   spectrum.t <- sqrt(Re( fft(cova.mat.t) ))
   
@@ -261,7 +275,7 @@ if(!is.null(spobj)) {
     ##############################################################################
 
     if(space)    {if(method=="CE"&&!grid) stop("CE method works only for regular grid\n")
-                  if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
+                  #if(!(corrmodel=="Matern")) stop("Not implemented for this correlation model  \n")
                  } 
     
     if(spacetime)

@@ -54,7 +54,7 @@ MatLogDet<-function(mat.decomp,method)    {
 ######################################################################################################
 ######################################################################################################
 
-GeoCovmatrix <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
                        maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=6371,
                        sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
 
@@ -74,12 +74,15 @@ if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
 {
   if(type=="Standard") {
       fname <-"CorrelationMat2"
+
       if(spacetime) fname <- "CorrelationMat_st_dyn2"
         if(bivariate) {
             if(model==1) fname <- "CorrelationMat_biv_dyn2"
             if(model==10)fname <- "CorrelationMat_biv_skew_dyn2" }
      
 #corr=double(numpairstot)
+
+
 cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double",  "integer","double","double","double","integer","integer"),
     corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordt,corrmodel,nuisance,paramcorr,radius,ns,NS,
  INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
@@ -94,14 +97,16 @@ cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double",  "in
         #cr=.C(fname,  corr=corr, as.double(coordx),as.double(coordy),as.double(coordt),
         #  as.integer(corrmodel), as.double(nuisance), as.double(paramcorr),as.double(radius),as.integer(ns),
         #   as.integer(NS),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+
 cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double",  "integer","double","double","double","integer","integer"),
      corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
-  INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+ INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
+            PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
      ## deleting correlation equual  to 1 because there are problems  with hipergeometric function
         sel=(abs(cr$corr-1)<.Machine$double.eps);cr$corr[sel]=0
       }
     }  
+    
 ###################################################################################
 ###################################################################################
 
@@ -675,6 +680,47 @@ return(varcov)
   #############################################################################################
 
 
+
+##############################################################################
+###### extracting GeoFit object informations if necessary              #######
+##############################################################################
+
+if(!is.null(estobj)){
+   if(!inherits(estobj,"GeoFit"))
+               stop("need  a 'GeoFit' object as input\n")
+   #data=estobj$data
+
+if(!estobj$grid){  #not regular grid 
+
+ if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy)
+                         else cord=estobj$coordx_dyn
+                      } ## spatial (temporal) non regular case
+ else  {    if(is.null(estobj$coordx_dyn))  { coordx=estobj$coordx[1:estobj$ns[1]]    # bivariate not dynamic    
+                                              coordy=estobj$coordy[1:estobj$ns[2]] 
+                                            }  
+            else {coordx_dyn=estobj$coordx_dyn}                                      # bivariate  dynamic  
+       }
+ }
+else  { coordx=estobj$coordx; 
+        coordy=estobj$coordy
+      }
+   if(length(estobj$coordt)==1) coordt=NULL
+   else coordt=estobj$coordt
+   coordx_dyn=estobj$coordx_dyn
+   corrmodel=estobj$corrmodel
+   model=estobj$model
+   distance=estobj$distance
+   grid=estobj$grid
+   n=estobj$n
+   param=append(estobj$param,estobj$fixed)
+   radius=estobj$radius
+   copula=estobj$copula
+   anisopars=estobj$anisopars
+   if(ncol(estobj$X)==1) X=NULL
+   else X=estobj$X
+}
+
+
  if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
  if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 
@@ -696,6 +742,9 @@ if(!is.null(spobj)) {
         if(!a$pj) {if(distance!="Chor") distance="Geod"}
      }
 }
+
+
+
 #######################################################
      ## setting zero mean and nugget if no mean or nugget is fixed
     if(!bivariate){

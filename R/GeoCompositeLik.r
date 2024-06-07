@@ -257,9 +257,9 @@ coords=cbind(coordx,coordy)
         else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
         parallel::setDefaultCluster(cl = cl)
         CompLikelihood <- optimParallel::optimParallel(par=param,fn=comploglik, 
-                              control=list(pgtol=1e-14, maxit=100000,factr=1e-10),
+                                 control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
                               coords=coords, coordt=coordt,corrmodel=corrmodel, 
-                               data=data, fixed=fixed,fan=fname, lower=lower, method='L-BFGS-B',n=n,
+                               data=data, fixed=fixed,fan=fname, lower=lower,n=n,
                               namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, 
                               upper=upper,weigthed=weigthed,X=X,ns=ns,NS=NS,local=local,GPU=GPU, hessian=FALSE,MM=MM
                                )

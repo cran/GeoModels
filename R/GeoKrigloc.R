@@ -15,28 +15,39 @@ call=match.call()
 ###############################
 ## checking if there is a  GeoFit object
 if(!is.null(estobj)){
-if(!inherits(estobj,"GeoFit"))
-              stop("use HypoTest only with 'GeoFit' objects\n")
+   if(!inherits(estobj,"GeoFit"))
+               stop("need  a 'GeoFit' object as input\n")
+   data=estobj$data
 
-data=estobj$data
-if(!estobj$grid){ coordx=cbind(estobj$coordx,estobj$coordy)}
-else            { coordx=estobj$coordx; 
-                  coordy=estobj$coordy}
-if(length(estobj$coordt)==1) coordt=NULL
-else coordt=estobj$coordt
+if(!estobj$grid){  #not regular grid 
 
-coordx_dyn=estobj$coordx_dyn
-corrmodel=estobj$corrmodel
-model=estobj$model
-distance=estobj$distance
-grid=estobj$grid
-n=estobj$n
-param=append(estobj$param,estobj$fixed)
-radius=estobj$radius
-copula=estobj$copula
-anisopars=estobj$anisopars
-if(ncol(estobj$X)==1) X=NULL
-else X=estobj$X
+ if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy)
+                         else cord=estobj$coordx_dyn
+                      } ## spatial (temporal) non regular case
+ else  {    if(is.null(estobj$coordx_dyn))  { coordx=estobj$coordx[1:estobj$ns[1]]    # bivariate not dynamic    
+                                              coordy=estobj$coordy[1:estobj$ns[2]] 
+                                            }  
+            else {coordx_dyn=estobj$coordx_dyn}                                      # bivariate  dynamic  
+       }
+ }
+else  { coordx=estobj$coordx; 
+        coordy=estobj$coordy
+      }
+
+   if(length(estobj$coordt)==1) coordt=NULL
+   else coordt=estobj$coordt
+   coordx_dyn=estobj$coordx_dyn
+   corrmodel=estobj$corrmodel
+   model=estobj$model
+   distance=estobj$distance
+   grid=estobj$grid
+   n=estobj$n
+   param=append(estobj$param,estobj$fixed)
+   radius=estobj$radius
+   copula=estobj$copula
+   anisopars=estobj$anisopars
+   if(ncol(estobj$X)==1) X=NULL
+   else X=estobj$X
 }
 ##################################
 ## X and more stuuffs..
@@ -74,7 +85,12 @@ if(!is.null(coordy)){
 }
 else{coordx=NULL;coordy=NULL;coords=NULL}
 
+
+if(is.null(dim(loc)))  loc= matrix(loc,1,2)
+
+
 Nloc=nrow(loc)
+if(is.null(Nloc)) Nloc=1
 Tloc=length(time)
 if(bivariate)  Tloc=1
 
@@ -90,11 +106,6 @@ if(space){
          ### computing spatial neighborhood
          neigh=GeoNeighborhood(data, coordx=coords,distance=distance,loc=loc,neighb=neighb,maxdist=maxdist,X=X,M=M,parallel=FALSE,ncores=ncores)
          res1=res2=NULL
-         #  pb <- txtProgressBar(min = 0, max = Nloc, style = 3)
-
-
-
-
 
 ################## not parallel version #######################################
 if(!parallel) {
@@ -104,7 +115,7 @@ if(!parallel) {
               #update mean
          if(!is.null(M)) param$mean=neigh$M[[i]]         
             pr=GeoKrig(estobj=NULL,loc=loc[i,], data=neigh$data[[i]],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,
+                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,sparse=sparse,
                 model=model, param=param,anisopars=anisopars, mse=mse,copula=copula)
                 res1[i]=pr$pred
                 if(mse) res2[i]=pr$mse
@@ -134,13 +145,13 @@ if(parallel) {
             pb(sprintf("i=%g", i))
         if(!is.null(M)) param$mean=neigh$M[[i]]
             pr=GeoKrig(estobj=NULL,loc=loc[i,], data=neigh$data[[i]],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,
+                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,sparse=sparse,
                 model=model, param=param,anisopars=anisopars, mse=mse,copula=copula)
             pr$data=pr$coordx=pr$coordy=pr$coordt=NULL
             c(pr$pred,pr$mse)
         }
    
-
+xx=matrix(xx,nrow=Nloc)
 res1=as.numeric(xx[,1])
 if(mse) res2=as.numeric(xx[,2])
 rm(xx)
@@ -163,7 +174,7 @@ if(spacetime)
              if(!is.null(M)) param$mean=neigh$M[[k]]
             pr=GeoKrig(estobj=NULL, data=neigh$data[[k]],coordx=neigh$coordx[[k]],coordt=neigh$coordt[[k]],loc=loc[i,],time=time[j], #ok
                X=neigh$X[[k]],  Mloc=Mloc[i+(Nloc)*(j-1)], #ok
-               Xloc= Xloc[i+(Nloc)*(j-1),], type_krig=type_krig,
+               Xloc= Xloc[i+(Nloc)*(j-1),], type_krig=type_krig,sparse=sparse,
              corrmodel=corrmodel,distance=distance, model=model, param=param,anisopars=anisopars, mse=mse,copula=copula,n=n)
             res1[k]=pr$pred
             if(mse) res2[k]=pr$mse
@@ -171,7 +182,7 @@ if(spacetime)
          #    setTxtProgressBar(pb, k)
           #         close(pb)
           }}
-     
+      # print(str(res1))
      }
    if(parallel) {
        if(is.null(ncores)){ n.cores <- coremax - 1 }
@@ -180,36 +191,47 @@ if(spacetime)
            if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
            n.cores=ncores
         }
+     doFuture::registerDoFuture()
         future::plan(multisession, workers = n.cores)
+ ############################# 
+        # Define your code
+        compute_krig <- function(k, neigh, loc, time, Mloc, Xloc, type_krig, corrmodel, distance, model, param, anisopars, mse, copula, n,sparse) {
+          
+          if (!is.null(M)) param$mean <- neigh$M[[k]]
+          pr <- GeoKrig(estobj = NULL, data = neigh$data[[k]], coordx = neigh$coordx[[k]], coordt = neigh$coordt[[k]], loc = loc, time = time,
+                        X = neigh$X[[k]], Mloc = Mloc, Xloc = Xloc, type_krig = type_krig,sparse=sparse,
+                        corrmodel = corrmodel, distance = distance, model = model, param = param, anisopars = anisopars, mse = mse, copula = copula, n = n)
+          # cat("k ",k,"\n")
+          # print(pr$pred)
+          return(list(pred = pr$pred, mse = ifelse(mse, pr$mse, NA)))
+        }
+        
+        # Flatten the loops
+        loop_indices <- expand.grid(i = 1:Nloc, j = 1:Tloc)
+        loop_indices <- loop_indices[order(loop_indices$i),]
+        rownames(loop_indices) <- NULL
+        
+        # Parallelize the computation using %dopar%
         progressr::handlers(global = TRUE) 
         progressr::handlers("txtprogressbar")
-        pb <- progressr::progressor(along = 1:Nloc)
+        pb <- progressr::progressor(along = 1:(Nloc * Tloc))
         cat("Performing local kriging using ",n.cores," cores...\n")
 
-     
-
-
- ############################# 
-  xx=foreach::foreach(i= 1:Nloc,.combine = rbind,.options.future = list(seed = TRUE,
-    globals = structure(TRUE, add = c("k","param","res1","res2")))) %dofuture% 
-        { 
-    for(j in 1: Tloc)
-          {
-          if(!is.null(M)) param$mean=neigh$M[[k]]
-            pr=GeoKrig(estobj=NULL, data=neigh$data[[k]],coordx=neigh$coordx[[k]],coordt=neigh$coordt[[k]],loc=loc[i,],time=time[j], #ok
-               X=neigh$X[[k]],  Mloc=Mloc[i+(Nloc)*(j-1)], #ok
-               Xloc= Xloc[i+(Nloc)*(j-1),], type_krig=type_krig,
-             corrmodel=corrmodel,distance=distance, model=model, param=param,anisopars=anisopars, mse=mse,copula=copula,n=n)
-            res1[k]=pr$pred
-            if(mse) res2[k]=pr$mse
-            k=k+1
-           }
-      pr$data=pr$coordx=pr$coordy=pr$coordt=pr$loc=NULL
-         c(res1,res2)
-
-       }
+            oopts=options(future.globals.maxSize = 8000 * 1024^2)
+        on.exit(options(oopts))
+        
+        output <- foreach::foreach(k = 1:(Nloc * Tloc), .combine = rbind,.options.future = list(seed = TRUE)) %dofuture% {
+          pb(sprintf("k=%g", k))
+          idx <- loop_indices[k, ]
+          compute_krig(k, neigh, loc[idx$i, ], time[idx$j], Mloc[idx$i + (Nloc) * (idx$j - 1)], Xloc[idx$i + (Nloc) * (idx$j - 1), ], 
+                       type_krig, corrmodel, distance, model, param, anisopars, mse, copula, n,sparse)
+        }
+        
+        # Extract the predictions and mse values
+        res1 <- as.numeric(unlist(output[, "pred"]))
+        res2 <- as.numeric(unlist(output[, "mse"]))
   #################################     
-       print(xx)
+
         future::plan(sequential)     
 
    }    
@@ -225,8 +247,8 @@ neigh=GeoNeighborhood(data, coordx=coords,distance=distance,loc=loc,maxdist=maxd
 if(!parallel){           
          for(i in 1: Nloc)
           {
-            pr=GeoKrig(loc=matrix(loc[i,],ncol=2),coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-                X=neigh$X,,Xloc= Xloc[i,],which=which,type_krig=type_krig,
+            pr=GeoKrig(loc=loc[i,],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
+                X=neigh$X,,Xloc= Xloc[i,],which=which,type_krig=type_krig,sparse=sparse,
                 model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[i]],copula=copula)
                 res1=c(res1,pr$pred)
                if(mse) res2=c(res2,pr$mse)
@@ -236,22 +258,31 @@ if(!parallel){
 }
 ############## parallel ###############################
 if(parallel) {
-        
         if(is.null(ncores)){ n.cores <- coremax - 1 }
-        else
+    else
         {  if(!is.numeric(ncores)) stop("number of cores not valid\n")
            if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
            n.cores=ncores
         }
         future::plan(multisession, workers = n.cores)
-        xx=foreach::foreach(i= 1:Nloc,.combine = rbind,.options.future = list(seed = TRUE)) 
-    {    GeoModels::GeoKrig(loc=matrix(loc[i,],ncol=2),coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-         X=neigh$X,,Xloc= Xloc[i,],which=which,type_krig=type_krig,
+        progressr::handlers(global = TRUE) 
+        progressr::handlers("txtprogressbar")
+        pb <- progressr::progressor(along = 1:Nloc)
+        cat("Performing local kriging using ",n.cores," cores...\n")
+
+        oopts=options(future.globals.maxSize = 8000 * 1024^2)
+        on.exit(options(oopts))
+
+ xx=foreach::foreach(i= 1:Nloc,.combine = rbind,
+    .options.future = list(seed = TRUE,
+    globals = structure(TRUE, add = c("param")))) %dofuture% {
+          pb(sprintf("i=%g", i))
+      pr=GeoKrig(loc=loc[i,],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
+         X=neigh$X,,Xloc= Xloc[i,],which=which,type_krig=type_krig,sparse=sparse,
          model=model, param=param,anisopars=anisopars, mse=mse, data=neigh$data[[i]],copula=copula)
     
              pr$data=pr$coordx=pr$coordy=pr$coordt=NULL
             c(pr$pred,pr$mse)
-
         }
 res1=as.numeric(xx[,1])
 if(mse) res2=as.numeric(xx[,2])

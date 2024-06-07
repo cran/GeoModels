@@ -2144,9 +2144,12 @@ void CorrelationMat2(double *rho,double *coordx, double *coordy, double *coordt,
      for(i=0;i<(ncoord[0]-1);i++){
 	    for(j=(i+1);j<ncoord[0];j++){
 
+
         dd=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],*REARTH);
 
+
     rho[h]=CorFct(cormod,dd,0,par,0,0);
+     // Rprintf("%d- %f %f %f %f -- %f %f --%f\n",type[0],coordx[i],coordx[j],coordy[i],coordy[j],*REARTH,dd,rho[h]);
        h++;
     }}
 

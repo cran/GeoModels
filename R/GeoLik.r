@@ -15,9 +15,9 @@ Lik <- function(copula,bivariate,coordx,coordy,coordt,coordx_dyn,corrmodel,data,
         #cc <- .C(corrmat,cr=corr,as.double(coordx),as.double(coordy),as.double(coordt),as.integer(corrmodel),as.double(nuisance),
         #as.double(paramcorr),as.double(radius),as.integer(ns),as.integer(NS),PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE)$cr
 
-           cc=dotCall64::.C64(as.character(corrmat),
+           cc=dotCall64::.C64(as.character(corrmat), #cr=dotCall64::numeric_dc(corr)
          SIGNATURE = c("double","double","double","double", "integer","double","double","double","integer","integer"),  
-                          cr=corr, coordx, coordy, coordt, corrmodel, nuisance,paramcorr,radius, ns,NS,
+                          cr=dotCall64::numeric_dc(length(corr)), coordx, coordy, coordt, corrmodel, nuisance,paramcorr,radius, ns,NS,
          INTENT =    c("rw","r","r","r","r","r","r","r","r", "r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$cr
         return(cc)
@@ -32,7 +32,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordt,coordx_dyn,corrmodel,data,
         hh=1;nn=nuisance['nugget'];mm=c(mu)
   cc=dotCall64::.C64(as.character(corrmat),
          SIGNATURE = c("double","double","double","double", "integer","double", "integer","double","double","double","integer","integer","integer"),  
-                          cr=corr, coordx, coordy, coordt, corrmodel, mm,hh,nn,paramcorr,radius, ns,NS,model,
+                          cr=dotCall64::numeric_dc(length(corr)), coordx, coordy, coordt, corrmodel, mm,hh,nn,paramcorr,radius, ns,NS,model,
          INTENT =    c("rw","r","r","r","r","r","r","r","r","r","r","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$cr
         return(cc)
@@ -924,15 +924,16 @@ if(optimizer=='L-BFGS-B'&&!parallel)
                           namesnuis=namesnuis,upper=upper,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso) 
 
    if(optimizer=='L-BFGS-B'&&parallel){
+         #ncores=max(1, parallel::detectCores() - 1)
         ncores=length(param) * 2 + 1
         if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
         else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
         parallel::setDefaultCluster(cl = cl)
                           Likelihood <- optimParallel::optimParallel(param,fn=eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
-                          corrmodel=corrmodel,control=list(pgtol=1e-14, maxit=100000,factr = 1e8),
+                          corrmodel=corrmodel,   control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
                           data=t(data),dimat=dimat,fixed=fixed,
                           fname=fname,grid=grid,ident=ident,lower=lower,mdecomp=mdecomp,method=optimizer,
-                          model=model,namescorr=namescorr,hessian=hessian,  parallel = list(forward = FALSE),
+                          model=model,namescorr=namescorr,hessian=hessian,    parallel = list(forward = FALSE,loginfo=FALSE),
                           namesnuis=namesnuis,upper=upper,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
      parallel::setDefaultCluster(cl=NULL)
      parallel::stopCluster(cl)

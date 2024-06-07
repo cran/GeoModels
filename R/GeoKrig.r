@@ -13,15 +13,15 @@ GeoKrig= function(estobj=NULL,data, coordx, coordy=NULL, coordt=NULL, coordx_dyn
 getInv=function(covmatrix,b,mse){
   cInvc=NULL    
 if(!covmatrix$sparse){
-               U =MatDecomp(covmatrix$covmatrix,method);Inv=0
+               U =MatDecomp(covmatrix$covmatrix,"cholesky");Inv=0
                if(is.logical(U)){print(" Covariance matrix is not positive definite");stop()}
                #print("1")
                vec=forwardsolve(U, b)
                rm(b)
-               # print("2")
+              #  print("2")
                Invc=forwardsolve(U, vec,transpose=T) ## R^-1 %*% c
                rm(U)
-                #    print("3")
+              #     print("3")
                if(mse) cInvc=crossprod(vec) # t(c)%*% R^-1 %*% c
               # if(mse) cInvc=Rfast::Crossprod(vec,vec)
                #print("4")
@@ -48,28 +48,39 @@ call <- match.call()
 ###############################
 ## checking if there is a  GeoFit object
 if(!is.null(estobj)){
-if(!inherits(estobj,"GeoFit"))
-              stop("use HypoTest only with 'GeoFit' objects\n")
+   if(!inherits(estobj,"GeoFit"))
+               stop("need  a 'GeoFit' object as input\n")
+   data=estobj$data
 
-data=estobj$data
-if(!estobj$grid){ coordx=cbind(estobj$coordx,estobj$coordy)}
-else            { coordx=estobj$coordx; 
-                  coordy=estobj$coordy}
-if(length(estobj$coordt)==1) coordt=NULL
-else coordt=estobj$coordt
+if(!estobj$grid){  #not regular grid 
 
-coordx_dyn=estobj$coordx_dyn
-corrmodel=estobj$corrmodel
-model=estobj$model
-distance=estobj$distance
-grid=estobj$grid
-n=estobj$n
-param=append(estobj$param,estobj$fixed)
-radius=estobj$radius
-copula=estobj$copula
-anisopars=estobj$anisopars
-if(ncol(estobj$X)==1) X=NULL
-else X=estobj$X
+ if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy)
+                         else cord=estobj$coordx_dyn
+                      } ## spatial (temporal) non regular case
+ else  {    if(is.null(estobj$coordx_dyn))  { coordx=estobj$coordx[1:estobj$ns[1]]    # bivariate not dynamic    
+                                              coordy=estobj$coordy[1:estobj$ns[2]] 
+                                            }  
+            else {coordx_dyn=estobj$coordx_dyn}                                      # bivariate  dynamic  
+       }
+ }
+else  { coordx=estobj$coordx; 
+        coordy=estobj$coordy
+      }
+
+   if(length(estobj$coordt)==1) coordt=NULL
+   else coordt=estobj$coordt
+   coordx_dyn=estobj$coordx_dyn
+   corrmodel=estobj$corrmodel
+   model=estobj$model
+   distance=estobj$distance
+   grid=estobj$grid
+   n=estobj$n
+   param=append(estobj$param,estobj$fixed)
+   radius=estobj$radius
+   copula=estobj$copula
+   anisopars=estobj$anisopars
+   if(ncol(estobj$X)==1) X=NULL
+   else X=estobj$X
 }
 ##################################
 
@@ -167,7 +178,7 @@ if((model %in% c("LogGaussian","SinhAsinh","Tukeyh2","Tukeyh"))&&type_krig=="Opt
 ######################################################## 
 ######################################################## 
 Mtemp=NULL
-   if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian")&&type_krig=="Simple")          # we need a x covariane matrix with with mean=0   x=gamma,weibull,loglogistic
+   if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian")&&type_krig=="Simple")          # we need a x covariane matrix with mean=0   x=gamma,weibull,loglogistic
 {
      paramtemp=param; sel=substr(names(param),1,4)=="mean";  ## selecting mean values
      meantemp=names(param[sel])             ## saving   mean parameters
@@ -183,6 +194,13 @@ Mtemp=NULL
     covmatrix = GeoCovmatrix(coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coordx_dyn,
          corrmodel=corrmodel, distance= distance,grid=grid,maxdist= maxdist,maxtime=maxtime,model=model,n=n,
           param=param, anisopars=anisopars, radius=radius,sparse=sparse,taper=taper,tapsep=tapsep,type=type,copula=copula,X=X)
+ #print(param)
+ #print(model)
+ #print(head(coordx))
+ #print(head(coordy))
+ #print(covmatrix$nozero)
+
+
 
 #####################################################
     covmatrix$param=unlist(covmatrix$param)
@@ -228,7 +246,7 @@ Mtemp=NULL
 ########## setting means for data and loc to predict#########
 ##############################################################
 if(type_krig=="Simple"){ if(is.null(MM)) {mu=X%*%betas; muloc=Xloc%*%betas}
-                         else {mu=MM;muloc=Mloc}        }          # for non constant external mean    
+                         else            {mu=MM;         muloc=Mloc}      }          # for non constant external mean    
 ##############################################################
 #}       
 
@@ -568,10 +586,14 @@ else    {
 ##################################################################
 
 CC = matrix(corri*vvar,nrow=dimat,ncol=dimat2)
+
+
 MM=getInv(covmatrix,CC,mse)  #compute (\Sigma^-1) %*% cc
+
 rm(CC)
 krig_weights = MM$a
 BB=MM$b
+
 
 ##################################################################
 ################# simple kriging #################################
@@ -637,7 +659,7 @@ if(!bivariate) ## space and spacetime simple kringing
                if(covmatrix$model %in% c(1,12,27,38,29,10,18,39,37,28,9, 34,40,20))   ####gaussian, StudenT, two piece  skew gaussian bimodal tukeyh tukey hh
               {
                     # pp = c(muloc)      +  krig_weights %*% (c(dataT)-c(mu))
-                         
+                        
                       datas=as.matrix(c(dataT)-c(mu))
 
                      pp = c(muloc)      +  crossprod(datas,krig_weights)
@@ -664,9 +686,10 @@ if(covmatrix$model %in% c(21,24,26,22)&&type_krig=="Simple")
       
 else  {   ## bivariate  case   cokriging
           dat = c(dataT) - as.numeric(c(rep(covmatrix$param['mean_1'],covmatrix$ns[1]),
-                            rep(covmatrix$param['mean_2'],covmatrix$ns[2])))
-                      if(which==1) pp = param$mean_1 + krig_weights %*% dat
-                      if(which==2) pp = param$mean_2 + krig_weights %*% dat
+                                        rep(covmatrix$param['mean_2'],covmatrix$ns[2])))
+
+                      if(which==1) pp = c(param$mean_1) + crossprod(dat,krig_weights)
+                      if(which==2) pp = c(param$mean_2) + crossprod(dat,krig_weights)
       }
    #### MSE COMPUTATION ##################
   if(mse) {
