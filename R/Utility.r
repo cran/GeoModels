@@ -68,6 +68,9 @@ CkCorrModel <- function(corrmodel)
                              Hypergeometric_Matern=23,HyperGeometric_Matern=23, hypergeometric_Matern=23,
                              Kummer=24,Kummer=24,
                              Kummer_Matern=25,Kummer_matern=25,
+                             GenWend_Hole=26,GenWend_hole=26,
+                             Matern_Hole=27,Matern_hole=27,
+                             Schoenberg=28,schoenberg=28,
              # spatial-temporal non-separable models
                              gneiting=42,Gneiting=42,  #ok
                              iacocesare=44,Iacocesare=44, #ok
@@ -757,7 +760,7 @@ CorrelationPar <- function(corrmodel)
     if(is.null(corrmodel)){param <- NULL}
     else { 
     # Exponential and Gaussian and spherical and wave correlation :
-     if(corrmodel %in% c(2,3,4,16)) {
+     if(corrmodel %in% c(2,3,4,16,28)) {
       param <- c('scale')
       return(param)}
     #if(corrmodel %in% c(45)) {
@@ -771,8 +774,11 @@ CorrelationPar <- function(corrmodel)
       param <- c('power1', 'power2','scale')
       return(param)}
     # hypergeometric2
-     if(corrmodel %in% c(21)) {
+     if(corrmodel %in% c(21,26)) {
         param <- c('power1', 'power2','scale','smooth')
+        return(param)}
+     if(corrmodel %in% c(27)) { # matern hole
+        param <- c('power1','scale','smooth')
         return(param)}
         # hypergeometric2
      if(corrmodel %in% c(22,23)) {

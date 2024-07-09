@@ -1,9 +1,9 @@
-3122905493f8ba756ed8e478fa3cefb4 *DESCRIPTION
+f289372ac2bf158b9a3e7b0aac6771cc *DESCRIPTION
 b4b96ace0c4e1897e3c98cc44959edca *NAMESPACE
 78f0d38ebedb5213e406480e2d99b651 *R/GeoAniso.R
 7951b40f4d16c1dd6a59cea4c89aa84a *R/GeoCV.R
 5997914b299b769341045f05388be7d1 *R/GeoCompositeLik.r
-964368574ed5ffb116505bbbe8e01479 *R/GeoCompositeLik2.R
+3c0a78138ecb198418277b3bfb69194a *R/GeoCompositeLik2.R
 472b550e382528c6206372f6adb185e4 *R/GeoCorrFct.r
 52aa7961b3c8ebf583770c2a746effcc *R/GeoCorrFct_Cop.R
 c2d0316e9c6702a09096945ffb66fb80 *R/GeoCovDisplay.R
@@ -26,7 +26,7 @@ b7c51f4826413897dec215ce74501066 *R/GeoNeighIndex.R
 bf88cb72713a7d30c2d4c8a17eeecef4 *R/GeoResiduals.r
 fa104bfedece50d71ad2f3b47fcb749c *R/GeoScatterplot.R
 336b03fb341c636a1d14ac375fa50e87 *R/GeoScores.R
-82f4d40419912e1a79b165a8fa8452d7 *R/GeoSim.r
+806bcdbb06fbcd4ece532df18333e30c *R/GeoSim.r
 e673290f861ef65f742616cd43402327 *R/GeoSimCopula.R
 3b60624cd66eb0fe5842be2b9461ae20 *R/GeoSimapprox.r
 fb7eda298c59b3626474ddae9b153655 *R/GeoSpoutlier.R
@@ -35,7 +35,7 @@ f08e54cdb20f64cc327a83ef0c84e6fb *R/GeoVariogram.r
 e2103ce9f12499981858052c39fbc1a0 *R/GeoWls.r
 db62f6886741f05b2ad1c75efcf361dc *R/Geovarestbootstrap.R
 98c85c4ab4ce2910ebed223591c7ac64 *R/SimCE.R
-6788d7fdd29e377a1991707f11bcd486 *R/Utility.r
+35fa05fec5c35694df37c48cb01e6043 *R/Utility.r
 21dfba52d1a4bffccd63fbfcb309a198 *R/sp2Geo.R
 95af348a39038878f95a7bc97c701197 *data/Jamaicatemp.RData
 0ad52eba520f4fdacd6c34265e17a39d *data/anomalies.rda
@@ -67,7 +67,7 @@ e40ac40c264232ae5f2e9942bd133099 *man/GeoAniso.Rd
 5aa2f7bca3ae51e8b1a60ac891eed2d2 *man/GeoCorrFct_Cop.Rd
 067e76ebe5bdf01eec3228c88f6019b0 *man/GeoCovDisplay.Rd
 d051e8cb8e9c7de41e241aa87c0dd31b *man/GeoCovariogram.Rd
-2403c1685c08b62666e1fa619ba04907 *man/GeoCovmatrix.Rd
+4b0539e1bbc314f62f8f7615d5a2bb22 *man/GeoCovmatrix.Rd
 396512f9a8db4427ae6d626eee9cebb2 *man/GeoDosocores.Rd
 58626e7f6f882eb2f40f15bbc2491453 *man/GeoFit.Rd
 f10dba8c411d975957ef0a1e725eb5be *man/GeoFit2.Rd
@@ -111,15 +111,15 @@ eccd92ddcf57b2ddd9db9cb31ebc925b *man/spanish_wind.Rd
 40f5a61500ca74f19c88b47f8ed6e359 *src/CompositeLikelihood2_ani.c
 2edcda2e1014d9279eb00713cbf3806d *src/CompositeLikelihoodCond2.c
 de6f2d46782d04d9d22f6fef3ea4c4ca *src/CompositeLikelihoodCond2_ani.c
-33fc060490fc58812dfa6ec6b36afae2 *src/CorrelationFunction.c
-245aa08a241f10e7434bbd71d7904192 *src/Distributions.c
+9c4a77bb6b53d1463abccf2552df6496 *src/CorrelationFunction.c
+e232191303419349562d7046bfb38ff4 *src/Distributions.c
 df1ab405480f1dd4dc911af6cc434640 *src/GeoModels_init.c
 e0daf95f7a9f63968a74d5c02b74b303 *src/Godambe.c
 abe401929aa179376125865403e4cfe4 *src/Gradient.c
 2a6f9e9e044a78154d3cfda5936d6f48 *src/Makevars
 8d554aecc4cd8360d52b4b84e72fa7c5 *src/TB.c
 2ffb263ad50c7d274dc98a6764efb051 *src/Utility.c
-69cca5454312954f08d2f645c86bc55c *src/header.h
+3e14e57e3e965e3e1c4b6cf6bbf5f770 *src/header.h
 cbee2b2c8b7d51ce965b778b7bc4e20c *src/mvndstpack.f
 3357b56cfac62b4581faa4f88d2269ca *src/specfun.f
 1351e4691f61d1be598b028d5ee9c78c *src/weightedleastsquare.c

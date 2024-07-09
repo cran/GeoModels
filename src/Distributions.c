@@ -17,6 +17,63 @@ void  hyperg_call(double *a,double *b,double *x,double *res)
 
 
 
+
+double onef2( double a, double b,double c,double x,double *err )
+{
+double n, a0, sum, t;
+double an, bn, cn, max, z;
+double stop=1.37e-17;
+an = a;
+bn = b;
+cn = c;
+a0 = 1.0;
+sum = 1.0;
+n = 1.0;
+t = 1.0;
+max = 0.0;
+do
+        {
+        if( an == 0 )
+                goto done;
+        if( bn == 0 )
+                goto error;
+        if( cn == 0 )
+                goto error;
+        if( (a0 > 1.0e34) || (n > 200) )
+                goto error;
+        a0 *= (an * x) / (bn * cn * n);
+        sum += a0;
+        an += 1.0;
+        bn += 1.0;
+        cn += 1.0;
+        n += 1.0;
+        z = fabs( a0 );
+        if( z > max )
+                max = z;
+        if( sum != 0 )
+                t = fabs( a0 / sum );
+        else
+                t = z;
+        }
+while( t > stop );
+
+done:
+
+*err = fabs(MACHEP * max / sum);
+
+  goto xit;
+
+ error:
+  *err = 1.0e38;
+
+ xit:
+   return(sum);
+ }
+
+
+
+
+
  
 double poch(double a, double m)
 {
@@ -74,7 +131,7 @@ double poch(double a, double m)
 }
 
 
-
+/*
 double onef2(double a,double b,double c,double z)
 {
 double term,s1=0.0;int k=0;
@@ -86,7 +143,7 @@ if(fabs(term)<MACHEP)  {break;}
 k++;
 }
 return(s1);
-}
+}*/
 
 
 
@@ -176,7 +233,7 @@ void  reghyperg_call(int *a,int *b,double *x,double *res)
 {
     *res = log_regularized1F1(*a,*b,*x);
 }
-/************ pochammer symbols*******************/
+/************ pochammer symbols******************
 double Poch(int q,int n)
 {
     if(n==0) return(1.0);
@@ -189,7 +246,7 @@ double Poch(int q,int n)
          return(res);
     }
        
-}
+}*/
 
 
 
@@ -1334,6 +1391,47 @@ done:
     return (s);
 }
 //************************************* END igam.c*****************************************
+
+
+
+/* integrand  in  generalized wendland function*/
+double int_onef2(double x,double a, double b1,double b2,double y)
+{
+    double res=0.0,of1;
+    of1=gammafn(b1)*R_pow(x*y,1-b1/2)*bessel_i(2*sqrt(x*y),b1-1,1);
+    res=R_pow(1-x,b2-a-1)*R_pow(x,a-1)*of1;
+    return (res);
+}
+void integr_onef2(double *x, int n, void *ex){
+    int i;double a,b1,b2,y;
+    a =    ((double*)ex)[0];  //smooth
+    b1 = ((double*)ex)[1];  //alpha
+    b2 =     ((double*)ex)[2];  //h
+    y =     ((double*)ex)[3];  //h
+    for (i=0;i<n;i++) {x[i]=int_onef2(x[i],a,b1,b2,y);}
+    return;
+}
+// function computing generalized wendland
+double onef2integral(double x, double *param) {
+    
+    double ex[4], lower, upper, epsabs, epsrel, result, abserr, *work;
+    int neval, ier, subdiv, lenw, last, *iwork;
+    subdiv = 100;
+    epsabs = R_pow(DBL_EPSILON, 0.25);
+    epsrel = epsabs;
+    lenw = 4 * subdiv;           /* as instructed in WRE */
+    iwork =   (int *) Calloc(subdiv, int);  /* idem */
+    work = (double *) Calloc(lenw, double); /* idem */
+    ex[0] = param[0]; ex[1] = param[1];ex[2]= param[2];ex[3]=x;
+    lower=0;
+    upper=1;
+    // Compute the integral
+    Rdqags(integr_onef2, (void *) &ex,
+               &lower, &upper, &epsabs, &epsrel, &result,
+               &abserr, &neval, &ier, &subdiv, &lenw, &last, iwork, work);
+    Free(iwork);Free(work);
+    return(result);
+}
 
 /******************************************************************************/
 /******************************************************************************/

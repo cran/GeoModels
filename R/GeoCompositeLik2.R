@@ -110,17 +110,33 @@ if(!type_cop) { # not copula models
             coords1=GeoAniso (coords, anisopars=anisopar)
           c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
           result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double","double","double", "integer","double","integer","double","double","double","double","integer","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
+         SIGNATURE = c("integer","double","double","double","double", "integer",
+          "double","integer","double","double","double",
+          "double","integer","integer","integer","integer"),  
+                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], 
+                        other_nuis,local,GPU,type_cop,cond_pair,
           INTENT =    c("r","r","r","r","r","r","r","r","rw", "r", "r","r", "r","r","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
         }
          else
          {
        
+
+#      (int *cormod, double *data1,double *data2,int *NN,
+# double *par, int *weigthed, double *res,double *mean1,double *mean2,
+# double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+
+ #print(corrmodel)
+ #print(c(data1)[1:4])
+ # print(paramcorr)
+ #print(other_nuis)
+#print(type_cop)
          result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer","integer","integer"), 
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
+         SIGNATURE = c("integer","double","double", "integer",
+          "double","integer","double","double","double",
+          "double","integer","integer","integer","integer"), 
+                        corrmodel,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], 
+                        other_nuis,local,GPU,type_cop,cond_pair,
           INTENT =    c("r","r","r","r","r","r","rw", "r", "r","r", "r","r","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
        }

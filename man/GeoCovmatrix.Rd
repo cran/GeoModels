@@ -169,6 +169,9 @@ The associated parameters in the argument \code{param} are
 
     \item \eqn{GenWend_{\_}Matern} (Generalized Wendland Matern in  Bevilacqua et al. (2022)). It is defined as a rescaled version of the Generalized Wendland that is \eqn{h} must be divided by 
     \eqn{(\Gamma(\beta+2\kappa+1)/\Gamma(\beta))^{1/(1+2\kappa)}}. When  \eqn{\beta} goes to infinity it is the Matern model.
+
+    \item \eqn{GenWend_{\_}Matern2} (Generalized Wendland Matern second parametrization. It is defined as a rescaled version of the Generalized Wendland that is \eqn{h} must be multiplied  by \eqn{\beta}  and the smoothness parameter is
+    \eqn{\kappa-0.5}. When  \eqn{\beta} goes to infinity it is the Matern model.
     
      \item \eqn{Hypergeometric} (Parsimonious Hypegeometric model in Alegria and Emery (2022)) defined as the model \eqn{Hypergeometric2} with the restriction \eqn{\beta=\alpha}. 
 

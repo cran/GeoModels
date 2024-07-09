@@ -262,9 +262,11 @@ SIM=list()
 ###################################################
 ### starting number of replicates
 ###################################################
+if(nrep>1){
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:nrep)
+}
 for( L in 1:nrep){
     k=1;  npoi=1
 
