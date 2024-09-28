@@ -71,6 +71,7 @@ CkCorrModel <- function(corrmodel)
                              GenWend_Hole=26,GenWend_hole=26,
                              Matern_Hole=27,Matern_hole=27,
                              Schoenberg=28,schoenberg=28,
+                             GenWend_Matern_Hole=29,GenWend_Matern_hole=29,
              # spatial-temporal non-separable models
                              gneiting=42,Gneiting=42,  #ok
                              iacocesare=44,Iacocesare=44, #ok
@@ -773,8 +774,8 @@ CorrelationPar <- function(corrmodel)
    if(corrmodel %in% c(8,5)) {
       param <- c('power1', 'power2','scale')
       return(param)}
-    # hypergeometric2
-     if(corrmodel %in% c(21,26)) {
+    # hypergeometric2 gen_wend_matern hole gen_wend_matern hole
+     if(corrmodel %in% c(21,26,29)) {
         param <- c('power1', 'power2','scale','smooth')
         return(param)}
      if(corrmodel %in% c(27)) { # matern hole

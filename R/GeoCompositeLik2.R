@@ -2,7 +2,6 @@
 ### File name: CompLik2.r
 ####################################################
 
-
 ### Optim call for Composite log-likelihood maximization
 
 CompLik2 <- function(copula,bivariate, coordx, coordy ,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed, GPU,grid,
@@ -12,76 +11,28 @@ CompLik2 <- function(copula,bivariate, coordx, coordy ,coordt,coordx_dyn,corrmod
                            colidx,rowidx,neighb,MM,aniso)
   {
 
-comploglik2MM <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, namescorr, 
-                              namesnuis,namesparam,namesaniso, weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
-      {
-        names(param) <- namesparam
-        param <- c(param, fixed)
-        paramcorr <- param[namescorr]
-        nuisance <- param[namesnuis]
-        sel=substr(names(nuisance),1,4)=="mean"
-        Mean=MM   ### for non constant fixed mean
-        other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
-
-################################
-if(!type_cop) { # not copula models
-         if(aniso){     ### anisotropy
-             anisopar<-param[namesaniso]
-             coords1=GeoAniso (coords, anisopars=anisopar)
-             c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
-        result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "double","double","integer","double","integer","double","double","double","double","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
-         INTENT =    c("r","r","r","r","r","r","r","r","w", "r", "r","r", "r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-         }  
-      else{      ### not anisotropy
-;
-         result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
-          INTENT =    c("r","r","r","r","r","r","w", "r", "r","r", "r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-       }
-     }
-else {     # copula models
-         if(aniso){     ### anisotropy
-            anisopar<-param[namesaniso]
-             #print(anisopar)
-            coords1=GeoAniso (coords, anisopars=anisopar)
-            c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
-         result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "double","double","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
-         INTENT =    c("r","r","r","r","r","r","r","r","w", "r", "r","r", "r","r","r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-         }  
-       else{      ### not anisotropy
-         result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
-          INTENT =    c("r","r","r","r","r","r","w", "r", "r","r", "r","r","r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-       }
-     }
-#################################
-         return(-result)
-      }
 
 comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, namescorr, 
                               namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
       {
         names(param) <- namesparam
         param <- c(param, fixed)
-        paramcorr <- param[namescorr]
+        paramcorr <- as.numeric(param[namescorr])
         nuisance <- param[namesnuis]
         sel=substr(names(nuisance),1,4)=="mean"
-                mm=as.numeric(nuisance[sel])
-                Mean=c(X%*%mm)
+
+        if(is.null(MM)){ mm=as.numeric(nuisance[sel]) ### linear mean
+                         Mean=c(X%*%mm)
+                       }
+        else           Mean=MM                     ### fixed mean
+
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
 
+#print(fan)
+#print(type_cop)
+#print(cond_pair)
 ############################################
-if(!type_cop) { # not copula models 
+#if(!type_cop) { # not copula models 
 
         if(aniso){
             anisopar<-param[namesaniso]
@@ -89,62 +40,23 @@ if(!type_cop) { # not copula models
           c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
 
           result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
-          INTENT =    c("r","r","r","r","r","r","r","r","w", "r", "r","r", "r","r"),
+         SIGNATURE = c("integer","double","double","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
+                        corrmodel,c1,c2,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
+          INTENT =    c("r","r","r","r","r","r","r","r","r","w","r","r","r", "r","r","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
         }
          else
          {
          result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
-          INTENT =    c("r","r","r","r","r","r","rw", "r", "r","r", "r","r"),
+         SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
+                        corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
+          INTENT =    c("r","r","r","r","r","r","r","rw","r","r","r","r","r", "r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
        }
-     }
-   else # copula models 
-   {
-     if(aniso){
-            anisopar<-param[namesaniso]
-            coords1=GeoAniso (coords, anisopars=anisopar)
-          c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
-          result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double","double","double", "integer",
-          "double","integer","double","double","double",
-          "double","integer","integer","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], 
-                        other_nuis,local,GPU,type_cop,cond_pair,
-          INTENT =    c("r","r","r","r","r","r","r","r","rw", "r", "r","r", "r","r","r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-        }
-         else
-         {
-       
-
-#      (int *cormod, double *data1,double *data2,int *NN,
-# double *par, int *weigthed, double *res,double *mean1,double *mean2,
-# double *nuis, int *local,int *GPU,int *type_cop, int *cond)
-
- #print(corrmodel)
- #print(c(data1)[1:4])
- # print(paramcorr)
- #print(other_nuis)
-#print(type_cop)
-         result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer",
-          "double","integer","double","double","double",
-          "double","integer","integer","integer","integer"), 
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res=dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], 
-                        other_nuis,local,GPU,type_cop,cond_pair,
-          INTENT =    c("r","r","r","r","r","r","rw", "r", "r","r", "r","r","r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-       }
-   }
-    #print(-result)
-         return(-result)
+return(-result)
       }
-      
+##################################################################
+##################################################################
 comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, 
                           namescorr, namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
       {
@@ -165,8 +77,6 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
         Mean=c(X1%*%mm1,X2%*%mm2)
         res=double(1)
        
-
-        
         result=dotCall64::.C64(as.character(fan),
           SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx],Mean[rowidx],other_nuis,local,GPU,
@@ -463,12 +373,12 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
 
 
 ##################
-if(!bivariate){
-if(is.null(MM)) lname="comploglik2"
-else            lname="comploglik2MM"
-}
+#if(!bivariate){
+#if(is.null(MM)) lname="comploglik2"
+#else            lname="comploglik2MM"
+#}
 
-
+lname="comploglik2"
 
 
 coords=cbind(coordx,coordy)

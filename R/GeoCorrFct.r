@@ -117,7 +117,7 @@ if(!bivariate){
 ###### non Gaussian cases
 ##########################
 
-   if(model=="SkewGausssian") {    
+   if(model=="SkewGaussian") {    
             if(bivariate) {}
               else {
 
@@ -127,7 +127,6 @@ if(!bivariate){
               vv=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew']);sk2=sk^2;corr2=correlation^2;  
               cc=(2*sk2)*(sqrt(1-corr2) + correlation*asin(correlation)-1)/(pi*vv+sk2*(pi-2)) + (correlation1*vv)/(vv+sk2*(1-2/pi))
               vs=(vv+sk2*(1-2/pi))
-              
               cova=cc; 
                }
                    }
@@ -506,10 +505,10 @@ plot.GeoCorrFct<- function(x,type="p",...)
 
 if(!inherits(x,"GeoCorrFct"))       stop("Enter an object obtained from the function GeoCorrFct\n")
 
-#opar=par(no.readonly = TRUE)
-#on.exit(par(opar))
+opar=par(no.readonly = TRUE)
+on.exit(par(opar))
 
-old.par <- par(no.readonly = TRUE)
+#old.par <- par(no.readonly = TRUE)
 
 space=!x$bivariate&&!x$spacetime
 ################################# spatial ###################################################################
@@ -617,6 +616,6 @@ persp(cc,x= x$distances,y=x$times, theta = 20, phi = 30,
    }
 }
 ################################################################################################
-par(old.par)
+invisible()
 }  
 
