@@ -7,6 +7,8 @@
   Maximum weighted composite-likelihood fitting for Gaussian  and some Non-Gaussian  
   univariate spatial, spatio-temporal and bivariate spatial random fieldss
   The function allows to fix any of the parameters and setting upper/lower bound in the optimization.
+  Different methods of optimization can be used.
+
 }
 \usage{
 GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
@@ -61,7 +63,7 @@ GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
     likelihood. \code{Marginal} is the default, see the Section \bold{Details}.}
     \item{local}{Numeric; number of local work-items of the OpenCL setup}
    \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
-    when the optimizer is  \code{L-BFGS-B} or \code{nlminb}  or \code{optimize}. The 
+    when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
   \item{maxdist}{Numeric; an optional positive value indicating the maximum
     spatial distance considered in the composite or tapered likelihood
@@ -84,8 +86,9 @@ GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
   without optimizing. \code{FALSE} is the default.}
   \item{optimizer}{String; the optimization algorithm
     (see \code{\link{optim}} for details). \code{Nelder-Mead} is the
-    default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B} and \code{nlminb}. 
-    In these last two cases upper and lower bounds can be passed by the user. In the case
+    default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B} and \code{nlminb} and
+    \code{bobyqa}.
+    In these last three cases upper and lower bounds can be passed by the user. In the case
     of one-dimensional optimization, the function \code{optimize} is used.}  
   \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel using the maximum number of cores,  when optimizer is  \code{L-BFGS-B}.\code{FALSE} is the default.}  
    \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
@@ -106,7 +109,7 @@ GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
     default) then the marginal composite likelihood is formed by
     pairwise marginal likelihoods (see \bold{Details}).}
   \item{upper}{An optional named list giving the values  for the upper bound 
-      of the space parameter when the optimizer is or \code{L-BFGS-B} or  \code{nlminb} or \code{optimize}. 
+      of the space parameter when the optimizer is or \code{L-BFGS-B} or  \code{bobyqa} or   \code{nlminb} or \code{optimize}. 
        The names of the list must be the same of the names in the   \code{start} list.}  
   \item{varest}{Logical; if \code{TRUE} the estimates' variances and
     standard errors are returned. For composite likelihood estimation it is deprecated.
@@ -138,8 +141,8 @@ GeoFit(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,
   \code{GeoFit} provides  weighted composite likelihood  estimation based on pairs and independence composite likelihood estimation
   for Gaussian and non Gaussian  random fields. Specifically, marginal and conditional  pairwise 
   likelihood are considered for each type of random field (Gaussian and not Gaussian).
-  The optimization method is specified using \code{optimizer}. The default method is \code{Nelder-mead} and other available methods are \code{ucminf}, \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B},
-    and  \code{nlminb}. In the last two cases upper and lower bounds constraints in the optimization can be specified using \code{lower} and \code{upper} parameters.
+  The optimization method is specified using \code{optimizer}. The default method is \code{Nelder-mead} and other available methods are  \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B}, \code{bobyqa}
+    and  \code{nlminb}. In the last three cases upper and lower bounds constraints in the optimization can be specified using \code{lower} and \code{upper} parameters.
 
   Depending on the dimension of \code{data} and on  the name of the correlation model, 
   the observations   are assumed as a realization of
@@ -570,11 +573,11 @@ print(unlist(fit2$param))
 ################################################################
 ###
 ### Example 4. Maximum pairwise likelihood fitting of
-### a SinhAsinh-Gaussian spatial  random fields with Wendland correlation
+### a Skew-Gaussian spatial  random fields with Wendland correlation
 ###
 ###############################################################
 set.seed(261)
-model="SinhAsinh"
+model="SkewGaussian"
 # Define the spatial-coordinates of the points:
 x <- runif(500, 0, 1)
 y <- runif(500, 0, 1)
@@ -583,22 +586,24 @@ coords <- cbind(x,y)
 corrmodel="Wend0"
 mean=0;nugget=0
 sill=1
-skew=-0.5
-tail=1.5
+skew=-4.5
 power2=4
 c_supp=0.2
 
 # model parameters
-param=list(power2=power2,skew=skew,tail=tail,
+param=list(power2=power2,skew=skew,
              mean=mean,sill=sill,scale=c_supp,nugget=nugget)
 data <- GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
 
 plot(density(data))
 fixed=list(power2=power2,nugget=nugget)
-start=list(scale=c_supp,skew=skew,tail=tail,mean=mean,sill=sill)
+start=list(scale=c_supp,skew=skew,mean=mean,sill=sill)
+lower=list(scale=0,skew=-I,mean=-I,sill=0)
+upper=list(scale=I,skew=I,mean=I,sill=I)
 # Maximum marginal pairwise likelihood:
 fit1 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
                     neighb=3,likelihood="Marginal",type="Pairwise",
+                    optimizer="bobyqa",lower=lower,upper=upper,
                     start=start,fixed=fixed)
 print(unlist(fit1$param))
 

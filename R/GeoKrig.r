@@ -15,13 +15,10 @@ getInv=function(covmatrix,b,mse){
 if(!covmatrix$sparse){
                U =MatDecomp(covmatrix$covmatrix,"cholesky");Inv=0
                if(is.logical(U)){print(" Covariance matrix is not positive definite");stop()}
-               #print("1")
                vec=forwardsolve(U, b)
                rm(b)
-              #  print("2")
-               Invc=forwardsolve(U, vec,transpose=T) ## R^-1 %*% c
+               Invc=forwardsolve(U, vec,transpose=T) ## t(c)%*% R^-1
                rm(U)
-              #     print("3")
                if(mse) cInvc=crossprod(vec) # t(c)%*% R^-1 %*% c
               # if(mse) cInvc=Rfast::Crossprod(vec,vec)
                #print("4")
@@ -34,7 +31,7 @@ if(covmatrix$sparse){
              
                vec=  spam::forwardsolve(U, b)
                 rm(b)
-               Invc= spam::backsolve(U, vec) ## R^-1 %*% c
+               Invc= spam::backsolve(U, vec) ## t(c)%*% R^-1
                rm(U)
                if(mse) cInvc=spam::crossprod.spam(vec)  # t(c)%*% R^-1 %*% c
         }
@@ -577,11 +574,15 @@ else    {
 ##########computing kriging weights##################################
 ##################################################################
 CC = matrix(corri*vvar,nrow=dimat,ncol=dimat2)
-MM=getInv(covmatrix,CC,mse)  #compute (\Sigma^-1) %*% cc
-
+MM=getInv(covmatrix,CC,mse)  
 rm(CC)
-krig_weights = MM$a
-BB=MM$b
+krig_weights = MM$a       #compute (\Sigma^-1) %*% cc
+BB=MM$b                   #compute t(cc)%*%(\Sigma^-1) %*% cc
+
+
+#BB/sum()
+
+
 
 
 

@@ -64,7 +64,7 @@ GeoFit2(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     likelihood. \code{Marginal} is the default, see the Section \bold{Details}.}
     \item{local}{Numeric; number of local work-items of the OpenCL setup}
    \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
-    when the optimizer is  \code{L-BFGS-B} or \code{nlminb}   or \code{optimize}. The 
+    when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
   \item{maxdist}{Numeric; an optional positive value indicating the maximum
     spatial distance considered in the composite or tapered likelihood
@@ -87,8 +87,7 @@ GeoFit2(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
   without optimizing. \code{FALSE} is the default.}
   \item{optimizer}{String; the optimization algorithm
     (see \code{\link{optim}} for details). \code{Nelder-Mead} is the
-    default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN},  \code{L-BFGS-B} and \code{nlminb}. 
-    In these last two cases upper and lower bounds can be passed by the user. In the case
+    default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN},  \code{L-BFGS-B} and \code{nlminb} and \code{bobyqa}. In these last three cases upper and lower bounds can be passed by the user. In the case
     of one-dimensional optimization, the function \code{optimize} is used.  }  
   \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel using the maximum number of cores,  when optimizer is  \code{L-BFGS-B}.\code{FALSE} is the default.}  
    \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
@@ -109,7 +108,7 @@ GeoFit2(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     default) then the marginal composite likelihood is formed by
     pairwise marginal likelihoods (see \bold{Details}).}
   \item{upper}{An optional named list giving the values  for the upper bound 
-      of the space parameter when the optimizer is or \code{L-BFGS-B} or  \code{nlminb} or \code{optimize}. 
+      of the space parameter when the optimizer is or \code{L-BFGS-B} or  \code{nlminb} or \code{bobyqa} or \code{optimize}. 
        The names of the list must be the same of the names in the   \code{start} list.}  
   \item{varest}{Logical; if \code{TRUE} the estimates' variances and
     standard errors are returned. For composite likelihood estimation it is deprecated.

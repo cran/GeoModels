@@ -4,7 +4,8 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),max.ext=1,method="TB", L=2000,model='Gaussian', n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1)
+     local=c(1,1),max.ext=1,method="TB", L=1000,model='Gaussian', 
+     n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################
 ############  starting internal function ###########################
@@ -62,15 +63,27 @@ RFfct1<- function(numcoord,numtime,spacetime,bivariate,dime,nuisance,simd,X,ns)
 simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
 {
 ##### spatial case 
+
 if(!spacetime){    
    ## Turning Bands
-   if(method=="TB") { 
+ if(method=="TB") { 
         if(bivariate)
+        { param$nugget1=0;par;param$nugget2=0;
         simu=tbm2d(coords,coordt, param, corrmodel,L,bivariate)
+        }
         else
-        simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate)
-   if(!bivariate) simu=c(simu[,1])
-   else           simu=c(simu)
+        {   tau2=param$nugget
+            vvv=param$sill
+            ##----------###
+            param$nugget=0
+            param$sill=1
+            ##----------###
+         simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate)$simu
+         if(is.null(simu)) {print("TB simulation method fails\n");return(simu)}
+
+         simu=sqrt(vvv)*(sqrt(1-tau2)*simu+sqrt(tau2)*rnorm(length(simu)))
+        }
+           simu=c(simu)
     }     
 ## Vecchia
 #if(method=="Vecchia"){ 
@@ -265,12 +278,13 @@ SIM=list()
 ###################################################
 ### starting number of replicates
 ###################################################
+if(progress){
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:nrep)
-
+}
 for( LL in 1:nrep){
-    if(nrep>1) pb(sprintf("LL=%g", LL))
+    if(progress){if(nrep>1) pb(sprintf("LL=%g", LL))}
     k=1;npoi=1
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1

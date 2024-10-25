@@ -3,22 +3,19 @@
 ############ functions for TB############################
 #########################################################
 #########################################################
-spectral_density_1dR <- function(param, corrmodel, u_range = c(-1,1), N){
 
-  model=CkCorrModel(corrmodel)
-  av <- param$scale
-  nu1v <- param$smooth
-  params_other <- param$power2
-  if(is.null(params_other)) params_other <- 0
-  norm_u <- seq(u_range[1],u_range[2],l = N)  
+spectral_density_1dR <- function(param, corrmodel, u_vec = seq(-1,1,l=100)){
+
+
+    av <- param$scale
+    nu1v <- param$smooth
+    params_other <- param$power2
+    if(is.null(params_other)) params_other <- 0
+    norm_u <- u_vec
+    N <- length(u_vec)
+    model=CkCorrModel(corrmodel)
+
   
-  #result <- .C("spectral_density_1d", as.double(norm_u), 
-   #                                   as.integer(N), 
-    #                                  as.double(av), 
-     #                                 as.double(params_other),
-      #                                as.double(nu1v), 
-       #                               as.integer(model), 
-        #                              simu1 = as.double(numeric(N)),PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE)$simu1
    result=dotCall64::.C64("spectral_density_1d",
         SIGNATURE = c("double","integer","double", "double","double","integer","double"),
                      norm_u, N, av, params_other, nu1v, model, simu1 = dotCall64::numeric_dc(N),
@@ -30,7 +27,7 @@ spectral_density_1dR <- function(param, corrmodel, u_range = c(-1,1), N){
 ##################################################### 
 ######### bivarate case #############################
 #####################################################
-tbm2d<- function(coord, coordt, param, corrmodel,L,bivariate){
+tbm2d <- function(coord, coordt, param, corrmodel,L,bivariate){
 
   N=1; n <- dim(coord)[1]; d <- 2
     if(corrmodel == "Matern"){
@@ -96,6 +93,40 @@ result=dotCall64::.C64("for_c",
 tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate){
   
   N=1; n <- dim(coord)[1]; d <- 2
+
+
+#########################
+if(corrmodel=="GenWend")  
+{
+rep=(gamma(param$power2+2*param$smooth+1)/gamma(param$power2))^(-1/(1+2*param$smooth)) # inverse parametrization
+param$scale=param$scale*rep
+corrmodel="GenWend_Matern"
+param$power2=1/param$power2
+}
+#########################
+if(corrmodel=="Kummer")  
+{
+  rep= sqrt(2*(param$power2+1)) # inverse parametrization
+param$scale=param$scale/rep
+corrmodel="Kummer_Matern"
+}
+#########################
+
+
+LIM1=8 # after this limit then GenWend_Matern is a matern approx..
+LIM2=8 # after this limit then kummer_Matern is a matern approx..
+  if(corrmodel == "GenWend_Matern"&&(1/param$power2)>=LIM1)
+  {
+    corrmodel = "Matern"
+    param$smooth=param$smooth+0.5
+    param$power2=NULL
+  }
+   if(corrmodel == "Kummer_Matern"&&param['power2']>=LIM2)
+  {
+    corrmodel = "Matern"
+    param$power2=NULL
+  }
+
  ################################### 
   if(corrmodel == "Matern"){
     CC=as.double(param['sill']); N=1
@@ -105,71 +136,74 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate){
     a0 = a; nu0 = nu1
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
+    parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+    u <- frequency_sampler(L, parametersg, corrmodel)
+    model_num <- CkCorrModel(corrmodel)
   }
-  
-  if(corrmodel == "Kummer"){
+  ##################################################
+  #if(corrmodel == "Kummer"){
+  #  CC=as.double(param['sill']); N=1
+  #  a <- as.double(param['scale']);  
+  #  nu1 <- as.double(param['smooth']);
+  #  other <- as.double(param['power2'])
+  #  a0 = a; nu0 = nu1
+  #  a0 <- a <- param$scale
+  #  parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0, "other" = other)
+  #  P <- 1;  vtype = 0
+  #  parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+  #  u <- frequency_sampler(L, parametersg, corrmodel)
+  #  model_num <- CkCorrModel(corrmodel)
+  #}
+   if(corrmodel == "Kummer_Matern"){
     CC=as.double(param['sill']); N=1
     a <- as.double(param['scale']);  
     nu1 <- as.double(param['smooth']);
     other <- as.double(param['power2'])
     a0 = a; nu0 = nu1
-    a0 <- a <- param$scale/sqrt(2*nu1)
+    a0 <- a <- param$scale    
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
+    parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+    u <- frequency_sampler(L, parametersg, corrmodel)
+    model_num <- CkCorrModel(corrmodel)
   }
-  
-  if(corrmodel == "Kummer_Matern"){
-    CC=as.double(param['sill']); N=1 
-    a <- as.double(param['scale']);  
-    nu1 <- as.double(param['smooth']);
-    other <- as.double(param['power2'])
-    a0 = a; nu0 = nu1
-    a0 <- a <- param$scale/sqrt(2*nu1)
-    corrmodel = "Kummer"
-    parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0, "other" = other)
-    P <- 1;  vtype = 0
-  }
-  
-  if(corrmodel == "GenWend"){
-    CC <- as.double(param['sill']); N=1
-    a <- as.numeric(param['scale']);  
-    nu1 <- as.numeric(param['smooth'])
-    other <- as.numeric(param['power2'])
-    a0 = a; nu0 = nu1
-    parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
-    P <- 1;  vtype = 0
-  }
-  
+    ##################################################
+ # if(corrmodel == "GenWend"){
+ #   CC <- as.double(param['sill']); N=1;
+ #   nu1 <- as.numeric( param['smooth'] )
+ #   other <- as.numeric(param['power2'])
+ #   a <- as.numeric(param['scale'])
+ #   a0 = a; nu0 = nu1
+ #   parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
+ #   P <- 1;  vtype = 0
+ #   parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+ #   u <- frequency_sampler(L, parametersg, corrmodel)
+ #   model_num <- CkCorrModel(corrmodel)
+ # }
+  if(corrmodel == "GenWend_Matern"){
+    CC <- as.double(param['sill']); N=1;
+    nu1 <- as.numeric( param['smooth'] )
 
-    if(corrmodel == "GenWend_Matern"){
-    CC <- as.double(param['sill']); N=1
-    a <- as.numeric(param['scale']);  
-    nu1 <- as.numeric(param['smooth'])
     other <- 1/as.numeric(param['power2'])
+
+    a <- as.numeric(param['scale'])
     a0 = a; nu0 = nu1
-     a0 <- a <- param$scale*(gamma(other+2*nu1+1)/gamma(other))^(-(1+2*nu1))
-    corrmodel = "GenWend"
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
+    parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+    u <- frequency_sampler(L, parametersg, corrmodel)
+    model_num <- CkCorrModel(corrmodel)
   }
 
-  #parametersg <- list("a" = a0,"nu1" = nu0)11
-  parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+    ##################################################
+  if(!is.null(u)){  
   A <- matrix(0, P, P*L*N); B <- matrix(0, P, P*L*N)
-  #S <- ceiling(1e7*runif(3)); set.seed(S[1])
-  
-  #Simulando frecuencias de una densidad espectral Matern
-  #G <- matrix(rgamma(P*L*N, nu0, scale = 1),P*L*N,d); #set.seed(S[2])
-  #u <- matrix(rnorm(P*L*N*d), P*L*N, d)/sqrt(G*2)/a0/(2*pi); #set.seed(S[3])
-  #Simulando frecuencias desde g
-  
-  u <- frequency_sampler(P, L, N, d, parametersg, corrmodel)
-  #u <- matrix(rnorm(P*L*N*d), P*L*N, d)/sqrt(G*2)/a0/(2*pi); #set.seed(S[3])
   phi <- 2*pi*runif(P*L*N)
   sequen <- c(seq(0,n-0.5, by = ceiling(1e6/P/N)),n)
   m = c()
   for (i in 1:(length(sequen)-1)){ m1 <- sequen[i+1]-sequen[i]; m = c(m1,m)}
   simu11 = as.numeric( rep(0,N*P*sum(m)*(length(sequen)-1)))
+
   result=dotCall64::.C64("for_c",
                          SIGNATURE = c("integer","double", "double","double",
                                        "double","integer","integer","integer","integer","double",
@@ -178,7 +212,7 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate){
                                        "double","double","integer","integer","double",
                                        "double","double"),
                          d_v = d, a_v = c(a), nu1_v = c(nu1), C_v = c(CC), nu2_v = c(parameters$nu2), 
-                         P = P, N = N, L = L, model = CkCorrModel(corrmodel),
+                         P = P, N = N, L = L, model = model_num,
                          u = c(u), a0 = a0, nu0 = nu0, A = c(A), B = c(B), sequen = c(sequen),
                          largo_sequen = length(sequen), n = n, coord = coord, phi = phi, vtype = vtype,
                          m1 = m,
@@ -187,23 +221,101 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate){
                                     "r", "r", "r", "r", "r", "r","r","r","r", "r",
                                     "r", "r", "rw","r","r"),
                          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
+ 
   simu =  matrix(sqrt(CC)*result,n,P)
-  return(simu)
+  }
+  else
+  {simu=u=parametersg=NULL }
+  return( list( simu = simu, freqs = u, parametersg = parametersg) )
 }
+######################################################################
+######################################################################
+frequency_sampler <- function(L, parametersg, corrmodel){
+  
+  if(corrmodel == "Matern"){
+    #Simulando frecuencias de una densidad espectral Matern
+    G <- matrix(rgamma(L, parametersg$nu1, scale = 1),L,2)
+    ini.sample <- matrix(rnorm(L*2), L, 2)/sqrt(G*2)/parametersg$a/(2*pi)
+  }
+  
+  #if(corrmodel == "GenWend"){
+  #  #Simulando frecuencias desde la densidad espectral
+  #  param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1,
+  #                              power2 = parametersg$other, nugget = 0)
+  #  Q.particles <- 15
+  #   dff=0.1#2*(1.5 + parametersg$nu)-1
+    
+  #  u_proposal <- cbind( rt(Q.particles*L, df = dff), rt(Q.particles*L, df = dff))
+  #  u_norm <- sqrt( rowSums(u_proposal^2) )
+  #  w0 <- dt(u_proposal[,1], df = dff)*dt(u_proposal[,2], df = dff)
+  #  w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
+  #  www <- w1/w0
+  #   if(any(is.na(www))){ ini.sample=NULL}
+  #  else{
+  #  u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
+  #  ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
+  #}
+  #}
 
+if(corrmodel == "GenWend_Matern"){
+    #Simulando frecuencias desde la densidad espectral
+    param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1,
+                                power2 = parametersg$other, nugget = 0)
+    Q.particles <- 15
 
-frequency_sampler <- function(P, L, N, d, parametersg, corrmodel){
-  u_range <- 100*10*parametersg$CC*c(-parametersg$a, parametersg$a)
-  u_range <- c( pmax(2*pi*u_range[1], -20.5), pmin(2*pi*u_range[2], 20.5)) 
-  spectral.dens <- parametersg$CC*spectral_density_1dR(param = list(smooth = parametersg$nu1, 
-                                                     scale = parametersg$a,
-                                                     power2 = parametersg$other), 
-                                        corrmodel, u_range = u_range, N = L)
-  spectral.distr <- cumsum(spectral.dens)
-  spectral.dens.fun <- approxfun(spectral.distr , seq(u_range[1], u_range[2], l = L) )
-  u.test <- runif(P*L*N*d, min(spectral.distr), max(spectral.distr))  
-  u <- spectral.dens.fun(u.test)
+    #dff <- 2*(1.5 + parametersg$nu)
+     dff=0.05#2*(1.5 + parametersg$nu)-1
+    
+    u_proposal <- cbind( rt(Q.particles*L, df = dff), rt(Q.particles*L, df = dff))
+    u_norm <- sqrt( rowSums(u_proposal^2) )
+    w0 <- dt(u_proposal[,1], df = dff)*dt(u_proposal[,2], df = dff)
+    w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
+    www <- w1/w0
+     if(any(is.na(www))){ ini.sample=NULL}
+    else{
+    u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
+    ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
+  }
+  }
+  
+  #if(corrmodel == "Kummer"){
+  #  param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1, 
+   #                             power2 = parametersg$other, nugget = 0)
+
+   # Q.particles <- 15
+   # dff=0.2#min(0.05,parametersg$other-1)
+   # u_proposal <- cbind( rt(Q.particles*L,  df=dff), rt(Q.particles*L, df=dff))
+   # u_norm <- sqrt( rowSums(u_proposal^2) )
+   # w0 <- dt(u_proposal[,1], df=dff)*dt(u_proposal[,2], df=dff)
+   # w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
+   # www <- w1/w0
+   # if(any(is.na(www))){ ini.sample=NULL}
+   # else
+   # {
+   # u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
+   # ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
+   # }
+  #}
+
+if(corrmodel == "Kummer_Matern"){
+    #Simulando frecuencias desde la densidad espectral
+    param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1, 
+                                power2 = parametersg$other, nugget = 0)
+
+    Q.particles <- 15
+    dff=0.2#min(0.05,parametersg$other-1)
+    u_proposal <- cbind( rt(Q.particles*L,  df=dff), rt(Q.particles*L, df=dff))
+    u_norm <- sqrt( rowSums(u_proposal^2) )
+    w0 <- dt(u_proposal[,1], df=dff)*dt(u_proposal[,2], df=dff)
+    w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
+    www <- w1/w0
+    if(any(is.na(www))){ ini.sample=NULL}
+    else{
+    u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
+    ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
+  }
+  }
+  
+  u <- ini.sample
   return(u)
 }
-
-

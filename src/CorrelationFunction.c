@@ -614,9 +614,9 @@ case 23: // hyperg correlation 1 parameter with matern
         R_power1=par[1];
         scale=par[2];
         smooth=par[3];
-   rho=CorFunW_genhole(h, R_power1, smooth-0.5, scale*R_power1, R_power);
+          rho=CorFunW_genhole(h, R_power1, smooth-0.5, scale*R_power1, R_power);
         break;
-     case 24: // original   kummer
+   case 24: // original   kummer
         R_power1=par[0];
         scale=par[1];
         smooth=par[2];
@@ -626,7 +626,7 @@ case 23: // hyperg correlation 1 parameter with matern
         R_power1=par[0];
         scale=par[1];
         smooth=par[2];
-  rho=CorKummer(h, R_power1, smooth, scale*2*sqrt(smooth*(R_power1+1)));
+  rho=CorKummer(h, R_power1, smooth, scale*sqrt(2*(R_power1+1)));
         break;
 
  case 27://  Whittle-Matern correlation function with hole effect
@@ -2025,7 +2025,7 @@ double CorKummer(double lag,double R_power,double smooth,double scale)  // mu al
     x=lag/scale;
     if(x<1e-32) rho=1;
     else
-    rho=exp((lgammafn(smooth+R_power)-(lgammafn(smooth))))*kummer(R_power,1-smooth,smooth*x*x);
+    rho=exp((lgammafn(smooth+R_power)-(lgammafn(smooth))))*kummer(R_power,1-smooth,0.5*x*x);
     return(rho);
 }    
 
@@ -2066,20 +2066,15 @@ double CorFunWitMathole(double lag, double scale, double smooth,double R_power1)
                         delta = 0.0;
                         for (s = 0; s <= q - r; s++) {
                             for (t = 0; t <= q - r - s; t++) {
-                                delta += exp(lgammafn(q - r + 1) - lgammafn(s + 1) + (smooth + q - r - s) * log(x) -
-                                              (q - r - s) * log(2) - lgammafn(t + 1) - lgammafn(q - r - s - t + 1)) *
-                                         poch(smooth + 1 - s, s) * R_pow(-1.0, q - r - s) * 
-                                         bessel_k( x,smooth + 2 * t + r + s - q, 1);
-                            }
-                        }
-                        delta = R_pow(2, 1 - smooth) / gammafn(smooth) * delta;
-                        rho += R_pow(-1.0, r) * poch(k - q + 1, q) * poch(q, r) * poch(q - r, r) /
+    delta += exp(lgammafn(q - r + 1) - lgammafn(s + 1) -lgammafn(t + 1) - lgammafn(q - r - s - t + 1)) *
+                    poch(smooth + 1 - s, s) * R_pow(-0.5, q - r - s) * R_pow(x,smooth-s)*bessel_k( x,smooth + 2 * t + r + s - q, 1);
+                            }}
+                    rho += R_pow(x,q-r)*R_pow(-1.0, r) * poch(k - q + 1, q) * poch(q, r) * poch(q - r, r) /
                                 (R_pow(2, q + r) * gammafn(q + 1) * gammafn(r + 1) * 
-                                poch(d / 2, q) )* exp(-x) * delta;
-                    }
-                }
-         }
-}
+                                poch(d / 2, q) )*  delta;
+                    }}
+                rho=rho*  R_pow(2, 1 - smooth) / gammafn(smooth);
+         }}
 return(rho);
 }
 
@@ -2276,7 +2271,7 @@ double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu
 
     if(x<=1)
     {rho=exp((lgammafn(smooth)+lgammafn(2*smooth+R_power1+1))-(lgammafn(2*smooth)+
-            lgammafn(smooth+R_power1+1)))*R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
+            lgammafn(smooth+R_power1+1)))*R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo_sem(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
     }
     else rho=0;
    /*/second version

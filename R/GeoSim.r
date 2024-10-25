@@ -6,7 +6,7 @@
 # Simulate spatial and spatio-temporal random felds:
 GeoSim <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
      local=c(1,1),method="cholesky",model='Gaussian', n=1, param, anisopars=NULL, radius=6371,
-      sparse=FALSE,X=NULL,spobj=NULL,nrep=1)
+      sparse=FALSE,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################
 ############ internal function #####################################
@@ -263,14 +263,16 @@ SIM=list()
 ### starting number of replicates
 ###################################################
 if(nrep>1){
+if(progress){
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:nrep)
 }
+}
 for( L in 1:nrep){
     k=1;  npoi=1
 
-    if(nrep>1) pb(sprintf("L=%g", L))
+   if(progress){ if(nrep>1) pb(sprintf("L=%g", L))}
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
     if(model %in% c("Weibull","Wrapped")) k=2

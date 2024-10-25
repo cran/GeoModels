@@ -100,10 +100,10 @@ res_est=GeoFit( data=data_sim$data[[k]], start=fit$param,fixed=fit$fixed,
 if(res_est$convergence=='Successful'&&res_est$logCompLik<1.0e8) 
  {
  res=rbind(res,unlist(res_est$param)) 
- pb(sprintf("k=%g", k))
-  k=k+1   
+ 
 }   
-       
+    pb(sprintf("k=%g", k))
+  k=k+1      
 
 }
 #print(res)

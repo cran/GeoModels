@@ -42,6 +42,7 @@ extern void GodambeMat(double *betas,int *biv,double *coordx, double *coordy, do
 extern void Maxima_Minima_dist(double *res,double *coordx,double *coordy,int *nsize,int *type_dist,double *radius);
 
 /* for Turning band */
+extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
 extern void extraer(double *coord,int sequen1,double *sub_coord,int fila,int col, int d);
 extern void rellenar_indice(int *index,int inicio, int final,int largo);
@@ -431,6 +432,10 @@ extern void Comp_Cond_Tukeyh2mem(int *cormod, double *data1,double *data2,int *N
 extern void Comp_Cond_Tukeyhh2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                            double *nuis, int *local,int *GPU,int *type_cop, int *cond);
+extern void Comp_Cond_WrapGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU,int *type_cop, int *cond);
+
 extern void Comp_Cond_SkewGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                              double *nuis, int *local,int *GPU,int *type_cop, int *cond);
@@ -629,6 +634,10 @@ extern void Comp_Cond_LogLogistic_st2mem(int *cormod, double *data1,double *data
 extern void Comp_Cond_Logistic_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                double *nuis, int *local,int *GPU,int *type_cop, int *cond);
+extern void Comp_Cond_WrapGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *local,int *GPU,int *type_cop, int *cond);
+
 
 
 /********************** spatial anisotropic  marginal************************************/
@@ -880,6 +889,7 @@ extern void CorrelationMat_st_dis_tap(double *rho,double *coordx, double *coordy
                                int *ns, int *NS, int *n1,int *n2, double *mu1,double *mu2,int  *model);
 
 extern void hypergeo_call(double *a,double *b,double *c,double *x, double *res);
+extern void hyperg_1F2_e_call( double *a,  double *b,double *c,  double *x, double *val);
 
 extern void hyperg_call(double *a,double *b,double *x,double *res);
 extern void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *mean_j,double *res);
@@ -916,6 +926,7 @@ static const R_CMethodDef CEntries[] = {
     {"biv_pois_call",             (DL_FUNC) &biv_pois_call,            6},
     {"appellF4_call",             (DL_FUNC) &appellF4_call,            7},
     {"hypergeo_call",             (DL_FUNC) &hypergeo_call,            5},
+    {"hyperg_1F2_e_call",             (DL_FUNC) &hyperg_1F2_e_call,    5},
     {"CorrelationMat_st_dis_tap", (DL_FUNC) &CorrelationMat_st_dis_tap,15},
     {"CorrelationMat2",             (DL_FUNC) &CorrelationMat2,             10},
     {"CorrelationMat_dis2",         (DL_FUNC) &CorrelationMat_dis2,         13},
@@ -956,7 +967,9 @@ static const R_CMethodDef CEntries[] = {
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
 
 /* for Turning band */
-    {"spectraldensityC",            (DL_FUNC) &spectraldensityC,           10},
+
+    {"TBD1d",                       (DL_FUNC) &TBD1d,                      8},
+    {"spectraldensityC",            (DL_FUNC) &spectraldensityC,          10},
     {"spectral_density_1d",         (DL_FUNC) &spectral_density_1d,        7},
     {"extraer",                     (DL_FUNC) &extraer,                    6},
     {"rellenar_indice",             (DL_FUNC) &rellenar_indice,            4},
@@ -985,6 +998,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Tukeyh2mem",         (DL_FUNC) &Comp_Pair_Tukeyh2mem,         15},
     {"Comp_Pair_Tukeyhh2mem",         (DL_FUNC) &Comp_Pair_Tukeyhh2mem,         15},
     {"Comp_Pair_SkewGauss2mem",         (DL_FUNC) &Comp_Pair_SkewGauss2mem,         15},
+     {"Comp_Pair_WrapGauss2mem",         (DL_FUNC) &Comp_Pair_WrapGauss2mem,         15},
     {"Comp_Pair_T2mem",         (DL_FUNC) &Comp_Pair_T2mem,         15},
     {"Comp_Pair_Gauss_misp_T2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_T2mem,         15},
     {"Comp_Pair_Gauss_misp_SkewT2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_SkewT2mem,         15},
@@ -1049,6 +1063,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Gauss_misp_PoisZIP_st2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_PoisZIP_st2mem,         15},
     {"Comp_Pair_LogLogistic_st2mem",         (DL_FUNC) &Comp_Pair_LogLogistic_st2mem,         15},
     {"Comp_Pair_Logistic_st2mem",         (DL_FUNC) &Comp_Pair_Logistic_st2mem,         15},
+   {"Comp_Pair_WrapGauss_st2mem",         (DL_FUNC) &Comp_Pair_WrapGauss_st2mem,         15},
   /*********************** for copula ***************************************************/
     {"Comp_Pair_GaussCop2mem",         (DL_FUNC) &Comp_Pair_GaussCop2mem,         14},
     {"Comp_Pair_LogGaussCop2mem",         (DL_FUNC) &Comp_Pair_LogGaussCop2mem,         14},
@@ -1068,6 +1083,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Tukeyh2mem",         (DL_FUNC) &Comp_Cond_Tukeyh2mem,         15},
     {"Comp_Cond_Tukeyhh2mem",         (DL_FUNC) &Comp_Cond_Tukeyhh2mem,         15},
     {"Comp_Cond_SkewGauss2mem",         (DL_FUNC) &Comp_Cond_SkewGauss2mem,         15},
+    {"Comp_Cond_WrapGauss2mem",         (DL_FUNC) &Comp_Cond_WrapGauss2mem,         15},
     {"Comp_Cond_T2mem",         (DL_FUNC) &Comp_Cond_T2mem,         15},
     {"Comp_Cond_Gauss_misp_T2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_T2mem,         15},
     {"Comp_Cond_Gauss_misp_SkewT2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_SkewT2mem,         15},
@@ -1132,6 +1148,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Gauss_misp_PoisZIP_st2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisZIP_st2mem,         15},
     {"Comp_Cond_LogLogistic_st2mem",         (DL_FUNC) &Comp_Cond_LogLogistic_st2mem,         15},
     {"Comp_Cond_Logistic_st2mem",         (DL_FUNC) &Comp_Cond_Logistic_st2mem,         15},
+    {"Comp_Cond_WrapGauss_st2mem",         (DL_FUNC) &Comp_Cond_WrapGauss_st2mem,         15},
     /********************** spatial anisotropic +************************************/
     {"Comp_Pair_Gauss2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss2mem_aniso,         15},
     {"Comp_Pair_Pois2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss2mem_aniso,         15},

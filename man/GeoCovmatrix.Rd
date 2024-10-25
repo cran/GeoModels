@@ -149,12 +149,12 @@ The associated parameters in the argument \code{param} are
      If \eqn{h} is the geodesic distance then \eqn{\kappa \in (0,0.5]}
 
    \item \eqn{Kummer} (Kummer hypergeometric in  Ma and Bhadra (2022)) defined as:
-    \deqn{R(h) = \Gamma(\kappa+\alpha) U(\alpha,1-\kappa,\kappa h^2 ) / \Gamma(\kappa+\alpha)}
+    \deqn{R(h) = \Gamma(\kappa+\alpha) U(\alpha,1-\kappa,0.5 h^2 ) / \Gamma(\kappa+\alpha)}
      \eqn{U(.,.,.)} is the Kummer hypergeometric function.
      If \eqn{h} is the geodesic distance then \eqn{\kappa \in (0,0.5]}
 
     \item \eqn{Kummer{\_}Matern} It is a rescaled version of the  \eqn{Kummer} model  
-     that is \eqn{h} must be divided by \eqn{2(\kappa(1+\alpha)^{0.5}}.  When  \eqn{\alpha} goes to infinity it is the Matern model. 
+     that is \eqn{h} must be divided by \eqn{(2*(1+\alpha))^{0.5}}.  When  \eqn{\alpha} goes to infinity it is the Matern model. 
 
     \item \eqn{Wave} defined as:
     \deqn{R(h)=sin(h)/h} 

@@ -1318,7 +1318,7 @@ if(method1=="euclidean")
                  }
         }
 
-if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                                                        #discrete
+if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                                                        #discrete
             mu=0
             if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
                            if(is.list(fixed)) 
@@ -1400,7 +1400,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
 
     }
 }  ### end continous models
-     if(model %in% c(2,11,14,15,16,19,17,30,49,51,52,54,43,45,53,56,57,58)) {  # discrete models
+     if(model %in% c(2,11,13,14,15,16,19,17,30,49,51,52,54,43,45,53,56,57,58)) {  # discrete models
 
         if(any(type==c(1, 3, 7,8,4)))# Checks the type of likelihood
             if(is.list(fixed)) {
@@ -1409,7 +1409,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
                                }
             else               {mu <- mean(unlist(data));fixed <- list(mean=mu)}
 
-         if(model %in% c(2,11,14,15,16,19,17,30,49,51,52,54))   nuisance <- c(0,rep(0,num_betas-1) ,0, 1) 
+         if(model %in% c(2,11,13,14,15,16,19,17,30,49,51,52,54))   nuisance <- c(0,rep(0,num_betas-1) ,0, 1) 
 
        
   

@@ -298,7 +298,7 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
 GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, corrmodel, distance="Eucl",
                          fixed=NULL,grid=FALSE, maxdist=NULL, neighb=NULL,maxtime=NULL, model='Gaussian',
                          optimizer='Nelder-Mead', numbins=NULL, radius=6371,  start=NULL,
-                         weighted=FALSE)
+                         weighted=FALSE,optimization=TRUE)
   {
     ### Check first if the model is not binary:
     #if(substr(model,1,6)=='Binary'||substr(model,1,6)=='Binomial') stop("The weighted least squares method can not be used with binary data")
@@ -320,8 +320,8 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
     if(is.null(numbins))
       numbins <- 13
     ### Define the object function for the weighted least squares method:
-    WLsquare <- function(bins, bint, corrmodel, fixed, fun, lenbins, moments,
-                         namescorr, namesnuis, numbins, numbint, param)
+    WLsquare <- function(param,bins, bint, corrmodel, fixed, fun, lenbins, moments,
+                         namescorr, namesnuis, numbins, numbint)
       {
         param <- c(param, fixed)#set the parameters set:
         paramcorr <- param[namescorr]#set the correlation parameters:
@@ -470,6 +470,8 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
       if(weighted) fname <- 'GeoWLS_G'
       else fname <- 'LeastSquare_G'
 
+
+if(optimization){
     ### Computes estimates by the weighted least squares method:
     if(optimizer=='L-BFGS-B')
       fitted <- optim(initparam$param, WLsquare, bins=bins, bint=bint, corrmodel=initparam$corrmodel,
@@ -483,7 +485,14 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
                       moments=moments, namescorr=initparam$namescorr, namesnuis=initparam$namesnuis,
                       numbins=numbins, numbint=numbint, control=list(fnscale=-1, reltol=1e-14, maxit=1e8),
                       hessian=FALSE)
+     }  
+     else{ res=WLsquare(unlist(start),bins=bins, bint=bint, corrmodel=initparam$corrmodel,
+                      fixed=initparam$fixed, fun=fname, lenbins=lenbins, 
+                      moments=moments, namescorr=initparam$namescorr, namesnuis=initparam$namesnuis,
+                      numbins=numbins, numbint=numbint)
+              fitted=list(convergence=NULL,counts=NULL,message=NULL,par=unlist(start),value=res)
 
+            }
 
 
     ###### ---------- END model fitting by weighted least squares method ----------######

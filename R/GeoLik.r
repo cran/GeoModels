@@ -888,7 +888,6 @@ hessian=FALSE
     if(type==6) fname <- 'LogshDenTap1'
 
 }
- 
  if(model==34){   ## Tukeyh case
      lname <- 'loglik_tukeyh'
     if(bivariate)  {lname <- 'loglik_biv_tukeyh'}
@@ -900,46 +899,37 @@ hessian=FALSE
     if(bivariate)  {lname <- 'loglik_biv_tukey2h'}
    
 }
-
  if(model==47){   ## gaussian misspecified poissongamma
      lname <- 'loglik_miss_Poisgamma'
     if(bivariate)  {lname <- 'loglik_biv_miss_Poisgamma'}
 
 }
-
  if(model==35){   ## gaussian misspecified t
      lname <- 'loglik_miss_T'
     if(bivariate)  {lname <- 'loglik_biv_miss_T'}
 
 }
-
  if(model==36){   ## Poisson misspecified t
      lname <- 'loglik_miss_Pois'
     if(bivariate)  {lname <- 'loglik_biv_miss_Pois'}
 
 }
-
-
  if(model==37){   ## gaussian misspecified skewt
      lname <- 'loglik_miss_skewT'
     if(bivariate)  {lname <- 'loglik_biv_miss_skewT'}
 
 }
-
-
  if(model==22){   ## loggaussian  case
      lname <- 'loglik_loggauss'
     if(bivariate)  {lname <- 'loglik_biv_loggauss'}
 
 }
 
-
+#############
  if(type!=5&&type!=6){ corrmat <- paste(corrmat,"2",sep="") }
-
-
-  namesaniso=c("angle","ratio")
-
-
+#############
+##################
+namesaniso=c("angle","ratio")
 ##################
 
 
@@ -1016,6 +1006,16 @@ if(optimizer=='L-BFGS-B'&&!parallel)
                       Likelihood <- nlm(eval(as.name(lname)),param,const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
                           corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,hessian=hessian,
                           model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,iterlim = maxit,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
+    if(optimizer=='bobyqa')
+                      Likelihood <-minqa::bobyqa(fn=eval(as.name(lname)),par=param, 
+                                     control = list(maxfun=maxit),
+                              lower=lower,upper=upper, #hessian=hessian,
+                          const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
+                          corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,
+                          model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,radius=radius,
+                          setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
+                           
+
   if(optimizer=='nlminb')
                       Likelihood <-nlminb(objective=eval(as.name(lname)),start=param,
                              control = list( iter.max=100000),
@@ -1031,13 +1031,15 @@ if(optimizer=='L-BFGS-B'&&!parallel)
 
 
 
- if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS','nmk','nmkb','multiNelder-Mead'))
+
+ if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS','nmk','nmkb','multiNelder-Mead','bobyqa'))
                    {names(Likelihood$par)=namesparam
                     param <- Likelihood$par
-                   maxfun <- -Likelihood$value
+                    if(optimizer=='bobyqa')  maxfun <- -Likelihood$fval
+                    else                     maxfun <- -Likelihood$value
                    Likelihood$value <- maxfun
     if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS'))  Likelihood$counts=as.numeric(Likelihood$counts[1])
-     if(optimizer %in% c('nmk','nmkb'))                    Likelihood$counts=as.numeric(Likelihood$feval)
+     if(optimizer %in% c('nmk','nmkb','bobyqa'))                    Likelihood$counts=as.numeric(Likelihood$feval)
                }
 
     #if(optimizer=='ucminf'){
@@ -1074,6 +1076,13 @@ if(optimizer=='L-BFGS-B'&&!parallel)
              {Likelihood$claic <- -2*(maxfun-numparam) 
               Likelihood$clbic <- -2*maxfun+numparam*log(dimat)    }
     ### Some checks of the output from the optimization procedure:
+     if(optimizer=='bobyqa'){
+    if(Likelihood$ierr == 0)
+      Likelihood$convergence <- 'Successful'
+    else
+        Likelihood$convergence <- 'Optimization may have failed'
+    }
+
     if(optimizer=='Nelder-Mead' ||  optimizer=='L-BFGS-B'||  optimizer=='BFGS'){
     if(Likelihood$convergence == 0)
       Likelihood$convergence <- 'Successful'

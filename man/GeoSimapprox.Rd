@@ -10,8 +10,9 @@
 GeoSimapprox(coordx, coordy=NULL, coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
 grid=FALSE,local=c(1,1),max.ext=1,
-method="TB", L=2000,model='Gaussian',
-n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,nrep=1)
+method="TB", L=1000,model='Gaussian',
+n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,
+nrep=1,progress=TRUE)
 }
 \arguments{
   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
@@ -59,6 +60,7 @@ n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,nrep=1)
   \item{X}{Numeric; Matrix of space-time covariates.}
     \item{spobj}{An object of class sp or spacetime}
     \item{nrep}{Numeric; Numbers of indipendent replicates.}
+        \item{progress}{Logic; If TRUE then a progress bar is shown.}
 }
 
 

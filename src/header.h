@@ -269,7 +269,7 @@ double igam(double a, double x);
 double igamc(double a, double x);
 
 void  reghyperg_call(int *a,int *b,double *x,double *res);
-
+void hyperg_1F2_e_call( double *a,  double *b,double *c,  double *x, double *val);
 
 
 void Maxima_Minima_time(double *res,double *coordt,int *nsize);
@@ -448,6 +448,7 @@ int fmin_int(int u,int v);
 
 double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c);
 
+double one_log_wrapped(double alfa,double u,double mi,double sill);
 double one_log_T(double z,double m, double sill, double df);
 double one_log_tukeyh(double z,double m, double sill, double tail);
 double one_log_tukeyhh(double z,double m, double sill, double h1,double h2);
@@ -804,6 +805,9 @@ double QFORM2(double **A,double *x,double *y,int n, int m);
 double Trace(double **A,int n);
 void lubksb(double **a, int n, int *indx, double *b);
 void ludcmp(double **a, int n, int *indx, double *dd);
+
+
+
 
 
 
@@ -1305,6 +1309,7 @@ double hyt2f1( double a, double b, double c, double x, double *loss );
 double hys2f1( double a,double b,double c,double x,double *loss );
 double hyp2f1( double a,double b,double c,double x);
 double hypergeo(double a,double b,double c,double x);
+double hypergeo_sem(double a,double b,double c,double x);
 
 double polevl(double x, const double coef[], int N);
 double p1evl(double x, const double coef[], int N);

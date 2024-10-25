@@ -11,7 +11,7 @@
 GeoWLS(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, 
              distance="Eucl", fixed=NULL, grid=FALSE, maxdist=NULL,neighb=NULL,
              maxtime=NULL,  model='Gaussian', optimizer='Nelder-Mead',
-             numbins=NULL, radius=6371, start=NULL, weighted=FALSE)
+             numbins=NULL, radius=6371, start=NULL, weighted=FALSE,optimization=TRUE)
 }
 \arguments{
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
@@ -64,6 +64,8 @@ GeoWLS(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel,
   \item{weighted}{Logical; if \code{TRUE} then the weighted least square
     estimator is considered. If \code{FALSE} (the
     default) then the classic least square is used.}
+    \item{optimization}{Logical; if \code{TRUE} then the weighted least square
+    minimization is performed. Otherwise the  weighted least square function is evaluated at the starting value.}  
 }
 
 \details{
