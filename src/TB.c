@@ -138,7 +138,8 @@ res=a*c/b;
 return(res);
 }
 
-/*******************************************************************/
+
+/******************************************************************
 double den_wen_gen_mat(double z,double k,double sc,double mu,double tol){ 
 double res;
 int d=2;
@@ -150,22 +151,62 @@ double u=2*M_PI;
 z=z*u;
 double zsc=z*sc;
 
-double LL=58;
+double LL=48;
 
-int MAT=1;
-if((k>-0.5)&(k<0)&(mu<lambda+2)) {LL=51;MAT=1;}  //OK
-if((k>-0.5)&(k<0)&(mu>=lambda+2)) {LL=49;MAT=1;} //OK
-if((k==0)&(k<=0.5)&(mu>=lambda+2)) {LL=58;MAT=0;}  //ok
-if((k>=0)&(k<=0.5)&(mu<lambda+2)) {LL=45;MAT=0;}  //OK
+if((k>-0.5)&(k<0)&(mu<lambda+2)) {LL=43;}  //OK
+if((k>-0.5)&(k<0)&(mu>=lambda+2)) {LL=44;} //OK
+if((k>=0)&(k<=0.5)&(mu>=lambda+2)) {LL=45;}  //ok
+if((k>=0)&(k<=0.5)&(mu<lambda+2)) {LL=46;}  //OK
 
 
-if((zsc<LL)&(!MAT))
+
+double uff=ff(lambda, mu, k,zsc,sc,tol,d);
+double mat=den_mat(z/u,k+0.5,beta1);
+
+
+if(zsc<LL)
 {
-res=ff(lambda, mu, k,zsc,sc,tol,d);
+res=uff;
 }
 else
-{//res=wen_genasy(z, k,mu, sc);
-res=den_mat(z/u,k+0.5,beta1);}
+{
+    if(fabs(uff)<=mat) res=uff;
+    else res=mat;
+}
+return(res);
+}*/
+
+
+
+
+/********************************************************************/
+double den_wen_gen_mat(double z,double k,double sc,double mu,double tol){ 
+double res;
+int d=2;
+double beta1=sc;
+double rep=R_pow(gammafn(mu+2*k+1)/(gammafn(mu)),1/(1+2*k));
+sc=sc*rep;
+double lambda=1.5+k;
+double u=2*M_PI;
+z=z*u;
+double zsc=z*sc;
+
+//double LL=55;
+
+//if((k>-0.5)&(k<0)&(mu<lambda+2)) {LL=51;}  //OK
+//if((k>-0.5)&(k<0)&(mu>=lambda+2)) {LL=50;} //OK
+//if((k>=0)&(k<=0.5)&(mu>=lambda+2)) {LL=44;}  //ok
+//if((k>=0)&(k<=0.5)&(mu<lambda+2)) {LL=45;}  //OK
+
+
+double uff=ff(lambda, mu, k,zsc,sc,tol,d);
+double mat=den_mat(z/u,k+0.5,beta1);
+
+
+//if(zsc<LL){
+    if(fabs(uff)<=mat) res=uff;
+    else res=mat;
+//}else{res=mat;}
 return(res);
 }
 

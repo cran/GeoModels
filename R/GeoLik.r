@@ -988,14 +988,14 @@ if(optimizer=='L-BFGS-B'&&!parallel)
      parallel::setDefaultCluster(cl=NULL)
      parallel::stopCluster(cl)
   }
-  if(optimizer=='BFGS')
-                      Likelihood <- optim(param,eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
-                          corrmodel=corrmodel,control=list(
-                          pgtol=1e-14,maxit=maxit),data=t(data),dimat=dimat,
-                         fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,method=optimizer,
-                          model=model,namescorr=namescorr,hessian=hessian,
-                          namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
-  if(optimizer=='Nelder-Mead')
+  #if(optimizer=='BFGS')
+   #                   Likelihood <- optim(param,eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
+    #                      corrmodel=corrmodel,control=list(
+     #                     pgtol=1e-14,maxit=maxit),data=t(data),dimat=dimat,
+      #                   fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,method=optimizer,
+       #                   model=model,namescorr=namescorr,hessian=hessian,
+       #                   namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
+  if(optimizer=='Nelder-Mead'||optimizer=='SANN'||optimizer=="BFGS")
                       Likelihood <- optim(param,eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
                           corrmodel=corrmodel,control=list(
                           reltol=1e-14, maxit=maxit),data=t(data),dimat=dimat,
@@ -1032,13 +1032,13 @@ if(optimizer=='L-BFGS-B'&&!parallel)
 
 
 
- if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS','nmk','nmkb','multiNelder-Mead','bobyqa'))
+ if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS','nmk','nmkb','multiNelder-Mead','bobyqa','SANN'))
                    {names(Likelihood$par)=namesparam
                     param <- Likelihood$par
                     if(optimizer=='bobyqa')  maxfun <- -Likelihood$fval
                     else                     maxfun <- -Likelihood$value
                    Likelihood$value <- maxfun
-    if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS'))  Likelihood$counts=as.numeric(Likelihood$counts[1])
+    if(optimizer %in% c('Nelder-Mead','L-BFGS-B','BFGS','SANN'))  Likelihood$counts=as.numeric(Likelihood$counts[1])
      if(optimizer %in% c('nmk','nmkb','bobyqa'))                    Likelihood$counts=as.numeric(Likelihood$feval)
                }
 
@@ -1083,7 +1083,7 @@ if(optimizer=='L-BFGS-B'&&!parallel)
         Likelihood$convergence <- 'Optimization may have failed'
     }
 
-    if(optimizer=='Nelder-Mead' ||  optimizer=='L-BFGS-B'||  optimizer=='BFGS'){
+    if(optimizer=='Nelder-Mead' ||  optimizer=='L-BFGS-B'||  optimizer=='BFGS'||  optimizer=='SANN'){
     if(Likelihood$convergence == 0)
       Likelihood$convergence <- 'Successful'
     else
@@ -1153,6 +1153,8 @@ names(Likelihood$score)=namesparam
     # if optimization has failed it does not compute stderr
 
     ### START Computing the asymptotic variance-covariance matrices:  
+
+
     if(varest){
     if((model==20||model==22||model==1||model==34||model==35||model==37)&& !(type==5||type==6))      {
        # if(is.null(Likelihood$hessian)) {Likelihood$hessian=numDeriv::hessian(func=eval(as.name(lname)),x=param,method="Richardson",
@@ -1163,8 +1165,12 @@ names(Likelihood$score)=namesparam
        #                   namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS)
        # rownames(Likelihood$hessian)=namesparam; colnames(Likelihood$hessian)=namesparam
         #             }
+
+
+
          aa=try(abs(det(Likelihood$hessian)),silent=T)
-         if(aa<1e-08) { 
+     if(inherits(aa,"try-error")) {
+                        #options(warn = -1)
                         warning("Asymptotic information matrix is singular",immediate.=TRUE)
                         Likelihood$varcov <- NULL  } 
         else 

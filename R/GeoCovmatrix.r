@@ -732,8 +732,7 @@ else  { coordx=estobj$coordx;
    else X=estobj$X
 }
 
-
- if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
+if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
  if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 
 bivariate<-CheckBiv(CkCorrModel(corrmodel))

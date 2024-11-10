@@ -638,27 +638,21 @@ if((sensitivity||varest))
   {
 
  
-{
-if(!bivariate)  {
+if(!bivariate)  { if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=matrix(c(1,2,3,2),2,2) }
+                  if( min(eigen( CompLikelihood$hessian )$values) <0)
+                                  {
+                                 CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(CompLikelihood$par),method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
+                                                        data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
+                                                        namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
+                                                        weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                                   }
+                 }
 
-if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=matrix(c(1,2,3,2),2,2)}
-if( min(eigen( CompLikelihood$hessian )$values) <0)
-{
-
-#print(CompLikelihood$par);print(namesparam);print(head(X))
-
-  CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(CompLikelihood$par),method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
-                              namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                              weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
-}
-
-if(bivariate)  
-CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(CompLikelihood$par),method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
+if(bivariate)   CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(CompLikelihood$par),method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                           data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                           namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-}
+                          weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+
 rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
   }

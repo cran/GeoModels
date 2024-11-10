@@ -2152,39 +2152,7 @@ double CorFunW_genhole(double lag,double R_power1,double smooth,double scale,dou
 int k = (int) kk;
 if(k==0) {rho=CorFunW_gen(lag,mu,smooth,scale);
              return(rho);}  
-else /* 
-if(k==1){
- if(smooth==0||smooth==1||smooth==2||smooth==3||smooth==4||smooth==5||smooth==6)
-  { 
-  double A1,B1,K1,K2,KK;int n=0;int smooth1 = (int) smooth;
-     if(smooth1==0)
-             {
-              if(x<=1) {
-               A1=R_pow(1-x,R_power1-1)/(1+x);B1=1-x*(mu+d)/d;
-             rho=(A1*B1);
-              }
-              else rho=0;
-    return(rho);
-             }
-    else {  
-          rho=0.0;
-             if(x<=1) {
-            for(n=0;n<=smooth1;n++){
-             A1=R_pow(1-x,n+smooth1+mu-1)*R_pow(1+x,smooth1-n-1);
-             B1=1- x*(2*n+mu)/d - x*x*(2*smooth1+mu+d)/d;
-             K1=gammafn(smooth1)*gammafn(1+2*smooth1+mu)*poch(mu,n)*poch(-smooth1,n);
-             K2=2*gammafn(2*smooth1)*gammafn(1+smooth1+mu)*poch(1+smooth1+mu,n)*gammafn(n+1);
-             KK=K1/K2;
-             rho=rho+KK*A1*B1;
-              }
-           }
-           else rho=0;
-    return(rho);
-  }
- }
-}
-else{
-    */
+else
              {
 double alpha,beta,gama,a1,a2,a3,a4,A,B,B1,B2,cc,tt,uu,c1,c2,c3,c4,C;
  if(x<=1)
@@ -2197,8 +2165,9 @@ int n;
 A=0.0;
 for(n=0;n<=k;n++){
     cc=1+d/2+k;
-a1=R_pow(-1,n)*poch(cc-beta,n)*poch(cc-gama,n)/(poch(1-d/2-n,n)*poch(cc-alpha,n));
-a2=exp(lgammafn(n+1)+lgammafn(k-n+1)-lgammafn(k+1));
+//a1=R_pow(-1,n)*poch(cc-beta,n)*poch(cc-gama,n)/(poch(1-d/2-n,n)*poch(cc-alpha,n));
+a1=(R_pow(-1,n)/poch(-n,n))* (poch(cc-beta,n)*poch(cc-gama,n))/poch(cc-alpha,n);
+a2=gammafn(n+1)*gammafn(k-n+1)/gammafn(k+1);
 a3=R_pow(x,2*n);
 a4=hypergeo(cc-beta+n , cc-gama+n, cc-alpha+n,x2);
 A=A+(a1*a3*a4/a2);
@@ -2214,7 +2183,7 @@ tt=1+alpha;
 C=0.0;
 for(n=0;n<=k;n++){
 c1=R_pow(-1,n+k)*poch(1-alpha,k-n)*poch(1+alpha-beta,n)*poch(1+alpha-gama,n)/poch(1+alpha-uu,n);
-c2=exp(lgammafn(n+1)+lgammafn(k-n+1)-lgammafn(k+1));
+c2=gammafn(n+1)*gammafn(k-n+1)/gammafn(k+1);
 c3=R_pow(x,2*alpha-d-2*(k-n));
 c4=hypergeo(tt-beta+n , tt-gama+n, tt-d/2-k+n,x2);
 C=C+(c1*c3*c4/c2);

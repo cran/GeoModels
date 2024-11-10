@@ -247,6 +247,8 @@ else                                     nui['nugget']=nuisance['nugget']
         #correlation <- CorrelationFct(bivariate,corrmodel, lags_m, lagt_m, numlags_m, numlagt_m,mu,
          #                            CkModel(fitted$model), nui,param,fitted$n)
 
+#print(correlation);print(lags_m);print(lagt_m)
+#print("hjhjhj")
 
 ##########################################
 ########### starting cases ###############
@@ -520,7 +522,9 @@ covariance=sill*vs*corr;variogram=sill*vs*(1-corr)
                         vs=exp(mm)^2*(gamma(1+2/ssh)/gamma(1+1/ssh)^2-1)
                         auxcorr= (gamma(1+1/ssh))^2/((gamma(1+2/ssh))-(gamma(1+1/ssh))^2)
                         cc=auxcorr*(Re(hypergeo::hypergeo(-1/ssh, -1/ssh, 1,correlation^2)) -1)
-                        covariance=vs*cc;variogram=vs*(1-cc)  }
+                        covariance=vs*cc;variogram=vs*(1-cc) 
+                      #    print(cc) 
+                    }
                     }
 ##########################################
   if(loglogistic)    { if(bivariate) {}  
@@ -721,7 +725,7 @@ OLS=NULL
 #####################################
 #### bivariate case semivariogram ###
 ##################################### 
-
+ if(bivariate){
       if(bivariate&&!dyn){
        plot(vario$centers,vario$variograms[1,], main="First semi-variogram",ylim=c(0,max(vario$variograms[1,])),
            xlim=c(0,max(vario$centers)),
@@ -740,7 +744,10 @@ OLS=NULL
        plot(vario$centers,vario$variograms[2,], main="Second semi-variogram",ylim=c(0,max(vario$variograms[2,])),
          xlim=c(0,max(vario$centers)),
                      xlab="Distance", ylab="Semi-Variogram",...)
-       lines(lags_m, variogram22, type='l',...)  }
+       lines(lags_m, variogram22, type='l',...)  
+  if(invisible)  OLS= sum( (vario$variograms[2,]-variogram22)^2) + sum((vario$variograms[1,]-variogram11))^2 + sum((vario$variogramst-variogram12))^2
+
+   }
  
    if(bivariate&&dyn){
        plot(vario$centers,vario$variograms[1,], main="First semi-variogram",ylim=c(0,max(vario$variograms[1,])),
@@ -748,8 +755,12 @@ OLS=NULL
        lines(lags_m, variogram11, type='l',...)
        plot(vario$centers,vario$variograms[2,], main="Second semi-variogram",ylim=c(0,max(vario$variograms[2,])),
                      xlab="Distance", ylab="Semi-Variogram",...)
-       lines(lags_m, variogram22, type='l',...)  }
+       lines(lags_m, variogram22, type='l',...)  
 
+    if(invisible)  OLS= sum( (vario$variograms[2,]-variogram22)^2) + sum((vario$variograms[1,]-variogram11))^2
+
+        }
+}
 #######################################
 #### space time case  semivariogram ###
 #######################################
@@ -799,6 +810,7 @@ OLS=NULL
             } 
 
             par(mai=c(.2,.2,.2,.2))
+            #print(variogram);print(lags_m);print(lagt_m)
             persp(lags_m, lagt_m, variogram, xlab="Distance",
                   ylab="Time", zlab=vario.zlab, ltheta=90,
                   shade=0.75, ticktype="detailed", phi=30,
@@ -856,13 +868,11 @@ OLS=NULL
   #################################
 
                       if(invisible) OLS=sum(evario-variogram)^2
-                }
+ } ####### end space time
           
 ################################
 #### spaatial semivariogram ###
 #################################
-
-
     if(!ispatim && !bivariate){
 
    #################################
@@ -882,7 +892,9 @@ OLS=NULL
                      ylab=vario.ylab,...)
                 points(vario$centers, vario$variograms,...)
                 if(show.range) abline(v=Range)}
-        }}
+        }
+ #################################       
+}
         
     if(ispatim) par(mai=c(1.02 ,0.85 ,0.85 ,0.45),mgp=c(3,1,0))
     # return the estimated covariance function

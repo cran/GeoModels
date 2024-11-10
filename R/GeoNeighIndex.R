@@ -116,11 +116,19 @@ spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
     }
   }
   ######
-  SS = data.table::rbindlist(m_s)
-  TT = data.table::rbindlist(m_t)
-  ST = data.table::rbindlist(m_st)
-  ##final space-time indexes and distances
-  final=data.table::rbindlist(list(SS,TT,ST))
+  # SS = data.table::rbindlist(m_s)
+  # TT = data.table::rbindlist(m_t)
+  # ST = data.table::rbindlist(m_st)
+  # ##final space-time indexes and distances
+  # final=data.table::rbindlist(list(SS,TT,ST))
+  
+  SS <- do.call(rbind, m_s)
+  TT <- do.call(rbind, m_t)
+  ST <- do.call(rbind, m_st)
+
+  # Final space-time indexes and distances
+  final <- do.call(rbind, list(SS, TT, ST))
+  
   return(as.matrix(final))
 }
 ##############################################################

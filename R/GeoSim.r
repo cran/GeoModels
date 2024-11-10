@@ -66,8 +66,9 @@ return(dims*dimt)
 ############# END internal functions ###############################
 ####################################################################
 
-    if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
-    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
+
+
+    if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
     model=gsub("[[:blank:]]", "",model)
     distance=gsub("[[:blank:]]", "",distance)

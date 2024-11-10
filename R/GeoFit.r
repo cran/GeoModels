@@ -23,6 +23,7 @@ GeoFit <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copul
         else               {corrmodel="Exp_Exp";tlist=list(nugget=0,scale_s=1,scale_t=1)}
         fixed=append(fixed,tlist)
     }
+    if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
      { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong\n")}

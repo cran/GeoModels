@@ -2,34 +2,46 @@
 ### File name: GeoNeighbSelect.r
 ####################################################
 
-GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
+GeoNeighbSelect <- function(data, coordx,coordy=NULL, coordt=NULL, coordx_dyn=NULL,
   copula=NULL,corrmodel=NULL, distance="Eucl",fixed=NULL,anisopars=NULL,
   est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal', 
-  lower=NULL,maxdist_v=Inf,neighb=c(1,2,3,4,5),
-  maxtime=Inf, maxtime_v=Inf, memdist=TRUE,model='Gaussian',n=1,numbins=20, ncores=NULL,
+  lower=NULL,neighb=c(1,2,3,4,5),
+  maxtime=Inf, memdist=TRUE,model='Gaussian',n=1, ncores=NULL,
   optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE,
   radius=6371, start=NULL,  type='Pairwise', upper=NULL,  weighted=FALSE,
-  X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
+  X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL)
 {
+
+
 
 if(!is.numeric(neighb))  stop("neighb must be a numeric vector")
 if(sum(neighb-floor(neighb))) stop("neighb must be a positive integer numeric vector")
 
 estimates=best_T=best_K= NULL
 
-############## computing semivariogram ###############
- semiv=GeoVariogram(data=data, coordx=coordx, coordy=coordy, coordt=coordt, 
-coordx_dyn=coordx_dyn, distance=distance,
-              grid=grid, maxdist=maxdist_v,neighb=NULL,
-              maxtime=maxtime_v, numbins=numbins, 
-              radius=radius, type='variogram',bivariate=bivariate)
-######################################################
+
 if(!is.null(try(CkCorrModel(corrmodel), TRUE)))
 {
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
     spacetime<-CheckST(CkCorrModel(corrmodel))
     space=!spacetime&&!bivariate
 }else {stop("correlation model is not valid\n")}
+
+############## computing semivariogram  if necessary###############
+if(!is.null(vario))
+{
+if(!inherits(vario,"GeoVariogram"))  stop("A GeoVariogram object is needed as input for vario\n")
+ if( !((vario$bivariate&&bivariate)||(!is.null(vario$bint)&&spacetime)||(is.null(vario$bint)&&!bivariate)) )
+       stop("The GeoVariogram object is not of the same type of the correlation model\n")
+
+ semiv=vario
+}
+else stop("A GeoVariogram object is needed as input for vario\n")
+######################################################################
+
+
+######################################################
+
 
 
 ####################
@@ -49,13 +61,21 @@ if(spacetime){
 #######################################################################################
 ##################################### SPATIAL #########################################
 #######################################################################################
-if(space) {
+if(space||bivariate) {
 
 M=1
 ##################################### spatial not parallel ############################
 if(!parallel)
 {
+
+progressr::handlers(global = TRUE)
+progressr::handlers("txtprogressbar")
+pb <- progressr::progressor(along = 1:K)
+
 for(M in 1:K) {
+
+    pb(sprintf("k=%g", M)) 
+
   aa=GeoFit(data=data, coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coordx_dyn,copula=copula,corrmodel=corrmodel, distance=distance,
                          fixed=fixed,anisopars=anisopars,est.aniso=est.aniso, grid=grid, likelihood=likelihood, 
                          lower=lower,neighb=neighb[M],
@@ -65,8 +85,6 @@ for(M in 1:K) {
                          type=type, upper=upper,  weighted=weighted,X=X,nosym=nosym,spobj=spobj,spdata=spdata)
  clest=  aa$param
  estimates=rbind(estimates,unlist(clest))
-
- 
 
  if(aa$convergence=="Successful")
  {
@@ -82,6 +100,7 @@ for(M in 1:K) {
 
  }
 }
+
 ##################################### end spatial not parallel ############################
 ##################################### spatial parallel ############################
 if(parallel)
@@ -97,25 +116,40 @@ cat("Performing",K,"estimations using",n.cores,"cores...\n")
 future::plan(multisession, workers = n.cores)
 
 progressr::handlers(global = TRUE)
-progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:K)
 k=1
-xx=foreach::foreach(k = 1:K,.combine = rbind,
-                           .options.future = list(seed = TRUE)) %dofuture% 
-    {  
-
-aa=GeoFit(data=data, coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coordx_dyn,copula=copula,corrmodel=corrmodel, distance=distance,
-                         fixed=fixed,anisopars=anisopars,est.aniso=est.aniso, grid=grid, likelihood=likelihood, 
-                         lower=lower,neighb=neighb[k],
-                          maxtime=maxtime, memdist=memdist,model=model,n=n, 
-                          optimizer=optimizer,  
-                         radius=radius, start=start,  
-                         type=type, upper=upper,  weighted=weighted,X=X,nosym=nosym,spobj=spobj,spdata=spdata)
-  pb(sprintf("k=%g", k)) 
-     xx=GeoCovariogram(fitted=aa,distance=distance,show.vario=TRUE, vario=semiv,pch=20,invisible=TRUE)
-
-     }   
-res=as.numeric(xx)
+# Ejecutar el bucle de forma paralela usando foreach
+results <- foreach(M = 1:K, .combine = rbind,
+                   .options.future = list(seed = TRUE)) %dofuture% {
+  pb(sprintf("k=%g", M))  # Actualizar el progreso
+  
+  # Ejecutar la función GeoFit
+  aa <- GeoFit(data = data, coordx = coordx, coordy = coordy, coordt = coordt, coordx_dyn = coordx_dyn,
+               copula = copula, corrmodel = corrmodel, distance = distance, fixed = fixed, anisopars = anisopars,
+               est.aniso = est.aniso, grid = grid, likelihood = likelihood, lower = lower, neighb = neighb[M],
+               maxtime = maxtime, memdist = memdist, model = model, n = n, optimizer = optimizer,
+               radius = radius, start = start, type = type, upper = upper, weighted = weighted,
+               X = X, nosym = nosym, spobj = spobj, spdata = spdata)
+  
+  # Almacenar resultados
+  clest <- aa$param
+  estimates <- unlist(clest)
+  
+  # Calcular el resultado de acuerdo a la convergencia
+  if (aa$convergence == "Successful") {
+    cc <- GeoCovariogram(fitted = aa, distance = distance, show.vario = TRUE, vario = semiv, pch = 20, invisible = TRUE)
+    res <- cc
+  } else {
+    res <- Inf
+  }
+  
+  # Retornar los resultados como una fila
+  c(estimates, res = res)
+}
+# Separar las columnas de resultados en 'estimates' y 'res'
+estimates <- results[, -ncol(results)]  # Todas las columnas menos la última
+rownames(estimates) <- NULL
+res <- results[, ncol(results)]         # Última columna
 future::plan(sequential)
 }
 
@@ -129,9 +163,16 @@ if(spacetime){
 ######################################## Space time  NO parallel ############################
 if(!parallel)
 {
+
+progressr::handlers(global = TRUE)
+progressr::handlers("txtprogressbar")
+pb <- progressr::progressor(along = 1:(K*P))
+
   F=1
 for(L in 1:P) { 
 for(M in 1:K) {
+
+  pb(sprintf("k=%g", F)) 
   aa=GeoFit(data=data, coordx=coordx, coordy=coordy, coordt=coordt, coordx_dyn=coordx_dyn,copula=copula,corrmodel=corrmodel, distance=distance,
                          fixed=fixed,anisopars=anisopars,est.aniso=est.aniso, grid=grid, likelihood=likelihood, 
                          lower=lower,neighb=neighb[M],
@@ -154,18 +195,80 @@ for(M in 1:K) {
  }
  else { res[F]=Inf; F=F+1 }
 }}
+  # print(str(res))
 }
 ######################################## end Space time NO parallel ############################
 ######################################## Space time   parallel ############################
-if(!parallel)
+if(parallel)
 {
+  if(is.null(ncores)){ n.cores <- coremax - 1 }
+  else
+  {  if(!is.numeric(ncores)) stop("number of cores not valid\n")
+    if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
+    n.cores=ncores
+  }
+  cat("Performing",K,"estimations using",n.cores,"cores...\n")
+  
+  future::plan(multisession, workers = n.cores)
+  progressr::handlers(global = TRUE)
+  progressr::handlers("txtprogressbar")
+  pb <- progressr::progressor(along = 1:(K*P))
+  
+  iteration_count <- 1  # Cambio de F por un nombre descriptivo
+  estimates <- NULL
+  results <- vector("list", P)  # Lista para guardar futuros resultados
 
+  # Crear los futuros para P paralelizados
+  for (L in 1:P) {
+    results[[L]] <- future::future({
+      sub_results <- vector("list", K)
+
+      for (M in 1:K) {
+        progressr::with_progress({
+          pb(sprintf("k=%g", iteration_count))
+
+          # Llamada a la función GeoFit con los parámetros específicos
+          aa <- GeoFit(data = data, coordx = coordx, coordy = coordy, coordt = coordt, coordx_dyn = coordx_dyn,
+                       copula = copula, corrmodel = corrmodel, distance = distance, fixed = fixed, anisopars = anisopars,
+                       est.aniso = est.aniso, grid = grid, likelihood = likelihood, lower = lower, neighb = neighb[M],
+                       maxtime = maxtime[L], memdist = memdist, model = model, n = n, optimizer = optimizer,
+                       radius = radius, start = start, type = type, upper = upper, weighted = weighted, X = X,
+                       nosym = nosym, spobj = spobj, spdata = spdata)
+
+          # Verificar si la estimación fue exitosa
+          if (aa$convergence == "Successful") {
+            clest <- unlist(aa$param)
+            cc <- GeoCovariogram(fitted = aa, distance = distance, show.vario = TRUE, vario = semiv, pch = 20,
+                                 fix.lagt = 1, fix.lags = 1, invisible = TRUE)
+            result_res <- cc  # Guardar el resultado de la covariograma
+          } else {
+            clest <- Inf
+            result_res <- Inf  # En caso de no converger
+          }
+
+          iteration_count <<- iteration_count + 1  # Incrementar el contador de iteraciones
+          sub_results[[M]] <- list(estimates = clest, res = result_res)
+        })
+      }
+      sub_results
+    }, seed = TRUE)
+  }
+
+  # Recuperar y combinar resultados una vez completados
+  results <- lapply(results, future::value)
+  estimates <- do.call(rbind, lapply(results, function(res) do.call(rbind, lapply(res, function(x) x$estimates))))
+  res <- unlist(lapply(results, function(res) unlist(lapply(res, function(x) x$res))))
+
+  # Restablece el plan a secuencial si deseas
+  future::plan(sequential)
 }
 ######################################## end Space time   parallel ############################
 }
 ################# end SPATIOTEMPORAL ######################################################
 
-if(space) {
+
+
+if(space||bivariate) {
 indexmin=which.min(res)
 bestK=neighb[indexmin]
 }

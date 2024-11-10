@@ -4,13 +4,13 @@
 \title{Fast simulation of Gaussian and non Gaussian Random Fields.}
 \description{
   Simulation of Gaussian and some non Gaussian spatial, spatio-temporal and spatial bivariate 
- random fields using approximate methods of simulation (circulant embeeding and turning bands) (see Examples). 
+ random fields using two approximate methods of simulation: circulant embeeding and turning band. (see Examples). 
 }
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
 grid=FALSE,local=c(1,1),max.ext=1,
-method="TB", L=1000,model='Gaussian',
+method="TB", L=1000,model='Gaussian',parallel=FALSE,ncores=NULL,
 n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,
 nrep=1,progress=TRUE)
 }
@@ -32,6 +32,10 @@ nrep=1,progress=TRUE)
     }
   \item{corrmodel}{String; the name of a correlation model, for the
     description see the Section \bold{Details}.}
+   \item{parallel}{Logical; if \code{TRUE} then 
+      the TB method is  parallelized 
+      }
+       \item{ncores}{Numeric; number of cores involved in parallelization.} 
   \item{distance}{String; the name of the spatial distance. The default
     is \code{Eucl}, the euclidean distance. See the Section
     \bold{Details}  of \code{\link{GeoFit}}.}
@@ -98,7 +102,6 @@ Fast and Exact Simulation of Large Gaussian Lattice Systems in R2: Exploring the
 
 D. Arroyo, X. Emery (2020) An R Implementation of a Continuous Spectral Algorithm for Simulating Vector Gaussian Random Fields in Euclidean Spaces \emph{ACM Transactions on Mathematical Software}  47(1)
 
-J. Guiness (2018) Permutation and Grouping Methods for Sharpening Gaussian Process Approximations \emph{Technometrics} 60(4) 415-429.
 
 }
 
@@ -118,11 +121,10 @@ library(GeoModels)
 ###            with  Matern  covariance model
 ###            using circulant embeeding method
 ###            It works only for regular grid
-###            for any typpe of correlation model
 ###############################################################
 set.seed(68)
-x = seq(0,1,0.006)
-y = seq(0,1,0.006)
+x = seq(0,1,0.005)
+y = seq(0,1,0.005)
 param=list(smooth=1.5,mean=0,sill=1,scale=0.2/3,nugget=0)
 # Simulation of a spatial Gaussian RF with Matern correlation function
 data1 <- GeoSimapprox(coordx=x,coordy=y, grid=TRUE,corrmodel="Matern", model="Gaussian",
@@ -131,19 +133,18 @@ fields::image.plot( matrix(data1, length(x), length(y), byrow = TRUE) )
 
 ################################################################
 ###
-### Example 2. Simulation of a large spatial Gaussian RF 
-###            with  Matern  covariance model
+### Example 2. Simulation of a large spatial Tukey-h RF 
+###            with  GenWend-Matern  covariance model
 ###            using Turning band method
 ###            It works for (ir)regular grid
-###            for the Matern model
 ###############################################################
 set.seed(68)
-x = runif(8000)
-y = runif(8000)
+x = runif(50000)
+y = runif(50000)
 coords=cbind(x,y)
-param=list(smooth=0.5,mean=0,sill=1,scale=0.1,nugget=0)
+param=list(smooth=0.5,mean=0,sill=1,scale=0.04,nugget=0,tail=0.15,power2=1/4)
 # Simulation of a spatial Gaussian RF with Matern correlation function
-data1 <- GeoSimapprox(coords, corrmodel="Matern", model="Gaussian",
+data1 <- GeoSimapprox(coords, corrmodel="GenWend_Matern", model="Tukeyh",
                       method="TB",param=param)$data
 quilt.plot(coords,data1)
 

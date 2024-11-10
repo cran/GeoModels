@@ -24,7 +24,7 @@ GeoFit2 <- function(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,copu
 
     if(type=='Independence') stop("use Geofit for Independence composite likelihood \n")
     ### Check the parameters given in input:
-      if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
+    if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
     model=gsub("[[:blank:]]", "",model)
     distance=gsub("[[:blank:]]", "",distance)

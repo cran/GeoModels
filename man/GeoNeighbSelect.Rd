@@ -1,22 +1,23 @@
 \name{GeoNeighbSelect}
 \alias{GeoNeighbSelect}
 \encoding{UTF-8}
-\title{An heuristic algorithm for spatial or spatiotemoral optimal neighboord selection
+\title{A brute force algorithm for spatial or spatiotemoral optimal neighboord selection
 for pairwise composite likelihood estimation.}
 \description{
   The procedure performs different pairwise composite likelihood estimation using 
   user's specified  spatial or spatiotemporal neighboords in the weight function. 
   The neighbor minimizing the sum of the squared differences
    between the estimated semivariogram  and the  empirical semivariogram is selected. 
+   The procedure needs an object obtained using the GeoVariogram function.
 }
 \usage{
 GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     copula=NULL,corrmodel=NULL, distance="Eucl",fixed=NULL,anisopars=NULL,
-    est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',lower=NULL,maxdist_v=Inf,
-    neighb=c(1,2,3,4,5),maxtime=Inf, maxtime_v=Inf,memdist=TRUE,model='Gaussian',
-    n=1,numbins=20, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
+    est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',lower=NULL,
+    neighb=c(1,2,3,4,5),maxtime=Inf, memdist=TRUE,model='Gaussian',
+    n=1, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
     bivariate=FALSE,radius=6371, start=NULL,type='Pairwise', upper=NULL, 
-    weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
+    weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL)
 }
 \arguments{
   \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on 
@@ -61,8 +62,6 @@ GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
   
-  \item{maxdist_v}{Numeric; an optional positive value indicating the maximum
-    spatial distance considered in the semivariogram estimation}
     
       \item{neighb}{Numeric; a vector of positive integers  indicating the 
     order of neighborhood  in the weight function of  composite likelihood 
@@ -71,8 +70,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     \item{maxtime}{Numeric; an optional positive integer indicating the 
     order of temporal neighborhood  in the composite likelihood
     computation.}
-     \item{maxtime_v}{Numeric; an optional positive integer indicating the 
-    order of temporal neighborhood  in the semivariogram estimation.} 
+
 
     \item{memdist}{ Logical; if \code{TRUE} then  all  the distances  useful in the  composite likelihood 
       estimation are computed before  the optimization. \code{FALSE} is deprecated. }  
@@ -81,7 +79,6 @@ GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
     objects. \code{Gaussian} is the default, see the Section \bold{Details} in \link{GeoFit}.}
    
      \item{n}{Numeric; number of trials in a binomial random fields; number of successes in a negative binomial random fields }
-     \item{numbins}{Numeric;  an integer indicating the number of bins in the empirical semivariogram }
      \item{ncores}{Numeric;  the number of cores involved in the parallelization }  
   
   \item{optimizer}{String; the optimization algorithm
@@ -118,12 +115,14 @@ GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
  
    \item{spobj}{An object of class sp or spacetime}
    \item{spdata}{Character:The name of data in the sp or spacetime object}
+   \item{vario}{An object of the class GeoVariogram obtained using the \link{GeoVariogram} function }
 }
 \details{
  The procedure performs different pairwise composite likelihood estimation using 
   user's specified  spatial or spatiotemporal neighboords in the weight function. 
   The neighbor  minimizing the sum of the squared differences between the estimated 
   semivariogram  and the  empirical semivariogram is selected.
+    The procedure needs an object obtained using the GeoVariogram function.
 }
 \value{
   Returns a list with information on the best selected neighbor.
@@ -136,42 +135,40 @@ Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.rese
 \examples{
 
 library(GeoModels)
-# Define the spatial-coordinates of the points:
+
+
+######### spatial case
 set.seed(32)
 N=500  # number of location sites
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
-
-
 mean <- 0.2
 # Set the covariance model's parameters:
 corrmodel <- "Matern"
-sill <- 1
-nugget <- 0
-scale <- 0.2/3
-smooth=0.5
+sill <- 1;nugget <- 0
+scale <- 0.2/3;smooth=0.5
 
 model="Gaussian"
 param<-list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth)
-
 # Simulation 
 data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,model=model)$data
-
 I=Inf
 fixed<-list(nugget=nugget)
 start<-list(mean=mean,scale=scale,smooth=smooth,sill=sill)
 lower<-list(mean=-I,scale=0,sill=0,smooth=0)
 upper<-list(mean=I,scale=I,sill=I,smooth=I)
 
+vario = GeoVariogram(coordx=coords,data=data,maxdist=0.3,numbins=15)
 
-neighb=c(2,3,4,5,6,7,8) ## trying  different neighbs
-selK <- GeoNeighbSelect(data=data,coordx=coords,corrmodel=corrmodel, 
-                        maxdist_v=0.25,model=model,numbins=20,neighb=neighb,
+neighb=c(1,2,3,4) ## trying  different neighbs
+selK <- GeoNeighbSelect(vario=vario,data=data,coordx=coords,corrmodel=corrmodel, 
+                        model=model,neighb=neighb,
                         likelihood="Conditional",type="Pairwise",parallel=FALSE,
                         optimizer="nlminb",lower=lower,upper=upper,
                         start=start,fixed=fixed)
 print(selK$best_neighb) ## selected neighbor
+
 
 
 

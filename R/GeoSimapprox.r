@@ -4,7 +4,7 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),max.ext=1,method="TB", L=1000,model='Gaussian', 
+     local=c(1,1),max.ext=1,method="TB", L=1000,model='Gaussian', parallel=FALSE,ncores=NULL,
      n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################
@@ -60,9 +60,10 @@ RFfct1<- function(numcoord,numtime,spacetime,bivariate,dime,nuisance,simd,X,ns)
 ######################################################################
 ############## main  internal function  ##############################
 ######################################################################
-simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,ncores)
 {
 ##### spatial case 
+
 
 if(!spacetime){    
    ## Turning Bands
@@ -78,7 +79,7 @@ if(!spacetime){
             param$nugget=0
             param$sill=1
             ##----------###
-         simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate)$simu
+         simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate,parallel,ncores)$simu
          if(is.null(simu)) {print("TB simulation method fails\n");return(simu)}
 
          simu=sqrt(vvv)*(sqrt(1-tau2)*simu+sqrt(tau2)*rnorm(length(simu)))
@@ -118,6 +119,22 @@ return(simu)
     method=gsub("[[:blank:]]", "",method)
     numxgrid=numygrid=NULL
     spacetime_dyn=FALSE
+
+
+### some check for parallel #######
+ coremax=parallel::detectCores()
+if(is.na(coremax)||coremax==1) parallel=FALSE
+
+if(parallel) { if(is.null(ncores)){ n.cores <- coremax - 1 }
+      else
+        {  if(!is.numeric(ncores)) stop("number of cores not valid\n")
+           if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
+           n.cores=ncores
+         }   
+}
+else n.cores=NULL
+##################################
+
 ##############################################################################
 ###### extracting sp object informations if necessary              ###########
 ##############################################################################
@@ -275,16 +292,17 @@ else   { if(is.null(param$sill_1)) param$sill_1=1
 
 
 SIM=list()
+
 ###################################################
 ### starting number of replicates
 ###################################################
-if(progress){
-progressr::handlers(global = TRUE)
-progressr::handlers("txtprogressbar")
-pb <- progressr::progressor(along = 1:nrep)
+if(progress&&nrep>1){
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    pb <- progressr::progressor(along = 1:nrep)
 }
 for( LL in 1:nrep){
-    if(progress){if(nrep>1) pb(sprintf("LL=%g", LL))}
+    if(progress&&nrep>1){pb(sprintf("LL=%g", LL))}
     k=1;npoi=1
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
@@ -339,7 +357,7 @@ KK=1;sel=NULL;ssp=double(dime)
 if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
-      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -350,7 +368,7 @@ while(KK<=npoi) {
 for(i in 1:k) {
 
 ################# here the approximated simulation  ##################################################
-simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
 ######################################################################################################
 
 namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
@@ -417,7 +435,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonGammaZIP","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -460,7 +478,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim

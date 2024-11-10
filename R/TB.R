@@ -5,8 +5,6 @@
 #########################################################
 
 spectral_density_1dR <- function(param, corrmodel, u_vec = seq(-1,1,l=100)){
-
-
     av <- param$scale
     nu1v <- param$smooth
     params_other <- param$power2
@@ -15,7 +13,6 @@ spectral_density_1dR <- function(param, corrmodel, u_vec = seq(-1,1,l=100)){
     N <- length(u_vec)
     model=CkCorrModel(corrmodel)
 
-  
    result=dotCall64::.C64("spectral_density_1d",
         SIGNATURE = c("double","integer","double", "double","double","integer","double"),
                      norm_u, N, av, params_other, nu1v, model, simu1 = dotCall64::numeric_dc(N),
@@ -90,10 +87,9 @@ result=dotCall64::.C64("for_c",
 #######################################################
 ######### univariate case #############################
 #######################################################
-tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate){
+tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, ncores){
   
   N=1; n <- dim(coord)[1]; d <- 2
-
 
 #########################
 if(corrmodel=="GenWend")  
@@ -113,8 +109,8 @@ corrmodel="Kummer_Matern"
 #########################
 
 
-LIM1=8 # after this limit then GenWend_Matern is a matern approx..
-LIM2=8 # after this limit then kummer_Matern is a matern approx..
+LIM1=15 # after this limit then GenWend_Matern is a matern approx..
+LIM2=15 # after this limit then kummer_Matern is a matern approx..
   if(corrmodel == "GenWend_Matern"&&(1/param$power2)>=LIM1)
   {
     corrmodel = "Matern"
@@ -126,7 +122,6 @@ LIM2=8 # after this limit then kummer_Matern is a matern approx..
     corrmodel = "Matern"
     param$power2=NULL
   }
-
  ################################### 
   if(corrmodel == "Matern"){
     CC=as.double(param['sill']); N=1
@@ -137,23 +132,10 @@ LIM2=8 # after this limit then kummer_Matern is a matern approx..
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
     parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
-    u <- frequency_sampler(L, parametersg, corrmodel)
     model_num <- CkCorrModel(corrmodel)
   }
   ##################################################
-  #if(corrmodel == "Kummer"){
-  #  CC=as.double(param['sill']); N=1
-  #  a <- as.double(param['scale']);  
-  #  nu1 <- as.double(param['smooth']);
-  #  other <- as.double(param['power2'])
-  #  a0 = a; nu0 = nu1
-  #  a0 <- a <- param$scale
-  #  parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0, "other" = other)
-  #  P <- 1;  vtype = 0
-  #  parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
-  #  u <- frequency_sampler(L, parametersg, corrmodel)
-  #  model_num <- CkCorrModel(corrmodel)
-  #}
+
    if(corrmodel == "Kummer_Matern"){
     CC=as.double(param['sill']); N=1
     a <- as.double(param['scale']);  
@@ -164,22 +146,10 @@ LIM2=8 # after this limit then kummer_Matern is a matern approx..
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1,"nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
     parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
-    u <- frequency_sampler(L, parametersg, corrmodel)
     model_num <- CkCorrModel(corrmodel)
   }
     ##################################################
- # if(corrmodel == "GenWend"){
- #   CC <- as.double(param['sill']); N=1;
- #   nu1 <- as.numeric( param['smooth'] )
- #   other <- as.numeric(param['power2'])
- #   a <- as.numeric(param['scale'])
- #   a0 = a; nu0 = nu1
- #   parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
- #   P <- 1;  vtype = 0
- #   parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
- #   u <- frequency_sampler(L, parametersg, corrmodel)
- #   model_num <- CkCorrModel(corrmodel)
- # }
+
   if(corrmodel == "GenWend_Matern"){
     CC <- as.double(param['sill']); N=1;
     nu1 <- as.numeric( param['smooth'] )
@@ -191,38 +161,79 @@ LIM2=8 # after this limit then kummer_Matern is a matern approx..
     parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
     P <- 1;  vtype = 0
     parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
-    u <- frequency_sampler(L, parametersg, corrmodel)
     model_num <- CkCorrModel(corrmodel)
   }
 
     ##################################################
-  if(!is.null(u)){  
-  A <- matrix(0, P, P*L*N); B <- matrix(0, P, P*L*N)
-  phi <- 2*pi*runif(P*L*N)
-  sequen <- c(seq(0,n-0.5, by = ceiling(1e6/P/N)),n)
-  m = c()
-  for (i in 1:(length(sequen)-1)){ m1 <- sequen[i+1]-sequen[i]; m = c(m1,m)}
-  simu11 = as.numeric( rep(0,N*P*sum(m)*(length(sequen)-1)))
+  u <- frequency_sampler(L, parametersg, corrmodel)
+  phi <- runif(L, 0, (2*pi))
+  Nlocs <- nrow(coord)
+  if(!is.null(u)){
+    if(Nlocs > 100000){
+      #message("Simulation over 100000 spatial locations. Dividing into chunks \n")
+      Chunks <- ceiling(Nlocs/100000)
+      #message("Total number of chunks: ", Chunks, "\n")
+      limits <- seq(0, Nlocs, by = 100000)
+      limits <- c(limits,Nlocs)
+      limits <- unique(limits)
+      low_limits <- limits[1:(length(limits) - 1)]
+      upp_limits <- limits[2:length(limits)]
+      simu =  matrix(NA,Nlocs,1)
+      if(!parallel){
+        for(i in 1:length(low_limits)){
+          indexes <- (low_limits[i]+1):upp_limits[i]
+          Ninner <- length(indexes)
+          result=dotCall64::.C64("TBD1d",
+                                 SIGNATURE = c("double","double", "double","double",
+                                               "double","integer","integer","double"),
+                                 ux = u[,1], uy = u[,2], 
+                                 sx = coord[indexes, 1], 
+                                 sy = coord[indexes, 2], 
+                                 phi = phi, L = L, n = Ninner, result = rep(0, Ninner), 
+                                 INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
+                                 PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
+          
+          simu[indexes,1] = sqrt(CC)*result/sqrt(2*L)
+       #   message("Chunk: ", i, "\n")
+        }
+      }else{
+        
 
-  result=dotCall64::.C64("for_c",
-                         SIGNATURE = c("integer","double", "double","double",
-                                       "double","integer","integer","integer","integer","double",
-                                       "double","double","double","double",
-                                       "integer","integer","integer",
-                                       "double","double","integer","integer","double",
-                                       "double","double"),
-                         d_v = d, a_v = c(a), nu1_v = c(nu1), C_v = c(CC), nu2_v = c(parameters$nu2), 
-                         P = P, N = N, L = L, model = model_num,
-                         u = c(u), a0 = a0, nu0 = nu0, A = c(A), B = c(B), sequen = c(sequen),
-                         largo_sequen = length(sequen), n = n, coord = coord, phi = phi, vtype = vtype,
-                         m1 = m,
-                         simu1=dotCall64::numeric_dc(length(simu11)), L1 = L, other,
-                         INTENT = c("r", "r", "r", "r", "r","r","r","r", "r",
-                                    "r", "r", "r", "r", "r", "r","r","r","r", "r",
-                                    "r", "r", "rw","r","r"),
-                         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
- 
-  simu =  matrix(sqrt(CC)*result,n,P)
+        future::plan(future::multisession, workers = ncores)
+       # progressr::handlers(global = TRUE)
+       # progressr::handlers("txtprogressbar")
+       # pb <- progressr::progressor(along = 1:Chunks)
+        k=1
+        simu <- foreach::foreach(k = 1:Chunks, .combine = c, .options.future = list(seed = TRUE, packages = "GeoModels")) %dofuture% {
+          indexes <- (low_limits[k]+1):upp_limits[k]
+          Ninner <- length(indexes)
+          result=dotCall64::.C64("TBD1d",
+                                 SIGNATURE = c("double","double", "double","double",
+                                               "double","integer","integer","double"),
+                                 ux = u[,1], uy = u[,2], 
+                                 sx = coord[indexes, 1], 
+                                 sy = coord[indexes, 2], 
+                                 phi = phi, L = L, n = Ninner, result = rep(0, Ninner), 
+                                 INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
+                                 PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
+          
+          result <- sqrt(CC)*result/sqrt(2*L)
+          return(result)
+        }
+       future::plan(sequential)
+      }
+    }else{
+      result=dotCall64::.C64("TBD1d",
+                             SIGNATURE = c("double","double", "double","double",
+                                           "double","integer","integer","double"),
+                             ux = u[,1], uy = u[,2], 
+                             sx = coord[,1], 
+                             sy = coord[,2], 
+                             phi = phi, L = L, n = Nlocs, result = rep(0, Nlocs), 
+                             INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
+                             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
+      simu = matrix(sqrt(CC)*result/sqrt(2*L),Nlocs,1)
+    }
   }
   else
   {simu=u=parametersg=NULL }
@@ -237,25 +248,6 @@ frequency_sampler <- function(L, parametersg, corrmodel){
     G <- matrix(rgamma(L, parametersg$nu1, scale = 1),L,2)
     ini.sample <- matrix(rnorm(L*2), L, 2)/sqrt(G*2)/parametersg$a/(2*pi)
   }
-  
-  #if(corrmodel == "GenWend"){
-  #  #Simulando frecuencias desde la densidad espectral
-  #  param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1,
-  #                              power2 = parametersg$other, nugget = 0)
-  #  Q.particles <- 15
-  #   dff=0.1#2*(1.5 + parametersg$nu)-1
-    
-  #  u_proposal <- cbind( rt(Q.particles*L, df = dff), rt(Q.particles*L, df = dff))
-  #  u_norm <- sqrt( rowSums(u_proposal^2) )
-  #  w0 <- dt(u_proposal[,1], df = dff)*dt(u_proposal[,2], df = dff)
-  #  w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
-  #  www <- w1/w0
-  #   if(any(is.na(www))){ ini.sample=NULL}
-  #  else{
-  #  u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
-  #  ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
-  #}
-  #}
 
 if(corrmodel == "GenWend_Matern"){
     #Simulando frecuencias desde la densidad espectral
@@ -278,24 +270,6 @@ if(corrmodel == "GenWend_Matern"){
   }
   }
   
-  #if(corrmodel == "Kummer"){
-  #  param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1, 
-   #                             power2 = parametersg$other, nugget = 0)
-
-   # Q.particles <- 15
-   # dff=0.2#min(0.05,parametersg$other-1)
-   # u_proposal <- cbind( rt(Q.particles*L,  df=dff), rt(Q.particles*L, df=dff))
-   # u_norm <- sqrt( rowSums(u_proposal^2) )
-   # w0 <- dt(u_proposal[,1], df=dff)*dt(u_proposal[,2], df=dff)
-   # w1 <- pmax( (spectral_density_1dR(param_geomodels.int, corrmodel, u_vec = u_norm) ), 0)
-   # www <- w1/w0
-   # if(any(is.na(www))){ ini.sample=NULL}
-   # else
-   # {
-   # u_index <- sample(1:(Q.particles*L), size = L, replace = T, prob = www)
-   # ini.sample <- matrix(u_proposal[u_index,], ncol = 2 )
-   # }
-  #}
 
 if(corrmodel == "Kummer_Matern"){
     #Simulando frecuencias desde la densidad espectral
