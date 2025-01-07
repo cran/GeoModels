@@ -7,7 +7,7 @@
  random fields using two approximate methods of simulation: circulant embeeding and turning band. (see Examples). 
 }
 \usage{
-GeoSimapprox(coordx, coordy=NULL, coordt=NULL, 
+GeoSimapprox(coordx, coordy=NULL, coordz=NULL,coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
 grid=FALSE,local=c(1,1),max.ext=1,
 method="TB", L=1000,model='Gaussian',parallel=FALSE,ncores=NULL,
@@ -15,15 +15,14 @@ n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,
 nrep=1,progress=TRUE)
 }
 \arguments{
-  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
-    \code{d} is the number of spatial sites) giving 2-dimensions of spatial coordinates or a numeric \eqn{d}{d}-dimensional vector giving
-    1-dimension of spatial coordinates.
+   \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
      Coordinates on a sphere for a  fixed radius \code{radius} 
     are passed in lon/lat format expressed in decimal degrees.}
   \item{coordy}{A numeric vector giving 1-dimension of
-    spatial coordinates; \code{coordy} is interpreted only if \code{coordx} is a numeric
-    vector or \code{grid=TRUE} otherwise it will be ignored. Optional argument, the default is \code{NULL} then \code{coordx} is expected to
-    be numeric a (\eqn{d \times 2}{d x 2})-matrix.}
+    spatial coordinates; Optional argument, the default is \code{NULL}.}
+      \item{coordz}{A numeric vector giving 1-dimension of
+    spatial coordinates;  Optional argument, the default is \code{NULL}.}
+
   \item{coordt}{A numeric vector giving 1-dimension of
     temporal coordinates.  Optional argument, the default is \code{NULL}
     then a spatial RF is expected.}

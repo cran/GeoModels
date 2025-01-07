@@ -3,7 +3,7 @@
 ####################################################
 
 # Simulate approximate spatial and spatio-temporal random felds:
-GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
+GeoSimapprox <- function(coordx, coordy=NULL,coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
      local=c(1,1),max.ext=1,method="TB", L=1000,model='Gaussian', parallel=FALSE,ncores=NULL,
      n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
@@ -12,11 +12,15 @@ GeoSimapprox <- function(coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrm
 ####################################################################
 
 ###############################
-ddim<-function(coordx,coordy,coordt)
+ddim<-function(coordx,coordy,coordz,coordt)
 {
 dimt=1
+if(is.null(coordz))
+{
 if(is.null(coordy))  dims=dim(coordx)[1]
 else                 dims=length(coordx)*length(coordy)
+}
+else   dims=length(coordx)*length(coordy)*length(coordz)
 if(!is.null(coordt)) dimt=length(coordt)
 return(dims*dimt)
 }
@@ -60,7 +64,7 @@ RFfct1<- function(numcoord,numtime,spacetime,bivariate,dime,nuisance,simd,X,ns)
 ######################################################################
 ############## main  internal function  ##############################
 ######################################################################
-simu_approx=function(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,ncores)
+simu_approx=function(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,ncores)
 {
 ##### spatial case 
 
@@ -96,7 +100,7 @@ if(!spacetime){
       #                            covfun_name = model1, coords, m = M)
        #               }
  ## Circulant embeeding           for regular grid          
-  if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,corrmodel,param,mean.val=0, max.ext)$X)        
+  if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,coordz,corrmodel,param,mean.val=0, max.ext)$X)        
 }
 ##### spacetime case ######
 if(spacetime)  {
@@ -154,13 +158,17 @@ if(!is.null(spobj)) {
 ###############################################################
 ###############################################################
 
-    if(grid) { xgrid=coordx;ygrid=coordy;
-               numxgrid=length(xgrid);numygrid=length(ygrid) 
-               coords=as.matrix(expand.grid(xgrid,ygrid))
+    if(grid) {  xgrid=coordx;ygrid=coordy
+                numxgrid=length(xgrid);numygrid=length(ygrid) 
+               if(is.null(coordz)){ 
+                          coords=as.matrix(expand.grid(xgrid,ygrid))
+                          }
+               else     { zgrid=coordz;numzgrid=length(zgrid) 
+                          coords=as.matrix(expand.grid(xgrid,ygrid,zgrid))}  
              }
     else
     {   coords=coordx
-        if(!is.null(coordy)) coords=cbind(coordx,coordy)
+        if(!is.null(coordy)) coords=cbind(coordx,coordy,coordz)
     }         
     coords_orig=coords
     if(!(is.null(anisopars))) coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))    
@@ -181,7 +189,7 @@ if(!is.null(spobj)) {
    ################################################################################
     unname(coordt);
     if(is.null(coordx_dyn)){
-    unname(coordx);unname(coordy)}
+    unname(coordx);unname(coordy);;unname(coordz)}
   
   ################################################################################
   ################ setting parameters for each model #############################
@@ -336,10 +344,11 @@ for( LL in 1:nrep){
        if(bivariate) coordt=c(1,2)
        coords=do.call(rbind,args=c(coordx_dyn))
        ns=lengths(coordx_dyn)/2
-       coordx <- coords[,1]; coordy <- coords[,2]
+       if(ncol(coords)==2) {coordx <- coords[,1]; coordy <- coords[,2];coordz <- NULL}
+         if(ncol(coords)==3) {coordx <- coords[,1]; coordy <- coords[,2];coordz <- coords[,3]}
        dime=sum(ns)
    }
-   else { dime=ddim(coordx,coordy,coordt)
+   else { dime=ddim(coordx,coordy,coordz,coordt)
           if(bivariate) {ns=c(length(coordx),length(coordx))/2}
         }
    if(!bivariate) dd=array(0,dim=c(dime,1,k))
@@ -357,7 +366,7 @@ KK=1;sel=NULL;ssp=double(dime)
 if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
-      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -368,7 +377,7 @@ while(KK<=npoi) {
 for(i in 1:k) {
 
 ################# here the approximated simulation  ##################################################
-simd=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
 ######################################################################################################
 
 namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
@@ -435,7 +444,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonGammaZIP","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -478,7 +487,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim
@@ -778,12 +787,12 @@ if(nrep==1) SIM=SIM[[1]]
 
     #######################################
     if(bivariate)   numtime=1
-
     # Delete the global variables:
     # Return the objects list:
     GeoSim <- list(bivariate = bivariate,
     coordx = coords_orig[,1],
     coordy = coords_orig[,2],
+    coordz = coordz,
     coordt = coordt,
     coordx_dyn =coordx_dyn,
     corrmodel = corrmodel,

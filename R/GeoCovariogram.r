@@ -213,8 +213,9 @@ fitted$fixed=unlist(fitted$fixed)
     else{
         mmm <- double(2)
         type_dist <- CheckDistance(distance)
-        p=.C("Maxima_Minima_dist",mmm=as.double(mmm),as.double(fitted$coordx),as.double(fitted$coordy)
-        ,as.integer(fitted$numcoord),as.integer(type_dist),as.double(fitted$radius),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+        p=.C("Maxima_Minima_dist",mmm=as.double(mmm),as.double(fitted$coordx),as.double(fitted$coordy),as.double(fitted$coordz),
+        as.integer(fitted$numcoord),as.integer(type_dist),as.double(fitted$radius),
+        PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
         lags_m <- seq(slow,p$mmm[2],length=150)
         if (ispatim) {
             tt <- double(2)

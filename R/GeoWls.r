@@ -36,10 +36,11 @@ print.GeoWLS <- function(x, digits = max(3, getOption("digits") - 3), ...)
   }
 
 
-WlsStart <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed, grid,
-                    likelihood, maxdist, neighb,maxtime, model, n, param, parscale,
-                    paramrange, radius, start, taper, tapsep, type, varest, vartype,
-                    weighted, winconst,winconst_t, winstp_t, winstp,copula,X,memdist,nosym)
+
+WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed, grid,
+                    likelihood, maxdist, neighb,maxtime, model, n, param, 
+                    parscale, paramrange, radius, start, taper, tapsep, type, varest, 
+                    weighted, copula,X,memdist,nosym)
   {
   
     # Determines the range of the parameters for a given correlation
@@ -145,12 +146,14 @@ WlsStart <- function(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distan
     }
     
     ### Initialization parameters:
-    initparam <- StartParam(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed,
+    
+    initparam <- StartParam(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed,
                            grid, likelihood, maxdist,neighb, maxtime, model, n, 
                            param, parscale, paramrange, radius,  start, taper, tapsep,
-                           "GeoWLS", type, varest, vartype,
-                           weighted, winconst,winconst_t, winstp_t, winstp,copula, X, memdist, nosym)
+                           "GeoWLS", type,  weighted,copula, X, memdist, nosym)
   
+
+
     if(!is.null(initparam$error))     stop(initparam$error)
     if(length(coordt)>0&&is.list(X)) X=X[[1]]
 
@@ -223,6 +226,7 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
         else {initparam$fixed <- NULL}
         }    
 }     ## end univariate case
+
   ###################################
      if(initparam$bivariate)    ## bivariate case
      {           ###bivariate case
@@ -284,9 +288,12 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
         else  paramrange <- list(lower=NULL, upper=NULL)
         initparam$lower<-paramrange$lower
         initparam$upper<-paramrange$upper
+
         return(initparam)
 
-}### end checking if numparam = numstart
+}### end checking if numparam = numstart 
+
+
         initparam$error="Some starting and/or fixed parameters are missing. (All the covariance and nuisance  parameters must be included) "
         return(initparam)
   }
@@ -295,7 +302,7 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
 ####################################################################################################################
 ####################################################################################################################
 ####################################################################################################################
-GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, corrmodel, distance="Eucl",
+GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_dyn=NULL, corrmodel, distance="Eucl",
                          fixed=NULL,grid=FALSE, maxdist=NULL, neighb=NULL,maxtime=NULL, model='Gaussian',
                          optimizer='Nelder-Mead', numbins=NULL, radius=6371,  start=NULL,
                          weighted=FALSE,optimization=TRUE)
@@ -305,9 +312,9 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
 
     call <- match.call()
     ### Check the parameters given in input:
-    checkinput <- CkInput(coordx, coordy, coordt, coordx_dyn, corrmodel, data, distance,"Fitting", fixed, grid, 'None',
+    checkinput <- CkInput(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance,"Fitting", fixed, grid, 'None',
                               maxdist, maxtime,  model,NULL,  optimizer, NULL, radius, start, NULL,
-                             NULL, 'GeoWLS', FALSE, 'SubSamp', weighted, NULL,NULL)
+                             NULL, 'GeoWLS', FALSE, weighted, NULL,NULL)
     
 
     if(!is.null(checkinput$error))
@@ -346,14 +353,16 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
     variogramst <- NULL
     ### Initializes the parameter values:
     parscale <- NULL
-    initparam <- StartParam(coordx, coordy, coordt, coordx_dyn,corrmodel, data, distance, "Fitting", fixed, grid,
-    'None', maxdist, neighb,maxtime,  model, NULL,  NULL,
-                           parscale, optimizer=='L-BFGS-B', radius, start,NULL,  NULL,
-                           'GeoWLS', 'GeoWLS', FALSE, 'SubSamp', FALSE, 1, 1,1,1,NULL, NULL,0)
+    initparam <- StartParam(coordx, coordy, coordz,coordt, coordx_dyn,corrmodel, data, distance, "Fitting", fixed, grid,
+    'None', maxdist, neighb,maxtime,  model, NULL,  NULL,parscale, TRUE, radius, start,NULL,  NULL,
+                           'GeoWLS', 'GeoWLS', FALSE, NULL,NULL, FALSE,FALSE)
+
+
     if(!is.null(initparam$error))
       stop(initparam$error)
      coordx=initparam$coordx
      coordy=initparam$coordy
+     coordz=initparam$coordz
     ###### ----------- START Estimation of the empirical variogram ---------- #####
     numvario <- numbins-1
     bins <- double(numbins) # vector of spatial bins
@@ -380,12 +389,14 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
                                   data=c(t(data))
                                   coordx=rep(coordx,length(coordt))
                                   coordy=rep(coordy,length(coordt))
+                                   coordz=rep(coordz,length(coordz))
                          }
       if(spacetime_dyn) data=unlist(data)
          NS=c(0,NS)[-(length(ns)+1)]
       fname <- 'Binned_Variogram_st';fname <- paste(fname,"2",sep="") 
+      if(is.null(coordz)) coordz=0
       # Compute the spatial-temporal moments:
-      EV=.C("Binned_Variogram_st2", bins=bins, bint=bint, as.double(coordx),as.double(coordy),as.double(coordt),as.double(initparam$data),
+      EV=.C("Binned_Variogram_st2", bins=bins, bint=bint, as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(initparam$data),
            lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,moments= moments, momentst=momentst, momentt=momentt, as.integer(numbins), as.integer(numbint),
            as.integer(ns),as.integer(NS), PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
       bins=EV$bins
@@ -442,7 +453,7 @@ GeoWLS <- function(data, coordx, coordy=NULL, coordt=NULL,  coordx_dyn=NULL, cor
       lenbint <- integer(1) # vector of temporal bin sizes
       lenbinst <- integer(1)  # vector of spatial-temporal bin sizes
       fname <- paste(fname,"2",sep="")
-      EV=.C("Binned_Variogram2", bins=bins, as.double(coordx),as.double(coordy),as.double(coordt),as.double(initparam$data), lenbins=lenbins,
+      EV=.C("Binned_Variogram2", bins=bins, as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(initparam$data), lenbins=lenbins,
          moments=moments, as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
       bins=EV$bins
       lenbins=EV$lenbins
@@ -504,6 +515,7 @@ if(optimization){
                          centers=centers,
                          coordx = initparam$coordx,
                          coordy = initparam$coordy,
+                         coordz = initparam$coordz,
                          coordt = initparam$coordt,
                          coordx_dyn=coordx_dyn,
                          convergence = fitted$convergence,

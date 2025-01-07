@@ -4,10 +4,10 @@
 
 ### Optim call for Composite log-likelihood maximization
 
-CompLik2 <- function(copula,bivariate, coordx, coordy ,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed, GPU,grid,
+CompLik2 <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed, GPU,grid,
                            likelihood, local,lower, model, n, namescorr, namesnuis, namesparam,
                            numparam, numparamcorr, optimizer, onlyvar, parallel, param, spacetime, type,
-                           upper, varest, vartype, weigthed, winconst, winstp,winconst_t, winstp_t, ns, X,sensitivity,
+                           upper, varest,  weigthed, ns, X,sensitivity,
                            colidx,rowidx,neighb,MM,aniso)
   {
 
@@ -45,6 +45,7 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
         }
          else
          {
+                  
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
                         corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
@@ -277,7 +278,7 @@ lname="comploglik2"
 
 
  
-coords=cbind(coordx,coordy)
+coords=cbind(coordx,coordy,coordz)
 
 if(!onlyvar){
   
@@ -662,97 +663,8 @@ colnames(CompLikelihood$hessian)=namesparam
        if( (CompLikelihood$convergence!='Successful')||CompLikelihood$value==-1e+15)  print("Optimization may have failed: try with other starting values ")
           else{
     if(varest){
-           print("subsambling is not working")
-           # dimmat <- numparam^2
-           # dmat <- numparam*(numparam+1)/2
-           # eps <- (.Machine$double.eps)^(1/3)
-           # param <- c(CompLikelihood$par, fixed)
-           # score <- double(numparam)
-           # paramcorr <- param[namescorr]
-           # nuisance <- param[namesnuis]
-           # sel=substr(names(nuisance),1,4)=="mean"
-            
-           # mm=as.numeric(nuisance[sel])   ## mean paramteres
-            
-           #if(bivariate){
-           #  sel1=substr(names(nuisance),1,6)=="mean_1"
-           #  mm1=as.numeric(nuisance[sel1])
-           #  sel2=substr(names(nuisance),1,6)=="mean_2"
-           #  mm2=as.numeric(nuisance[sel2])
-           #  mm=length(c(mm1,mm2))}
-           #  num_betas=length(mm)
-      
-            #other_nuis=as.numeric(nuisance[!sel]) 
-           # nuisance=c(mm,other_nuis)
-           # sensmat <- double(dmat);varimat <- double(dmat)
-
-            # Set the window parameter:
-         #  if(length(winconst)==1) winconst=c(winconst,0)
-           
-
-          #  GD=.C('GodambeMat',as.double(mm),as.integer(bivariate),as.double(coordx),as.double(coordy),
-           #   as.double(coordt),as.integer(corrmodel), as.double(data),as.integer(distance),as.double(eps),
-            #  as.integer(flagcorr), as.integer(flagnuis),as.integer(grid),as.integer(likelihood),
-             # as.double(c(X%*%mm)),as.integer(model),as.double(n),as.integer(num_betas),
-             # as.integer(numparam),as.integer(numparamcorr),as.integer(length(paramcorr)),as.double(paramcorr),as.double(nuisance),
-             # score=score,sensmat=sensmat,as.integer(spacetime),as.integer(type),
-             # varimat=varimat,as.integer(vartype),as.double(winconst),as.double(winstp),as.double(winconst_t),as.double(winstp_t),
-             # as.integer(weigthed),c(t(X)),as.integer(ns),as.integer(NS),PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE)
-      
-           # if(!sum(GD$varimat)) print("Std error estimation failed")
-            # Set score vectore:
-            #CompLikelihood$winconst<-winconst
-            #CompLikelihood$winstp<-winstp
-
-           # GD$score=numDeriv::grad(func=comploglik2,x=CompLikelihood$par,method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-            #                  data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
-             #                 namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-              #                weigthed=weigthed,X=X,local=local,GPU=GPU)
-            #CompLikelihood$score <- GD$score
-            # Set sensitivity matrix:
-            #CompLikelihood$sensmat <- matrix(rep(0,dimmat),ncol=numparam)
-            # Set variability matrix:
-            #CompLikelihood$varimat <- matrix(rep(0,dimmat),ncol=numparam)
-            
-
-            #namesgod <- c(namesnuis[as.logical(flagnuis)], namescorr[as.logical(flagcorr)])
-            #names(CompLikelihood$score) <- namesgod
-            #CompLikelihood$score <- CompLikelihood$score[namesparam]
-            #dimnames(CompLikelihood$sensmat) <- list(namesgod, namesgod)
-            #dimnames(CompLikelihood$varimat) <- list(namesgod, namesgod)
-
-            #if(numparam>1){
-    #
-         #     CompLikelihood$varimat[lower.tri(CompLikelihood$varimat, diag=TRUE)] <- GD$varimat
-         #     CompLikelihood$varimat <- t(CompLikelihood$varimat)
-         #     CompLikelihood$varimat[lower.tri(CompLikelihood$varimat, diag=TRUE)] <- GD$varimat
-         #     CompLikelihood$sensmat <- CompLikelihood$sensmat[namesparam, namesparam]
-        #      CompLikelihood$varimat <- CompLikelihood$varimat[namesparam, namesparam]}
-         #   else {CompLikelihood$sensmat[1,1] <- sensmat
-          #        CompLikelihood$varimat[1,1] <- varimat}
-           # if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
-           # icholsensmat <- try(chol(CompLikelihood$sensmat), silent = TRUE)
-            #isensmat <- try(chol2inv(icholsensmat), silent = TRUE)
-         #    if(!is.matrix(isensmat) || !is.matrix(CompLikelihood$varimat))
-          #    {
-           #     warning("observed information matrix is singular")
-            #    CompLikelihood$varcov <- 'none'
-             #   CompLikelihood$stderr <- 'none'
-             # }
-            #else
-             # { 
-              #  penalty <- crossprod(CompLikelihood$varimat,isensmat)
-               # CompLikelihood$claic <- -2 * CompLikelihood$value + 2*sum(diag(penalty))
-               # CompLikelihood$clbic <- -2 * CompLikelihood$value + log(dimat)*sum(diag(penalty))
-               # CompLikelihood$varcov <- crossprod(isensmat,penalty)
-               # dimnames(CompLikelihood$varcov) <- list(namesparam, namesparam)
-               # CompLikelihood$stderr <- diag(CompLikelihood$varcov)
-               # if(any(CompLikelihood$stderr < 0))
-               #   CompLikelihood$stderr <- 'none'
-               # else
-               #   CompLikelihood$stderr <- sqrt(CompLikelihood$stderr)
-              #}
-        }
+           stop("subsambling is not working")
+            }
       }
       if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
     if(!is.null(GPU)) gc()

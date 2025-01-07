@@ -11,7 +11,7 @@ for pairwise composite likelihood estimation.}
    The procedure needs an object obtained using the GeoVariogram function.
 }
 \usage{
-GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
+GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
     copula=NULL,corrmodel=NULL, distance="Eucl",fixed=NULL,anisopars=NULL,
     est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',lower=NULL,
     neighb=c(1,2,3,4,5),maxtime=Inf, memdist=TRUE,model='Gaussian',
@@ -26,15 +26,15 @@ GeoNeighbSelect(data, coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,
    (\eqn{t \times d}{t x d})-matrix (a single spatial-temporal realisation)   or an (\eqn{d \times d \times t \times n }{d x d x t})-array
    (a single spatial-temporal realisation on regular grid).
    For the description see the Section \bold{Details}.}
-  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix (where
-    \code{d} is the number of spatial sites) assigning 2-dimensions of spatial coordinates or a numeric \eqn{d}{d}-dimensional vector assigning
-    1-dimension of spatial coordinates.  Coordinates on a sphere for a  fixed radius \code{radius} 
+      \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
+     Coordinates on a sphere for a  fixed radius \code{radius} 
     are passed in lon/lat format expressed in decimal degrees.}
-  \item{coordy}{A numeric vector assigning 1-dimension of
-    spatial coordinates; \code{coordy} is interpreted only if \code{coordx} is a numeric
-    vector or \code{grid=TRUE} otherwise it will be ignored. Optional argument, the default is \code{NULL} then \code{coordx} is expected to
-    be numeric a (\eqn{d \times 2}{d x 2})-matrix.}
-  \item{coordt}{A numeric vector assigning 1-dimension of
+  \item{coordy}{A numeric vector giving 1-dimension of
+    spatial coordinates; Optional argument, the default is \code{NULL}.}
+      \item{coordz}{A numeric vector giving 1-dimension of
+    spatial coordinates;  Optional argument, the default is \code{NULL}.}
+
+     \item{coordt}{A numeric vector assigning 1-dimension of
     temporal coordinates.  Optional argument, the default is \code{NULL}
     then a spatial random fields is expected.}
   \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices

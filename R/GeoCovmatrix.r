@@ -54,7 +54,7 @@ MatLogDet<-function(mat.decomp,method)    {
 ######################################################################################################
 ######################################################################################################
 
-GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NULL,coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
                        maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=6371,
                        sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
 
@@ -62,13 +62,17 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordt=NULL, coordx_dy
   ########################################################################################################
   ##########  Internal function: computing covariance matrix #############################################
   ########################################################################################################
-    Cmatrix <- function(bivariate, coordx, coordy, coordt,corrmodel, dime, n, ns, NS, nuisance, numpairs,
+
+
+
+
+
+    Cmatrix <- function(bivariate, coordx, coordy,coordz, coordt,corrmodel, dime, n, ns, NS, nuisance, numpairs,
                            numpairstot, model, paramcorr, setup, radius, spacetime, spacetime_dyn,type,copula,ML,other_nuis)
     {
 ###################################################################################
 ############### computing correlation #############################################
 ###################################################################################
-
 
 if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
 {
@@ -80,9 +84,9 @@ if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
         if(bivariate) {
             if(model==1) fname <- "CorrelationMat_biv_dyn2"
             if(model==10)fname <- "CorrelationMat_biv_skew_dyn2" }
-       cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double",  "integer","double","double","double","integer","integer"),
-            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordt,corrmodel,nuisance,paramcorr,radius,ns,NS,
-            INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
+       cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double", "double",  "integer","double","double","double","integer","integer"),
+            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,radius,ns,NS,
+            INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
     
 }
@@ -97,9 +101,9 @@ if(type=="Tapering")  {
         #  as.integer(corrmodel), as.double(nuisance), as.double(paramcorr),as.double(radius),as.integer(ns),
         #   as.integer(NS),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
 
-cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double",  "integer","double","double","double","integer","integer"),
-     corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
- INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
+cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","double",  "integer","double","double","double","integer","integer"),
+     corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
+ INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
      ## deleting correlation equual  to 1 because there are problems  with hipergeometric function
         sel=(abs(cr$corr-1)<.Machine$double.eps);cr$corr[sel]=0
@@ -611,11 +615,11 @@ if(type=="Standard")  {
     if(spacetime) fname <- "CorrelationMat_st_dyn_dis2"
 
   cr=dotCall64::.C64(fname,SIGNATURE =
-      c("double","double","double","double", 
+      c("double","double","double","double","double", 
        "integer","double","integer","double",
        "double","double","integer","integer","integer"),
-        corr=dotCall64::numeric_dc(numpairstot), coordx,coordy,coordt,corrmodel,c(mu), n,other_nuis,paramcorr,radius,ns,NS,model,
-  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r"),
+        corr=dotCall64::numeric_dc(numpairstot), coordx,coordy,coordz, coordt,corrmodel,c(mu), n,other_nuis,paramcorr,radius,ns,NS,model,
+  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
      corr=cr$corr # ojo que corr en este caso es una covarianza y ya va con el nugget
@@ -647,9 +651,9 @@ if(type=="Standard")  {
    #        as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
 
      cr=dotCall64::.C64(fname,SIGNATURE =
-         c("double","double","double","double","integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
-        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
-  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r","r"),
+         c("double","double","double","double","double","integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
+        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
+  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
         varcov <-new("spam",entries=cr$corr,colindices=setup$ja,
@@ -696,15 +700,12 @@ return(varcov)
 ##############################################################################
 ###### extracting GeoFit object informations if necessary              #######
 ##############################################################################
-
 if(!is.null(estobj)){
    if(!inherits(estobj,"GeoFit"))
                stop("need  a 'GeoFit' object as input\n")
-   #data=estobj$data
-
 if(!estobj$grid){  #not regular grid 
 
- if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy)
+ if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy,estobj$coordz)
                          else cord=estobj$coordx_dyn
                       } ## spatial (temporal) non regular case
  else  {    if(is.null(estobj$coordx_dyn))  { coordx=estobj$coordx[1:estobj$ns[1]]    # bivariate not dynamic    
@@ -715,6 +716,7 @@ if(!estobj$grid){  #not regular grid
  }
 else  { coordx=estobj$coordx; 
         coordy=estobj$coordy
+        coordz=estobj$coordz
       }
    if(length(estobj$coordt)==1) coordt=NULL
    else coordt=estobj$coordt
@@ -731,7 +733,7 @@ else  { coordx=estobj$coordx;
    if(ncol(estobj$X)==1) X=NULL
    else X=estobj$X
 }
-
+################# end extracting information###################################################
 if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
  if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 
@@ -775,8 +777,10 @@ if(!is.null(spobj)) {
 }
 
     if(is.null(coordx_dyn)){
-    unname(coordx);unname(coordy)}
-    else{coordx=NULL;coordy=NULL}
+    unname(coordx);unname(coordy);unname(coordz)}
+    else{coordx=NULL;coordy=NULL;coordz=NULL}
+
+
     #if the covariance is compact supported  and option sparse is used
     #then set the code as a tapering and an object spam is returned
 if(sparse) {
@@ -822,29 +826,47 @@ else                    param$sill=1
 }
 }
 
-#######################################
-    if(grid) { coords=as.matrix(expand.grid(coordx,coordy)); grid=FALSE }
-    else     { coords=coordx; if(!is.null(coordy)) coords=cbind(coordx,coordy)}         
 
+coords=NULL
+coordz=NULL
+
+if(is.null(coordx_dyn)){
+ #######################################
+    if(grid) { coords=as.matrix(expand.grid(coordx,coordy)); grid=FALSE }
+    else     {  if(!is.null(coordy)) { coords=as.matrix(cbind(coordx,coordy,coordz))}
+                else                 { coords=as.matrix(coordx);}
+                if(ncol(coords)==3) coordz=coords[,3]
+             }         
+}
     coords_orig=coords
-  
+ #######################################  
+
     if(!is.null(anisopars)) {  coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))}
 #######################################
-    checkinput <- CkInput(coords[,1], coords[,2], coordt, coordx_dyn, corrmodel, NULL, distance, "Simulation",
+
+
+
+    checkinput <- CkInput(coords[,1], coords[,2],coordz, coordt, coordx_dyn, corrmodel, NULL, distance, "Simulation",
                              NULL, grid, NULL, maxdist, maxtime,  model=model, n,  NULL,
-                              param, radius, NULL, taper, tapsep,  "Standard", NULL, NULL, NULL,copula,X)
-  
+                              param, radius, NULL, taper, tapsep,  "Standard", NULL, NULL,copula,X)
+
+
+
+
+    
     if(!is.null(checkinput$error)) stop(checkinput$error)
     spacetime_dyn=FALSE
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
     # Initialising the parameters:
 
-    initparam <- StartParam(coords[,1], coords[,2], coordt,coordx_dyn, corrmodel, NULL, distance, "Simulation",
+    
+    initparam <- StartParam(coords[,1], coords[,2],coordz, coordt,coordx_dyn, corrmodel, NULL, distance, "Simulation",
                            NULL, grid, NULL, maxdist, NULL,maxtime, model, n,
-                           param, NULL, NULL, radius, NULL, taper, tapsep,  type, type,
-                           NULL, NULL, FALSE, NULL, NULL,NULL,NULL,copula,X,FALSE)
+                           param, NULL, NULL, radius, NULL, taper, tapsep,  type, 
+                           type, FALSE,copula,X,FALSE,FALSE)
 
-    cc=cbind(initparam$coordx,initparam$coordy)
+    if(is.null(coordz)) cc=cbind(initparam$coordx,initparam$coordy,0)
+    else cc=cbind(initparam$coordx,initparam$coordy,initparam$coordz)
 
     if(!spacetime_dyn) dime=initparam$numcoord*initparam$numtime
     else               dime=sum(initparam$ns)
@@ -857,6 +879,9 @@ else                    param$sill=1
     {
     
        corr <- double(initparam$numpairs)
+       if(ncol(cc)==2)  ccz=corr
+       if(ncol(cc)==3)  ccz=cc[,3]
+
        #tapmod <- setup$tapmodel
        ### unit taperssss ####
        if(sparse){
@@ -872,17 +897,14 @@ else                    param$sill=1
          if(initparam$bivariate) fname= "CorrelationMat_biv_tap"
      }
 
- #tp=.C(fname,tapcorr=double(initparam$numpairs),as.double(cc[,1]),as.double(cc[,2]),as.double(initparam$coordt),as.integer(tapmod),
-  #    as.double(1),as.double(tapsep),as.double(1),0,0,
-   #   PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE) 
-
 if(is.null(tapsep)) tapsep=1
-      tp=dotCall64::.C64(fname,SIGNATURE =
-         c("double","double","double","double","integer","double","double","double","integer","integer"),
+   tp=dotCall64::.C64(fname,SIGNATURE =
+         c("double","double","double","double","double","integer","double","double","double","integer","integer"),
         tapcorr=dotCall64::numeric_dc(initparam$numpairs),
-        cc[,1],cc[,2],initparam$coordt,tapmod, 1,tapsep,1,1,1,
-  INTENT = c("w","r","r","r","r","r","r","r", "r", "r"),
+        cc[,1],cc[,2],ccz,initparam$coordt,tapmod, 1,tapsep,1,1,1,
+  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
         setup$taps<-tp$tapcorr
 
     }
@@ -923,14 +945,15 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
   other_nuis=as.numeric(other_nuis2[order(names(other_nuis2))]) # other nuis parameters ordered by names
   if((dim(initparam$X)[2])>1){ ML=initparam$X%*%c(beta) }
   else                       { if(sum(sel)>1)   ML=beta 
-                               else  ML=initparam$X*c(beta) 
-                             }
-  } 
+                               else  ML=initparam$X*c(beta) }
+                             } 
 }
 
 
+
+
 ######  calling main correlation functions
-    covmatrix<- Cmatrix(initparam$bivariate,cc[,1],cc[,2],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
+    covmatrix<- Cmatrix(initparam$bivariate,cc[,1],cc[,2],cc[,3],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
                         initparam$NS, initparam$param[initparam$namesnuis],
                         initparam$numpairs,numpairstot,initparam$model,
                         initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
@@ -953,6 +976,7 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
     CovMat <- list(bivariate =  initparam$bivariate,
                    coordx = coords_orig[,1],
                    coordy = coords_orig[,2],
+                   coordz = coordz,
                    coordt = initparam$coordt,
                    coordx_dyn = coordx_dyn,
                    covmatrix=covmatrix,

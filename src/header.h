@@ -397,6 +397,7 @@ extern double *maxtime;// the threshould of the temporal distances below which t
 extern int *ncoord;// number of total spatial coordinates
 extern int *ncoordx;// number of the first spatial coordinates
 extern int *ncoordy;// number of the second spatial coordinates
+extern int *ncoordz;// number of the second spatial coordinates
 extern int *npairs;// effective number of pairs
 //int *nrep;// number of iid replicates of the random field
 extern int *ntime;// number of times
@@ -1227,7 +1228,7 @@ double biv_two_pieceGaussian(double rho,double zi,double zj,double sill,double e
 
 double stirling(double x);
 
-double dist(int type_dist,double coordx,double locx,double coordy,double locy, double radius); 
+double dist(int type_dist,double coordx,double locx,double coordy,double locy,double coordz,double locz, double radius); 
 
 double Dist_geodesic(double loni, double lati, double lonj, double latj,double radius);
 
@@ -1276,14 +1277,14 @@ void SetSampling_t(double *data,double *sdata, int nbetas,int npts,
 
 
 
-void Space_Dist(double *coordx,double *coordy,int *ia,int *idx,
+void Space_Dist(double *coordx,double *coordy,double *coordz,int *ia,int *idx,
         int *ismal,int *ja,int *colidx,int *rowidx ,double thres);
 
 
-void SpaceTime_Dist(double *coordx,double *coordy,double *coordt,int *ia,int *idx,int *ismal,int *ja,
+void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,int *ia,int *idx,int *ismal,int *ja,
                     int *tapmodel,int *ns, int  *NS,int *colidx,int *rowidx ,double *thres,double *thret);
 
-void SpaceBiv_Dist(double *coordx,double *coordy,double *coordt,int *ia,int *idx,int *ismal,int *ja,
+void SpaceBiv_Dist(double *coordx,double *coordy,double *coordz,double *coordt,int *ia,int *idx,int *ismal,int *ja,
                     int *tapmodel,int *ns, int  *NS,int *colidx,int *rowidx ,double *thres);
 /*----------------------------------------------------------------
 File name: Utility.c
@@ -1481,4 +1482,4 @@ double qnorm55(double p, double mu, double sigma, int lower_tail, int log_p);
 
 
 
-void Maxima_Minima_dist(double *res,double *coordx,double *coordy,int *nsize,int *type_dist,double *radius);
+void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius);

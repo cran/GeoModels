@@ -27,19 +27,15 @@ extern void SetGlobalVar2 (int *nsite, int *times,
                            double *h,int *nn,  double *maxh,
                            double *u,int *tt,  double *maxu,
                            int *st,int *biv,int *one, int *two);
-extern void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordt,int *grid,int *ia,
-                         int *idx,int *ismal,int *ja,int *mem, int *nsite,int *nsitex,int *nsitey,
+extern void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *coordt,int *grid,int *ia,
+                         int *idx,int *ismal,int *ja,int *mem, int *nsite,int *nsitex,int *nsitey,int *nsitez,
                          int *npair,double *radius,double *srange, double *sep,int *st, int *times,double *trange,
                          int *tap,int *tapmodel,int *tp,int *weighted, int *colidx,int *rowidx,
                      int *ns, int *NS, int *dyn);
 extern void DeleteGlobalVar(void);
 extern void DeleteGlobalVar2(void);
-extern void GodambeMat(double *betas,int *biv,double *coordx, double *coordy, double *coordt, int *cormod, double *data, int *dst,
-                       double *eps,int *flagcor, int *flagnuis, int *grid, int *like, double *mean,int *model,double *NN, int *nbetas,
-                       int *npar, int *nparc,int *nparcT, double *parcor, double *nuis, double *score,
-                       double *sensmat, int *spt,  int *type_lik, double *varimat,
-                       int *vartype, double *winc, double *winstp,double *winct,double *winstp_t,int *weigthed, double *X,int *ns,int *NS);
-extern void Maxima_Minima_dist(double *res,double *coordx,double *coordy,int *nsize,int *type_dist,double *radius);
+
+extern void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius);
 
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
@@ -67,32 +63,32 @@ extern void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2
 extern void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result);
 /*****/
 
-extern void pairs(int *ncoords,double *data,double *coordx,double *coordy,double *numbins,double *bins,double *v0,double *v1,double *v2,double *maxdist);
+extern void pairs(int *ncoords,double *data,double *coordx,double *coordy,double *coordz,double *numbins,double *bins,double *v0,double *v1,double *v2,double *maxdist);
 
 /*extern void simu_on_coords(int *Ndim,int *Mcoords,int *Mu,double *coords,double *amatrix,
                            double *matrix_phi,double *matrix_u,double *matrix_out);
 */
 /********************** for variogrms computations  ****************************************************/
 
-extern void Binned_Variogram_biv2(double *bins,double *coordx, double *coordy, double *coordt, double *data,
+extern void Binned_Variogram_biv2(double *bins,double *coordx, double *coordy,double *coordz, double *coordt, double *data,
   int *cross_lbins, double *cross_moms, int *nbins,int *marg_lbins, double *marg_moms,int *ns, int *NS);
-extern void Binned_Variogram_st2(double *bins, double *bint, double *coordx, double *coordy, double *coordt,double *data, int *lbins, int *lbinst,
+extern void Binned_Variogram_st2(double *bins, double *bint, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, int *lbinst,
        int *lbint, double *moms,double *momst, double *momt, int *nbins, int *nbint, int *ns,int *NS);
-extern void Binned_Variogram2(double *bins, double *coordx, double *coordy, double *coordt,double *data, int *lbins, double *moms, int *nbins);
+extern void Binned_Variogram2(double *bins, double *coordx, double *coordy, double *coordz, double *coordt,double *data, int *lbins, double *moms, int *nbins);
 extern void Binned_Variogram2new(double *bins, int *np,double *data1, double *data2, double *vdist, int *lbins, double *moms, int *nbins,double *mm);
 extern void Binned_Variogram_biv2new(double *bins, int *np,double *data1, double *data2,  double *vdist, double *mm,
      double *moms00,double *moms10,double *moms11,
        int *lbins00,int *lbins10,int *lbins11,
      int *nbins,int *first, int *second);
-extern void Binned_Variogram_st2_dyn(double *bins, double *bint, double *coordx, double *coordy, double *coordt,double *data, int *lbins, int *lbinst,
+extern void Binned_Variogram_st2_dyn(double *bins, double *bint, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, int *lbinst,
                               int *lbint, double *moms,double *momst, double *momt, int *nbins, int *nbint, int *ns,int *NS);
-extern void Cloud_Variogram2(double *bins,double *coordx, double *coordy, double *coordt, double *data, int *lbins, double *moms, int *nbins);
+extern void Cloud_Variogram2(double *bins,double *coordx, double *coordy,double *coordz, double *coordt, double *data, int *lbins, double *moms, int *nbins);
 extern void LeastSquare_G(double *bins, double *bint, int *cormod, double *lbins, double *moms,
           int *nbins, int *nbint, double *nuis, double *par, double *res);
 extern void WLeastSquare_G(double *bins, double *bint, int *cormod, double *lbins, double *moms,
            int *nbins, int *nbint, double *nuis, double *par, double *res);
 
-extern void Binned_Variogram_22(double *bins, double *coordx, double *coordy, double *coordt,double *data, int *lbins, double *moms, int *nbins);
+extern void Binned_Variogram_22(double *bins, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, double *moms, int *nbins);
 
 /********************** for distribution computations  ****************************************************/
 
@@ -103,41 +99,41 @@ extern void vpbnorm(int *cormod, double *h, double *u, int *nlags, int *nlagt,
                     double *nuis, double *par, double *rho, double *thr);
 
 /*********************** for correlation computations ***************************************************/
-extern void Corr_c(double *cc,double *coordx, double *coordy, double *coordt, int *cormod, int *grid, double *locx,  double *locy,
+extern void Corr_c(double *cc,double *coordx, double *coordy,  double *coordz, double *coordt, int *cormod, int *grid, double *locx,  double *locy,
             int *ncoord, int *nloc,int *tloc,int *ns,int *NS,int *ntime, double *par, int *spt, int *biv, double *time,int *type, int *which,double *radius);
-extern void Corr_c_bin(double *cc,double *coordx, double *coordy, double *coordt, int *cormod, int *grid, double *locx,  double *locy,int *ncoord, int *nloc,
+extern void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,  double *locy,int *ncoord, int *nloc,
                 int *model,int *tloc,int *nn,int *n, int *ns,int *NS,int *ntime, double *mean,double *nuis, double *par, int *spt, int *biv, double *time,int *type, int *which,double *radius);
-extern void Corr_c_tap(double *cc,double *cc_tap,double *coordx, double *coordy, double *coordt, int *cormod, int *cormodtap, int *grid, double *locx,  double *locy,
+extern void Corr_c_tap(double *cc,double *cc_tap,double *coordx, double *coordy, double *coordz, double *coordt, int *cormod, int *cormodtap, int *grid, double *locx,  double *locy,
                 double *mxd,double *mxt, int *ncoord, int *nloc, int *ns,int *NS,int*tloc,int *ntime, double *par, int *spt, int *biv, double *time,int *type,int *which,double *radius);
 extern void VectCorrelation(double *rho, int *cormod, double *h, int *nlags, int *nlagt,double *mean,int *model,
                             double *nuis,double *par, double *u,int *N);
 extern void VectCorrelation_biv(double *rho, double *vario,int *cormod, double *h, int *nlags, int *nlagt,double *mean,int *model,
                                 double *nuis,double *par, double *u,int *N);
-extern void CorrelationMat2(double *rho,double *coordx, double *coordy, double *coordt,  int *cormod,
+extern void CorrelationMat2(double *rho,double *coordx, double *coordy, double *coordz, double *coordt,  int *cormod,
  double *nuis, double *par,double *radius,int *ns, int *NS);
-extern void CorrelationMat_dis2(double *rho,double *coordx, double *coordy, double *coordt,  int *cormod, double *mean,
+extern void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod, double *mean,
                          int *nn,double *nuis, double *par,double *radius, int *ns, int *NS,int *model);
-extern void CorrelationMat_st_dyn2(double *rho, double *coordx, double *coordy, double *coordt,int *cormod,
+extern void CorrelationMat_st_dyn2(double *rho, double *coordx, double *coordy,double *coordz, double *coordt,int *cormod,
   double *nuis, double *par,double *radius, int *ns,int *NS);
-extern void CorrelationMat_st_dyn_dis2(double *rho,double *coordx, double *coordy, double *coordt,  int *cormod,  double *mean,int *n,
+extern void CorrelationMat_st_dyn_dis2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod,  double *mean,int *n,
                                 double *nuis, double *par,double *radius, int *ns, int *NS, int *model);
-extern void CorrelationMat_biv_dyn2(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,  double *nuis,
+extern void CorrelationMat_biv_dyn2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod,  double *nuis,
   double *par,double *radius, int *ns,int *NS);
-extern void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy, double *coordt,int *cormod,
+extern void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy,double *coordz, double *coordt,int *cormod,
  double *nuis, double *par,double *radius, int *ns,int *NS);
-extern void DCorrelationMat_biv(int *cormod,double *coordx, double *coordy, double *coordt,double *drho,double *eps,int *flagcor,
+extern void DCorrelationMat_biv(int *cormod,double *coordx, double *coordy, double *coordz,double *coordt,double *drho,double *eps,int *flagcor,
       int *nparcor,double *parcor,double *rho);
-extern void DCorrelationMat_biv2(int *cormod,double *coordx, double *coordy, double *coordt,double *drho,double *eps,int *flagcor,
+extern void DCorrelationMat_biv2(int *cormod,double *coordx, double *coordy, double *coordz,double *coordt,double *drho,double *eps,int *flagcor,
       int *nparcor,double *parcor,double *rho);
-extern void DCorrelationMat_biv_tap(int *cormod,double *coordx, double *coordy, double *coordt,double *drho,
+extern void DCorrelationMat_biv_tap(int *cormod,double *coordx, double *coordy, double *coordz,double *coordt,double *drho,
             double *eps,int *flagcor,int *nparcor,double *parcor,double *rho);
-extern void CorrelationMat_biv_skew_dyn2(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,
+extern void CorrelationMat_biv_skew_dyn2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod,
  double *nuis, double *par,double *radius, int *ns,int *NS);
-extern void CorrelationMat_tap(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
+extern void CorrelationMat_tap(double *rho,double *coordx, double *coordy, double *coordz,double *coordt, int *cormod,  double *nuis, double *par,double *radius,
   int *ns, int *NS);
-extern void CorrelationMat_dis_tap(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
+extern void CorrelationMat_dis_tap(double *rho,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
   int *ns, int *NS, int *n1,int *n2, double *mu1,double *mu2,int  *model);
-extern void CorrelationMat_st_tap(double *rho,double *coordx, double *coordy, double *coordt, int *cormod, double *nuis,
+extern void CorrelationMat_st_tap(double *rho,double *coordx, double *coordy, double *coordz,double *coordt, int *cormod, double *nuis,
   double *par,double *radius, int *ns, int *NS);
 
 /*********************** for bivariate composite likelihood ***************************************************/
@@ -885,7 +881,7 @@ extern void Comp_Cond_Logistic2mem_aniso(int *cormod, double *coord1, double *co
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU);
 /*********************************************************************************************/
-extern void CorrelationMat_st_dis_tap(double *rho,double *coordx, double *coordy, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
+extern void CorrelationMat_st_dis_tap(double *rho,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod,  double *nuis, double *par,double *radius,
                                int *ns, int *NS, int *n1,int *n2, double *mu1,double *mu2,int  *model);
 
 extern void hypergeo_call(double *a,double *b,double *c,double *x, double *res);
@@ -941,12 +937,12 @@ static const R_CMethodDef CEntries[] = {
     {"CorrelationMat_tap",          (DL_FUNC) &CorrelationMat_tap,          10},
     {"CorrelationMat_dis_tap",      (DL_FUNC) &CorrelationMat_dis_tap,      15},
     {"CorrelationMat_st_tap",       (DL_FUNC) &CorrelationMat_st_tap,       10},
-    {"Binned_Variogram2",           (DL_FUNC) &Binned_Variogram2,            8},
+    {"Binned_Variogram2",           (DL_FUNC) &Binned_Variogram2,            9},
     {"Binned_Variogram2new",        (DL_FUNC) &Binned_Variogram2new,         9},
      {"Binned_Variogram_biv2new",        (DL_FUNC) &Binned_Variogram_biv2new,         15},
     {"Binned_Variogram_biv2",       (DL_FUNC) &Binned_Variogram_biv2,       12},
-    {"Binned_Variogram_st2",        (DL_FUNC) &Binned_Variogram_st2,        16},
-    {"Binned_Variogram_st2_dyn",    (DL_FUNC) &Binned_Variogram_st2_dyn,    16},
+    {"Binned_Variogram_st2",        (DL_FUNC) &Binned_Variogram_st2,        17},
+    {"Binned_Variogram_st2_dyn",    (DL_FUNC) &Binned_Variogram_st2_dyn,    17},
     {"Cloud_Variogram2",            (DL_FUNC) &Cloud_Variogram2,             8},
     {"LeastSquare_G",               (DL_FUNC) &LeastSquare_G,               10},
     {"WLeastSquare_G",              (DL_FUNC) &WLeastSquare_G,              10},
@@ -959,11 +955,10 @@ static const R_CMethodDef CEntries[] = {
     {"corr_kuma_vec",               (DL_FUNC) &corr_kuma_vec,                5},
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
     {"DeleteGlobalVar2",            (DL_FUNC) &DeleteGlobalVar2,             0},
-    {"GodambeMat",                  (DL_FUNC) &GodambeMat,                  36},
-    {"Maxima_Minima_dist",          (DL_FUNC) &Maxima_Minima_dist,           6},
-    {"pairs",                       (DL_FUNC) &pairs,                       10},
+    {"Maxima_Minima_dist",          (DL_FUNC) &Maxima_Minima_dist,           7},
+    {"pairs",                       (DL_FUNC) &pairs,                       11},
     {"SetGlobalVar2",               (DL_FUNC) &SetGlobalVar2,               12},
-    {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,               29},
+    {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,               31},
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
 
 /* for Turning band */
