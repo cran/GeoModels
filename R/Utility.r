@@ -1146,8 +1146,8 @@ StartParam <- function(coordx, coordy,coordz ,coordt,coordx_dyn, corrmodel, data
     }
 ##############################################################################################    
 newtap<- function(coords,numcoord, coordt,numtime, distance,maxdist,maxtime,spacetime,bivariate,radius)
+### using nearest.dist...
     {
-
       if(distance==0) method1="euclidean"
       if(distance==2||distance==1) method1="greatcircle"
 if(method1=="greatcircle"){
@@ -1157,9 +1157,8 @@ if(method1=="greatcircle"){
       if(distance==1) gb@entries=2*radius*sin(0.5*gb@entries)  ##CH
       }
 if(method1=="euclidean")
-      gb=spam::nearest.dist( x=coords,method = method1,
+      gb=spam::nearest.dist(x=coords,method = method1,
                          delta = maxdist, upper =NULL,miles=FALSE, R=1)
-    
       numpairs=length(gb@entries)
  ##loading only good distances..
    dotCall64::.C64("SetGlobalVar2",
@@ -1170,7 +1169,7 @@ if(method1=="euclidean")
        numcoord,  numtime,  
        gb@entries,numpairs,srange[2],
        1,1,1, # to change for spacetime sparse
-       spacetime,bivariate,1,1, INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+       spacetime,bivariate,1,1, INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
    
     colidx=gb@colindices
@@ -1184,30 +1183,30 @@ if(method1=="euclidean")
 
 
 
-    # Set the correlation and  if the correlation is space-time(T or F) or bivariate (T o F)  or univariate (case spacetime=F and bivariate=F)p
+    # Set the correlation and  if the correlation is space-time(spacetime=T and bivariate=F) or bivariate (F o T)  or univariate (case spacetime=F and bivariate=F)p
     corrmodel<-CkCorrModel(corrmodel)
-    
     bivariate <- CheckBiv(corrmodel); if(bivariate) coordt=c(1,2)
-    
     spacetime <- CheckST(corrmodel)
     isdyn=!is.null(coordx_dyn)
     space=!(spacetime||bivariate)
-    
+    ####################
     if(!bivariate)
-       {
+    {
         if(is.null(X))  {X=1;num_betas=1}
-           else 
-        {if(is.list(X))  num_betas=ncol(X[[1]])
-           else  num_betas=ncol(X) }
+        else 
+          {if(is.list(X))  num_betas=ncol(X[[1]])
+           else  num_betas=ncol(X) 
+          }
     }
-    
-    if(bivariate){
+    if(bivariate)
+    {
         if(is.null(X))  {X=1;num_betas=c(1,1)}
         else
-        { if(is.list(X))  num_betas=c(ncol(X[[1]]),ncol(X[[2]]))
-            else  num_betas=c(ncol(X),ncol(X)) }}
+                        { if(is.list(X))  num_betas=c(ncol(X[[1]]),ncol(X[[2]]))
+                          else  num_betas=c(ncol(X),ncol(X)) }
+    }
+    ####################
     namesnuis <- NuisParam2(model,bivariate,num_betas,copula)
-
     ltimes=length(coordt)
 
     if(grid) { if(is.null(coordz)) { cc=as.matrix(expand.grid(coordx,coordy));coordx=cc[,1];coordy=cc[,2]; coordz=NULL}
@@ -1233,11 +1232,9 @@ if(method1=="euclidean")
     paramcorr <- rep(1, numparamcorr)
     names(paramcorr) <- namescorr
     flagcorr <- NULL
+
     ### START settings the data structure:
     # set the coordinates sizes:
-
-
-
     if(is.null(coordx_dyn))  
     {
     
@@ -1271,10 +1268,7 @@ if(method1=="euclidean")
        if(ncol(coords)==2) {coordx <- coords[,1]; coordy <- coords[,2];coordz=NULL}
        if(ncol(coords)==3) { coordx <- coords[,1]; coordy <- coords[,2];coordz <- coords[,3]}
        numcoord <- numcoordx <- numcoordy <-numcoordz <- length(coordx)
-
     }
-
-
 
 
    if(!space && is.null(coordx_dyn)) {coordx=rep(coordx,ltimes);coordy=rep(coordy,ltimes);coordz=rep(coordz,ltimes);}
@@ -1294,10 +1288,7 @@ if(method1=="euclidean")
         ### Parameters' settings:
         nuisance=nuisance1=nuisance2=NULL
         likelihood <- CkLikelihood(likelihood)
-   
-   
         type <- CkType(type)
-  
  
      #if((!bivariate&&num_betas==1)||(bivariate&&num_betas==c(1,1)))
      if((!bivariate&&num_betas==1)||(bivariate&all(num_betas==c(1,1))))
@@ -1448,10 +1439,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         namesparam <- sort(c(namescorr, namesnuis))
         param <- c(nuisance, paramcorr)
         param <- param[namesparam]
-
-
         numparam <- length(param)
-
         flag <- rep(1, numparam)
         namesflag <- namesparam
         names(flag) <- namesflag
@@ -1469,10 +1457,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             numparam <- length(param)   
 
         }
-        else {
-        }
-
-
+        else { }
 
         flagcorr <- flag[namescorr]
         flagnuis <- flag[namesnuis]
@@ -1498,8 +1483,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
                                                  start <- start[!namesstart == paste("mean",i,sep="")]
                             }
                        }
-                
-
                 }
                 if(bivariate) {          
                                   if(any(namesstart == 'mean_1'))  start <- start[!namesstart == 'mean_1']        
@@ -1518,8 +1501,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 
             namesstart <- names(start)
             numstart <- length(start)
-        
-         
             param[pmatch(namesstart,namesparam)] <- start
             }
 
@@ -1528,12 +1509,9 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         # Insert here!
         # set the range of the parameters if its the case
         paramrange=TRUE
- 
         #if(paramrange) paramrange <- SetRangeParam(namesparam, numparam)
         #else 
         paramrange <- list(lower=NULL, upper=NULL)
-
-
         ### Set the data format:
         if(!space){ # setting spam indexes
             if(spacetime) numtime <- ltimes
@@ -1651,8 +1629,6 @@ if(fcall=="Fitting"&likelihood==2&!is.null(neighb)) mem=FALSE # Vecchia gp case
 if(fcall=="Fitting"&likelihood==2||fcall=="Simulation") mem=FALSE 
 if(tapering) mem=TRUE
 
-
-
 ###################### using new "spam" with neighdist(just for space)#########################################################
 
 if(tapering&space){
@@ -1694,17 +1670,40 @@ if(fcall=="Fitting"&mem==TRUE&(!space)&!tapering)   {vv=length(NS); numcoord=NS[
 #             "w", "w",#2
 #             "r", "r", "r"),
 #             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-
-
   
+
+#gb=dotCall64::.C64('SetGlobalVar',SIGNATURE = c(
+#         "integer","double","double","double","integer", "integer","integer",  #7
+#         "integer","integer","integer","integer", "integer","integer", #6
+#         "integer","double","double","double", "integer",  #5
+#         "integer","double", "integer","integer","integer","integer", #6
+#         "integer","integer", # 2
+#         "integer","integer","integer"),  # 3
+#     bivariate, coordx, coordy, coordt,grid,ia=ia,idx=idx,  #7
+#           isinit=isinit,ja=ja, mem, numcoord, numcoordx,  numcoordy, #6
+#           numpairs=numpairs, radius,srange,  tapsep,  spacetime, #5
+#            numtime,trange, tapering, tapmodel,distance, weighted, #6
+#           colidx= colidx,rowidx= rowidx, # 2
+#            ns, NS, isdyn, #3
+# INTENT = c("r","r","r","r","r","rw","rw", #7
+#            "rw","rw", "rw", "r", "r", "r", #6
+#           "rw", "r", "rw", "r", "r", #5
+#             "r",  "rw", "r", "r", "r", "r", #6
+#             "w", "w",#2
+#             "r", "r", "r"),
+#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+  
+
+  if(is.null(coordz)) coordz=double(numcoordx*numtime) ## is it necessary?
+
 srange[which(srange==Inf)]=1e+50;trange[which(trange==Inf)]=1e+50
 gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy),as.double(coordz), as.double(coordt),as.integer(grid),ia=as.integer(ia),idx=as.integer(idx),  #7
            isinit=as.integer(isinit),ja=as.integer(ja), as.integer(mem), as.integer(numcoord),as.integer( numcoordx),  as.integer(numcoordy), as.integer(numcoordz), #6
            numpairs=as.integer(numpairs), as.double(radius),as.double(srange), as.double(tapsep),  as.integer(spacetime), #5
             as.integer(numtime),as.double(trange), as.integer(tapering), as.integer(tapmodel),as.integer(distance),as.integer(weighted), #6
            colidx= as.integer(colidx),rowidx= as.integer(rowidx), # 2
-            as.integer(ns), as.integer(NS), as.integer(isdyn))
-
+            as.integer(ns), as.integer(NS), as.integer(isdyn),
+      PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
 rm(colidx);rm(rowidx)
 if(type=="Tapering") {rm(idx);rm(ja);rm(ia)}
 ##
@@ -1733,10 +1732,8 @@ else
 #### it works when CL  using neighb  or maxdist AND neighb 
 #############################################################
 { 
-  
 
 if(typereal!="Independence") {
-  
   ########################## 
 if(distance==0) distance1="Eucl";
 if(distance==2) distance1="Geod";
@@ -1776,11 +1773,12 @@ if(space)   #  spatial case
 if(weighted)  mmm=max(sol$lags)
   
   ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
-    as.double(sol$lags),as.integer(nn),as.double(mmm),as.double(ttt),
-    as.double(sol$lagt),as.integer(nn),
+    as.double(sol$lags),as.integer(nn), as.double(mmm),
+    as.double(sol$lagt), as.integer(nn),as.double(ttt),
     as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1)) 
-  
+
 } 
+
 
 
 ##############################################   
@@ -1816,8 +1814,10 @@ if(weighted) { mmm=max(sol$lags) ;ttt=max(sol$lagt)}
        numcoord,  numtime, 
         sol$lags,nn,mmm, 
       sol$lagt,nn,ttt,
-       spacetime,bivariate,1,1, INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+       spacetime,bivariate,1,1, INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+
 
 } 
 ##############################################  
@@ -1850,7 +1850,7 @@ if(weighted) { mmm=max(sol$lags)}
             "integer","integer","integer","integer"),  
        numcoord,  2,  sol$lags,nn,mmm, 
        1,nn,1,spacetime,bivariate,sol$first,sol$second,
-        INTENT =    c("r","r","r","r","r","r", "r","r","r","r","r","r"),
+        INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
   

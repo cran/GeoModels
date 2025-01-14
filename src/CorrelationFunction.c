@@ -2347,11 +2347,8 @@ void CorrelationMat2(double *rho,double *coordx, double *coordy,double *coordz, 
       //Rprintf("%d- %f %f %f %f -- %f %f %f --%f\n",type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],dd,rho[h]);
        h++;
     }}
-
   return;
 }
-
-
 
 // Computation of the upper (lower) triangular spatial discrete  models
 void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod, double *mean,
@@ -2396,7 +2393,6 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
        }
  if(*model==46||*model==47) // Poisson gamma
        {
-        
            mui=exp(mean[i]);
            muj=exp(mean[j]);
            ai=mui*(1+mui/nuis[1]);
@@ -2413,7 +2409,10 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
            p1=1-2*p+psj;
           rho[h]=p1*dd +  ai*aj*(p1-pow((1-p),2));
        }
-
+  if(*model==57||*model==58) // poissongamma inflado
+       {
+      
+       }
             h++;
         }}
     return;

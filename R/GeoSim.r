@@ -294,7 +294,7 @@ for( L in 1:nrep){
     if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB"))
                  { k=99999;if(model %in% c("Geometric")) {model="BinomialNeg";n=1}}
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*param$shape;npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
     if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {k=round(param$shape)}
@@ -814,7 +814,7 @@ else {
                                                  if(model %in% c("Geometric")) {model="BinomialNeg";n=1}
                                                }
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*param$shape;npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
     if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {  k=max(param$shape_1,param$shape_2)}

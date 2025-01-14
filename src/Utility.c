@@ -303,8 +303,6 @@ void Space_Dist(double *coordx,double *coordy,double *coordz,int *ia,int *idx,
 {
   int i=0,h=0,j=0;
   double dij=0.0;
-
-
   /******************************************************************************/
   if(*istap){   // tapering case
       ia[0]=1;
@@ -324,19 +322,14 @@ void Space_Dist(double *coordx,double *coordy,double *coordz,int *ia,int *idx,
   /******************************************************************************/
 else{  //no tapering
      h=0;
-
-
 	  for(i=0;i<(ncoord[0]-1);i++){
 	    for(j=(i+1);j<ncoord[0];j++){
-
       dij=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
-  
      if(dij<= thres){
         tlags[h]=dij;
         colidx[h]=i;  rowidx[h]=j; 
         h++;}
 	      }}
-
    }
  // saving  spatial distances   
     *npairs=h;
@@ -375,8 +368,10 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
           for(j=0;j<ncoord[0];j++){
          // dij=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],*REARTH);
             dij=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
+                // Rprintf("%f %f %f %f %f %f -  %f   %d %d %d %d \n",coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],dij,
+                  //  t,i,v,j); 
                 Comp_supp(c_supp,tapmodel, dij, dtv,thre);
-                  if((dij<c_supp[0]||is_equal(dij,c_supp[0]))&&(dtv<c_supp[1] ||  is_equal(dtv,c_supp[1]))){     
+                  if((dij<c_supp[0]||is_equal(dij,c_supp[0]))&&(dtv<c_supp[1] ||  is_equal(dtv,c_supp[1]))){    
                                tlags[h]=dij;
                                tlagt[h]=dtv;
                                idx[h] =(t * (ncoord[0]) * (ncoord[0]) * ntime[0]) +  (i*  ntime[0] *  *ncoord) +  (1+j+ *ntime * v);
@@ -388,10 +383,8 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
                 k=k+1;}}
    }   // end space time case
 }    // end tapering case
-
   else {   // no tapering
   h=0;
-        
   for(t=0;t<ntime[0];t++){
     for(i=0;i<ns[t];i++){
       for(v=t;v<ntime[0];v++){
@@ -399,9 +392,11 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
          for(j=i+1;j<ns[v];j++){
            dij=dist(type[0],coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
                        coordz[(i+NS[t])],coordz[(j+NS[v])],*REARTH);
+     
                       if(dij<=thres[1]){
+                             //  Rprintf("%f %f %f %f %f %f -%f  \n",coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
+                       //coordz[(i+NS[t])],coordz[(j+NS[v])],dij); 
                           tlags[h]=dij;tlagt[h]=0;
-                 
                            colidx[h]=i+NS[t];  rowidx[h]=j+NS[v];
                           h++;
                                     }}}
@@ -411,6 +406,8 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
            dij=dist(type[0],coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
                    coordz[(i+NS[t])],coordz[(j+NS[v])],*REARTH);
                           if(dij<=thres[1] && dtv<=thret[1]){
+                                    //Rprintf("%f %f %f %f %f %f -%f  \n",coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
+                       //coordz[(i+NS[t])],coordz[(j+NS[v])],dij); 
                             tlags[h]=dij;tlagt[h]=dtv;
                            colidx[h]=i+NS[t];  rowidx[h]=j+NS[v];  
                            h++; 
@@ -848,8 +845,7 @@ void SetSampling_biv(double *coordx, double *coordy, double *data, int n, int *n
 void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *coordt,int *grid,int *ia,
 		  int *idx,int *ismal,int *ja,int *mem, int *nsite,int *nsitex,int *nsitey,int *nsitez,
 		  int *npair,double *radius,double *srange, double *sep,int *st, int *times,double *trange,
-		  int *tap,int *tapmodel,int *tp,int *weighted, int *colidx,int *rowidx, 
-      int *ns, int *NS, int *dyn)
+		  int *tap,int *tapmodel,int *tp,int *weighted, int *colidx,int *rowidx, int *ns, int *NS, int *dyn)
 {
 
 
@@ -1090,7 +1086,7 @@ void DeleteGlobalVar(void)
   int i=0;
   // Delete all the global variables:
   R_Free(maxdist);R_Free(maxtime);
-  R_Free(ncoord);R_Free(ncoordx);R_Free(ncoordy);;R_Free(ncoordz); 
+  R_Free(ncoord);R_Free(ncoordx);R_Free(ncoordy);R_Free(ncoordz); 
   R_Free(npairs);
   R_Free(type);R_Free(REARTH);
   R_Free(tapsep);
@@ -1165,8 +1161,6 @@ else{
    }
     return;
 }
-
-
 
 
 /*#######################################################################*/

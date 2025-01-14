@@ -106,10 +106,21 @@ GeoVariogram <- function(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coo
                lenbins_marg<-integer(n_var*numvario)  #
                moments_cross<-double(0.5*n_var*(n_var-1)*numvario)  # vect of square differences for cross components (12)
                lenbins_cross<-integer(0.5*n_var*(n_var-1)*numvario) #
-               DEV=dotCall64::.C64("Binned_Variogram_biv2", 
-                     SIGNATURE = c("double","double","double","double","double","double", "integer","double","integer","integer","double","integer","integer"),
-                      bins=bins, coordx,coordy,coordz,coordt,data,lenbins_cross=lenbins_cross, moments_cross=moments_cross, numbins,lenbins_marg=lenbins_marg,
-                       moments_marg=moments_marg,ns,NS,INTENT = c("rw","r","r","r","r","r","rw","rw","rw","rw","rw","r","r"),NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+
+            #   DEV=dotCall64::.C64("Binned_Variogram_biv2", 
+            #         SIGNATURE = c(rep("double",6), "integer","double","integer","integer","double","integer","integer"),
+             #        bins=bins, coordx,coordy,coordz,coordt,data,lenbins_cross=lenbins_cross, moments_cross=moments_cross, numbins,lenbins_marg=lenbins_marg,
+            #           moments_marg=moments_marg,ns,NS,INTENT = c("rw",rep("r",5),rep("rw",5),"r","r"),NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+              
+
+              DEV=.C("Binned_Variogram_biv2", 
+                 bins=as.double(bins), as.double(coordx), as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
+                 lenbins_cross=as.integer(lenbins_cross), moments_cross=as.double(moments_cross), as.integer(numbins),lenbins_marg=as.integer(lenbins_marg),
+                  moments_marg=as.double(moments_marg),as.integer(ns),as.integer(NS),
+                   PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+
+
+
                bins=DEV$bins
                lenbins_cross=DEV$lenbins_cross; moments_cross=DEV$moments_cross
                lenbins_marg=DEV$lenbins_marg; moments_marg=DEV$moments_marg
@@ -174,7 +185,7 @@ if(initparam$spacetime){
       momentst <- double(numbinst)   # vector of spatial-temporal moments
       lenbinst <- integer(numbinst)  # vector of spatial-temporal bin sizes
       #if(cloud) fname <- 'Cloud_Variogram_st' else 
-      fname <- 'Binned_Variogram_st'
+    
 
       if(grid)     {
           if(is.null(coordz)) {a=expand.grid(coordx,coordy);coordx=a[,1];coordy=a[,2]}
@@ -187,8 +198,7 @@ if(initparam$spacetime){
    
 
        NS=c(0,NS)[-(length(ns)+1)]
-      if(spacetime_dyn) fname <- paste(fname,"2_dyn",sep="") 
-      if(!spacetime_dyn) fname <- paste(fname,"2",sep="") 
+    
 ##### temporal bint #############
     if(var(diff(coordt))==0)           ### regular times   
          { regular=TRUE
@@ -205,14 +215,42 @@ if(initparam$spacetime){
 #########################
  if(is.null(coordz))  coordz=double(length(coordx)*(length(coordx)-1))
   if(!memdist)  { 
-                    EV=dotCall64::.C64(fname, 
-                    SIGNATURE = c("double","double","double","double","double","double","double",
-                               "integer","integer","integer","double","double","double",
-                                "integer","integer","integer","integer"),
-                                 bins=bins, bint=bint,coordx,coordy,coordz,coordt,data,lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,
-                                 moments=moments,momentst=momentst,momentt=momentt,numbins,numbint,ns,NS,
-                                 INTENT = c("rw","rw","r","r","r","r","r","rw","rw","rw","rw","rw","rw", "r","r","r","r"), 
-                                 NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+
+
+        #  if(!spacetime_dyn)
+         #           EV=dotCall64::.C64('Binned_Variogram_st2', 
+          #        SIGNATURE = c(rep("double",7),
+           #                    rep("integer",3),rep("double",3),
+            #                    rep("integer",4)),
+             #                   bins=bins, bint=bint,coordx,coordy,coordz,coordt,data,lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,
+              #                   moments=moments,momentst=momentst,momentt=momentt,numbins,numbint,ns,NS,
+               #                  INTENT = c("rw","rw",rep("r",5),"rw","rw","rw","rw","rw","rw", rep("r",4)), 
+                #                 NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+     #       if(spacetime_dyn)
+      #              EV=dotCall64::.C64('Binned_Variogram_st2_dyn', 
+       #           SIGNATURE = c(rep("double",7),
+        #                       rep("integer",3),rep("double",3),
+         #                       rep("integer",4)),
+          #                      bins=bins, bint=bint,coordx,coordy,coordz,coordt,data,lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,
+           #                      moments=moments,momentst=momentst,momentt=momentt,numbins,numbint,ns,NS,
+            #                    INTENT = c("rw","rw",rep("r",5),"rw","rw","rw","rw","rw","rw", rep("r",4)), 
+             #                    NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+
+      if(!spacetime_dyn)
+                      EV=.C('Binned_Variogram_st2', 
+                               bins=as.double(bins), bint=as.double(bint),as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
+                                lenbins=as.integer(lenbins),lenbinst=as.integer(lenbinst),lenbint=as.integer(lenbint),
+                                 moments=as.double(moments),momentst=as.double(momentst),momentt=as.double(momentt),
+                                 as.integer(numbins),as.integer(numbint),as.integer(ns),as.integer(NS),
+                            PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+      if(spacetime_dyn)
+         EV=.C('Binned_Variogram_st2_dyn', 
+                               bins=as.double(bins), bint=as.double(bint),as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
+                                lenbins=as.integer(lenbins),lenbinst=as.integer(lenbinst),lenbint=as.integer(lenbint),
+                                 moments=as.double(moments),momentst=as.double(momentst),momentt=as.double(momentt),
+                                 as.integer(numbins),as.integer(numbint),as.integer(ns),as.integer(NS),
+                            PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+                     
     }
     else {
              stop("not implemented")
@@ -259,21 +297,17 @@ if(initparam$spacetime){
      if(!memdist)  { 
      fname <- paste(fname,"2",sep="") 
      # Computes the spatial moments
-     # EV=.C("Binned_Variogram2", bins=bins,  as.double(coordx),as.double(coordy),as.double(coordt),as.double(data), 
-      #  lenbins=lenbins, moments=moments, as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+      EV=.C("Binned_Variogram2", bins=bins,  as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data), 
+        lenbins=as.integer(lenbins), moments=as.double(moments), as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
 
-  
-
-        EV=dotCall64::.C64("Binned_Variogram2",
-         SIGNATURE = c("double","double","double","double","double","double","integer","double","integer"),
-            bins=bins, coordx,coordy,coordz,coordt,data, lenbins=lenbins, moments=moments, numbins,
-                INTENT = c("w","r","r","r","r","r","w","w","r"), 
-                     NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
-
+       # EV=dotCall64::.C64('Binned_Variogram2',
+        # SIGNATURE = c(rep("double",6),"integer","double","integer"),
+         #   bins=bins, coordx,coordy,coordz,coordt,data, lenbins=lenbins, moments=moments, numbins,
+          #      INTENT = c("w",rep("r",5),"rw","rw","r"), 
+           #     NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
        }
       else {
        fname="Binned_Variogram2new"
-  
          idx=GeoNeighIndex(cbind(coordx,coordy,coordz),distance = distance, neighb = neighb, maxdist = maxdist,radius=radius)
          #mm=c(min(idx$lags),max(idx$lags))
          mm=range(idx$lags)
@@ -282,12 +316,10 @@ if(initparam$spacetime){
         #        as.double(data[idx$rowidx]), as.double(idx$lags),
         #lenbins=lenbins, moments=moments, as.integer(numbins),as.double(mm),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
 
-   EV=dotCall64::.C64("Binned_Variogram2new", 
-                    SIGNATURE = c("double","integer","double","double", 
-                      "double","integer","double","integer","double"),
-                    bins=bins, length(idx$lags),data[idx$colidx],data[idx$rowidx],
-                    idx$lags,lenbins=lenbins, moments=moments, numbins,mm,
-                    INTENT = c("w","r","r","r","r","w","w","r","r"), 
+   EV=dotCall64::.C64('Binned_Variogram2new', 
+                    SIGNATURE = c("double","integer","double","double","double","integer","double","integer","double"),
+                    bins=bins, length(idx$lags),data[idx$colidx],data[idx$rowidx],idx$lags,lenbins=lenbins, moments=moments, numbins,mm,
+                    INTENT = c("rw","r","r","r","r","rw","ww","r","r"),
                     NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
        }
        bins=EV$bins

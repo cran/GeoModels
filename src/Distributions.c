@@ -4198,18 +4198,15 @@ return(res);
 
 /************* POIsson gammma ************/
 double PG00(double corr,int r, int t, double mean_i, double mean_j, double a){ //alpha=a
-
     double rho2= R_pow(corr,2);
     double beta_i= a/mean_i;
     double beta_j= a/mean_j;
     double beta_ij=beta_i*beta_j;
     int k = 0, l = 0;
     double p00,sum = 0.0,res0=0.0,term=0.0,aa=0.0,bb=0.0;
-
     double auxi= 1/(1+beta_i);
     double auxj= 1/(1+beta_j);
     double auxij=auxi*auxj;
-
     int iter1=500;  int iter2=500;
     for(k=0;k<iter1;k++){
         l=0;    
@@ -4247,7 +4244,7 @@ double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a){
     double fij=bri*beta_j*auxij;
     double ra=r+a;
     double r2br=-rho2/bri;
-    int iter1=700;  int iter2=600; int iter3=400;
+    int iter1=500;  int iter2=400; int iter3=300;
 
     while(k<iter1){
       l1=0;
@@ -4265,10 +4262,8 @@ double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a){
             sum =sum+term;
             l++;
         }
-
         aa1= R_pow(beta_ij,l1+a)*R_pow(rho2,k+l1)*pow1p(-rho2, ra)*R_pow(auxij,ra+k+l1);
         bb1= exp(lgammafn(r+k)+2*lgammafn(ra+k+l1)-2*lgammafn(mm)-lgammafn(k+1)-lgammafn(l1+1)-lgammafn(r)-lgammafn(a)-lgammafn(l1+a));
-
         term1 = aa1*hypergeo(1,ff,mm,bmi)      *hypergeo(1,ff,mm,bmj)*R_pow(beta_ij*auxij,-1) *bb1;
         term2 = aa1*hypergeo(1,ff,mm,r2br)*hypergeo(1,ff,mm,bmj)*R_pow(fij,-1)* bb1;
         term3 = aa1*hypergeo(1,ff,mm,bmi)      *hypergeo(1,ff,mm,-rho2/brj)*R_pow(fji,-1)* bb1;
@@ -4299,8 +4294,7 @@ double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
 
     double auxi= 1/(beta_i+1);
     double auxj= 1/(beta_j+1);
-    double auxij=auxi*auxj;
-        double brho=beta_i-rho2;
+    double auxij=auxi*auxj;double brho=beta_i-rho2;
 
     int n, l=0, l1=0 ,cc=0,ii=0,q=0,nq=0;
     int iter1=600;  int iter2=500;
@@ -4308,7 +4302,6 @@ double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
     double an=a+n;
     double rb=-rho2/(1+brho);
     double ib=-1/beta_j;
-
     double aux1= R_pow(beta_i,a)*R_pow(auxi,n+a)*exp(lgammafn(n+a)-lgammafn(n+1)-lgammafn(a));
 
     while(l<iter1){
@@ -4349,7 +4342,7 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
     double rtrho=-rho2/(1+brho);
     double mbj=-1/beta_j;
     int n=0,s=0, k=0, l=0, l1=0, u=0,us=0,cc=0 ,ii=0,u1=0,tl=0,tna=0,ll1=0,f=0,d=0;
-    int iter1=600;  int iter2=500; int iter3=400;
+    int iter1=500;  int iter2=400; int iter3=300;
     n= r-t;
     s=n+1;
     tna=t+n+a;

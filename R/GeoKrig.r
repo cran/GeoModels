@@ -361,22 +361,34 @@ if(covmatrix$model %in% c(1,10,18,21,12,26,24,27,38,29,39,28,9, 34,40,20,22))
 ## sihasin=20
 
 
-if((type=="Standard"||type=="standard")) {
-  cc=dotCall64::.C64('Corr_c',
-    SIGNATURE = c("double","double","double","double","double", "integer", #5
-                   "integer","double","double","double","integer","integer",
-                   "integer","integer","integer","integer","double",
-                   "integer","integer","double","integer","integer","double"),
 
-  corri=dotCall64::numeric_dc(dimat*dimat2),ccc[,1] , ccc[,2] ,ccc[,3] , covmatrix$coordt ,corrmodel , #5
-         0, locx , locy ,locz, covmatrix$numcoord ,numloc ,
-         tloc , covmatrix$ns , NS ,covmatrix$numtime , corrparam ,
-         covmatrix$spacetime ,covmatrix$bivariate , time , distance , which-1 , covmatrix$radius ,
- INTENT = c("w","r","r","r","r","r",
-            "r","r","r","r","r","r",
-            "r","r","r","r","r",
-            "r","r","r","r","r","r"),
-        PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+
+if((type=="Standard"||type=="standard")) {
+
+
+      #cc=dotCall64::.C64('Corr_c',
+  #  SIGNATURE = c(rep("double",5), "integer",  #6
+  #                "integer","double","double","double","integer","integer", # 6 
+  #                rep("integer",4),"double","integer", #6
+  #                "integer","double","integer","integer","double"),      #5
+  #corri=dotCall64::numeric_dc(dimat*dimat2),ccc[,1] , ccc[,2] ,ccc[,3] , covmatrix$coordt ,corrmodel ,
+  #       as.integer(0), locx , locy ,locz, covmatrix$numcoord ,numloc ,
+  #       tloc , covmatrix$ns , NS ,covmatrix$numtime , corrparam ,covmatrix$spacetime ,
+  #       covmatrix$bivariate , time , distance , as.integer(which-1) , covmatrix$radius ,
+ #INTENT = c("w",rep("r",22)),
+ #       PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+
+ cc=.C("Corr_c",
+   corri=double(dimat*dimat2),as.double(ccc[,1] ), as.double(ccc[,2]) ,as.double(ccc[,3]) , as.double(covmatrix$coordt) ,as.integer(corrmodel) ,
+         as.integer(0), as.double(locx) , as.double(locy) ,as.double(locz), as.integer(covmatrix$numcoord) ,as.integer(numloc) ,
+         as.integer(tloc) , as.integer(covmatrix$ns), as.integer(NS) ,as.integer(covmatrix$numtime) , as.double(corrparam) ,as.integer(covmatrix$spacetime) ,
+         as.integer(covmatrix$bivariate) , as.double(time) , as.integer(distance) , as.integer(which-1) , as.double(covmatrix$radius) ,
+          PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
+
+
+
 
 ####  transforming gaussian correlations depending on the (non)Gaussian  model
 if(bivariate){  corri=cc$corri  }  #  adding models.....
@@ -830,23 +842,18 @@ if(covmatrix$model %in% c(2,11,14,16,19,30,36,43,44,45,46,47))
 {   
    
    ccorr=dotCall64::.C64('Corr_c_bin',
-   SIGNATURE = c("double","double","double","double","double", #4
-  "integer","integer", "double","double","double","integer",  #9
-  "integer","integer", "integer", #12
-  "integer","integer","integer","integer","integer", #17
- "double", "double", "double","integer", #21
- "integer","double","integer","integer","double"),   #26
-   corri=dotCall64::numeric_dc(dimat*dimat2),  ccc[,1], ccc[,2], ccc[,3] ,covmatrix$coordt,corrmodel,0,
+   SIGNATURE = c("double","double","double","double","double",
+                 "integer","integer", "double","double","double",
+                 "integer","integer","integer", "integer","integer",
+                 "integer","integer","integer","integer", "double", 
+                 "double", "double","integer","integer","double",
+                 "integer","integer","double"),   
+   corri=dotCall64::numeric_dc(dimat*dimat2),  ccc[,1], ccc[,2], ccc[,3] ,covmatrix$coordt,corrmodel,as.integer(0),
    locx, locy,locz,covmatrix$numcoord,numloc,covmatrix$model,  tloc,
      kk,n,covmatrix$ns,NS,covmatrix$numtime, 
     rep(c(mu),dimat2),  other_nuis, corrparam,covmatrix$spacetime,
-     bivariate, time,distance,which-1, covmatrix$radius,
-  INTENT = c("w","r","r","r","r",
-            "r","r","r","r","r","r",
-            "r","r","r",
-            "r","r","r","r","r",
-             "r","r","r","r",
-           "r","r","r","r","r"),
+     bivariate, time,distance,as.integer(which-1), covmatrix$radius,
+  INTENT = c("w",rep("r",27)),
       PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
  }
 

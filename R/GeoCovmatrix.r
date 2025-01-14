@@ -77,34 +77,59 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NU
 if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
 {
 
-  if(type=="Standard") {
-      fname <-"CorrelationMat2"
 
-      if(spacetime) fname <- "CorrelationMat_st_dyn2"
-        if(bivariate) {
-            if(model==1) fname <- "CorrelationMat_biv_dyn2"
-            if(model==10)fname <- "CorrelationMat_biv_skew_dyn2" }
-       cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double", "double",  "integer","double","double","double","integer","integer"),
-            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,radius,ns,NS,
-            INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
+
+
+#print(coordx)
+#print(coordy)
+#print(coordz)
+#print(numpairstot)
+#print(corrmodel)
+#print(nuisance)
+#print(paramcorr)
+#print(radius)
+#print(ns)
+#print(NS)
+  if(type=="Standard") {
+      #fname <-'CorrelationMat2'
+      #if(spacetime) fname <- 'CorrelationMat_st_dyn2'
+      #  if(bivariate) {if(model==1) fname <- 'CorrelationMat_biv_dyn2'}
+    if(spacetime) 
+       cr=dotCall64::.C64('CorrelationMat_st_dyn2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
+            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corrmodel,nuisance,paramcorr,radius,ns,NS,
+            INTENT = c("w",rep("r",10)),
+            PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+     if(bivariate) 
+       cr=dotCall64::.C64('CorrelationMat_biv_dyn2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
+            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corrmodel,nuisance,paramcorr,radius,ns,NS,
+            INTENT = c("w",rep("r",10)),
+            PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+   if(!bivariate&&!spacetime)  
+        cr=dotCall64::.C64('CorrelationMat2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
+            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corrmodel,nuisance,paramcorr,radius,ns,NS,
+            INTENT = c("w",rep("r",10)),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
     
 }
 ###############################################################
 if(type=="Tapering")  {
-        fname <- "CorrelationMat_tap"
+        fname <- 'CorrelationMat_tap'
 
-        if(spacetime) fname <- "CorrelationMat_st_tap"
-       if(bivariate) fname <- "CorrelationMat_biv_tap"
+        if(spacetime) fname <- 'CorrelationMat_st_tap'
+       if(bivariate) fname <- 'CorrelationMat_biv_tap'
        #corr=double(numpairs)
         #cr=.C(fname,  corr=corr, as.double(coordx),as.double(coordy),as.double(coordt),
         #  as.integer(corrmodel), as.double(nuisance), as.double(paramcorr),as.double(radius),as.integer(ns),
         #   as.integer(NS),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-
-cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","double",  "integer","double","double","double","integer","integer"),
+#############
+cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","double","integer","double","double","double","integer","integer"),
      corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
  INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+#############
      ## deleting correlation equual  to 1 because there are problems  with hipergeometric function
         sel=(abs(cr$corr-1)<.Machine$double.eps);cr$corr[sel]=0
       }
@@ -602,7 +627,7 @@ if(model==22)  {  ## Log Gaussian
 ###############################################################
 ################################ start discrete #models ########
 ###############################################################
-if(model %in% c(2,11,30,16,14,43,45,46,57,58)){ #  binomial (negative)Gaussian type , Poisson (inflated) poissongamma
+if(model %in% c(2,11,30,16,14,43,45,46,57,58)){ #  binomial (negative)Gaussian type , Poisson (inflated) poissongamma poisson gamma zip
 
 if(model==2||model==11)
 {if(length(n)==1) n=rep(n,dime)}
@@ -611,19 +636,16 @@ mu=ML
 
 if(type=="Standard")  {
 
-    fname <-"CorrelationMat_dis2"
-    if(spacetime) fname <- "CorrelationMat_st_dyn_dis2"
+    fname <-'CorrelationMat_dis2'
+    if(spacetime) fname <- 'CorrelationMat_st_dyn_dis2'
 
   cr=dotCall64::.C64(fname,SIGNATURE =
-      c("double","double","double","double","double", 
-       "integer","double","integer","double",
-       "double","double","integer","integer","integer"),
+      c("double","double","double","double","double","integer","double","integer","double","double","double","integer","integer","integer"),
         corr=dotCall64::numeric_dc(numpairstot), coordx,coordy,coordz, coordt,corrmodel,c(mu), n,other_nuis,paramcorr,radius,ns,NS,model,
   INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
      corr=cr$corr # ojo que corr en este caso es una covarianza y ya va con el nugget
-
      varcov <-  diag(dime)
      varcov[lower.tri(varcov)] <- corr
      varcov <- t(varcov)
@@ -636,25 +658,31 @@ if(type=="Standard")  {
         tap <-new("spam",entries=setup$taps,colindices=setup$ja,
                          rowpointers=setup$ia,dimension=as.integer(rep(dime,2)))
         idx=spam::triplet(tap)$indices
-
+        
         fname <- "CorrelationMat_dis_tap"
         if(spacetime) fname <- "CorrelationMat_st_dis_tap"
-      #   corr=double(numpairs)
+     
+ if(spacetime)
+     {cr=.C("CorrelationMat_st_dis_tap",  corr=double(numpairs), as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),
+        as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
+           as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+     }
+ else
+    {cr=.C("CorrelationMat_dis_tap",  corr=double(numpairs), as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),
+        as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
+           as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+}
 
- #if(spacetime)
-    #    cr=.C(fname,  corr=corr, as.double(coordx),as.double(coordy),as.double(coordt),
-    #    as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
-    #       as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-# else
- #             cr=.C("CorrelationMat_dis_tap",  corr=corr, as.double(coordx),as.double(coordy),as.double(coordt),
-  #      as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
-   #        as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-
-     cr=dotCall64::.C64(fname,SIGNATURE =
-         c("double","double","double","double","double","integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
-        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
-  INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r","r","r"),
-             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+#if(spacetime)
+#     cr=dotCall64::.C64("CorrelationMat_st_dis_tap",SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
+#        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
+#        INTENT = c("w",rep("r",15)),
+#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+#else 
+#   cr=dotCall64::.C64("CorrelationMat_dis_tap",SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
+#        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
+#        INTENT = c("w",rep("r",15)),
+#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
         varcov <-new("spam",entries=cr$corr,colindices=setup$ja,
                          rowpointers=setup$ia,dimension=as.integer(rep(dime,2)))

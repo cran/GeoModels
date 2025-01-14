@@ -4,6 +4,9 @@
 #########################################################
 #########################################################
 
+
+      
+
 spectral_density_1dR <- function(param, corrmodel, u_vec = seq(-1,1,l=100)){
     av <- param$scale
     nu1v <- param$smooth
@@ -13,10 +16,15 @@ spectral_density_1dR <- function(param, corrmodel, u_vec = seq(-1,1,l=100)){
     N <- length(u_vec)
     model=CkCorrModel(corrmodel)
 
-   result=dotCall64::.C64("spectral_density_1d",
-        SIGNATURE = c("double","integer","double", "double","double","integer","double"),
-                     norm_u, N, av, params_other, nu1v, model, simu1 = dotCall64::numeric_dc(N),
-        INTENT =    c("r","r","r", "r","r", "r","w"),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
+   #result=dotCall64::.C64("spectral_density_1d",
+   #     SIGNATURE = c("double","integer","double", "double","double","integer","double"),
+   #                  norm_u, N, av, params_other, nu1v, model, simu1 = dotCall64::numeric_dc(N),
+   #     INTENT =    c(rep("r",6),"w"),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
+
+
+      result = .C("spectral_density_1d", 
+ as.double(norm_u), as.integer(N), as.double(av), as.double(params_other), as.double(nu1v), as.integer(model), simu1 = double(N),
+           PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)$simu1
 
   return(result)
 }
@@ -186,10 +194,10 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
           result=dotCall64::.C64("TBD1d",
                                  SIGNATURE = c("double","double", "double","double",
                                                "double","integer","integer","double"),
-                                 ux = u[,1], uy = u[,2], 
-                                 sx = coord[indexes, 1], 
-                                 sy = coord[indexes, 2], 
-                                 phi = phi, L = L, n = Ninner, result = rep(0, Ninner), 
+                                 ux = c(u[,1]), uy = c(u[,2]), 
+                                 sx = c(coord[indexes, 1]), 
+                                 sy = c(coord[indexes, 2]), 
+                                 phi = phi, L = as.integer(L), n = as.integer(Ninner), result = dotCall64::numeric_dc(Ninner), 
                                  INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
                                  PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
           
@@ -210,10 +218,10 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
           result=dotCall64::.C64("TBD1d",
                                  SIGNATURE = c("double","double", "double","double",
                                                "double","integer","integer","double"),
-                                 ux = u[,1], uy = u[,2], 
-                                 sx = coord[indexes, 1], 
-                                 sy = coord[indexes, 2], 
-                                 phi = phi, L = L, n = Ninner, result = rep(0, Ninner), 
+                                 ux = c(u[,1]), uy = c(u[,2]), 
+                                 sx = c(coord[indexes, 1]), 
+                                 sy = c(coord[indexes, 2]), 
+                                 phi = phi, L = as.integer(L), n = as.integer(Ninner), result = dotCall64::numeric_dc(Ninner), 
                                  INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
                                  PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
           
@@ -226,10 +234,10 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
       result=dotCall64::.C64("TBD1d",
                              SIGNATURE = c("double","double", "double","double",
                                            "double","integer","integer","double"),
-                             ux = u[,1], uy = u[,2], 
-                             sx = coord[,1], 
-                             sy = coord[,2], 
-                             phi = phi, L = L, n = Nlocs, result = rep(0, Nlocs), 
+                             ux = c(u[,1]), uy = c(u[,2]), 
+                             sx = c(coord[,1]), 
+                             sy = c(coord[,2]), 
+                             phi = phi, L = as.integer(L), n = as.integer(Nlocs), result = dotCall64::numeric_dc(Nlocs), 
                              INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
                              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
       simu = matrix(sqrt(CC)*result/sqrt(2*L),Nlocs,1)

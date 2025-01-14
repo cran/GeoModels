@@ -322,7 +322,7 @@ for( LL in 1:nrep){
                                                  if(model %in% c("Geometric")) {model="BinomialNeg";n=1}
                                                }
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
-    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*round(param$shape);npoi=999999999}
+    if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*param$shape;npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
     if(model %in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP")) {param$nugget=param$nugget1}
     if(model %in% c("Gamma"))  {if(!bivariate) k=round(param$shape)
