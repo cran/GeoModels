@@ -813,7 +813,7 @@ if(!is.null(spobj)) {
     #then set the code as a tapering and an object spam is returned
 if(sparse) {
     covmod=CkCorrModel(corrmodel)
-    if(covmod %in% c(10,11,13,15,19,6,7,
+    if(covmod %in% c(10,11,13,15,19,6,7,21,22,23,30,
                      63,64,65,66,67,68,
                      69,70,71,72,73,74,75,76,77,
                      111,112,129,113,114,131,132,130,134,

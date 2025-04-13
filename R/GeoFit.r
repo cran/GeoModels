@@ -64,12 +64,34 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
 
  
 
-##############################################################################
-###### extracting sp object informations if necessary              ###########
-##############################################################################
+
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
+
+
+
+
+###### checking if neighb or maxdist or maxtime has been specified when using cl
+if(space||bivariate){
+     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
+          if(is.null(neighb)&&maxdist==Inf) 
+               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+}
+if(spacetime){
+     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
+       if((is.null(neighb)&maxdist==Inf)&maxtime==Inf) 
+               stop("neighb or maxdist and maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+       if((is.null(neighb)&maxdist==Inf)&maxtime<Inf) 
+               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+       if((!is.null(neighb)|maxdist<Inf) &maxtime==Inf) 
+               stop("maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")     
+     }
+########
+
+##############################################################################
+###### extracting sp object informations if necessary              ###########
+##############################################################################
 if(!is.null(spobj)) {
    if(space||bivariate){
         a=sp2Geo(spobj,spdata); coordx=a$coords 
@@ -81,7 +103,7 @@ if(!is.null(spobj)) {
      }
    if(!is.null(a$Y)&&!is.null(a$X)) {data=a$Y ; X=a$X }
 }
-
+##############################################################################
 ###### setting nugget if missing
 if(!bivariate)
    if(!sum(substr(names(unlist(append(start,fixed))),1,6)=="nugget")) fixed$nugget=0
@@ -152,12 +174,9 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
    }
     #if(!bivariate){ 
 }
-
-
     if(type=="Independence"){
      if(sum(NuisParam(model, bivariate=initparam$bivariate, num_betas=initparam$num_betas-1) %in% names(unlist(start)))==0) stop("No marginal parameters to estimate")
      }
-
         ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
         if(sum(initparam$namesparam=='sill')==1)
         {
@@ -250,6 +269,7 @@ if(!is.null(anisopars)) {
     }
     ###################################################################################
     ###################################################################################
+
 
 
    # Full likelihood:
@@ -371,15 +391,17 @@ if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",
 conf.int=NULL
 pvalues=NULL
 if(likelihood=="Full"&&type=="Standard") 
-{if(varest){
+{
+  if(!sum(initparam$coordz)) initparam$coordz=NULL
+  if(varest){
    alpha=0.05 
    conf.int=pvalues=NULL
    if(is.numeric(fitted$stderr))
-   {aa=qnorm(1-(1-alpha)/2)*fitted$stderr
-   pp=as.numeric(fitted$par)
-   low=pp-aa; upp=pp+aa
-   conf.int=rbind(low,upp)
-   pvalues= 2*pnorm(-abs(pp/fitted$stderr))
+   { aa=qnorm(1-(1-alpha)/2)*fitted$stderr
+     pp=as.numeric(fitted$par)
+     low=pp-aa; upp=pp+aa
+     conf.int=rbind(low,upp)
+     pvalues= 2*pnorm(-abs(pp/fitted$stderr))
     }
    }
 }

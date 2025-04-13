@@ -152,6 +152,23 @@ if(!bivariate){
                               cova=cc;
                                }
                   }
+
+      ##########################################
+   if(model=="SkewStudentT")        { if(bivariate) {}
+                        else {
+                              
+                 if(length(t)>1) correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
+                 else            correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(x==0)
+
+                              nu=1/as.numeric(nuisance['df']);sill=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew'])
+                              skew2=sk*sk; f=(nu-1)/2; w=sqrt(1-skew2);y=correlation1;
+                              CorSkew=(2*skew2/(pi*w*w+skew2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*correlation/(w*w+skew2*(1-2/pi)) ;
+                              mm=sqrt(nu)*gamma(f)*sk/(sqrt(pi)*gamma(nu/2));
+                cc=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(nu/2)^2-skew2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,nu/2,y*y))*((1-2*skew2/pi)*CorSkew+2*skew2/pi)-2*skew2/pi);
+                               vs=sill*(nu/(nu-2)-mm*mm);
+                              cova=cc;
+                               }
+                  }
 ##########################################
 
  if(model=="Tukeyh")        { if(bivariate) {}
@@ -469,6 +486,26 @@ if(model=="Poisson") {
                            cova=cc
                          }
                       }
+if(model=="PoissonGamma") {
+        if(bivariate) {}
+                    if(!bivariate) {  
+                       if(length(t)>1) correlation=(1-as.numeric(nuisance['nugget']))*correlation  +as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
+                       else correlation=(1-as.numeric(nuisance['nugget']))*correlation  +as.numeric(nuisance["nugget"])*I(x==0)
+                       corr2=correlation^2  
+                       a=as.numeric(nuisance['shape'])
+                       b=a/exp(mu);
+                       KK=b*(1-corr2)
+                       KK1=(a+1)/(2+KK)
+                       dd=  exp(log(b)+0.5*log(KK)+a*log(2+KK)-log(1+b)-(a+0.5)*log(4+KK))
+                       aa=hypergeo::hypergeo((1 - a)/2, -a/2, 1, 4/(2+KK)^2)
+                       bb=KK1*hypergeo::hypergeo((2-a)/2, (1-a)/2, 2, 4/(2+KK)^2)
+                       cc=Re(corr2*(1-dd*(aa+bb)))
+                       vv=exp(mu)*(1+1/b)
+                       cova=vv*cc
+            }
+    }
+
+
   } ## end not bivariate                 
 #################################################################
 

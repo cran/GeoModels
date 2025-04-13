@@ -124,11 +124,11 @@ LSCORE=(1/(2*dime))*(sum(log(2*pi/vv))+sum(zz^2))
 CRPS=(1/dime)*(sum((1/vv)^0.5*zz*(2*pnorm(zz)-1))+2*sum((1/vv)^0.5*pnorm(zz))+sum((1/vv)^0.5)/sqrt(pi))
 
 ###########################
-scores = list(RMSE = RMSE,
-               LSCORE = LSCORE,
-               MAD=MAD,
-               CRPS = CRPS,
-               MAE=MAE)
+scores = list(RMSE = as.numeric(RMSE),
+               LSCORE = as.numeric(LSCORE),
+               MAD=as.numeric(MAD),
+               CRPS = as.numeric(CRPS),
+               MAE=as.numeric(MAE))
 return(scores)
 }
 

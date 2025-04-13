@@ -107,6 +107,16 @@ param$scale=param$scale*rep
 corrmodel="GenWend_Matern"
 param$power2=1/param$power2
 }
+
+if(corrmodel=="Hypergeometric")  
+{
+rep=( ((2^(2 * param$smooth + 1)) * gamma((param$power2 + 1) / 2 + param$smooth) * gamma((param$power2 + d + 1) / 2 + 2 * param$smooth))/ (gamma(param$power2 / 2) * gamma((param$power2 + d) / 2 + param$smooth))
+)^(-1/(1+2*param$smooth)) # inverse parametrization
+param$scale=param$scale*rep
+corrmodel="Hypergeometric_Matern"
+param$power2=1/param$power2
+}
+
 #########################
 if(corrmodel=="Kummer")  
 {
@@ -119,12 +129,20 @@ corrmodel="Kummer_Matern"
 
 LIM1=15 # after this limit then GenWend_Matern is a matern approx..
 LIM2=15 # after this limit then kummer_Matern is a matern approx..
-  if(corrmodel == "GenWend_Matern"&&(1/param$power2)>=LIM1)
+  if((corrmodel == "GenWend_Matern"|| corrmodel == "GenWend_Matern2")&&(1/param$power2)>=LIM1)
   {
     corrmodel = "Matern"
     param$smooth=param$smooth+0.5
     param$power2=NULL
   }
+
+    if((corrmodel == "Hypergeometric_Matern"|| corrmodel == "Hypergeometric_Matern2")&&(1/param$power2)>=LIM1)
+  {
+    corrmodel = "Matern"
+    param$smooth=param$smooth+0.5
+    param$power2=NULL
+  }
+
    if(corrmodel == "Kummer_Matern"&&param['power2']>=LIM2)
   {
     corrmodel = "Matern"
@@ -142,8 +160,19 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
     parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
     model_num <- CkCorrModel(corrmodel)
   }
+    ##################################################
+    if(corrmodel == "GenWend_Matern"|| corrmodel == "GenWend_Matern2"||corrmodel == "Hypergeometric_Matern"|| corrmodel == "Hypergeometric_Matern2"){
+    CC <- as.double(param['sill']); N=1;
+    nu1 <- as.numeric( param['smooth'] )
+    other <- 1/as.numeric(param['power2'])
+    a <- as.numeric(param['scale'])
+    a0 = a; nu0 = nu1
+    parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
+    P <- 1;  vtype = 0
+    parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
+    model_num <- CkCorrModel(corrmodel)
+  }
   ##################################################
-
    if(corrmodel == "Kummer_Matern"){
     CC=as.double(param['sill']); N=1
     a <- as.double(param['scale']);  
@@ -157,20 +186,6 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
     model_num <- CkCorrModel(corrmodel)
   }
     ##################################################
-
-  if(corrmodel == "GenWend_Matern"){
-    CC <- as.double(param['sill']); N=1;
-    nu1 <- as.numeric( param['smooth'] )
-
-    other <- 1/as.numeric(param['power2'])
-
-    a <- as.numeric(param['scale'])
-    a0 = a; nu0 = nu1
-    parameters <- list("CC" = CC, "a" = a,"nu1" = nu1, "nu2" = 0, "other" = other)
-    P <- 1;  vtype = 0
-    parametersg <- list("a" = a0, "nu1" = nu0, other = other, CC = CC)
-    model_num <- CkCorrModel(corrmodel)
-  }
 
     ##################################################
   u <- frequency_sampler(L, parametersg, corrmodel)
@@ -257,7 +272,7 @@ frequency_sampler <- function(L, parametersg, corrmodel){
     ini.sample <- matrix(rnorm(L*2), L, 2)/sqrt(G*2)/parametersg$a/(2*pi)
   }
 
-if(corrmodel == "GenWend_Matern"){
+if(corrmodel == "GenWend_Matern"|| corrmodel == "GenWend_Matern2"||corrmodel == "Hypergeometric_Matern"|| corrmodel == "Hypergeometric_Matern2"){
     #Simulando frecuencias desde la densidad espectral
     param_geomodels.int <- list(scale = parametersg$a, smooth = parametersg$nu, sill = 1,
                                 power2 = parametersg$other, nugget = 0)

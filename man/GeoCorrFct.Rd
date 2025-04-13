@@ -52,15 +52,15 @@ library(GeoModels)
 ###
 ###############################################################
 # Define the spatial distances
-#x = seq(0,1,0.002)
+x = seq(0,1,0.002)
 # Correlation Parameters for Matern model 
-#CorrParam("Matern")
-#NuisParam("Gaussian")
+CorrParam("Matern")
+NuisParam("Gaussian")
 # Matern Parameters 
-#param=list(sill=2,smooth=0.5,scale=0.2/3,nugget=0.2,mean=0)
-#cc= GeoCorrFct(x=x, corrmodel="Matern", covariance=TRUE,
-#  param=param,model="Gaussian")
-#plot(cc,ylab="Corr",lwd=2,main="Matern correlation",type="l")
+param=list(sill=2,smooth=0.5,scale=0.2/3,nugget=0.2,mean=0)
+cc= GeoCorrFct(x=x, corrmodel="Matern", covariance=TRUE,
+  param=param,model="Gaussian")
+plot(cc,ylab="Corr",lwd=2,main="Matern correlation",type="l")
 
 ################################################################
 ###
@@ -68,12 +68,12 @@ library(GeoModels)
 ### Generalized Wendland-Matern correlation model
 ###
 ###############################################################
-#CorrParam("GenWend_Matern")
-#NuisParam("Gaussian")
+CorrParam("GenWend_Matern")
+NuisParam("Gaussian")
 # GenWend Matern Parameters 
-#param=list(sill=2,smooth=1,scale=0.1,nugget=0,power2=1/4,mean=0)
-#cc= GeoCorrFct(x=x, corrmodel="GenWend_Matern", param=param,model="Gaussian",covariance=FALSE)
-#plot(cc,ylab="Cov",lwd=2,,main="GenWend covariance",type="l")
+param=list(sill=2,smooth=1,scale=0.1,nugget=0,power2=1/4,mean=0)
+cc= GeoCorrFct(x=x, corrmodel="GenWend_Matern", param=param,model="Gaussian",covariance=FALSE)
+plot(cc,ylab="Cov",lwd=2,,main="GenWend covariance",type="l")
 
 ################################################################
 ###
@@ -81,12 +81,12 @@ library(GeoModels)
 ### Generalized Wendland correlation model
 ###
 ###############################################################
-#CorrParam("GenWend")
-#NuisParam("Tukeyh")
-#x = seq(0,1,0.005)
-#param=list(sill=1,smooth=1,scale=0.5,nugget=0,power2=5,tail=0.1,mean=0)
-#cc= GeoCorrFct(x=x, corrmodel="GenWend", param=param,model="Tukeyh",variogram=TRUE)
-#plot(cc,ylab="Corr",lwd=2,main="Tukey semivariogram",type="l")
+CorrParam("GenWend")
+NuisParam("Tukeyh")
+x = seq(0,1,0.005)
+param=list(sill=1,smooth=1,scale=0.5,nugget=0,power2=5,tail=0.1,mean=0)
+cc= GeoCorrFct(x=x, corrmodel="GenWend", param=param,model="Tukeyh",variogram=TRUE)
+plot(cc,ylab="Corr",lwd=2,main="Tukey semivariogram",type="l")
 
 ################################################################
 ###
@@ -94,14 +94,14 @@ library(GeoModels)
 ### Kummer correlation model
 ###
 ###############################################################
-#CorrParam("Kummer")
-#NuisParam("LogGaussian")
+CorrParam("Kummer")
+NuisParam("LogGaussian")
 # GenWend Matern Parameters 
-#param=list(smooth=1,sill=0.5,scale=0.1,nugget=0,power2=1,mean=0)
-#cc= GeoCorrFct(x=x, corrmodel="Kummer", param=param,model="LogGaussian",
-#       ,covariance=TRUE,variogram=TRUE)
-#plot(cc,ylab="Semivario",lwd=2,
-#  main="LogGaussian semivariogram",type="l")
+param=list(smooth=1,sill=0.5,scale=0.1,nugget=0,power2=1,mean=0)
+cc= GeoCorrFct(x=x, corrmodel="Kummer", param=param,model="LogGaussian",
+       ,covariance=TRUE,variogram=TRUE)
+plot(cc,ylab="Semivario",lwd=2,
+  main="LogGaussian semivariogram",type="l")
 
 
 ################################################################
@@ -110,13 +110,13 @@ library(GeoModels)
 ### Matern correlation model
 ###
 ###############################################################
-#CorrParam("Matern")
-#NuisParam("Poisson")
-#x = seq(0,1,0.005)
-#param=list(scale=0.6/3,nugget=0,smooth=0.5,mean=2)
-#cc= GeoCorrFct(x=x, corrmodel="Matern", param=param,model="Poisson",covariance=TRUE)
-#plot(cc,ylab="Cov",lwd=2,
-#  main="Poisson covariance",type="l")
+CorrParam("Matern")
+NuisParam("Poisson")
+x = seq(0,1,0.005)
+param=list(scale=0.6/3,nugget=0,smooth=0.5,mean=2)
+cc= GeoCorrFct(x=x, corrmodel="Matern", param=param,model="Poisson",covariance=TRUE)
+plot(cc,ylab="Cov",lwd=2,
+  main="Poisson covariance",type="l")
 
 ################################################################
 ###
@@ -126,17 +126,17 @@ library(GeoModels)
 ###############################################################
 
 ## spatial and temporal distances 
-#h<-seq(0,3,by=0.04)
-#times<-seq(0,3,by=0.04)
+h<-seq(0,3,by=0.04)
+times<-seq(0,3,by=0.04)
 
 # Correlation Parameters for the space time separable Matern model 
-#CorrParam("Matern")
-#NuisParam("Gaussian")
+CorrParam("Matern")
+NuisParam("Gaussian")
 # Matern Parameters 
-#param=list(sill=1,scale_s=0.6/3,scale_t=0.5,nugget=0,mean=0,smooth_s=1.5,smooth_t=0.5)
-#cc= GeoCorrFct(x=h,t=times,corrmodel="Matern_Matern", param=param,
-#        model="Gaussian",variogram=TRUE)
-#plot(cc,lwd=2,type="l")
+param=list(sill=1,scale_s=0.6/3,scale_t=0.5,nugget=0,mean=0,smooth_s=1.5,smooth_t=0.5)
+cc= GeoCorrFct(x=h,t=times,corrmodel="Matern_Matern", param=param,
+        model="Gaussian",variogram=TRUE)
+plot(cc,lwd=2,type="l")
 
 
 ################################################################
@@ -146,14 +146,14 @@ library(GeoModels)
 ###
 ###############################################################
 # Define the spatial distances
-#x = seq(0,1,0.005)
-# Correlation Parameters for the bivariate sep Matern model 
-#CorrParam("Bi_Matern")
-# Matern Parameters 
-#param=list(sill_1=1,sill_2=1,smooth_1=0.5,smooth_2=1,smooth_12=0.75,
-#           scale_1=0.2/3, scale_2=0.2/3, scale_12=0.2/3,
-#           mean_1=0,mean_2=0,nugget_1=0,nugget_2=0,pcol=-0.2)
-#cc= GeoCorrFct(x=x, corrmodel="Bi_Matern", param=param,model="Gaussian")
-#plot(cc,ylab="corr",lwd=2,type="l")
+x = seq(0,1,0.005)
+ #Correlation Parameters for the bivariate sep Matern model 
+CorrParam("Bi_Matern")
+ #Matern Parameters 
+param=list(sill_1=1,sill_2=1,smooth_1=0.5,smooth_2=1,smooth_12=0.75,
+           scale_1=0.2/3, scale_2=0.2/3, scale_12=0.2/3,
+           mean_1=0,mean_2=0,nugget_1=0,nugget_2=0,pcol=-0.2)
+cc= GeoCorrFct(x=x, corrmodel="Bi_Matern", param=param,model="Gaussian")
+plot(cc,ylab="corr",lwd=2,type="l")
 }
 

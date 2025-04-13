@@ -85,11 +85,11 @@ double CheckCor(int *cormod, double *par)
             if(scale<=0 ||smooth<0.0 ) rho=-2;
       break;
     case 6:
+    case 31:    
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
        //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
-    
             if(scale<=0 ||smooth<-0.5||R_power1>(1.5+smooth) ) rho=-2;
       break;
       case 24: //kummer
@@ -109,7 +109,8 @@ double CheckCor(int *cormod, double *par)
               if(scale<=0 ||smooth<1) rho=-2;
       break;
        case 22:   
-       case 23:    
+       case 23:
+       case 30:    
         R_power=par[0];
          R_power1=par[1];
         scale=par[2];
@@ -433,7 +434,7 @@ if(nug11<0 || nug22<0 ||  scale11<=0 || scale22<=0   ) rho=-2;
      break;
 
    case 128:  //bivariate matern
-   case 117: //bivariate smoke
+   case 117: //bivariate F_sphere
      var11=par[0];
      var22=par[1];
      nug11=par[2];
@@ -596,12 +597,21 @@ case 22: // hyperg correlation 1 parameter
         smooth=par[2];
        rho=CorFunHyperg(h,R_power, smooth, scale);
         break;
-case 23: // hyperg correlation 1 parameter with matern
-        R_power=1/par[0];
+case 23: // hyperg correlation  parameter with matern my version
+        R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
-  rho=CorFunHyperg(h,R_power, smooth, scale*2*R_power);
+        sep=exp(  (lgammafn((R_power1+1)/2+smooth)+lgammafn((R_power1+2+1)/2+2*smooth)
+                       -lgamma((R_power1+2)/2+smooth)-lgamma(R_power1/2) )/ (1+2*smooth) 
+               );
+  rho=CorFunHyperg(h,R_power1, smooth, 2*scale*sep);
         break;
+ case 30: // hyperg correlation  parameter with matern emery version
+        R_power1=1/par[0];
+        scale=par[1];
+        smooth=par[2];
+  rho=CorFunHyperg(h,R_power1, smooth, scale*R_power1);
+        break;       
 /*######*/
     case 19: // original   Generalised wend correlation
         R_power1=par[0];
@@ -652,14 +662,14 @@ case 23: // hyperg correlation 1 parameter with matern
         smooth=par[2];
         sep=exp(  (lgammafn(2*smooth+R_power1+1)-lgammafn(R_power1))/ (1+2*smooth) );
         rho=CorFunW_gen(h, R_power1, smooth,  scale * sep);
-        break;
+        break;  
      case 7: // emery second parametrization
-        R_power1=par[0];
+        R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
         rho=CorFunW_gen(h, R_power1, smooth,  scale * R_power1);
         break;
-     case 20://  smoke correlation function
+     case 20://  F_sphere correlation function
       scale=par[0];
       smooth=par[1];
       rho=CorFunSmoke(h, scale, smooth);
@@ -678,12 +688,12 @@ case 23: // hyperg correlation 1 parameter with matern
    case 29:// Bohman model
       rho=CorFunBohman(h,par[0]);
         break;*/
-  case 30:// Wendland0 for tap
-      rho= CorFunW0(h,maxdist[0],2);
-      break;
-   case 31:// Wendland1 for model
-      rho=CorFunW0(h,par[0],2);
-            break;
+  //case 30:// Wendland0 for tap
+  //    rho= CorFunW0(h,maxdist[0],2);
+  //    break;
+   //case 31:// Wendland1 for model
+   //   rho=CorFunW0(h,par[0],2);
+   /*         break;
     case 32:// Wendland1 for tap
       rho=CorFunW1(h,maxdist[0],3);
       break;
@@ -697,7 +707,7 @@ case 23: // hyperg correlation 1 parameter with matern
      rho=CorFunW2(h,par[0],4);
     case 38:// phericalfor tap
      rho=CorFunSferical(h, maxdist[0]);
-    break;
+    break;*/
         case 36:// unit taper
         case 37:// unit taper
       rho=1;
@@ -1070,7 +1080,7 @@ case 23: // hyperg correlation 1 parameter with matern
                                               break;}
         break;
 
-         case 119:       //bivariate smoke sep
+         case 119:       //bivariate F_sphere sep
      var11=par[0];
      var22=par[1];
      nug11=par[2];
@@ -1338,7 +1348,7 @@ case 23: // hyperg correlation 1 parameter with matern
         else      {rho=var22*CorFunWitMat(h, scale22,  smoo22);}
                                   break;}
         break;
-        case 121:       // full bivariate smoke with contraists
+        case 121:       // full bivariate F_sphere with contraists
         var11=par[0];
         var22=par[1];
         nug11=par[2];
@@ -1848,7 +1858,7 @@ double CorFunWave(double lag, double scale)
   return rho;
 }
 
-// smoke class of correlation models:
+// F_sphere class of correlation models:
 double CorFunSmoke(double lag, double scale, double smooth)
 {
 //Rprintf( "%f %f\n",lag,REARTH[0]);
@@ -1944,14 +1954,15 @@ double CorFunW2(double lag,double scale,double smoo)
     return rho;
 }
 
-/* generalized wendland function*/
+
 double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale)  // mu alpha beta
 {
-    double rho=0.0,x=0.0;int d=2;
+    double rho=0.0,x=0.0;double d=2.0;
 
     x=lag/scale;
     if(x<1e-32) {rho=1; return(rho);}
 
+//R_power is beta  R_power1 is gammma
 
 
     if(x<=1)
@@ -1965,15 +1976,45 @@ double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,dou
     return(rho);
 }
 
+
+   
+
+
 /* optimal  hypergeometric correlation  function*/
+double CorFunHyperg(double lag,double R_power,double smooth,double scale)    
+{
+    double rho=0.0,x=0.0;
+    double d=2.0;
+    double gamma1=0.0,gamma2=0.0,gamma3=0.0,gamma4=0.0;
 
 
+    x=lag/scale;
+    if(x<1e-32) {rho=1; return(rho);}
+
+    if(x<=1)
+         {
+    gamma1 = gamma(smooth + (R_power + 1) / 2.0);
+     gamma2 = gamma(2 * smooth + (d + R_power + 1) / 2.0);
+     gamma3 = gamma(R_power  + (d + 1) / 2.0 + 2 * smooth);
+     gamma4 = gamma(smooth + 0.5);
+
+    double term1 = R_pow(1 - R_pow(x, 2), R_power + (d - 1) / 2.0 + 2 * smooth);
+    double hyperg = hypergeo(R_power / 2.0, (R_power + d) / 2.0 + smooth, R_power + (d + 1) / 2.0 + 2 * smooth, 1 - R_pow(x, 2));
+    rho=gamma1 * gamma2 / (gamma3 * gamma4) * term1 * hyperg;
+      }
+  else {rho=0;}
+    return(rho);
+}
+
+
+
+/*
 double CorFunHyperg(double lag,double R_power,double smooth,double scale)    
 {
     double rho=0.0,x=0.0,delta=0.0,bet=0.0,gamm=0.0,l=0.0;
-    int d=2;
+    double d=2;
 
-   delta=0.5*(d+1)+smooth;
+   delta=(d+1)/2+smooth;
    bet=delta+R_power/2;
    l=d/2+smooth;
    gamm=bet+l;     //d+2*delta+R_power/2--0.5;
@@ -1991,7 +2032,7 @@ double CorFunHyperg(double lag,double R_power,double smooth,double scale)
 
     return(rho);
 }
-
+*/
 
 
 /* kummer function*/

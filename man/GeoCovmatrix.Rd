@@ -171,10 +171,12 @@ The associated parameters in the argument \code{param} are
     \eqn{\kappa-0.5}. When  \eqn{\beta} goes to infinity it is the Matern model.
     
 
-        \item \eqn{Hypergeometric2} (Hypegeometric model in Alegria and Emery (2022)). 
+        \item \eqn{Hypergeometric} (Hypegeometric model in Bevilacqua et al  (2025)). 
 
 
-     \item \eqn{Hypergeometric} (Optimal Hypegeometric model defined as ....). 
+     \item \eqn{Hypergeometric_{\_}Matern} (Hypegeometric model first parametrization). 
+     
+     \item \eqn{Hypergeometric_{\_}Matern2} (Hypegeometric model second  parametrization). 
 
       \item \eqn{Multiquadric} defined as:
     \deqn{R(h) = (1-\alpha0.5)^{2\beta}/(1+(\alpha0.5)^{2}-\alpha cos(h))^{\beta}, \quad h \in [0,\pi]}
@@ -183,7 +185,7 @@ The associated parameters in the argument \code{param} are
     \deqn{R(h) = 1-(sin(h/2))^{\alpha},\quad h \in [0,\pi]}
       This model is valid on the unit sphere and \eqn{h} is the geodesic distance.
   
-    \item \eqn{Smoke} (F family in   Alegria et al. (2021)) defined as:
+    \item \eqn{F{\_}Sphere} (F family in   Alegria et al. (2021)) defined as:
     \deqn{R(h) =   K*F(1/{\alpha},1/{\alpha}+0.5,
                 2/{\alpha}+0.5+{\kappa}),\quad h \in [0,\pi]}
       where      \eqn{K =(\Gamma(a)\Gamma(i))/\Gamma(i)\Gamma(o)) }.      
@@ -281,7 +283,7 @@ The associated parameters in the argument \code{param} are
      \item  \eqn{Bi}\code{_}\eqn{Wendx} (Bivariate  full Wendland model) 
        \item  \eqn{Bi}\code{_}\eqn{Wendx}\code{_}\eqn{contr} (Bivariate  Wendland model with contrainsts) 
           \item  \eqn{Bi}\code{_}\eqn{Wendx}\code{_}\eqn{sep} (Bivariate  separable Wendland model) 
-          \item  \eqn{Bi}\code{_}\eqn{Smoke} (Bivariate  full Smoke model on the unit sphere) 
+          \item  \eqn{Bi}\code{_}\eqn{F{\_}Sphere} (Bivariate  full F_model model on the unit sphere) 
     }
 
 
@@ -476,7 +478,7 @@ sum(mm-mm1)
 # Correlation Parameters for Gen Wendland model 
 CorrParam("GenWend_Matern")
 # Gen Wendland Parameters 
-param=list(sill=1,scale=0.04,nugget=0,smooth=0,power2=1.5)
+param=list(sill=1,scale=0.04,nugget=0,smooth=0,power2=1/1.5)
 
 matrix2 = GeoCovmatrix(coordx=coords, corrmodel="GenWend_Matern", param=param,sparse=TRUE)
 

@@ -311,20 +311,15 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         delta2=nuisance["tail2"]
 a=which(stdata>=0); b=which(stdata<0)
 stmas=stdata[stdata>=0]; stmenos=stdata[stdata<0]
-
 g1<-(VGAM::lambertW(delta1*(stmas)^2)/(delta1))^(1/2)
 jac1<- g1/(stmas*(1+VGAM::lambertW(delta1*(stmas)^2)))
-
 g2<-(VGAM::lambertW(delta2*(stmenos)^2)/(delta2))^(1/2)
 jac2<- -g2/(stmenos*(1+VGAM::lambertW(delta2*(stmenos)^2)))
-
 pp=data.frame(rbind(cbind(a,g1),cbind(b,g2)))
 qq=data.frame(rbind(cbind(a,jac1),cbind(b,jac2)))
-
 g=pp[with(pp, order(pp$a)), ] 
 jac=qq[with(qq, order(qq$a)), ] 
 tau_inv=sign(stdata)*c(g$g1)
-
 llik <- 0.5*( const*log(sill)/log(2*pi) + 
                       const + logdetvarcov + sum((forwardsolve(decompvarcov, c(tau_inv), transpose = FALSE))^2)- 2*sum(log(jac$jac1)))
         return(llik)
@@ -534,14 +529,13 @@ llik <- 0.5*( const*log(sill)/log(2*pi) +
    
         # Computes the vector of the correlations:
         corr=matr(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius)
-        nu=1/nuisance['df']; eta2=nuisance['skew']^2
+        nu=1/nuisance['df']; skew2=nuisance['skew']^2
         #if(nu<2||abs(nuisance['skew'])>1)  return(llik)
-        w=sqrt(1-eta2);
-        KK=2*eta2/pi
+        w=sqrt(1-skew2);
+        KK=2*skew2/pi
         D1=(nu-1)/2; D2=nu/2
-        CorSkew<-(2*eta2/(pi*w^2+eta2*(pi-2)))*(sqrt(1-corr^2)+corr*asin(corr)-1)+w^2*corr/(w^2+eta2*(1-2/pi))   
-        corr3<-(pi*(nu-2)*gamma(D1)^2/(2*(pi*gamma(D2)^2-eta2*(nu-2)*gamma(D1)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,D2,corr^2))*((1-KK)*CorSkew+KK)-KK)
-    #   if(is.nan(corr[1])||nuisance['sill']<0||nuisance['nugget']<0||nuisance['nugget']>1) return(llik)
+        CorSkew<-(2*skew2/(pi*w^2+skew2*(pi-2)))*(sqrt(1-corr^2)+corr*asin(corr)-1)+w^2*corr/(w^2+skew2*(1-2/pi))   
+        corr3<-(pi*(nu-2)*gamma(D1)^2/(2*(pi*gamma(D2)^2-skew2*(nu-2)*gamma(D1)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,D2,corr^2))*((1-KK)*CorSkew+KK)-KK)
         cova <- corr3*nuisance['sill'] *(1-nuisance['nugget'])
        #nuisance['nugget']=0
       loglik_u <- do.call(what="LogNormDenStand",args=list(stdata=(data-c(Mean)),const=const,cova=cova,dimat=dimat,ident=ident,

@@ -139,42 +139,16 @@ return(res);
 }
 
 
-/******************************************************************
-double den_wen_gen_mat(double z,double k,double sc,double mu,double tol){ 
-double res;
-int d=2;
-double beta1=sc;
-double rep=R_pow(gammafn(mu+2*k+1)/(gammafn(mu)),1/(1+2*k));
-sc=sc*rep;
-double lambda=1.5+k;
-double u=2*M_PI;
-z=z*u;
-double zsc=z*sc;
-
-double LL=48;
-
-if((k>-0.5)&(k<0)&(mu<lambda+2)) {LL=43;}  //OK
-if((k>-0.5)&(k<0)&(mu>=lambda+2)) {LL=44;} //OK
-if((k>=0)&(k<=0.5)&(mu>=lambda+2)) {LL=45;}  //ok
-if((k>=0)&(k<=0.5)&(mu<lambda+2)) {LL=46;}  //OK
-
-
-
-double uff=ff(lambda, mu, k,zsc,sc,tol,d);
-double mat=den_mat(z/u,k+0.5,beta1);
-
-
-if(zsc<LL)
+double ff_hyp(double lambda,double mu,double k,double zsc,double sc,double tol, int d)
 {
-res=uff;
-}
-else
-{
-    if(fabs(uff)<=mat) res=uff;
-    else res=mat;
-}
+double a,b,c,res;
+a= gammafn(lambda) * gammafn(lambda + 0.5*mu - d / 2) * gammafn(lambda + 0.5*mu+k) * R_pow(sc,d);
+b=R_pow(2,d) * R_pow(M_PI,d / 2) * exp(lgammafn(lambda - d / 2) + lgammafn(lambda + 0.5*mu) + lgammafn(lambda + 0.5*mu+d/2+k));
+c=hypergeometric_1F2(lambda, lambda + 0.5*mu, lambda + 0.5*mu+d/2+k, -R_pow(zsc,2)/4, tol);
+res=a*c/b;
 return(res);
-}*/
+}
+
 
 
 
@@ -190,25 +164,66 @@ double lambda=1.5+k;
 double u=2*M_PI;
 z=z*u;
 double zsc=z*sc;
-
-//double LL=55;
-
-//if((k>-0.5)&(k<0)&(mu<lambda+2)) {LL=51;}  //OK
-//if((k>-0.5)&(k<0)&(mu>=lambda+2)) {LL=50;} //OK
-//if((k>=0)&(k<=0.5)&(mu>=lambda+2)) {LL=44;}  //ok
-//if((k>=0)&(k<=0.5)&(mu<lambda+2)) {LL=45;}  //OK
-
-
 double uff=ff(lambda, mu, k,zsc,sc,tol,d);
 double mat=den_mat(z/u,k+0.5,beta1);
-
-
-//if(zsc<LL){
-    if(fabs(uff)<=mat) res=uff;
-    else res=mat;
-//}else{res=mat;}
+if(fabs(uff)<=mat) res=uff;
+else res=mat;
 return(res);
 }
+/********************************************************************/
+double den_wen_gen_mat2(double z,double k,double sc,double mu,double tol){ 
+double res;
+int d=2;
+double beta1=sc;
+double rep=mu;
+sc=sc*rep;
+double lambda=1.5+k;
+double u=2*M_PI;
+z=z*u;
+double zsc=z*sc;
+double uff=ff(lambda, mu, k,zsc,sc,tol,d);
+double mat=den_mat(z/u,k+0.5,beta1);
+if(fabs(uff)<=mat) res=uff;
+else res=mat;
+return(res);
+}
+/********************************************************************/
+double den_hyp_gen_mat(double z,double k,double sc,double mu,double tol){ 
+double res;
+int d=2;
+double beta1=sc;
+//double rep=R_pow(gammafn(mu+2*k+1)/(gammafn(mu)),1/(1+2*k));
+double rep=R_pow(R_pow(2,2*k+1)*gammafn((mu+1)/2+k)*gammafn((mu+d+1)/2+2*k)/(gammafn(mu/2)*gammafn((mu+d)/2+k)),1/(1+2*k));
+sc=sc*rep;
+double lambda=1.5+k;
+double u=2*M_PI;
+z=z*u;
+double zsc=z*sc;
+double uff=ff_hyp(lambda, mu, k,zsc,sc,tol,d);
+double mat=den_mat(z/u,k+0.5,beta1);
+if(fabs(uff)<=mat) res=uff;
+else res=mat;
+return(res);
+}
+/********************************************************************/
+double den_hyp_gen_mat2(double z,double k,double sc,double mu,double tol){ 
+double res;
+int d=2;
+double beta1=sc;
+//double rep=R_pow(gammafn(mu+2*k+1)/(gammafn(mu)),1/(1+2*k));
+double rep=mu;
+sc=sc*rep;
+double lambda=1.5+k;
+double u=2*M_PI;
+z=z*u;
+double zsc=z*sc;
+double uff=ff_hyp(lambda, mu, k,zsc,sc,tol,d);
+double mat=den_mat(z/u,k+0.5,beta1);
+if(fabs(uff)<=mat) res=uff;
+else res=mat;
+return(res);
+}
+
 
 
 /*******************************************************************/
@@ -235,6 +250,24 @@ void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double
       for(size_t i = 0; i < L*L; i++){
        r[i] = den_wen_gen_mat(norm_u,nu1v[i],av[i],params_other[0],tol);
       }}
+       if(model==7){//GenWendland_matern2
+      double tol = 1e-12;
+      for(size_t i = 0; i < L*L; i++){
+       r[i] = den_wen_gen_mat2(norm_u,nu1v[i],av[i],params_other[0],tol);
+      }}
+
+          if(model==23){//Hypergeometric_matern
+      double tol = 1e-12;
+      for(size_t i = 0; i < L*L; i++){
+       r[i] = den_hyp_gen_mat(norm_u,nu1v[i],av[i],params_other[0],tol);
+      }}
+       if(model==30){//Hypergeometric_matern2
+      double tol = 1e-12;
+      for(size_t i = 0; i < L*L; i++){
+       r[i] = den_hyp_gen_mat2(norm_u,nu1v[i],av[i],params_other[0],tol);
+      }}
+      
+
 /****************************************/
     for (size_t i = 0; i < L*L; i++) {f[i] = r[i];}
     R_Free(r);
@@ -675,6 +708,29 @@ void spectral_density_1d(double *norm_u, int *N, double *av, double *params_othe
     }
   }
 
+  if(mod==7){ //GenWendland_matern2
+
+    double tol = 1e-12;
+    for(int i=0;i < N[0];i++){
+      result[i] = den_wen_gen_mat2(norm_u[i],nu,bbb,mu,tol);
+    }
+  }
+
+   if(mod==23){ //Hypergeometric_matern
+
+    double tol = 1e-12;
+    for(int i=0;i < N[0];i++){
+      result[i] = den_hyp_gen_mat(norm_u[i],nu,bbb,mu,tol);
+    }
+  }
+
+  if(mod==30){ //Hypergeometric_matern2
+
+    double tol = 1e-12;
+    for(int i=0;i < N[0];i++){
+      result[i] = den_hyp_gen_mat2(norm_u[i],nu,bbb,mu,tol);
+    }
+  }
 
     if(mod==25){  //Kummermatern
     for(int i=0;i < N[0];i++){          

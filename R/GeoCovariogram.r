@@ -589,6 +589,7 @@ covariance=sill*vs*corr;variogram=sill*vs*(1-corr)
                            variogram=vv*(1-cc)}
                    }
    if(poissongamma||Gaussian_misp_PoissonGamma) {
+
                     if(bivariate) {}
                     if(!bivariate) {
                        correlation=(1-as.numeric(nuisance['nugget']))*correlation
@@ -604,7 +605,6 @@ covariance=sill*vs*corr;variogram=sill*vs*(1-corr)
                        vv=exp(mu)*(1+1/b)
                        covariance=vv*cc
                        variogram=vv*(1-cc)
-                       
                            }
                    }
      if(poissonZIP) {
@@ -828,7 +828,8 @@ OLS=NULL
             if(binomial)      vvv=fitted$n*pnorm(mm['mean'])*(1-pnorm(mm['mean']))
             if(poisson)       vvv=exp(mm['mean'])
             #if(poissongamma)  vvv=exp(mm['mean']*(1+1/nuisance["shape"]))
-            if(poissongamma)  {MM=exp(mm['mean']); vvv=MM*(1+MM/as.numeric(nuisance["shape"]))}
+            if(poissongamma)  {MM=exp(mm['mean']); vvv=MM*(1+MM/as.numeric(nuisance["shape"]))
+        }
 
 
             if(poissonZIP){        p=pnorm(nuisance['pmu']); MM=exp(mm['mean']); 

@@ -4207,7 +4207,7 @@ double PG00(double corr,int r, int t, double mean_i, double mean_j, double a){ /
     double auxi= 1/(1+beta_i);
     double auxj= 1/(1+beta_j);
     double auxij=auxi*auxj;
-    int iter1=500;  int iter2=500;
+    int iter1=600;  int iter2=600;
     for(k=0;k<iter1;k++){
         l=0;    
         while(l<iter2){
@@ -4244,7 +4244,7 @@ double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a){
     double fij=bri*beta_j*auxij;
     double ra=r+a;
     double r2br=-rho2/bri;
-    int iter1=500;  int iter2=400; int iter3=300;
+    int iter1=600;  int iter2=500; int iter3=400;
 
     while(k<iter1){
       l1=0;
@@ -4297,7 +4297,7 @@ double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
     double auxij=auxi*auxj;double brho=beta_i-rho2;
 
     int n, l=0, l1=0 ,cc=0,ii=0,q=0,nq=0;
-    int iter1=600;  int iter2=500;
+    int iter1=700;  int iter2=500;
     n= r-t;
     double an=a+n;
     double rb=-rho2/(1+brho);
@@ -4342,7 +4342,7 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
     double rtrho=-rho2/(1+brho);
     double mbj=-1/beta_j;
     int n=0,s=0, k=0, l=0, l1=0, u=0,us=0,cc=0 ,ii=0,u1=0,tl=0,tna=0,ll1=0,f=0,d=0;
-    int iter1=500;  int iter2=400; int iter3=300;
+    int iter1=700;  int iter2=500; int iter3=400;
     n= r-t;
     s=n+1;
     tna=t+n+a;

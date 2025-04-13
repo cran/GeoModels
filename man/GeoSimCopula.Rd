@@ -112,7 +112,7 @@ library(GeoModels)
 
 ################################################################
 ###
-### Example q. Simulation of a reparametrized Beta RF
+### Example:  Simulation of a reparametrized Beta RF
 ### for beta regression
 ### with Gaussian and Clayton Copula 
 ### with  underlying Wendland correlation.
@@ -123,23 +123,13 @@ NN=1400
 x <- runif(NN);y <- runif(NN)
 coords=cbind(x,y)
 
-shape1=3
-shape2=3
-smooth=0
-
-
 corrmodel="GenWend"
-min=0;max=1
-
-
 X=cbind(rep(1,NN),runif(NN))
 
 NuisParam("Beta2",num_betas=2,copula="Gaussian")
 CorrParam("GenWend")
-
-
 #### Gaussian copula
-param=list(smooth=smooth,power2=4, min=min,max=max,
+param=list(smooth=0,power2=4, min=0,max=1,
              mean=0.1,mean1=0.1,scale=0.3,nugget=0,shape=5)
 
 data <- GeoSimCopula(coordx=coords, corrmodel=corrmodel, model="Beta2",param=param,
@@ -151,7 +141,7 @@ quilt.plot(coords,data)
 #### Clayton copula
 NuisParam("Beta2",num_betas=2,copula="Clayton")
 CorrParam("GenWend")
-param=list(smooth=smooth,power2=4, min=min,max=max,
+param=list(smooth=0,power2=4, min=0,max=1,
              mean=0.2,mean1=0.1,scale=0.3,nugget=0,shape=6,nu=4)
 data1 <- GeoSimCopula(coordx=coords, corrmodel=corrmodel, model="Beta2",param=param,
   copula="Clayton",sparse=TRUE,X=X)$data

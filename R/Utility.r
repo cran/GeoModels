@@ -62,10 +62,11 @@ CkCorrModel <- function(corrmodel)
                              Multiquadric=17,multiquadric=17,
                              Sinpower=18,sinpower=18,
                              Genwend=19,GenWend=19,
-                             smoke=20,Smoke=20,
+                             F_sphere=20,F_Sphere=20,
                              Hypergeometric2=21,HyperGeometric2=21, hypergeometric2=21,
                              Hypergeometric=22,HyperGeometric=22, hypergeometric=22,
                              Hypergeometric_Matern=23,HyperGeometric_Matern=23, hypergeometric_Matern=23,
+                             Hypergeometric_Matern2=30,Hypergeometric_matern2=30, hypergeometric_Matern2=30,
                              Kummer=24,Kummer=24,
                              Kummer_Matern=25,Kummer_matern=25,
                              GenWend_Hole=26,GenWend_hole=26,
@@ -83,7 +84,7 @@ CkCorrModel <- function(corrmodel)
                              sinpower_st=56,Sinpower_st=56,    #ok
                              multiquadric_st=58,Multiquadric_st=58,   #ok
                              gneiting_mat_T=61,Gneiting_mat_T=61, #ok
-                             gneiting_mat_S=62,Gneiting_mat_S=62, #ok
+                             gneiting_mat_S=62,Gneiting_mat_S=62,Gneiting_Mat_S=62, #ok
                              Wen0_space=63,wen0_space=63,  #ok
                              Wen0_time=64,wen0_time=64,    #ok
                              Wen1_space=65,wen1_space=65,  #ok
@@ -92,7 +93,7 @@ CkCorrModel <- function(corrmodel)
                              Wen2_time=68,wen2_time=68,    #ok
                              #Wen_time=88,
                              #Wen_space=87,
-                             Gneiting_wen_S=87,gneiting_wen_S=87,
+                             Gneiting_wen_S=87,gneiting_wen_S=87,Gneiting_Wen_S=87,
                              Gneiting_wen_T=88,gneiting_wen_T=88, #ok
               # spatial-temporal separable models
                              Wend0_Wend0=69,wend0_wend0=69, #ok
@@ -115,9 +116,9 @@ CkCorrModel <- function(corrmodel)
                              Bi_Wend0_contr=129,Bi_wend0_contr=129,
                              Bi_wend0=112,Bi_Wend0=112,
                              
-                             Bi_smoke=117,Bi_Smoke=117,
-                              Bi_smoke_sep=119,Bi_Smoke_sep=119,
-                              Bi_smoke_contr=121,Bi_Smoke_contr=121,
+                             Bi_F_sphere=117,Bi_F_sphere=117,
+                              Bi_F_sphere_sep=119,Bi_F_sphere_sep=119,
+                              Bi_F_sphere_contr=121,Bi_F_sphere_contr=121,
                              
 
                              Bi_wend1_sep=113,Bi_Wend1_sep=113,
@@ -780,12 +781,12 @@ CorrelationPar <- function(corrmodel)
      if(corrmodel %in% c(27)) { # matern hole
         param <- c('power1','scale','smooth')
         return(param)}
-        # hypergeometric2
-     if(corrmodel %in% c(22,23)) {
-        param <- c('power2','scale','smooth')
-        return(param)}  
+        # hypergeometric
+   #  if(corrmodel %in% c(22,23,30)) {
+   #     param <- c('power2','scale','smooth')
+   #     return(param)}  
     # Generalised wend correlation model abnd reparametrized version and kummer correlation model
-     if(corrmodel %in% c(19,6,7,24,25)) {
+     if(corrmodel %in% c(22,23,30,19,6,7,24,25)) {
         param <- c('power2', 'scale','smooth')
         return(param)}
     # sine power on sphere 
@@ -1209,13 +1210,17 @@ if(method1=="euclidean")
     namesnuis <- NuisParam2(model,bivariate,num_betas,copula)
     ltimes=length(coordt)
 
-    if(grid) { if(is.null(coordz)) { cc=as.matrix(expand.grid(coordx,coordy));coordx=cc[,1];coordy=cc[,2]; coordz=NULL}
-              else { 
-                     if(is.null(coordz)) cc=as.matrix(expand.grid(coordx,coordy,0));
-                     if(is.null(coordz)) cc=as.matrix(expand.grid(coordx,coordy,coordz));
-                     coordx=cc[,1];coordy=cc[,2]; coordz=cc[,3];
 
-                 }
+    ### case gris handling coordz
+    if(grid) {
+              if(is.null(coordz)) { cc=as.matrix(expand.grid(coordx,coordy));coordx=cc[,1];coordy=cc[,2]; coordz=NULL}
+              else {  
+                    # if(is.null(coordz)) cc=as.matrix(expand.grid(coordx,coordy,0));
+                     cc=as.matrix(expand.grid(coordx,coordy,coordz));
+                     coordx=cc[,1];coordy=cc[,2]; coordz=cc[,3];
+            
+
+                  }
              }
 
     ### Set returning variables and initialize the model parameters:
@@ -1234,6 +1239,7 @@ if(method1=="euclidean")
     flagcorr <- NULL
 
     ### START settings the data structure:
+
     # set the coordinates sizes:
     if(is.null(coordx_dyn))  
     {
@@ -1576,11 +1582,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 }  # END code for the simulation procedure
 #####################################################################################
     
-
-    
-    numpairs <- integer(1)
-    srange <- double(1)
-    trange <- double(1)
+numpairs <- integer(1); srange <- double(1); trange <- double(1)
 
 if(typereal=="Independence"){ maxdist=NULL;maxtime=NULL;K=neighb}
     
@@ -1623,7 +1625,6 @@ if(!tapering)
 
     aa=double(5);for(i in 1:length(tapsep)) aa[i]=tapsep[i];tapsep=aa
  
-    
 
 if(fcall=="Fitting"&likelihood==2&!is.null(neighb)) mem=FALSE # Vecchia gp case
 if(fcall=="Fitting"&likelihood==2||fcall=="Simulation") mem=FALSE 
@@ -1696,6 +1697,8 @@ if(fcall=="Fitting"&mem==TRUE&(!space)&!tapering)   {vv=length(NS); numcoord=NS[
 
   if(is.null(coordz)) coordz=double(numcoordx*numtime) ## is it necessary?
 
+ 
+
 srange[which(srange==Inf)]=1e+50;trange[which(trange==Inf)]=1e+50
 gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy),as.double(coordz), as.double(coordt),as.integer(grid),ia=as.integer(ia),idx=as.integer(idx),  #7
            isinit=as.integer(isinit),ja=as.integer(ja), as.integer(mem), as.integer(numcoord),as.integer( numcoordx),  as.integer(numcoordy), as.integer(numcoordz), #6
@@ -1704,6 +1707,9 @@ gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy)
            colidx= as.integer(colidx),rowidx= as.integer(rowidx), # 2
             as.integer(ns), as.integer(NS), as.integer(isdyn),
       PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+
+  #if(!sum(coordz)) coordz=NULL
+
 rm(colidx);rm(rowidx)
 if(type=="Tapering") {rm(idx);rm(ja);rm(ia)}
 ##

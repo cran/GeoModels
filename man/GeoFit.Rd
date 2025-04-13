@@ -64,7 +64,7 @@ GeoFit(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,copul
     when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
   \item{maxdist}{Numeric; an optional positive value indicating the maximum
-    spatial distance considered in the composite or tapered likelihood
+    spatial distance considered in the composite 
     computation. See the Section \bold{Details} for more information.}
       \item{neighb}{Numeric; an optional positive integer indicating the 
     order of neighborhood  in the composite likelihood

@@ -48,12 +48,33 @@ GeoFit2 <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_d
     stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
 
  
+
+bivariate<-CheckBiv(CkCorrModel(corrmodel))
+spacetime<-CheckST(CkCorrModel(corrmodel))
+
+space=!spacetime&&!bivariate
+
+
+###### checking if neighb or maxdist or maxtime has been specified when using cl
+if(space||bivariate){
+     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
+          if(is.null(neighb)&&maxdist==Inf) 
+               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+}
+if(spacetime){
+     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
+       if((is.null(neighb)&maxdist==Inf)&maxtime==Inf) 
+               stop("neighb or maxdist and maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+       if((is.null(neighb)&maxdist==Inf)&maxtime<Inf) 
+               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+       if((!is.null(neighb)|maxdist<Inf) &maxtime==Inf) 
+               stop("maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")         
+}
+########
+
 ##############################################################################
 ###### extracting sp object informations if necessary              ###########
 ##############################################################################
-bivariate<-CheckBiv(CkCorrModel(corrmodel))
-spacetime<-CheckST(CkCorrModel(corrmodel))
-space=!spacetime&&!bivariate
 if(!is.null(spobj)) {
    if(space||bivariate){
         a=sp2Geo(spobj,spdata); coordx=a$coords 
