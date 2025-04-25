@@ -127,7 +127,7 @@ fit = GeoFit(data,coordx=coords, corrmodel=corrmodel,model=model,X=X,
 res=GeoResiduals(fit)
 mean(res$data) # should be approx 1
 # checking goodness of fit marginal model
-GeoQQ(res);GeoQQ(res,type="D",col="red",ylim=c(0,1.7),breaks=20);
+GeoQQ(res);GeoQQ(res,type="D",lwd=2,ylim=c(0,1.7),breaks=20);
 # Empirical estimation of the variogram for the residuals:
 vario = GeoVariogram(res$data,coordx=coords,maxdist=0.5)
 # Comparison between empirical amd estimated semivariogram for the residuals

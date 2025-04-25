@@ -25,17 +25,13 @@ CheckST <- function(numbermodel)
 
 
 # Check the type of distances
-CheckDistance<- function(distance)
-{
-    CheckDistance <- NULL
-    CheckDistance <- switch(distance,
-    eucl=0,
-    Eucl=0,
-    chor=1,
-    Chor=1,
-    geod=2,
-    Geod=2)
-    return(CheckDistance)
+CheckDistance <- function(distance) {
+  out <- switch(distance,
+                eucl = 0, Eucl = 0, 
+                chor = 1, Chor = 1, 
+                geod = 2, Geod = 2,
+                stop("Invalid type of  di distance: use 'Eucl', 'Chor' o 'Geod'."))
+  return(out)
 }
 ### Procedures are in alphabetical order.
 CkCorrModel <- function(corrmodel)
@@ -1734,7 +1730,7 @@ numpairs <- gb$numpairs
 #######################################################################
 else   
 ###############################################################
-################### loading distances in memory using RANN package 
+################### loading distances in memory using nabor package 
 #### it works when CL  using neighb  or maxdist AND neighb 
 #############################################################
 { 
@@ -1778,10 +1774,34 @@ if(space)   #  spatial case
   mmm=1;ttt=1
 if(weighted)  mmm=max(sol$lags)
   
-  ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
-    as.double(sol$lags),as.integer(nn), as.double(mmm),
-    as.double(sol$lagt), as.integer(nn),as.double(ttt),
-    as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1)) 
+  #ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
+  #  as.double(sol$lags),
+  #  as.integer(nn), as.double(mmm),
+  #  as.double(sol$lagt), 
+  #  as.integer(nn),as.double(ttt),
+  #  as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1))
+
+    ss <- dotCall64::.C64("SetGlobalVar2",
+           SIGNATURE = c("integer", "integer",
+            "double",
+             "integer", "double",
+                         "double", 
+                         "integer", "double", "integer", "integer",
+                         "integer", "integer"),
+           as.integer(numcoord),
+           as.integer(numtime),
+           as.double(sol$lags),
+           as.integer(nn),
+           as.double(mmm),
+           as.double(sol$lagt),
+           as.integer(nn),
+           as.double(ttt),
+           as.integer(spacetime),
+           as.integer(bivariate),
+           as.integer(1),
+           as.integer(1),
+           INTENT = rep("r", 12), 
+           PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
 } 
 
@@ -1796,6 +1816,10 @@ if(spacetime)   #  space time  case
   sol=GeoNeighIndex(coordx=x[1:numcoord,],
     coordx_dyn=coordx_dyn,
     coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
+
+    #sol=GeoNeighIndex(coordx=x,
+    #coordx_dyn=coordx_dyn,
+    #coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
 
  # ###    deleting symmetric indexes with associate distances #unuseful
   if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
@@ -1814,12 +1838,16 @@ if(weighted) { mmm=max(sol$lags) ;ttt=max(sol$lagt)}
 
   ss=dotCall64::.C64("SetGlobalVar2",
         SIGNATURE = c("integer","integer",
-             "double","integer","double",
-              "double","integer","double",
+             "double",
+             "integer","double",
+              "double",
+              "integer","double",
             "integer","integer","integer","integer"),  
        numcoord,  numtime, 
-        sol$lags,nn,mmm, 
-      sol$lagt,nn,ttt,
+        sol$lags,
+        nn,mmm, 
+      sol$lagt,
+      nn,ttt,
        spacetime,bivariate,1,1, INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
@@ -1851,10 +1879,13 @@ if(weighted) { mmm=max(sol$lags)}
   
   ss=dotCall64::.C64("SetGlobalVar2",
         SIGNATURE = c("integer","integer",
-             "double","integer","double",
+             "double",
+             "integer","double",
               "double","integer","double",
             "integer","integer","integer","integer"),  
-       numcoord,  2,  sol$lags,nn,mmm, 
+       numcoord,  2,  
+       sol$lags,
+       nn,mmm, 
        1,nn,1,spacetime,bivariate,sol$first,sol$second,
         INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
@@ -1876,7 +1907,6 @@ if(weighted) { mmm=max(sol$lags)}
 ##############################################
 if(is.null(coordt)) coordt=1
 }}
-
 
 ########################################################################################
 ########################################################################################

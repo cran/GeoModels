@@ -1113,7 +1113,6 @@ void SetGlobalVar2 (int *nsite, int *times,//2
 
 
    int i=0;
-
     ncoord=(int *)R_Calloc(1,int);//number of total spatial coordinates
   ncoord[0]=*nsite;
     ntime=(int *)R_Calloc(1,int);//number of times
@@ -1130,7 +1129,6 @@ void SetGlobalVar2 (int *nsite, int *times,//2
    
     isbiv=(int *)R_Calloc(1,int);//is a bivariate random field?
     isbiv[0]=biv[0];
-
     isst=(int *)R_Calloc(1,int);//is a spatio-temporal random field?
     isst[0]=st[0];
 /*########*/
@@ -1138,12 +1136,14 @@ if(!isst[0]&&!isbiv[0]) {  /// spatial case
        lags=(double *)R_Calloc(npairs[0],   double);
         for (i=0;i<*npairs;i++) {lags[i]=h[i];}
     }
-
 else{
     if(isst[0]) {  /// spatio teemporal case
         lags=(double *)R_Calloc(npairs[0],   double);
         lagt=(double *)R_Calloc(npairs[0],   double);
-        for (i=0;i<*npairs;i++) {lags[i]=h[i];lagt[i]=u[i];}
+
+        for (i=0;i<*npairs;i++) {lags[i]=h[i];lagt[i]=u[i];
+      // Rprintf("%f %f  %d\n",h[i],u[i],npairs[0]);
+}
     }
  
     

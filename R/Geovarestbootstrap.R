@@ -1,191 +1,181 @@
+GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local = c(1, 1), optimizer = NULL,
+                              lower = NULL, upper = NULL, method = "cholesky", alpha = 0.95, L = 1000,
+                              parallel = FALSE, ncores = NULL) {
 
-####################################################
-### File name: GeoVarestboostrap.r
-####################################################
+  if (length(fit$coordt) == 1) fit$coordt <- NULL
 
-   
-GeoVarestbootstrap=function(fit,K=100,sparse=FALSE,GPU=NULL,  local=c(1,1),optimizer=NULL,
-  lower=NULL, upper=NULL,method="cholesky", alpha=0.95, L=1000,parallel=FALSE,ncores=NULL)
-{
+  if (is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
 
-if(length(fit$coordt)==1) fit$coordt=NULL
+  if (!(method %in% c("cholesky", "TB", "CE"))) stop("The method of simulation is not correct")
 
-if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
-if(is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
+  if (is.null(optimizer)) {
+    optimizer <- fit$optimizer
+    lower <- fit$lower
+    upper <- fit$upper
+  }
 
-if(!(method=="cholesky"||method=="TB"||method=="CE")) stop("The method of simulation is not correct") #||method=="Vecchia"
+  if (is.numeric(alpha) && !(alpha > 0 && alpha < 1)) stop("alpha must be numeric between 0 and 1")
 
+  model <- fit$model
 
-if(is.null(optimizer)) {optimizer=fit$optimizer;lower=fit$lower;upper=fit$upper}
+  cat("Parametric bootstrap can be time consuming ...\n")
 
-if(is.numeric(alpha)) if(!(alpha<1&&alpha>0) ) stop(" alpha must be  numeric between 0 and 1")
+  if (fit$missp) {  # misspecification corrections
+    model_map <- c(
+      StudentT = "Gaussian_misp_StudentT",
+      Poisson = "Gaussian_misp_Poisson",
+      PoissonZIP = "Gaussian_misp_PoissonZIP",
+      SkewStudentT = "Gaussian_misp_SkewStudentT",
+      Tukeygh = "Gaussian_misp_Tukeygh"
+    )
+    if (model %in% names(model_map)) model <- model_map[[model]]
+  }
 
-model=fit$model
+  dimat <- fit$numtime * fit$numcoord
 
+  tempX <- fit$X
+  if (!is.null(fit$X) && sum(fit$X[1:dimat] == 1) == dimat && ncol(fit$X) == 1) fit$X <- NULL
 
-cat("Parametric bootstrap can be time consuming ...\n")
+  coords <- cbind(fit$coordx, fit$coordy)
+  if (fit$bivariate && is.null(fit$coordx_dyn)) coords <- coords[1:(length(fit$coordx) / 2), ]
+  N <- nrow(coords)
 
-if(fit$missp)  ### misspecification
- {if(fit$model=="StudentT")     model="Gaussian_misp_StudentT"
-  if(fit$model=="Poisson")      model="Gaussian_misp_Poisson"
-  if(fit$model=="PoissonZIP")   model="Gaussian_misp_PoissonZIP"
-  if(fit$model=="SkewStudentT") model="Gaussian_misp_SkewStudenT"
-  if(fit$model=="Tukeygh")      model="Gaussian_misp_Tukeygh"
- }
+  # Simulation of data
+  cat("Performing", K, "simulations....\n")
 
-dimat=fit$numtime*fit$numcoord;
+  if (is.null(fit$copula)) {  # non copula models
+    if (method == "cholesky") {
+      data_sim <- GeoSim(
+        coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
+        corrmodel = fit$corrmodel, model = fit$model, param = append(fit$param, fit$fixed),
+        GPU = GPU, local = local, sparse = sparse, grid = fit$grid, X = fit$X, n = fit$n, method = method,
+        distance = fit$distance, radius = fit$radius, nrep = K
+      )
+    } else if (method %in% c("TB", "CE")) {
+      data_sim <- GeoSimapprox(
+        coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
+        corrmodel = fit$corrmodel, model = fit$model, param = append(fit$param, fit$fixed),
+        GPU = GPU, local = local, grid = fit$grid, X = fit$X, n = fit$n, method = method,
+        parallel = parallel, ncores = ncores, L = L,
+        distance = fit$distance, radius = fit$radius, nrep = K
+      )
+    } else {
+      stop("Unsupported method for simulation")
+    }
+  } else {  # copula models
+    if (method == "cholesky") {
+      data_sim <- GeoSimCopula(
+        coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
+        corrmodel = fit$corrmodel, model = fit$model, copula = fit$copula,
+        param = append(fit$param, fit$fixed), GPU = GPU, local = local, sparse = sparse,
+        grid = fit$grid, X = fit$X, n = fit$n, method = method,
+        distance = fit$distance, radius = fit$radius, nrep = K
+      )
+    } else {
+      stop("Unsupported method for copula simulation")
+    }
+  }
 
-tempX=fit$X
-if(sum(fit$X[1:dimat]==1)==dimat&&!dim(fit$X)[2]>1) fit$X=NULL 
+  # Determine number of cores for parallelization
+  coremax <- parallel::detectCores(logical = FALSE)
+  if (is.na(coremax) || coremax <= 1) parallel <- FALSE
 
+  # Bootstrap estimation function
+  estimate_fun <- function(k) {
+    GeoFit(
+      data = data_sim$data[[k]], start = fit$param, fixed = fit$fixed,
+      coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn,
+      copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
+      lower = lower, upper = upper, neighb = fit$neighb,
+      corrmodel = fit$corrmodel, model = model, sparse = FALSE, n = fit$n,
+      GPU = GPU, local = local, maxdist = fit$maxdist, maxtime = fit$maxtime,
+      optimizer = optimizer, grid = fit$grid, likelihood = fit$likelihood,
+      type = fit$type, X = fit$X, distance = fit$distance, radius = fit$radius
+    )
+  }
 
-k=1;res=NULL
+  if (!parallel) {
+    cat("Performing", K, "estimations sequentially...\n")
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    pb <- progressr::progressor(along = 1:K)
 
-  coords=cbind(fit$coordx,fit$coordy)
-  if(fit$bivariate&&is.null(fit$coordx_dyn)) coords=coords[1:(length(fit$coordx)/2),]
-  N=nrow(coords)
-  pp=NULL
-######## simulation ##########################################
-if(is.null(fit$copula)){     ### non copula models
-   cat("Performing",K,"simulations....\n") 
-    if(method=="cholesky")
-    { 
-      data_sim = GeoSim(coordx=coords,coordt=fit$coordt,coordx_dyn=fit$coordx_dyn, anisopars=fit$anisopars,
-      corrmodel=fit$corrmodel,model=fit$model,param=append(fit$param,fit$fixed),
-      GPU=GPU,  local=local,sparse=sparse,grid=fit$grid, X=fit$X,n=fit$n,method=method,
-      distance=fit$distance,radius=fit$radius,nrep=K)
-   
+    res_list <- vector("list", K)
+    for (k in seq_len(K)) {
+      res_est <- estimate_fun(k)
+      if (res_est$convergence == "Successful" && res_est$logCompLik < 1.0e8) {
+        res_list[[k]] <- unlist(res_est$param)
+      } else {
+        res_list[[k]] <- NULL
+      }
+      pb(sprintf("k=%d", k))
+    }
+    res <- do.call(rbind, Filter(Negate(is.null), res_list))
+  } else {
+    if (is.null(ncores)) {
+      n.cores <- max(1, coremax - 1)
+    } else {
+      if (!is.numeric(ncores) || ncores < 1 || ncores > coremax) stop("number of cores not valid")
+      n.cores <- ncores
+    }
+    cat("Performing", K, "estimations using", n.cores, "cores...\n")
+    future::plan(multisession, workers = n.cores)
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    pb <- progressr::progressor(along = 1:K)
+
+    xx <- foreach::foreach(k = seq_len(K), .combine = rbind,
+                          .options.future = list(seed = TRUE)) %dofuture% {
+      pb(sprintf("k=%d", k))
+      res_est <- estimate_fun(k)
+      c(unlist(res_est$param), convergence = res_est$convergence, logCompLik = res_est$logCompLik)
     }
 
-   if(method=="TB"||method=="CE")    # ||method=="Vecchia"
-     { data_sim = GeoSimapprox(coordx=coords,coordt=fit$coordt,coordx_dyn=fit$coordx_dyn, anisopars=fit$anisopars,
-      corrmodel=fit$corrmodel,model=fit$model,param=append(fit$param,fit$fixed),
-      GPU=GPU,  local=local,grid=fit$grid,X=fit$X,n=fit$n,method=method,parallel=parallel,ncores=ncores,
-       L=L,distance=fit$distance,radius=fit$radius,nrep=K)}
-}
-else{    ### copula models
-  cat("Performing",K,"simulations....\n")
+    # Filtra risultati convergenti e con logCompLik valido
+    conv_idx <- xx[, "convergence"] == "Successful" & xx[, "logCompLik"] < 1.0e8
+    res <- xx[conv_idx, colnames(xx) != "convergence" & colnames(xx) != "logCompLik", drop = FALSE]
 
+    future::plan(sequential)
+  }
 
-        if(method=="cholesky")
-     { data_sim = GeoSimCopula(coordx=coords,coordt=fit$coordt,coordx_dyn=fit$coordx_dyn, anisopars=fit$anisopars,
-       corrmodel=fit$corrmodel,model=fit$model,copula=fit$copula,param=append(fit$param,fit$fixed),
-       GPU=GPU,  local=local,sparse=sparse,grid=fit$grid,X=fit$X,n=fit$n,method=method,
-       distance=fit$distance,radius=fit$radius,nrep=K)}
-}
-###############################################################
+  # Calcolo varianza e Godambe
+  numparam <- length(fit$param)
+  invG <- var(res)
+  G <- try(solve(invG), silent = TRUE)
+  if (!is.matrix(G)) warning("Bootstrap estimated Godambe matrix is singular")
 
+  stderr <- sqrt(diag(invG))
 
-coremax=parallel::detectCores()
-if(is.na(coremax)||coremax==1) parallel=FALSE
-#############
-### no parallelized version
-#############
-if(!parallel) {
-cat("Performing",K,"estimations...\n")
-progressr::handlers(global = TRUE)
-progressr::handlers("txtprogressbar")
-pb <- progressr::progressor(along = 1:K)
+  # Calcolo criteri di informazione
+  if ((fit$likelihood == "Marginal" && fit$type %in% c("Independence", "Pairwise")) ||
+      (fit$likelihood == "Conditional" && fit$type == "Pairwise")) {
 
-while(k<=K){
+    H <- fit$sensmat
+    penalty <- sum(diag(H %*% invG))
+    claic <- -2 * fit$logCompLik + 2 * penalty
+    clbic <- -2 * fit$logCompLik + log(dimat) * penalty
+    fit$varimat <- H %*% invG %*% H
+  } else if (fit$likelihood == "Full" && fit$type == "Standard") {
+    claic <- -2 * fit$logCompLik + 2 * numparam
+    clbic <- -2 * fit$logCompLik + log(dimat) * 2 * numparam
+  } else {
+    claic <- NA_real_
+    clbic <- NA_real_
+  }
 
-res_est=GeoFit( data=data_sim$data[[k]], start=fit$param,fixed=fit$fixed,
-   coordx=coords, coordt=fit$coordt, coordx_dyn=fit$coordx_dyn,
-   copula=fit$copula,anisopars=fit$anisopars,est.aniso=fit$est.aniso,
-   lower=lower,upper=upper,neighb=fit$neighb,
-   corrmodel=fit$corrmodel, model=model, sparse=FALSE,n=fit$n,
-   GPU=GPU,local=local,  maxdist=fit$maxdist, maxtime=fit$maxtime, optimizer=optimizer,
-   grid=fit$grid, likelihood=fit$likelihood, type=fit$type,
-   X=fit$X, distance=fit$distance, radius=fit$radius)
-if(res_est$convergence=='Successful'&&res_est$logCompLik<1.0e8) 
- {
- res=rbind(res,unlist(res_est$param)) 
- 
-}   
-    pb(sprintf("k=%g", k))
-  k=k+1      
+  # Aggiornamento risultati
+  fit$claic <- claic
+  fit$clbic <- clbic
+  fit$stderr <- stderr
+  fit$varcov <- invG
+  fit$estimates <- res
+  fit$X <- tempX
 
-}
-#print(res)
-#############
-}
+  # Intervalli di confidenza e p-values
+  aa <- qnorm(1 - (1 - alpha) / 2) * stderr
+  pp <- as.numeric(fit$param)
+  fit$conf.int <- rbind(pp - aa, pp + aa)
+  fit$pvalues <- 2 * pnorm(-abs(pp / stderr))
 
-#############
-###parallalized  version 
-#############
-if(parallel) {
-
-
-if(is.null(ncores)){ n.cores <- coremax - 1 }
-else
-{  if(!is.numeric(ncores)) stop("number of cores not valid\n")
-   if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
-   n.cores=ncores
-}
-cat("Performing",K,"estimations using",n.cores,"cores...\n")
-
-future::plan(multisession, workers = n.cores)
-
-progressr::handlers(global = TRUE)
-progressr::handlers("txtprogressbar")
-pb <- progressr::progressor(along = 1:K)
-
-xx=foreach::foreach(k = 1:K,.combine = rbind,
-                           .options.future = list(seed = TRUE)) %dofuture% 
-    {  
-      pb(sprintf("k=%g", k))
-      GeoFit( data=data_sim$data[[k]], start=fit$param,fixed=fit$fixed,
-   coordx=coords, coordt=fit$coordt, coordx_dyn=fit$coordx_dyn,
-   copula=fit$copula,anisopars=fit$anisopars,est.aniso=fit$est.aniso,
-   lower=lower,upper=upper,neighb=fit$neighb,
-   corrmodel=fit$corrmodel, model=model, sparse=FALSE,n=fit$n,
-   GPU=GPU,local=local,  maxdist=fit$maxdist, maxtime=fit$maxtime, optimizer=optimizer,
-   grid=fit$grid, likelihood=fit$likelihood, type=fit$type,
-   X=fit$X, distance=fit$distance, radius=fit$radius)
-      
-    }
-sel1=colnames(xx)=="param"; sel2=colnames(xx)=="convergence"
-res1=matrix(unlist(xx[,sel1]),nrow=K,byrow = T)
-conve=unlist(xx[,sel2])=="Successful"
-res=res1[conve,]
-colnames(res)=names(fit$param)
-rm(xx,res1,conve)
-future::plan(sequential)
-####################################################################
-}
-
-numparam=length(fit$param)
-invG=var(res); G=try(solve(invG),silent=TRUE);if(!is.matrix(G)) print("Bootstrap estimated Godambe matrix is singular")
-stderr=sqrt(diag(invG))
-
-
-if((fit$likelihood=="Marginal"&&(fit$type=="Independence"))||(fit$likelihood=="Marginal"&&(fit$type=="Pairwise"))||fit$likelihood=="Conditional"&&(fit$type=="Pairwise"))
-{
-
-H=fit$sensmat
-
-penalty <- sum(diag(H%*%invG))
-claic = -2*fit$logCompLik + 2*penalty
-clbic = -2*fit$logCompLik + log(dimat)*penalty
-fit$varimat=H%*%invG %*%H
-}    
-if( fit$likelihood=="Full"&&fit$type=="Standard"){
-claic <- -2 * fit$logCompLik + 2*numparam
-clbic <- -2 * fit$logCompLik + log(dimat)*2*numparam
-}
-fit$claic=claic
-fit$clbic=clbic
-fit$stderr=stderr
-fit$varcov=invG
-fit$estimates=res
-fit$X=tempX
-
-
-stderr=sqrt(diag(invG))
-aa=qnorm(1-(1-alpha)/2)*stderr
-pp=as.numeric(fit$param)
-low=pp-aa; upp=pp+aa
-fit$conf.int=rbind(low,upp)
-fit$pvalues=2*pnorm(-abs(pp/stderr))
-return(fit)
+  return(fit)
 }

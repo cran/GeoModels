@@ -1,7 +1,9 @@
 #include "header.h"
 
 // get all pair between certain distance 
-void pairs(int *ncoords,double *data,double *coordx, double *coordy,double *coordz, double *numbins, double *bins, double *v0,double *v1, double *v2,double *maxdist)
+
+void pairs(int *ncoords,double *data,double *coordx, double *coordy,double *coordz, double *numbins, double *bins, double *v0,double *v1, double *v2,double *maxdist,
+  int *typ, double *radius)
 {
   int ncrd,numbin,h=0,k=0,i,j;
   double max_dist;
@@ -14,7 +16,7 @@ void pairs(int *ncoords,double *data,double *coordx, double *coordy,double *coor
   for(h=0;h<=numbin;h++){
       for(i=0; i<(ncrd-1);i++){
         for(j=(i+1);j<ncrd;j++){
-          distance = dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
+          distance = dist(typ[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
           if(distance <= max_dist){
             if((bins[h] < distance) && (distance <= bins[(h+1)])){
               v0[k] = bins[(h)];

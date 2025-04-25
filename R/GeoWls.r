@@ -153,7 +153,7 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
                            "GeoWLS", type,  weighted,copula, X, memdist, nosym)
   
 
-
+    
     if(!is.null(initparam$error))     stop(initparam$error)
     if(length(coordt)>0&&is.list(X)) X=X[[1]]
 

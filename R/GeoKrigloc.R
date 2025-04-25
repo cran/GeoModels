@@ -49,8 +49,7 @@ else  { coordx=estobj$coordx;
    radius=estobj$radius
    copula=estobj$copula
    anisopars=estobj$anisopars
-   if(ncol(estobj$X)==1) X=NULL
-   else X=estobj$X
+   X=estobj$X
 }
 ##################################
 ## X and more stuuffs..
@@ -108,78 +107,98 @@ if(is.na(coremax)||coremax==1) parallel=FALSE
 
 
 #####################################################################
-if(space){
-         ### computing spatial neighborhood
-         neigh=GeoNeighborhood(data, coordx=coords,distance=distance,loc=loc,neighb=neighb,maxdist=maxdist,X=X,M=M,parallel=FALSE,ncores=ncores)
-         res1=res2=NULL
+if (space) {
+  # Calcolo vicinato spaziale
+  neigh <- GeoNeighborhood(
+    data, coordx = coords, distance = distance, loc = loc, neighb = neighb,
+    maxdist = maxdist, X = X, M = M, parallel = FALSE, ncores = ncores
+  )
 
-################## not parallel version #######################################
-if(!parallel) {
-     res1=double(Nloc); if(mse) res2=double(Nloc)
-         for(i in 1: Nloc)
-          {
-              #update mean
-         if(!is.null(M)) param$mean=neigh$M[[i]]         
+  res1 <- numeric(Nloc)
+  res2 <- if (mse) numeric(Nloc) else NULL
 
-            pr=GeoKrig(estobj=NULL,loc=loc[i,], data=neigh$data[[i]],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,sparse=sparse,
-                model=model, param=param,anisopars=anisopars, mse=mse,copula=copula)
-                res1[i]=pr$pred
-            if(mse) res2[i]=pr$mse
-          }
+  if (!parallel) {
+    # Versione sequenziale
+    for (i in seq_len(Nloc)) {
+      if (!is.null(M)) param$mean <- neigh$M[[i]]
+      pr <- GeoKrig(
+        estobj = NULL, loc = loc[i, ], data = neigh$data[[i]], coordx = neigh$coordx[[i]],
+        corrmodel = corrmodel, distance = distance, n = n,
+        X = neigh$X[[i]], Xloc = Xloc[i, ], Mloc = Mloc[i], type_krig = type_krig,
+        sparse = sparse, model = model, param = param, anisopars = anisopars,
+        mse = mse, copula = copula
+      )
+      res1[i] <- pr$pred
+      if (mse) res2[i] <- pr$mse
+    }
+  } else {
+    # Versione parallela con doFuture
+    if (is.null(ncores)) {
+      n.cores <- max(1, future::availableCores() - 1)
+    } else {
+      if (!is.numeric(ncores) || ncores < 1 || ncores > future::availableCores()) {
+        stop("Invalid number of cores specified")
+      }
+      n.cores <- ncores
+    }
+    future::plan(multisession, workers = n.cores)
+        cat("Performing local kriging using ", n.cores, " cores...")
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    pb <- progressr::progressor(along = seq_len(Nloc))
+
+
+
+    # Aumenta dimensione massima globale per future (8 GB)
+    oopts <- options(future.globals.maxSize = 8L * 1024^3)
+    on.exit(options(oopts), add = TRUE)
+
+    xx <- foreach::foreach(
+      i = seq_len(Nloc),
+      .combine = rbind,
+      .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"))
+    ) %dofuture% {
+      #pb(sprintf("Processing location %d", i))
+      if (!is.null(M)) param$mean <- neigh$M[[i]]
+
+      pr <- GeoKrig(
+        estobj = NULL, loc = loc[i, ], data = neigh$data[[i]], coordx = neigh$coordx[[i]],
+        corrmodel = corrmodel, distance = distance, n = n,
+        X = neigh$X[[i]], Xloc = Xloc[i, ], Mloc = Mloc[i], type_krig = type_krig,
+        sparse = sparse, model = model, param = param, anisopars = anisopars,
+        mse = mse, copula = copula
+      )
+
+      # Rimuove dati pesanti per ridurre overhead
+      pr$data <- pr$coordx <- pr$coordy <- pr$coordz <- pr$coordt <- NULL
+
+      c(pr$pred, if (mse) pr$mse else NA_real_)
+    }
+
+    xx <- matrix(xx, nrow = Nloc)
+    res1 <- as.numeric(xx[, 1])
+    if (mse) res2 <- as.numeric(xx[, 2]) else res2 <- NULL
+
+    rm(xx)
+    future::plan(sequential)
+  }
 }
-##################### parallel version ####################################
-if(parallel) {
-      
-        if(is.null(ncores)){ n.cores <- coremax - 1 }
-        else
-        {  if(!is.numeric(ncores)) stop("number of cores not valid\n")
-           if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
-           n.cores=ncores
-        }
-        future::plan(multisession, workers = n.cores)
-        progressr::handlers(global = TRUE) 
-        progressr::handlers("txtprogressbar")
-        pb <- progressr::progressor(along = 1:Nloc)
-        cat("Performing local kriging using ",n.cores," cores...\n")
 
-        oopts=options(future.globals.maxSize = 8000 * 1024^2)
-        on.exit(options(oopts))
- xx=foreach::foreach(i= 1:Nloc,.combine = rbind,
-    .options.future = list(seed = TRUE,
-    globals = structure(TRUE, add = c("param")))) %dofuture% 
-        { 
-            pb(sprintf("i=%g", i))
-        if(!is.null(M)) param$mean=neigh$M[[i]]
-            pr=GeoKrig(estobj=NULL,loc=loc[i,], data=neigh$data[[i]],coordx=neigh$coordx[[i]],corrmodel=corrmodel,distance=distance,n=n,
-                X=neigh$X[[i]],Xloc= Xloc[i,],Mloc=Mloc[i], type_krig=type_krig,sparse=sparse,
-                model=model, param=param,anisopars=anisopars, mse=mse,copula=copula)
-            pr$data=pr$coordx=pr$coordy=pr$coordz=pr$coordt=NULL
-            c(pr$pred,pr$mse)
-        }
-   
-xx=matrix(xx,nrow=Nloc)
-res1=as.numeric(xx[,1])
-if(mse) res2=as.numeric(xx[,2])
-rm(xx)
-future::plan(sequential)
-}
-
-} 
 ######################### end space ####################################
 
 ######################## space time ####################################
 if(spacetime)
 {  
        ### computing spatio-temporal neighborhood
-         neigh=GeoNeighborhood(data, coordx=coords,coordt=coordt,distance=distance,neighb=neighb,
+
+         neigh=GeoNeighborhood(data, coordx=coords,coordt=coordt,distance=distance,neighb=neighb,coordx_dyn=coordx_dyn,
                   loc=loc,time=time,maxdist=maxdist,maxtime=maxtime,X=X,M=M,parallel=FALSE,ncores=ncores)
          res1=res2=double(Nloc*Tloc)
          k=1
     if(!parallel)    {
-        # pb <- txtProgressBar(min = 0, max = Nloc*Tloc, style = 3)
          for(i in 1: Nloc){
           for(j in 1: Tloc){
+
              if(!is.null(M)) param$mean=neigh$M[[k]]
             pr=GeoKrig(estobj=NULL, data=neigh$data[[k]],coordx=neigh$coordx[[k]],coordt=neigh$coordt[[k]],loc=loc[i,],time=time[j], #ok
                X=neigh$X[[k]],  Mloc=Mloc[i+(Nloc)*(j-1)], #ok
@@ -188,10 +207,7 @@ if(spacetime)
             res1[k]=pr$pred
             if(mse) res2[k]=pr$mse
             k=k+1
-         #    setTxtProgressBar(pb, k)
-          #         close(pb)
           }}
-      # print(str(res1))
      }
    if(parallel) {
        if(is.null(ncores)){ n.cores <- coremax - 1 }
@@ -200,7 +216,7 @@ if(spacetime)
            if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
            n.cores=ncores
         }
-     doFuture::registerDoFuture()
+        doFuture::registerDoFuture()
         future::plan(multisession, workers = n.cores)
  ############################# 
         # Define your code
@@ -219,14 +235,12 @@ if(spacetime)
         loop_indices <- expand.grid(i = 1:Nloc, j = 1:Tloc)
         loop_indices <- loop_indices[order(loop_indices$i),]
         rownames(loop_indices) <- NULL
-        
         # Parallelize the computation using %dopar%
         progressr::handlers(global = TRUE) 
         progressr::handlers("txtprogressbar")
         pb <- progressr::progressor(along = 1:(Nloc * Tloc))
         cat("Performing local kriging using ",n.cores," cores...\n")
-
-            oopts=options(future.globals.maxSize = 8000 * 1024^2)
+        oopts=options(future.globals.maxSize = 8000 * 1024^2)
         on.exit(options(oopts))
         
         output <- foreach::foreach(k = 1:(Nloc * Tloc), .combine = rbind,.options.future = list(seed = TRUE)) %dofuture% {

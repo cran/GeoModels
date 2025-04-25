@@ -14,6 +14,8 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
 ###########  first preliminary check  ###############
     call <- match.call()
 
+
+
     if(is.null(start)) stop("Starting parameters are missing")
 
     if(is.null(corrmodel)&& likelihood=="Marginal"&&type=="Independence") 
@@ -50,7 +52,9 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
     likelihood=gsub("[[:blank:]]", "",likelihood)
     type=gsub("[[:blank:]]", "",type)
     if(!is.logical(memdist)) memdist=FALSE
-    if(!is.null(X)) X=as.matrix(X)
+
+    if(!is.null(X)) if(is.null(coordx_dyn)) X=as.matrix(X)
+
     if(is.numeric(neighb)) {
             neighb=round(neighb)
             if(all(neighb<1))  stop("neighb must be an integer >=1\n")
@@ -130,8 +134,6 @@ if(!bivariate){
 if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))==length(start)) && is.null(fixed))
 {fixed=list(nugget=0);tempstart=start;start$nugget=NULL;allest=TRUE}
 }
-######if(bivariate){}
-
 
 
 #############################################################################
@@ -174,7 +176,7 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
    }
     #if(!bivariate){ 
 }
-    if(type=="Independence"){
+if(type=="Independence"){
      if(sum(NuisParam(model, bivariate=initparam$bivariate, num_betas=initparam$num_betas-1) %in% names(unlist(start)))==0) stop("No marginal parameters to estimate")
      }
         ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
@@ -226,8 +228,9 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))
     ###################################################################################
     ###################################################################################
 
-
-#updating with aniso parameters
+####################################################################
+#############  handling anisotropy parameters ######################
+###################################################################
 update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,estimate_aniso)
 {
  un_anisopars=unlist(anisopars); 
@@ -254,10 +257,6 @@ update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,es
 aa=list(param=param,namesparam=namesparam, fixed=fixed,namesfixed=namesfixed,lower=lwr,upper=upr)
 return(aa)
 }
-
-
-
-
 aniso=FALSE
 if(!is.null(anisopars)) {
                  aniso=TRUE; namesaniso=c("angle","ratio")
@@ -267,10 +266,8 @@ if(!is.null(anisopars)) {
          initparam$namesparam=qq$namesparam; initparam$namesfixed=qq$namesfixed
          initparam$lower=qq$lower; initparam$upper=qq$upper
     }
-    ###################################################################################
-    ###################################################################################
-
-
+###################################################################################
+###################################################################################
 
    # Full likelihood:
     if(likelihood=='Full')
@@ -338,8 +335,18 @@ if(!is.null(anisopars)) {
     if(initparam$spacetime) numtime=length(coordt)
     if(initparam$bivariate) numtime=2
     dimat <- initparam$numcoord#*numtime#
-    if(is.null(dim(initparam$X)))  initparam$X=as.matrix(rep(1,dimat))
-    # Delete the global variables:
+
+   #if(!is.null(coordx_dyn)){
+   # if(is.null(dim(initparam$X)))  {
+   #           if(initparam$bivariate) initparam$X=as.matrix(rep(1,2*dimat))
+   #           if(initparam$spacetime) initparam$X=as.matrix(rep(1,numtime*dimat))
+   #           if(space)  initparam$X=as.matrix(rep(1,dimat))
+   #          }
+   # }
+   # else{ if(is.null(X)) initparam$X<- lapply(coordx_dyn, function(mat) {matrix(1, nrow = nrow(mat), ncol = 1)})
+   #          else        initparam$X=X 
+    #    }     
+
 
      
      
@@ -390,9 +397,11 @@ if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",
 
 conf.int=NULL
 pvalues=NULL
+
+ initparam$coordz=coordz
 if(likelihood=="Full"&&type=="Standard") 
 {
-  if(!sum(initparam$coordz)) initparam$coordz=NULL
+
   if(varest){
    alpha=0.05 
    conf.int=pvalues=NULL
@@ -405,6 +414,12 @@ if(likelihood=="Full"&&type=="Standard")
     }
    }
 }
+#####
+if (bivariate && is.null(coordx_dyn)) {initparam$coordx <- initparam$coordx[1:dimat]
+                                       initparam$coordy <- initparam$coordy[1:dimat]
+                                      }
+###
+
 
     ### Set the output object:
     GeoFit <- list(      anisopars=anisopars,
@@ -457,7 +472,7 @@ if(likelihood=="Full"&&type=="Standard")
                          varimat = fitted$varimat,
                          type = type,
                          weighted=initparam$weighted,
-                         X = initparam$X)
+                         X = X)
     structure(c(GeoFit, call = call), class = c("GeoFit"))
   }
 

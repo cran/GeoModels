@@ -10,11 +10,9 @@ GeoCV=function(fit, K=100, estimation=TRUE,
 
 if(n.fold>0.99||n.fold<0.01) stop("n.fold must be beween 0.01 and 0.99")
 print("Cross-validation  kriging can be time consuming ...")
-if(ncol(fit$X)==1) {X=Xloc=NULL;tempX=NULL}
+if(is.null(fit$X)) {X=Xloc=NULL;tempX=NULL}
 mae=rmse=lscore=crps=mad=brie=NULL
 space_dyn=FALSE
-
-
 if(is.null(optimizer)) {optimizer=fit$optimizer;lower=fit$lower;upper=fit$upper}
 
 if(is.list(fit$data)) space_dyn=TRUE
@@ -43,6 +41,8 @@ if(fit$missp)  ### misspecification
   if(fit$model=="SkewStudentT") model1="Gaussian_misp_SkewStudenT"
   if(fit$model=="Tukeygh")      model1="Gaussian_misp_Tukeygh"
  }
+
+Mloc=NULL 
 ########################################################################################################################
 ########### spatial case ###############################################################################################
 ########################################################################################################################
@@ -51,7 +51,7 @@ if(space)
 N=length(fit$data)
 coords=cbind(fit$coordx,fit$coordy)
 data=fit$data
-Mloc=NULL
+
 if(length(fit$fixed$mean)>1)  tempM=fit$fixed$mean
 if(!is.null(X)) tempX=fit$X
 
@@ -96,23 +96,14 @@ if(!is.null(fit$anisopars))   {   fit$param$angle=NULL;fit$param$ratio=NULL; fit
             param=append(fit_s$param,fit_s$fixed)
              }
 ########### prediction
-if(!local) { 
-             pr=GeoKrig(data=data_to_est, coordx=coords_est,  
-	            corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coords_to_pred, #ok
-	            model=fit$model, n=fit$n, mse=TRUE,#ok
+    krig_fun <- if (local) GeoKrigloc else GeoKrig
+    pr <- krig_fun(data=data_to_est, coordx=coords_est,  
+                corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coords_to_pred, #ok
+                model=fit$model, n=fit$n, mse=TRUE,#ok
                 param=param, anisopars=fit$anisopars, type_krig=type_krig,
                 radius=fit$radius, sparse=sparse, X=X,Xloc=Xloc,Mloc=Mloc) #ok
-             }
-if(local) {
-              pr=GeoKrigloc(data=data_to_est, coordx=coords_est,  
-              corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coords_to_pred, #ok
-              model=fit$model, n=fit$n, mse=TRUE,#ok
-              neighb=neighb,maxdist=maxdist,
-              param=param, anisopars=fit$anisopars, type_krig=type_krig,
-              radius=fit$radius, sparse=sparse, X=X,Xloc=Xloc,Mloc=Mloc) #ok
-              }
-#pred[i,]=pr$pred
-#dtp[i,]=data_to_pred 
+
+
 pp=GeoScores(data_to_pred,pred=pr$pred,mse=pr$mse,
     score=c("brie","crps","lscore","pe"))
 
@@ -127,87 +118,108 @@ i=i+1
 } 
 ################end while
 } # end no parallel
-
-
 ######################################################################
 #######  parallel version 
 ######################################################################
 if(parallel) {
 
-if(is.null(ncores)){ n.cores <- coremax - 1 }
-else
-{  if(!is.numeric(ncores)) stop("number of cores not valid\n")
-   if(ncores>coremax||ncores<1) stop("number of cores not valid\n")
-   n.cores=ncores
-}
+  if(is.null(ncores)){ 
+    n.cores <- coremax - 1 
+  } else {
+    if(!is.numeric(ncores)) stop("number of cores not valid\n")
+    if(ncores > coremax || ncores < 1) stop("number of cores not valid\n")
+    n.cores = ncores
+  }
 
-rmse=crps=mae=rmse=double(K)
-pp=round(N*(1-n.fold))
-data_to_est=matrix(0,nrow=K,ncol=pp)
-data_to_pred=matrix(0,nrow=K,ncol=N-pp)
-coords_est=coords_to_pred=list()
+  rmse = crps = mae = double(K)
+  pp = round(N * (1 - n.fold))
+  data_to_est = matrix(0, nrow = K, ncol = pp)
+  data_to_pred = matrix(0, nrow = K, ncol = N - pp)
+  coords_est = coords_to_pred = list()
 
-#######################
-#######################
-Mloc=Mest=X=Xloc=list()
-cat("Selecting",K,"sub-sample...\n")
+  Mloc = Mest = X = Xloc = list()
+  cat("Selecting", K, "sub-sample...\n")
 
+  for(i in 1:K) {
+    sel_data = sample(1:N, pp)  
+    if(!is.null(tempX)) {
+      X[[i]] = tempX[sel_data,]; 
+      Xloc[[i]] = tempX[-sel_data,]
+    } else {
+      X = Xloc = NULL
+    }
 
-for(i in 1:K) {
-sel_data = sample(1:N,pp)  
-if(!is.null(tempX)) {X[[i]]=tempX[sel_data,]; 
-                 Xloc[[i]]=tempX[-sel_data,]}
-else {X=Xloc=NULL}                 
-#### selecting mu and muloc for a fixed constant mean
-if(length(fit$fixed$mean)>1)  { Mloc[[i]]=tempM[-sel_data]
-                                Mest[[i]]=tempM[sel_data]   
-                               }
-else {Mloc=NULL} 
-# selecting data and coords to pred
-coords_to_pred[[i]]=coords[-sel_data,]
-coords_est[[i]]=coords[sel_data,]
-data_to_pred[i,]  = c(fit$data[-sel_data])
-data_to_est[i,]=c(fit$data[sel_data])
+    #### se fit$fixed esiste e contiene "mean"
+    if(!is.null(fit$fixed) && !is.null(fit$fixed$mean) && length(fit$fixed$mean) > 1) {
+      Mloc[[i]] = tempM[-sel_data]
+      Mest[[i]] = tempM[sel_data]   
+    } else {
+      Mloc = Mest = NULL
+    }
 
-}
-#### fixed param organized as a matrix (MEST)
-if(length(fit$fixed$mean)>1) 
-{ 
-    FF=fit$fixed
-    for(i in 1:K) {FF$mean=Mest[[i]]; MEST=matrix(rep(c(FF),K),ncol=length(FF),byrow=TRUE);colnames(MEST)=names(FF)    }
-}
-else  {FF=fit$fixed;MEST=matrix(rep(c(FF),K),ncol=length(FF),byrow=TRUE);colnames(MEST)=names(FF)   }
-###############################################################################################
-###############################################################################################
-if(estimation)  
-{
-cat("Performing",K,"estimations using",n.cores,"cores...\n")
-progressr::handlers(global = TRUE)
-progressr::handlers("txtprogressbar")
-pb <- progressr::progressor(along = 1:K)
-future::plan(multisession, workers = n.cores)
-xx=foreach::foreach(i = 1:K,.combine = rbind,
-                           .options.future = list(seed = TRUE)) %dofuture% {
-         pb(sprintf("i=%g", i))
-          a=GeoFit(data=data_to_est[i,],coordx=coords_est[[i]],corrmodel=fit$corrmodel,X=X[[i]],
-                            likelihood=fit$likelihood,type=fit$type,grid=fit$grid,
-                            copula=fit$copula,anisopars=fit$anisopars,est.aniso=fit$est.aniso,
-                            model=model1,radius=fit$radius,n=fit$n,
-                           maxdist=fit$maxdist, neighb=fit$neighb,distance=fit$distance,
-                            optimizer=optimizer, lower=lower,upper=upper,
-                           start=fit$param,fixed=as.list(MEST[i,]))
-          a$data=a$coordx=a$coordy=a$coordt=NULL
-          c(a$param,a$fixed);
-         }   
+    coords_to_pred[[i]] = coords[-sel_data,]
+    coords_est[[i]] = coords[sel_data,]
+    data_to_pred[i,] = c(fit$data[-sel_data])
+    data_to_est[i,] = c(fit$data[sel_data])
+  }
+
+  #### organizza MEST solo se fit$fixed non è NULL
+  if(!is.null(fit$fixed)) {
+    FF = fit$fixed
+    if(!is.null(FF$mean) && length(FF$mean) > 1 && !is.null(Mest)) {
+      for(i in 1:K) {
+        FF$mean = Mest[[i]]
+        MEST = matrix(rep(c(FF), K), ncol = length(FF), byrow = TRUE)
+        colnames(MEST) = names(FF)
+      }
+    } else {
+      MEST = matrix(rep(c(FF), K), ncol = length(FF), byrow = TRUE)
+      colnames(MEST) = names(FF)
+    }
+  } else {
+    MEST = NULL  # niente fixed
+  }
+
+  ####################################################################################
+
+  if(estimation) {
+    cat("Performing", K, "estimations using", n.cores, "cores...\n")
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    pb <- progressr::progressor(along = 1:K)
+    future::plan(multisession, workers = n.cores)
+
+    xx = foreach::foreach(i = 1:K, .combine = rbind,
+                          .options.future = list(seed = TRUE)) %dofuture% {
+      pb(sprintf("i=%g", i))
+
+      fixed_params = if(!is.null(MEST)) as.list(MEST[i,]) else NULL
+
+      a = GeoFit(data = data_to_est[i,], coordx = coords_est[[i]], corrmodel = fit$corrmodel, X = X[[i]],
+                 likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
+                 copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
+                 model = model1, radius = fit$radius, n = fit$n,
+                 maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
+                 optimizer = optimizer, lower = lower, upper = upper,
+                 start = fit$param, fixed = fixed_params)
+
+      a$data = a$coordx = a$coordy = a$coordt = NULL
+      c(a$param, a$fixed)
+    }
+
     future::plan(sequential)
-  
-}
-else
-{ ############### not estimation ###################
- ff=append(fit$param,fit$fixed);xx=matrix(rep(c(ff),K),ncol=length(ff),byrow=TRUE) ;colnames(xx)=names(ff)
-}   
-######################################################################################################
 
+  } else {
+    # se NON è una stima, semplicemente replica i parametri
+    if(is.null(fit$fixed)) {
+      xx = matrix(rep(c(fit$param), K), ncol = length(fit$param), byrow = TRUE)
+      colnames(xx) = names(fit$param)
+    } else {
+      ff = append(fit$param, fit$fixed)
+      xx = matrix(rep(c(ff), K), ncol = length(ff), byrow = TRUE)
+      colnames(xx) = names(ff)
+    }
+  }
 rownames(xx)=NULL
 
 if(!is.null(fit$anisopars))   {   fit$param$angle=NULL;fit$param$ratio=NULL; fit$fixed$angle=NULL;fit$fixed$ratio=NULL}
@@ -272,9 +284,7 @@ lscore[i]=pp$lscore; brie[i]=  pp$brie; crps[i]=  pp$crps
 }
 }  #end parallel
 
-
 rm(data_to_est,data_to_pred,coords_est,coords_to_pred)
-#list(rmse=rmse,mae=mae,lscore=lscore,crps=crps,brie=brie,mad=mad)
 
 } # end spatial
 
@@ -350,10 +360,8 @@ k=1 ; coordx_dynnew=Xnew=Xnew_loc=datanew=coordx_dynnew_loc=list()
 utt=unique(data_sel_ord[,3])
 utt_1=unique(data_to_pred_ord[,3])
 
-
 for(k in 1:length(utt_1) ){
   ll=data_to_pred_ord[data_to_pred_ord[,3]==utt_1[k],]
-
   if(is.matrix(ll)) coordx_dynnew_loc[[k]]=as.matrix(ll)[,1:2]
   else                                  coordx_dynnew_loc[[k]]=matrix(ll[1:2],nrow=1)
   if(!is.null(X))  {if(is.matrix(ll))  Xnew_loc[[k]]=as.matrix(ll)[,5:DD]
@@ -387,31 +395,20 @@ if(estimation) {
            param=append(fit_s$param,fit_s$fixed)
               }
 #####################################
-if(!local) {
-           pr_st=pr_mse=list()
-           for(j in 1:length(utt_1) ){
-            if(is.null(Xnew)) {Xnew_loc[j]=list(NULL)}
-               pr=GeoKrig(data=datanew,   coordt=utt, coordx_dyn=coordx_dynnew,  #ok
-                   corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coordx_dynnew_loc[[j]], #ok
-                   model=fit$model, n=fit$n,  param=param, radius=fit$radius,   time=utt_1[j], mse=TRUE,type_krig=type_krig,
-                   X=Xnew,Xloc= Xnew_loc[[j]]) #ok  
-               pr_st[[j]]=pr$pred ; pr_mse[[j]]=pr$mse
-         }
- }
-if(local) {
+
 
      
-           pr_st=pr_mse=list()
-           for(j in 1:length(utt_1) ){
-            if(is.null(Xnew)) {Xnew_loc[j]=list(NULL)} 
-               pr=GeoKrigloc(data=datanew,   coordt=utt, coordx_dyn=coordx_dynnew,  #ok
+         pr_st=pr_mse=list()
+         for(j in 1:length(utt_1) ){
+         if(is.null(Xnew)) {Xnew_loc[j]=list(NULL)} 
+         krig_fun <- if (local) GeoKrigloc else GeoKrig
+    pr <- krig_fun(data=datanew,   coordt=utt, coordx_dyn=coordx_dynnew,  #ok
                              corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=coordx_dynnew_loc[[j]], #ok
                              model=fit$model, n=fit$n,  param=param, radius=fit$radius,   time=utt_1[j], mse=TRUE,type_krig=type_krig,
                              neighb=neighb,maxdist=maxdist,maxtime=maxtime,
                              X=Xnew,Xloc=Xnew_loc[[j]]) #ok 
-                pr_st[[j]]=pr$pred ; pr_mse[[j]]=pr$mse
-                   }
-}   
+                pr_st[[j]]=pr$pred ; pr_mse[[j]]=pr$mse     
+         }   
 #####################################
 
 pp=GeoScores(c(data_to_pred[,4]),pred=as.numeric(unlist(pr_st)),mse=as.numeric(unlist(pr_mse)),
@@ -431,6 +428,7 @@ pb(sprintf("i=%g", i))
 
 if(parallel)
 {
+
   # Register parallel backend
   future::plan(multisession)  
   progressr::handlers(global = TRUE)
@@ -532,7 +530,6 @@ if(parallel)
   plan(sequential)
   
 } #end  parallel
-
 } ## end spacetime
 
 ############################################################
@@ -540,24 +537,31 @@ if(parallel)
 ############################################################
 if(bivariate)
 {
+
+fixmeans=length(fit$fixed$mean_1)>1&&length(fit$fixed$mean_1)>1
+
+if(fixmeans)  {tempM1=fit$fixed$mean_1;   tempM2=fit$fixed$mean_2;   }
+Mloc1=Mloc2=NULL
+
 ns=fit$ns
+
 if(space_dyn) {data1=fit$data[[1]]
                data2=fit$data[[2]]
                coords1=fit$coordx_dyn[[1]]
                coords2=fit$coordx_dyn[[2]]
                }
 if(!space_dyn) {data1=fit$data[1,];data2=fit$data[2,]
-                coords=cbind(fit$coordx,fit$coordy)
+                coords=cbind(fit$coordx,fit$coordy,fit$coordz)
                 coords1=coords; coords2=coords
                }
 if(!is.null(X)) {
-                if(!is.list(fit$X)){X1=fit$X[1:ns[1],];X2=fit$X[(ns[1]+1):(ns[1]+ns[2]),]}
-                if( is.list(fit$X)){X1=fit$X[[1]];X2=fit$X[[2]]}
+                if(!space_dyn){
+                               if(!is.list(fit$X)){X1=fit$X[1:ns[1],];X2=fit$X[(ns[1]+1):(ns[1]+ns[2]),]}
+                              }
+                if(space_dyn) { 
+                               if( is.list(fit$X)){X1=fit$X[[1]];X2=fit$X[[2]]}
+                              }
                 }
-#set.seed(round(seed))
-
-
-#param=as.list(c(fit$param,fit$fixed))
 param=append(fit$param,fit$fixed)
 
 ##########
@@ -566,45 +570,57 @@ if(!parallel){
 rmse=crps=mae=rmse=double(K)
 
 
+
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:K)
 while(i<=K){
 
-#######################################	
-if(which==1) {
-	          sel_data = sample(1:ns[1],round(ns[1]*(1-n.fold))) 
-              data_to_est=fit$data[sel_data]
-              cc1= coords1[sel_data,]
-              loc_to_pred   = coords1[-sel_data,]
-              d1   = data1[sel_data]
-              data_to_pred  = data1[-sel_data]
-              if(!is.null(X)) { X=rbind(X1[sel_data,],X2); Xloc=rbind(X1[-sel_data,],X2)}
-datanew=list();datanew[[1]]=d1;datanew[[2]]=data2;
-coordsnew=list();coordsnew[[1]]=cc1;coordsnew[[2]]=coords2;
-          }
-if(which==2) {
-	          sel_data = sample(1:ns[2],round(ns[2]*(1-n.fold))) 
-              data_to_est=fit$data[sel_data]
-              cc2= coords2[sel_data,]
-              loc_to_pred   = coords2[-sel_data,]
-              d2   = data2[sel_data]
-              data_to_pred  = data2[-sel_data]
-              if(!is.null(X)) {X=rbind(X1,X2[sel_data,]); Xloc=rbind(X1,X2[-sel_data,])}
-datanew=list();datanew[[1]]=data1;datanew[[2]]=d2;
-coordsnew=list();coordsnew[[1]]=coords1;coordsnew[[2]]=cc2;
-            }
-#dtp[[i]]=data_to_pred
+     if(which==1){ sel_data1 = sample(1:ns[1],round(ns[1]*(1-n.fold))) 
+
+               
+                  data_to_est1=data1[sel_data1]
+                  data_to_pred  = data1[-sel_data1]
+                  cc1= coords1[sel_data1,]
+                  loc_to_pred   = coords1[-sel_data1,]
+              
+
+                  if(!is.null(X)) { X=rbind(X1[sel_data1,],X2); Xloc=rbind(X1[-sel_data1,],X2)}
+                  if(fixmeans)  { 
+                                 fit$fixed$mean_1=tempM1[sel_data1]; 
+                                  Mloc2=tempM2[-sel_data1];
+                                } 
+
+                }
+
+     if(which==2) {sel_data2 = sample(1:ns[2],round(ns[2]*(1-n.fold))) 
+                   data_to_est2 = data2[sel_data2];
+                  data_to_pred = data2[-sel_data2]
+                   cc2= coords2[sel_data2,]
+                   loc_to_pred   = coords1[-sel_data2,]
+                  
+                   if(!is.null(X)) {  X=rbind(X1,X2[sel_data2,]); Xloc=rbind(X1,X2[-sel_data2,])}
+                   if(fixmeans)  { fit$fixed$mean_2=tempM2[sel_data2]; 
+                                   Mloc2=tempM2[-sel_data2];
+                                 } 
+                  }
+
+if(which==1) { data_to_est=list();data_to_est[[1]]=data_to_est1;data_to_est[[2]]= data2 
+              coordsnew=list();   coordsnew[[1]]=cc1; coordsnew[[2]]=coords2
+             } 
+if(which==2) { data_to_est=list();data_to_est[[1]]=data1;data_to_est[[2]]= data_to_est2
+              coordsnew=list();   coordsnew[[1]]=coords1; coordsnew[[2]]=cc2
+             } 
+                    
 
 if(estimation) {
-          fit_s= GeoFit(data=data_to_est,coordx=coords[sel_data,],corrmodel=fit$corrmodel,X=X,
-                            likelihood=fit$likelihood,c,type=fit$type,grid=fit$grid,
+          fit_s= GeoFit(data=data_to_est,coordx=NULL,corrmodel=fit$corrmodel,X=X,
+                            likelihood=fit$likelihood,type=fit$type,grid=fit$grid,
                             model="Gaussian",radius=fit$radius,n=fit$n,
-                               copula=fit$copula,
+                               copula=fit$copula,coordx_dyn=coordsnew,
                              local=fit$local,GPU=fit$GPU,
                            maxdist=fit$maxdist, neighb=fit$neighb,distance=fit$distance,
                             optimizer=optimizer, lower=lower,upper=upper,
-                           # start=as.list(fit$param),fixed=as.list(fit$fixed))
                                start=fit$param,fixed=fit$fixed)
 
              if(!is.null(fit$anisopars))   
@@ -615,27 +631,14 @@ if(estimation) {
             param=append(fit_s$param,fit_s$fixed)
               }
 #####################################
-if(!local) 
-    {
-        
-        pr=GeoKrig(data=datanew, coordx=NULL,   coordt=NULL, coordx_dyn=coordsnew,  #ok
-	       corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=loc_to_pred, #ok
-	          model=fit$model, n=fit$n, mse=TRUE,#ok
+    krig_fun <- if (local) GeoKrigloc else GeoKrig
+
+    pr <- krig_fun(data=data_to_est, coordx=NULL,  coordx_dyn=coordsnew,  #ok
+           corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=loc_to_pred, #ok
+              model=fit$model, n=fit$n, mse=TRUE,#ok
            param=param, 
            radius=fit$radius, sparse=sparse,   time=NULL,  type_krig=type_krig,
              which=which, X=X,Xloc=Xloc,Mloc=Mloc) 
-    }#ok  
-
-if(local) 
-   {
-          pr=GeoKrigloc(data=datanew, coordx=NULL,   coordt=NULL, coordx_dyn=coordsnew,  #ok
-         corrmodel=fit$corrmodel, distance=fit$distance,grid=fit$grid,loc=loc_to_pred, #ok
-            model=fit$model, n=fit$n, mse=TRUE,#ok
-           neighb=neighb, maxdist=maxdist,
-           param=param, 
-           radius=fit$radius, sparse=sparse,   time=NULL, type_krig=type_krig,
-             which=which, X=X,Xloc=Xloc,Mloc=Mloc) #ok  
-   }   
 
 
 pp=GeoScores(data_to_pred,pred=pr$pred,mse=pr$mse,
@@ -655,11 +658,108 @@ pb(sprintf("i=%g", i))
 }               
 } ## end not parallel
 
+if (parallel) {
+  n.cores <- if (is.null(ncores)) max(1, parallel::detectCores() - 1) else ncores
+  future::plan(multisession, workers = n.cores)
+  progressr::handlers(global = TRUE)
+  progressr::handlers("txtprogressbar")
+  pb <- progressr::progressor(along = 1:K)
 
-if(parallel)
-{
+  results <- foreach::foreach(i = 1:K, .combine = rbind,
+                               .options.future = list(seed = TRUE)) %dofuture% {
+    pb(sprintf("Fold %d/%d", i, K))
 
-    } #end  parallel
+    # Split: training vs prediction
+    if (which == 1) {
+      sel_data1 <- sample(1:ns[1], round(ns[1] * (1 - n.fold)))
+      data_to_est1 <- data1[sel_data1]
+      data_to_pred <- data1[-sel_data1]
+      cc1 <- coords1[sel_data1, ]
+      loc_to_pred <- coords1[-sel_data1, ]
+      data_to_est <- list(data_to_est1, data2)
+      coordsnew <- list(cc1, coords2)
+      if (!is.null(X)) {
+        X_use <- rbind(X1[sel_data1, ], X2)
+        Xloc_use <- rbind(X1[-sel_data1, ], X2)
+      } else {
+        X_use <- Xloc_use <- NULL
+      }
+      if (fixmeans) {
+        fit$fixed$mean_1 <- tempM1[sel_data1]
+        Mloc <- c(list(tempM1[-sel_data1]), list(tempM2))
+      } else {
+        Mloc <- NULL
+      }
+
+    } else if (which == 2) {
+      sel_data2 <- sample(1:ns[2], round(ns[2] * (1 - n.fold)))
+      data_to_est2 <- data2[sel_data2]
+      data_to_pred <- data2[-sel_data2]
+      cc2 <- coords2[sel_data2, ]
+      loc_to_pred <- coords2[-sel_data2, ]
+      data_to_est <- list(data1, data_to_est2)
+      coordsnew <- list(coords1, cc2)
+      if (!is.null(X)) {
+        X_use <- rbind(X1, X2[sel_data2, ])
+        Xloc_use <- rbind(X1, X2[-sel_data2, ])
+      } else {
+        X_use <- Xloc_use <- NULL
+      }
+      if (fixmeans) {
+        fit$fixed$mean_2 <- tempM2[sel_data2]
+        Mloc <- c(list(tempM1), list(tempM2[-sel_data2]))
+      } else {
+        Mloc <- NULL
+      }
+    }
+
+    # Stima se richiesta
+    param_fit <- if (estimation) {
+      fit_s <- GeoFit(data = data_to_est, coordx = NULL, coordx_dyn = coordsnew,
+                      corrmodel = fit$corrmodel, X = X_use,
+                      likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
+                      model = "Gaussian", radius = fit$radius, n = fit$n,
+                      copula = fit$copula, local = fit$local, GPU = fit$GPU,
+                      maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
+                      optimizer = optimizer, lower = lower, upper = upper,
+                      start = fit$param, fixed = fit$fixed)
+
+      if (!is.null(fit$anisopars)) {
+        fit_s$param$angle <- NULL;fit_s$param$ratio <- NULL
+        fit_s$fixed$angle <- NULL;fit_s$fixed$ratio <- NULL
+      }
+      append(fit_s$param, fit_s$fixed)
+    } else {
+      append(fit$param, fit$fixed)
+    }
+    krig_fun <- if (local) GeoKrigloc else GeoKrig
+    pr <- krig_fun(data = data_to_est, coordx = NULL, coordx_dyn = coordsnew,
+                   corrmodel = fit$corrmodel, distance = fit$distance, grid = fit$grid,
+                   loc = loc_to_pred, model = fit$model, n = fit$n, mse = TRUE,
+                   param = param_fit, radius = fit$radius, sparse = sparse,
+                   type_krig = type_krig,
+                   X = X_use, Xloc = Xloc_use, Mloc = Mloc, which = which)
+
+    scores <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
+                        score = c("brie", "crps", "lscore", "pe"))
+
+    c(scores$rmse, scores$mae, scores$mad, scores$lscore, scores$brie, scores$crps)
+  }
+
+  future::plan(sequential)
+
+  # Estrai risultati
+  rmse  <- unname(results[, 1])
+  mae   <- unname(results[, 2])
+  mad   <- unname(results[, 3])
+  lscore<- unname(results[, 4])
+  brie  <- unname(results[, 5])
+  crps  <- unname(results[, 6])
+}
+
+
+
+
 } ## end bivariate
 
 return(list(rmse=rmse,mae=mae,mad=mad,brie=brie,crps=crps,lscore=lscore,predicted=pred,data_to_pred=dtp))

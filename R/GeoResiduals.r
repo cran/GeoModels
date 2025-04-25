@@ -17,6 +17,7 @@ model=fit$model        #type of model
 num_betas=fit$numbetas  #number of mean parameters
 
 
+temp_X=fit$X
 
 if(!fit$bivariate)
 {
@@ -34,6 +35,18 @@ beta2=beta2[!is.na(beta2)]
 
 
 copula=fit$copula
+
+
+##### if X null X shuld be a matrix of 1
+  if(is.null(fit$X)) {
+   if(is.null(fit$coordx_dyn)) fit$X=matrix(1,nrow=length(fit$coordx)*length(fit$coordt),ncol=1)    
+   else {fit$X =lapply(fit$coordx_dyn, function(mat) matrix(1, nrow = nrow(mat), ncol = 1))
+         fit$X=as.matrix(do.call(rbind,fit$X)) }
+   }
+   else {
+       if(!is.null(fit$coordx_dyn))  fit$X=as.matrix(do.call(rbind,fit$X)) 
+   }
+
 
 #################################
 #### computing mean ########
@@ -209,6 +222,7 @@ nuisance <- param[namesnuis]
 ###
 if(is.list(fit$coordx_dyn)) dd=unlist(fit$data)
 else dd=c(t(fit$data))
+
 dd1=dd[1:ns[1]]
 dd2=dd[(ns[1]+1):(ns[2]+ns[1])]
 ###
@@ -219,9 +233,14 @@ dd2=dd[(ns[1]+1):(ns[2]+ns[1])]
  sel2=substr(names(nuisance),1,6)=="mean_2"
  beta2=as.numeric(nuisance[sel2])
 
+if(!is.null(X)){
  X1=as.matrix(X[1:ns[1],]);
  X2=as.matrix(X[(ns[1]+1):(ns[2]+ns[1]),]); 
-
+}
+else {
+     X1=matrix(1,nrow=ns[1],ncol=1)
+     X2=matrix(1,nrow=ns[2],ncol=1)
+}
 mu1=X1%*%beta1
 mu2=X2%*%beta2
 
@@ -286,7 +305,7 @@ GeoFit <- list(bivariate=fit$bivariate,
                          varimat = fit$varimat,
                          type = fit$type,
                          weighted=fit$weighted,
-                         X = fit$X)
+                         X = NULL)
     structure(c(GeoFit, call = call), class = c("GeoFit"))
 #########################
 }

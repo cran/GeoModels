@@ -1535,21 +1535,32 @@ double d2lognorm(double x, double y, double sill,double nugget, double mux,doubl
   return(res*R_pow(KK,2));
 }
 
-double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,double tail,double vari)
-{
-double b1=0.0,b2=0.0,A=0.0,B=0.0,k=0.0,res=0.0,Z1,Z2;
-double xi=(zi-mi)/(sqrt(vari));
-double xj=(zj-mj)/(sqrt(vari));
-  b1=tail * asinh(xi)-skew;
-  b2=tail * asinh(xj)-skew;
-  k=1-R_pow(corr,2);
-  A=R_pow(2 * M_PI * R_pow(k,0.5),-1) * cosh(b1) * cosh(b2) * R_pow(tail,2)/sqrt((R_pow(xi,2)+1) * (R_pow(xj,2)+1));
-  Z1=sinh(b1);Z2=sinh(b2);
-  B=exp(- (Z1*Z1 + Z2*Z2 - 2*corr*Z1*Z2)/(2*k)  );
-  res=A*B;                     
-  return(res/vari);
- } 
 
+
+double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,double tail,double vari){
+
+double xi=(zi-mi)/sqrt(vari);
+double xj=(zj-mj)/sqrt(vari);
+double asinh_xi=asinh(xi);
+double asinh_xj=asinh(xj);
+double b1=tail*asinh_xi-skew;
+double b2=tail*asinh_xj-skew;
+double sinh_b1=sinh(b1);
+double sinh_b2=sinh(b2);
+double cosh_b1=cosh(b1);
+double cosh_b2=cosh(b2);
+double Z1=sinh_b1;
+double Z2=sinh_b2;
+double one_minus_corr2=1.0-corr*corr;
+double xi2p1=xi*xi+1.0;
+double xj2p1=xj*xj+1.0;
+double sqrt_k=sqrt(one_minus_corr2);
+double denom=2.0*M_PI*sqrt_k;
+double A=(cosh_b1*cosh_b2*tail*tail)/(denom*sqrt(xi2p1*xj2p1));
+double exponent=-(Z1*Z1+Z2*Z2-2.0*corr*Z1*Z2)/(2.0*one_minus_corr2);
+double B=exp(exponent);
+return(A*B)/vari;
+}
 
 
 // cdf of  a bivariate Gausssian distribution
@@ -1608,21 +1619,26 @@ return(R_pow(alpha,2)*res/sill);
 
 
 
-double  biv_Weibull2(double rho12,double zi,double zj,double mi,double mj, double shape1,double shape2)
+double biv_Weibull2(double rho12,double zi,double zj,double mi,double mj,double shape1,double shape2){
 
-{
-double a1=0.0,a2=0.0,a=0.0,b=0.0,c=0.0,dens=.0,k=.0,mui=.0,muj=.0;
-a1=gammafn(1+1/shape1);
-a2=gammafn(1+1/shape2);
-mui=exp(mi);muj=exp(mj);
-k=1-rho12*rho12;
-a=(shape1*shape2*R_pow(a1,shape1)*R_pow(a2,shape2)*R_pow(zi,shape1-1)*R_pow(zj,shape2-1))/(R_pow(mui,shape1)*R_pow(muj,shape2)*k);
-b=exp(-(R_pow(a1*zi/mui,shape1) + R_pow(a2*zj/muj,shape2))/k);
-c=bessel_i(2*fabs(rho12)*R_pow(a1*zi/mui,shape1/2)*R_pow(a2*zj/muj,shape2/2)/k,0,1);
-dens=a*b*c;
-return(dens);
+double a1=gammafn(1.0+1.0/shape1);
+double a2=gammafn(1.0+1.0/shape2);
+double mui=exp(mi);
+double muj=exp(mj);
+double k=1.0-rho12*rho12;
+double zi_mui=zi/mui;
+double zj_muj=zj/muj;
+double a1zi=zi_mui*a1;
+double a2zj=zj_muj*a2;
+double pow1=pow(a1zi,shape1);
+double pow2=pow(a2zj,shape2);
+double pow1_sqrt=pow(a1zi,shape1/2.0);
+double pow2_sqrt=pow(a2zj,shape2/2.0);
+double a=shape1*shape2*pow(a1,shape1)*pow(a2,shape2)*pow(zi,shape1-1.0)*pow(zj,shape2-1.0)/(pow(mui,shape1)*pow(muj,shape2)*k);
+double b=exp(-(pow1+pow2)/k);
+double c=bessel_i(2.0*fabs(rho12)*pow1_sqrt*pow2_sqrt/k,0,1);
+return a*b*c;
 }
-
 double asy_log_besselI(double z,double nu)
 {
      double val;
@@ -1634,23 +1650,28 @@ double asy_log_besselI(double z,double nu)
 
 
 
-double biv_Weibull(double corr,double zi,double zj,double mui, double muj, double shape)
-{
-    double ui=0.0, uj=0.0,z=0.0,a=0.0,A=0.0,k=0.0,res=0.0,B=0.0;double ci=exp(mui);double cj=exp(muj);;
-    k=R_pow(gammafn(1+1/shape),-1);
-    ui=zi/ci;uj=zj/cj;
-        a=1-R_pow(corr,2);
-        z=2*fabs(corr)*R_pow(ui*uj,shape/2)*R_pow(k,-shape)/a;
-        A=2*log(shape)  +  (-2*shape)*log(k) + (shape-1)*log(ui*uj) - log(a);
-        B= -R_pow(k,-shape)*(R_pow(ui,shape)+R_pow(uj,shape))/a;
-               res=A+B+ log(bessel_i(z,0,2))+z  - (mui+muj);
-       
-    return(exp(res));
+double biv_Weibull(double corr,double zi,double zj,double mui,double muj,double shape){
+
+double ci=exp(mui);
+double cj=exp(muj);
+double k=1.0/gammafn(1.0+1.0/shape);
+double ui=zi/ci;
+double uj=zj/cj;
+double a=1.0-corr*corr;
+double uipow=pow(ui,shape);
+double ujpow=pow(uj,shape);
+double uipow_half=pow(ui,shape/2.0);
+double ujpow_half=pow(uj,shape/2.0);
+double kpow=pow(k,-shape);
+double z=2.0*fabs(corr)*uipow_half*ujpow_half*kpow/a;
+double A=2.0*log(shape)-2.0*shape*log(k)+(shape-1.0)*log(ui*uj)-log(a);
+double B=-kpow*(uipow+ujpow)/a;
+double res=A+B+log(bessel_i(z,0,2))+z-(mui+muj);
+return exp(res);
 }
-
 /*******************************************/
 
-/*******************************************/
+/***
 
 double psi(int i, int j, double p1, double p2, double p12){
     double aux= p1 + p2 - p12;
@@ -1661,66 +1682,95 @@ double psi(int i, int j, double p1, double p2, double p12){
     double aux3= (2-aux)/R_pow(aux,2);
     return(aux1+aux2+aux3);
 }
+***/
+
+double psi(int i,int j,double p1,double p2,double p12,double**cache){
+    if(i==0||j==0)return 0.0;
+    if(i==1&&j==1)return(p1+p2-p1*p2)/(p2*p1*(p1+p2-p12));
+    if(cache[i][j]!=-1.0)return cache[i][j];
+
+    double aux=p1+p2-p12;
+    double psi11=psi(i-1,j-1,p1,p2,p12,cache);
+    double psi01=psi(i,j-1,p1,p2,p12,cache);
+    double psi10=psi(i-1,j,p1,p2,p12,cache);
+    double aux1=(psi11*p12+psi01*(p1-p12)+psi10*(p2-p12))/aux;
+    double aux2=((i-p2/aux)/p2+(j-p1/aux)/p1)/aux;
+    double aux3=(2.0-aux)/(aux*aux);
+    cache[i][j]=aux1+aux2+aux3;
+    return cache[i][j];
+}
+
+
+
+
+double** create_cache(int max_i,int max_j){
+    double** cache=(double**)malloc((max_i+1)*sizeof(double*));
+    for(int i=0;i<=max_i;i++){
+        cache[i]=(double*)malloc((max_j+1)*sizeof(double));
+        for(int j=0;j<=max_j;j++)cache[i][j]=-1.0;
+    }
+    return cache;
+}
+
+
 
 double cov_binom_neg(int m,double p11,double p1, double p2) {
 
+double** cache=create_cache(m,m);
 double a;
 if(fabs(p11-p1*p2)<1e-32) return(0.0); //indipendence case
 else    
- a=psi( m, m, p1, p2, p11)- R_pow(m,2)/(p1*p2);
+ a=psi( m, m, p1, p2, p11,cache)- m*m/(p1*p2);
 return(a);
 }
 
 /*****************************************/
 /********* poisson gamma correlation******/
 /*****************************************/
-double corrPGs(double corr,double mean,double a){ //alpha=a
-double res=0.0;
-double corr2=R_pow(corr,2);
+double corrPGs(double corr,double mean,double a){
+
+double corr2=corr*corr;
 double nu=a/mean;
 double KK=nu*(1-corr2);
-double cc=4/R_pow(2+KK,2);
-double dd=  exp(log(nu)+0.5*(log(nu)+log1p(-corr2))+a*log(2+KK)-log1p(nu)-(a+0.5)*log(4+KK));
-double aa=hypergeo((1 - a)/2, -a/2, 1, cc);
-double bb=((a+1)/(2+KK))*hypergeo((2-a)/2, (1-a)/2, 2, cc);
-res=corr2*(1-dd*(aa+bb));
-    return(res);
-   } 
+double cc=4.0/pow(2.0+KK,2);
+double dd=exp(log(nu)+0.5*(log(nu)+log1p(-corr2))+a*log(2.0+KK)-log1p(nu)-(a+0.5)*log(4.0+KK));
+double aa=hypergeo((1.0-a)/2.0,-a/2.0,1,cc);
+double bb=((a+1.0)/(2.0+KK))*hypergeo((2.0-a)/2.0,(1.0-a)/2.0,2,cc);
+return corr2*(1.0-dd*(aa+bb));
+}
    
-double CorrPGns(double corr,double mean_i, double mean_j, double a){ //alpha=a
 
-    double rho2= R_pow(corr,2);
-    double nu_i= a/mean_i;
-    double nu_j= a/mean_j;
-    int r = 0, m = 0;
-    double res,sum = 0.0,term=0.0, aux3=0.0,aux4=0.0, aux1=0.0, aux2=0.0,H=0.0,a1m=0.0;
-    double lnuij=log(nu_i)+log(nu_j);
-    double lpnuij=log1p(nu_i)+log1p(nu_j);
-    double mnui=-1/(nu_i);
-    double mnuj=-1/(nu_j);
-    int iter1=1000;int iter2=1000,r2=0;
-while(r<iter1){     
-    m=0;
-    r2=r+2;
-for(m=0;m<iter2;m++){
-   a1m=1-a-m;
-   H= log(hypergeo(1, a1m, r2, mnui))+log(hypergeo(1,a1m, r2, mnuj))-2*lgammafn(r2);
-   aux1=2*m*log(corr)+m*lnuij*2*lgammafn(r+m+1+a);
-   aux2=(r+m)*(lpnuij )+lgammafn(m+a)+lgammafn(m);
-   term=log(H+aux1-aux2);
-            if((fabs(term)<1e-100)||!R_finite(term))   {break;}
-   sum =sum+term;
+double CorrPGns(double corr,double mean_i,double mean_j,double a){
 
-   }
-   r++;
-  }
-aux3= exp(log(rho2)+ (a+1)*log1p(-rho2)+(a-0.5)*(lnuij)
-                     -(lgammafn(a)+(a+0.5)*lpnuij+0.5*log(mean_i*mean_j)));
-aux4=exp(log(rho2)+0.5*(lnuij-lpnuij));
-res = aux4+aux3*sum;
+double rho2=corr*corr;
+double nu_i=a/mean_i;
+double nu_j=a/mean_j;
+double lnuij=log(nu_i)+log(nu_j);
+double lpnuij=log1p(nu_i)+log1p(nu_j);
+double mnui=-1.0/nu_i;
+double mnuj=-1.0/nu_j;
+double sum=0.0;
+int iter1=1000,iter2=1000;
+for(int r=0;r<iter1;r++){
+int r2=r+2;
+for(int m=0;m<iter2;m++){
+double a1m=1.0-a-m;
+double h1=hypergeo(1.0,a1m,r2,mnui);
+double h2=hypergeo(1.0,a1m,r2,mnuj);
+if(h1<=0.0||h2<=0.0)break;
+double H=log(h1)+log(h2)-2.0*lgammafn(r2);
+double aux1=2.0*m*log(corr)+m*lnuij+2.0*lgammafn(r+m+1+a);
+double aux2=(r+m)*lpnuij+lgammafn(m+a)+lgammafn(m);
+double term=H+aux1-aux2;
+if(!R_finite(term)||fabs(term)<1e-100)break;
+sum+=term;
+}
+}
+double aux3=exp(log(rho2)+(a+1.0)*log1p(-rho2)+(a-0.5)*lnuij-lgammafn(a)-(a+0.5)*lpnuij-0.5*log(mean_i*mean_j));
+double aux4=exp(log(rho2)+0.5*(lnuij-lpnuij));
+return aux4+aux3*sum;
+}
 
-return(res);
-   }
 /******************************************/
 double corr_pois_gen(double corr,double mean_i, double mean_j, double a){ 
 
@@ -1746,20 +1796,21 @@ res=rho2*(1-exp(-gg)*(bessel_i(gg,0,1)+bessel_i(gg,1,1)));
 return(res);
 }   
 /******************************************/
-double corr_pois_ns(double rho,double mi,double mj)
-{
-int r=0,aa=0; double res0=0.0,sum=0.0;
+double corr_pois_ns(double rho,double mi,double mj){
+int r=0;
+double res0=0.0,sum=0.0;
 double rho2=rho*rho;
-double ki=mi/(1-rho2);
-double kj=mj/(1-rho2);
-double K=rho2*(1-rho2)/sqrt(mi*mj);
+double ki=mi/(1.0-rho2);
+double kj=mj/(1.0-rho2);
+double K=rho2*(1.0-rho2)/sqrt(mi*mj);
 while(r<8000){
-    aa=r+1;
-  sum=sum+ exp( log(igam(aa,ki))+log(igam(aa,kj)));
-if((fabs(sum-res0)<1e-100)  ) {break;}
-else {res0=sum;}
-        r++;}
-return(sum*K);
+    double aa=r+1;
+    sum+=exp(log(igam(aa,ki))+log(igam(aa,kj)));
+    if(fabs(sum-res0)<1e-100) break;
+    res0=sum;
+    r++;
+}
+return sum*K;
 }
 /******************************************/
 double corr_pois(double rho,double mi,double mj){
@@ -1776,33 +1827,36 @@ if(fabs(rho)<1e-10){return(0.0);}
 /*****************************************/
 
 
-double corr_tukeygh(double rho,double eta,double tail)
-{   
-    double mu,rho2,a,eta2,tail2,u,A1,A2,A3,cova,vari,rho1=0.0;    
-if(fabs(rho)<1e-16){return(0.0);}
-    else{
 
-        if(fabs(eta)>1e-5){
-                  rho2=rho*rho; tail2=tail*tail;
-                  eta2=eta*eta; 
-                  u=1-tail; a=1+rho;
-                  A1=exp(a*eta2/(1-tail*a));
-                  A2=2*exp(0.5*eta2*  (1-tail*(1-rho2))  / (u*u- tail2*rho2)  );
-                  A3=eta2*sqrt(u*u- rho2*tail2);
-                  mu=(exp(eta2/(2*u))-1)/(eta*sqrt(u));
-                  cova=((A1-A2+1)/A3-mu*mu);
-                  vari=((exp(2*eta2/(1-2*tail))-2*exp(eta2/(2*(1-2*tail)))+1)/(eta2*
-                  sqrt(1-2*tail))-mu*mu);
-                  rho1=cova/vari;
-                  }
-       if(fabs(eta)<=1e-5) {
-                 a=R_pow(1-2*tail,-1.5);
-                 rho1=(-rho/((1+tail*(rho-1))*(-1+tail+tail*rho)*R_pow(1+tail*(-2+tail-tail*rho*rho),0.5)))/a;
-             
-                 }   
+
+double corr_tukeygh(double rho,double eta,double tail){
+
+    if(fabs(rho)<1e-16) return 0.0;
+    double rho2 = rho * rho;
+    double tail2 = tail * tail;
+    double eta2 = eta * eta;
+    double u = 1.0 - tail;
+    double a = 1.0 + rho;
+    double mu, cova, vari, rho1 = 0.0;
+
+    if(fabs(eta) > 1e-8){
+        double A1 = exp(a * eta2 / (1.0 - tail * a));
+        double A2 = 2.0 * exp(0.5 * eta2 * (1.0 - tail * (1.0 - rho2)) / (u * u - tail2 * rho2));
+        double A3 = eta2 * sqrt(u * u - rho2 * tail2);
+        mu = (exp(eta2 / (2.0 * u)) - 1.0) / (eta * sqrt(u));
+        cova = ((A1 - A2 + 1.0) / A3 - mu * mu);
+        vari = ((exp(2.0 * eta2 / (1.0 - 2.0 * tail)) - 2.0 * exp(eta2 / (2.0 * (1.0 - 2.0 * tail))) + 1.0) / 
+               (eta2 * sqrt(1.0 - 2.0 * tail)) - mu * mu);
+        rho1 = cova / vari;
+    } else {
+        double inv_tail = pow(1.0 - 2.0 * tail, -1.5);
+        rho1 = (-rho / ((1.0 + tail * (rho - 1.0)) * (-1.0 + tail + tail * rho) * 
+                        sqrt(1.0 + tail * (-2.0 + tail - tail * rho2)))) / inv_tail;
+    }
+
+    return rho1;
 }
-return(rho1);
-}
+
 
 
 
@@ -1828,29 +1882,27 @@ return(corr1);
 
 
 
-double biv_gamma(double corr,double zi,double zj,double mui, double muj, double shape)
-{
-    double a=0.0,A=0.0,D=0.0,z=0.0,res=0.0,B=0.0,C=0.0;
-    double ci=zi/exp(mui);double cj=zj/exp(muj);
-    double gam = gammafn(shape/2);
-    a=1-R_pow(corr,2);
+double biv_gamma(double corr,double zi,double zj,double mui,double muj,double shape) {
+    double a = 1.0 - corr * corr;
+    double ci = zi / exp(mui);
+    double cj = zj / exp(muj);
+    double gam = gammafn(shape / 2.0);
+    double res = 0.0;
 
-    if(corr){
-        z=shape*fabs(corr)*sqrt(ci*cj)/a;
-        A=(shape/2-1)*log(ci*cj) -shape*(ci+cj)/(2*a); ///ok
-        C=(1-shape/2)*log(z/2); //ok
-        B=log(gam)+(shape/2)*log(a)+shape*log(2)-shape*log(shape);  
-        D=log(bessel_i(z,shape/2-1,2))+z; //ok
-        res=(A+C+D)-(mui+muj+B);
-        return(exp(res));
-       }else
-    {
-        B=(R_pow((shape/(2*exp(mui))),shape/2)*R_pow(zi,shape/2-1)*exp(-(shape*ci/(2))))/gam;
-        C=(R_pow((shape/(2*exp(muj))),shape/2)*R_pow(zj,shape/2-1)*exp(-(shape*cj/(2))))/gam;
-        res=B*C;    
+    if (corr) {
+        double z = shape * fabs(corr) * sqrt(ci * cj) / a;
+        double A = (shape / 2.0 - 1.0) * log(ci * cj) - shape * (ci + cj) / (2.0 * a);
+        double C = (1.0 - shape / 2.0) * log(z / 2.0);
+        double B = log(gam) + (shape / 2.0) * log(a) + shape * log(2.0) - shape * log(shape);
+        double D = log(bessel_i(z, shape / 2.0 - 1.0, 2)) + z;
+        res = (A + C + D) - (mui + muj + B);
+        return exp(res);
+    } else {
+        double B = pow(shape / (2.0 * exp(mui)), shape / 2.0) * pow(zi, shape / 2.0 - 1.0) * exp(-shape * ci / 2.0) / gam;
+        double C = pow(shape / (2.0 * exp(muj)), shape / 2.0) * pow(zj, shape / 2.0 - 1.0) * exp(-shape * cj / 2.0) / gam;
+        res = B * C;
     }
-return(res);
-    //return(0.5);
+    return res;
 }
 
 
@@ -1878,23 +1930,6 @@ double biv_gamma_gen(double corr,double zi,double zj,double mui, double muj, dou
 return(res);
 }
 
-
-/*******************************
-double biv_gamma(double corr,double zi,double zj,double mui, double muj, double shape)
-{
-    double a=0.0,A=0.0,D=0.0,z=0.0,res=0.0,B=0.0,C=0.0;
-    double ci=zi/exp(mui);double cj=zj/exp(muj);
-    double gam = gammafn(shape/2);
-    //if(corr)   {
-        a=1-R_pow(corr,2);  
-        z=shape*fabs(corr)*sqrt((ci)*(cj))/a;
-        A=R_pow((ci)*(cj),shape/2-1) * exp(-shape*((ci)+(cj))/(2*a)); ///ok
-        C=R_pow(z/2,1-shape/2); //ok
-        B=gam*R_pow(a,shape/2)*R_pow(2,shape)*R_pow(shape,-shape);  
-        D=bessel_i(z,shape/2-1,1); //ok
-        res=(A*C*D)/(exp(muj)*exp(muj)*B);
-        return(res);
-}*/
 
 
 void biv_gamma_call(double *corr,double *zi,double *zj,double *mui, double *muj, double *shape, double *res)
@@ -1993,193 +2028,216 @@ else
                 
 
 
-double biv_skew(double corr,double z1,double z2,double mi,double mj,double vari,double skew,double nugget)
-{
-   double  aux2=0.0, pdf1=0,pdf2=0,cdf1=0,cdf2=0,zi,zj;
-    zi=z1-mi;
-    zj=z2-mj;
-    double dens=0.0,lim1,lim2,a11,a12,bb;
-    double skew2  = R_pow(skew,2);
-    double vari2  = vari;
-    double skew4  = R_pow(skew,4);
-    double skew3  = skew2*skew;
-    double vari4  = R_pow(vari,2);
-    double corr1=(1-nugget)*corr;
-    double corr2=corr*corr;
-    double corr12=corr1*corr1;
-    double s2v2=skew2*vari2;
-    double pp1=skew*vari2*corr1;
-    double pp =skew*vari2*corr;
-    double ff=pp1+pp;
-    double mm=pp1-pp;
-    double aux1  =  vari2 + skew2 ;
-                                      // pdf 1
-                                      
-                                       aux2  =   corr1*vari2 + corr*skew2;
-                                       pdf1  =  d22norm(zi, zj,aux1,aux1,aux2);
-                                  /***************************/
-                                       bb= vari4*corr12+2*s2v2*corr*corr1+skew4*corr2-vari4-2*s2v2-skew4;                          
-                                       lim1  =((mm)*zj+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
-                                       lim2  =((mm)*zi+(pp*corr1+skew3*corr2-skew*vari2-skew3)*zj)/bb;
-                                       a11   = (vari4*corr12+s2v2*corr2-vari4-s2v2)/bb;
-                                       a12   = (vari4*corr*corr12+(s2v2*corr2-s2v2)*corr1-vari4*corr)/bb;
-                                       cdf1  =  cdf_norm(lim1,lim2,a11,a12) ;
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                                       // pdf 2
-                                       aux2  =  vari2 * corr1 - skew2 * corr ;
-                                       pdf2  =  d22norm(zi, zj,aux1,aux1,aux2);
-                                       bb= vari4*corr12-2*s2v2*corr*corr1+skew4*corr2-vari4-2*s2v2-skew4;
-                                       lim1  =  (( ff)*zj+(-pp*corr1+skew3*corr2-skew*vari2-skew3)*zi)/bb;
-                                       lim2  = -(-(ff)*zi+( pp*corr1-skew3*corr2+skew*vari2+skew3)*zj)/bb;
-                                       a11   =  (vari4*corr12+s2v2*corr2-vari4-s2v2)/bb;
-                                       a12   = -(vari4*corr*corr12+(s2v2-s2v2*corr2)*corr1-vari4*corr)/bb;
-                                       cdf2  =  cdf_norm(lim1,lim2,a11,a12) ;
- 
-dens = 2*(pdf1 * cdf1 + pdf2 * cdf2);
-return(dens);
+double biv_skew(double corr, double z1, double z2, double mi, double mj, double vari, double skew, double nugget) {
+    double zi = z1 - mi;
+    double zj = z2 - mj;
+
+    double skew2 = skew * skew;
+    double skew3 = skew2 * skew;
+    double skew4 = skew2 * skew2;
+    double vari2 = vari;
+    double vari4 = vari2 * vari2;
+    double corr1 = (1 - nugget) * corr;
+    double corr2 = corr * corr;
+    double corr12 = corr1 * corr1;
+
+    double s2v2 = skew2 * vari2;
+    double pp1 = skew * vari2 * corr1;
+    double pp = skew * vari2 * corr;
+    double ff = pp1 + pp;
+    double mm = pp1 - pp;
+    double aux1 = vari2 + skew2;
+
+    double aux2 = corr1 * vari2 + corr * skew2;
+    double pdf1 = d22norm(zi, zj, aux1, aux1, aux2);
+
+    double bb = vari4 * corr12 + 2 * s2v2 * corr * corr1 + skew4 * corr2 - vari4 - 2 * s2v2 - skew4;
+    double lim1 = ((mm) * zj + (pp * corr1 + skew3 * corr2 - skew * vari2 - skew3) * zi) / bb;
+    double lim2 = ((mm) * zi + (pp * corr1 + skew3 * corr2 - skew * vari2 - skew3) * zj) / bb;
+    double a11 = (vari4 * corr12 + s2v2 * corr2 - vari4 - s2v2) / bb;
+    double a12 = (vari4 * corr * corr12 + (s2v2 * corr2 - s2v2) * corr1 - vari4 * corr) / bb;
+    double cdf1 = cdf_norm(lim1, lim2, a11, a12);
+
+    // PDF 2
+    aux2 = vari2 * corr1 - skew2 * corr;
+    double pdf2 = d22norm(zi, zj, aux1, aux1, aux2);
+
+    bb = vari4 * corr12 - 2 * s2v2 * corr * corr1 + skew4 * corr2 - vari4 - 2 * s2v2 - skew4;
+    lim1 = ((ff) * zj + (-pp * corr1 + skew3 * corr2 - skew * vari2 - skew3) * zi) / bb;
+    lim2 = -(-(ff) * zi + (pp * corr1 - skew3 * corr2 + skew * vari2 + skew3) * zj) / bb;
+    a11 = (vari4 * corr12 + s2v2 * corr2 - vari4 - s2v2) / bb;
+    a12 = -(vari4 * corr * corr12 + (s2v2 - s2v2 * corr2) * corr1 - vari4 * corr) / bb;
+    double cdf2 = cdf_norm(lim1, lim2, a11, a12);
+
+    double dens = 2 * (pdf1 * cdf1 + pdf2 * cdf2);
+    return dens;
 }
 
 
 
 
 
-double biv_wrapped (double alfa,double u, double v,double mi,double mj,double nugget,double sill,double corr)
-{
-    double x,y,s1=0.0,s12=0.0,quadr=0.0,det=0.0,wrap_gauss=0.0; // 5???
-    //2*atan(mean[i])-M_PI
-    x=u-2*atan(mi)-M_PI; y=v-2*atan(mj)-M_PI;
-    s1=sill;
-    s12=sill*corr;
-    det=R_pow(s1,2)-R_pow(s12,2);
-    double k1=-alfa,k2=-alfa;
+double biv_wrapped(double alfa, double u, double v, double mi, double mj, double nugget, double sill, double corr) {
+    double x = u - 2 * atan(mi) - M_PI;
+    double y = v - 2 * atan(mj) - M_PI;
 
-     while(k1<=alfa){
-     while(k2<=alfa){
-     quadr = -0.5*(1.0/det)*(s1*R_pow((y+2*k1*M_PI),2.0)+s1*R_pow((x+2*k2*M_PI),2.0)
-                                                    -2.0*s12*(x+2*k2*M_PI)*(y+2*k1*M_PI));
-     wrap_gauss +=  (1/2.0*M_PI)*(1/sqrt(det)*exp(quadr)) ;
-     k2 = k2+1;}
-     k1 = k1+1;
-     k2 = -alfa;
-     }
-return(wrap_gauss);
+    double s1 = sill;
+    double s12 = sill * corr;
+    double det = R_pow(s1, 2) - R_pow(s12, 2);
+    double wrap_gauss = 0.0;
+
+    double k1 = -alfa, k2 = -alfa;
+
+    double common_factor = 1 / (2 * M_PI * sqrt(det)); // Precompute common factor
+
+    while (k1 <= alfa) {
+        while (k2 <= alfa) {
+            double term1 = x + 2 * k2 * M_PI;
+            double term2 = y + 2 * k1 * M_PI;
+            double quadr = -0.5 * (1.0 / det) * (s1 * R_pow(term2, 2) + s1 * R_pow(term1, 2) - 2.0 * s12 * term1 * term2);
+
+            wrap_gauss += common_factor * exp(quadr);
+            k2++;
+        }
+        k1++;
+        k2 = -alfa;
+    }
+
+    return wrap_gauss;
 }
 
 
 
-//bivariate skew gaussian bivariate  distribution
-double biv_skew2(double corr,double zi,double zj,double vari1,double vari2,double rho ,double skew1,double skew2)
-{
-   
-    double aux1,aux2,aux3,pdf1,pdf2,quadr;
-    double dens=0.0,det,fact1,fact2, fact3,fact4,factor,c1,lim1,lim2,cdf1,cdf2,a11,a12,a22;
-       double taul=R_pow(vari1,0.5); double taur=R_pow(vari2,0.5);
-                                       c1= 1.0 /  (1-R_pow(corr,2)) ;
-                                       aux1 = R_pow(taul,2) + R_pow(skew1,2) ;
-                                       aux2 =  taul*taur*corr + skew1*skew2*corr ;
-                                       aux3 = R_pow(taur,2) + R_pow(skew2,2) ;
-                                       det =   aux1*aux3 - R_pow(aux2,2) ;   
+double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, double rho, double skew1, double skew2) {
+    // Calcoli preliminari
+    double taul = R_pow(vari1, 0.5);
+    double taur = R_pow(vari2, 0.5);
+    double c1 = 1.0 / (1 - R_pow(corr, 2));
+    
+    // Variabili di calcolo del determinante
+    double aux1 = R_pow(taul, 2) + R_pow(skew1, 2);
+    double aux2 = taul * taur * corr + skew1 * skew2 * corr;
+    double aux3 = R_pow(taur, 2) + R_pow(skew2, 2);
+    double det = aux1 * aux3 - R_pow(aux2, 2);
 
-                                       quadr= (1.0/det)*( aux1*R_pow(zj,2.0)+aux3*R_pow(zi,2.0) - 2.0*aux2*zi*zj  ) ;  
-                                       pdf1=  (0.5/M_PI) * (1/sqrt(det)) * exp(- 0.5 * quadr) ;
-                                       //////
-                                       aux1 = (R_pow(skew1/taul,2)+1)*c1;
-                                       aux2 = ((skew1*skew2)/(taul*taur)+1)*c1*corr;
-                                       aux3 = (R_pow(skew2/taur,2)+1)*c1;
+    // Calcolo quadratico e PDF 1
+    double quadr = (1.0 / det) * (aux1 * R_pow(zj, 2) + aux3 * R_pow(zi, 2) - 2.0 * aux2 * zi * zj);
+    double pdf1 = (0.5 / M_PI) * (1 / sqrt(det)) * exp(-0.5 * quadr);
 
-                                       det =   aux1*aux3 - R_pow(aux2,2) ;  
-                                       a11  =  (1/det)* aux3   ;
-                                       a12  =  (1/det)* aux2   ;
-                                       a22  =  (1/det)* aux1   ;
-                                       factor = c1 /  det ;
-                                       fact1 = factor * (aux3*(skew1/R_pow(taul,2)) - aux2*(skew2/(taul*taur))*corr) ;
-                                       fact2 = factor * (-aux3*(skew1/(taul*taur))*corr + aux2*(skew2/R_pow(taur,2)) ) ;
-                                       fact3 = factor * (aux2*(skew1/R_pow(taul,2)) - aux1*(skew2/(taul*taur))*corr) ;
-                                       fact4 = factor * (-aux2*(skew1/(taul*taur))*corr + aux1*(skew2/R_pow(taur,2)) ) ;
+    // Calcoli intermedi per la CDF 1
+    aux1 = (R_pow(skew1 / taul, 2) + 1) * c1;
+    aux2 = (skew1 * skew2) / (taul * taur) + 1 * c1 * corr;
+    aux3 = (R_pow(skew2 / taur, 2) + 1) * c1;
+    det = aux1 * aux3 - R_pow(aux2, 2);
+    double a11 = (1 / det) * aux3;
+    double a12 = (1 / det) * aux2;
+    double a22 = (1 / det) * aux1;
+    double factor = c1 / det;
+    double fact1 = factor * (aux3 * (skew1 / R_pow(taul, 2)) - aux2 * (skew2 / (taul * taur)) * corr);
+    double fact2 = factor * (-aux3 * (skew1 / (taul * taur)) * corr + aux2 * (skew2 / R_pow(taur, 2)));
+    double fact3 = factor * (aux2 * (skew1 / R_pow(taul, 2)) - aux1 * (skew2 / (taul * taur)) * corr);
+    double fact4 = factor * (-aux2 * (skew1 / (taul * taur)) * corr + aux1 * (skew2 / R_pow(taur, 2)));
 
-                                       lim1 =   fact1*zi +  fact2*zj   ;
-                                       lim2 =   fact3*zi +  fact4*zj   ;
-                                       cdf1 = cdf_norm2(lim1,lim2,a11,a12,a22) ;
-                                       //////////////////////////////////////////////////////////////////////////////////
-                                       aux1 = R_pow(taul,2) + R_pow(skew1,2) ;
-                                       aux2 =  taul*taur*corr - skew1*skew2*corr ;
-                                       aux3 = R_pow(taur,2) + R_pow(skew2,2) ;
-                                       det =   aux1*aux3 - R_pow(aux2,2) ;   
-                                       quadr= (1.0/det)*( aux1*R_pow(zj,2.0)+aux3*R_pow(zi,2.0) - 2.0*aux2*zi*zj  ) ;  
-                                       pdf2=  (0.5/M_PI) * (1/sqrt(det)) * exp(- 0.5 * quadr) ;
-                                       //////
-                                       aux1 = R_pow(skew1/taul,2)*c1 + c1 ;
-                                       aux2 = (skew1*skew2)/(taul*taur)*c1*corr - c1*corr;
-                                       aux3 = R_pow(skew2/taur,2)*c1 + c1 ;
-                                       det =   aux1*aux3 - R_pow(aux2,2) ;  
-                                       a11  =  (1/det)* aux3   ;
-                                       a12  =  (1/det)* aux2   ;
-                                       a22  =  (1/det)* aux1   ;
-                                       factor = c1 /  det ;
-                                       fact1 = factor * (aux3*(skew1/R_pow(taul,2)) - aux2*(skew2/(taul*taur))*corr) ;
-                                       fact2 = factor * (-aux3*(skew1/(taul*taur))*corr + aux2*(skew2/R_pow(taur,2)) ) ;
-                                       fact3 = factor * (aux2*(skew1/R_pow(taul,2)) - aux1*(skew2/(taul*taur))*corr) ;
-                                       fact4 = factor * (-aux2*(skew1/(taul*taur))*corr + aux1*(skew2/R_pow(taur,2) )) ;
-                                       lim1 =   fact1*zi +  fact2*zj   ;
-                                       lim2 =   fact3*zi +  fact4*zj   ;
-                                       cdf2 = cdf_norm2(lim1,lim2,a11,a12,a22) ; 
-                            dens=2*(pdf1*cdf1+pdf2*cdf2);
+    double lim1 = fact1 * zi + fact2 * zj;
+    double lim2 = fact3 * zi + fact4 * zj;
+    double cdf1 = cdf_norm2(lim1, lim2, a11, a12, a22);
 
-return(dens);
+    // Calcoli per il secondo PDF
+    aux1 = R_pow(taul, 2) + R_pow(skew1, 2);
+    aux2 = taul * taur * corr - skew1 * skew2 * corr;
+    aux3 = R_pow(taur, 2) + R_pow(skew2, 2);
+    det = aux1 * aux3 - R_pow(aux2, 2);
+    quadr = (1.0 / det) * (aux1 * R_pow(zj, 2) + aux3 * R_pow(zi, 2) - 2.0 * aux2 * zi * zj);
+    double pdf2 = (0.5 / M_PI) * (1 / sqrt(det)) * exp(-0.5 * quadr);
+
+    // Calcoli intermedi per la CDF 2
+    aux1 = R_pow(skew1 / taul, 2) * c1 + c1;
+    aux2 = (skew1 * skew2) / (taul * taur) * c1 * corr - c1 * corr;
+    aux3 = R_pow(skew2 / taur, 2) * c1 + c1;
+    det = aux1 * aux3 - R_pow(aux2, 2);
+    a11 = (1 / det) * aux3;
+    a12 = (1 / det) * aux2;
+    a22 = (1 / det) * aux1;
+    factor = c1 / det;
+    fact1 = factor * (aux3 * (skew1 / R_pow(taul, 2)) - aux2 * (skew2 / (taul * taur)) * corr);
+    fact2 = factor * (-aux3 * (skew1 / (taul * taur)) * corr + aux2 * (skew2 / R_pow(taur, 2)));
+    fact3 = factor * (aux2 * (skew1 / R_pow(taul, 2)) - aux1 * (skew2 / (taul * taur)) * corr);
+    fact4 = factor * (-aux2 * (skew1 / (taul * taur)) * corr + aux1 * (skew2 / R_pow(taur, 2)));
+
+    lim1 = fact1 * zi + fact2 * zj;
+    lim2 = fact3 * zi + fact4 * zj;
+    double cdf2 = cdf_norm2(lim1, lim2, a11, a12, a22);
+
+    // Calcolo finale della densità
+    double dens = 2 * (pdf1 * cdf1 + pdf2 * cdf2);
+    return dens;
 }
 
 
-double log_biv_Norm(double corr,double zi,double zj,double mi,double mj,double vari, double nugget)
-{
-    double u,v,u2,v2,det,s1,s12,dens=0.0;
-    u=zi-mi;
-    v=zj-mj;
-    u2=R_pow(u,2);v2=R_pow(v,2);
-    s1=vari;
-    s12=vari*corr*(1-nugget);
-    det=R_pow(s1,2)-R_pow(s12,2);
-    dens=-0.5*(2*log(2*M_PI)+log(det)+(s1*(u2+v2)-2*s12*u*v)/det);
-return(dens);
+
+double log_biv_Norm(double corr, double zi, double zj, double mi, double mj, double vari, double nugget) {
+    double u = zi - mi;
+    double v = zj - mj;
+    double u2 = u * u;
+    double v2 = v * v;
+    double s1 = vari;
+    double s12 = s1 * corr * (1 - nugget);
+    double det = s1 * s1 - s12 * s12;
+    double dens = -0.5 * (2 * log(2 * M_PI) + log(det) + (s1 * (u2 + v2) - 2 * s12 * u * v) / det);
+    
+    return dens;
 }
 
-double biv_Norm(double corr,double zi,double zj,double mi,double mj,double vari1,double vari2, double nugget)
-{
-    double u,v,u2,v2,det,s1,s12,dens=0.0;
-    u=zi-mi;
-    v=zj-mj;
-    u2=R_pow(u,2);v2=R_pow(v,2);
-    s1=sqrt(vari1*vari2);
-    s12=s1*corr*(1-nugget);
-    det=R_pow(s1,2)-R_pow(s12,2);
-    dens=(-0.5*(2*log(2*M_PI)+log(det)+(s1*(u2+v2)-2*s12*u*v)/det));
-return(exp(dens));
+double biv_Norm(double corr, double zi, double zj, double mi, double mj, double vari1, double vari2, double nugget) {
+    double u = zi - mi;
+    double v = zj - mj;
+    double u2 = u * u; // u^2
+    double v2 = v * v; // v^2
+    double s1 = sqrt(vari1 * vari2);
+    double s12 = s1 * corr * (1 - nugget);
+    double det = s1 * s1 - s12 * s12;
+    double dens = -0.5 * (2 * log(2 * M_PI) + log(det) + (s1 * (u2 + v2) - 2 * s12 * u * v) / det);
+    return exp(dens); // ritorna l'esponenziale della densità
 }
 
 
 
 /*multivariate gaussian PDF*/
-double dNnorm(int N,double **M, double *dat)
-{
- double dd,pdf=0.0; int m=0,n=0,i=0;
- int *indx; indx=(int *) R_Calloc(N,int);
- double *col; col=(double *) R_Calloc(N,double);
- double **inverse;
- inverse= (double **) R_Calloc(N,double *);
- for(i=0;i<N;i++){inverse[i]=(double *) R_Calloc(N,double);} 
+double dNnorm(int N, double **M, double *dat) {
+    double dd, pdf = 0.0;
+    int m, n, i;
+    int *indx = (int *) R_Calloc(N, int);
+    double *col = (double *) R_Calloc(N, double);
+    double **inverse = (double **) R_Calloc(N, double *);
 
- ludcmp(M,N,indx,&dd);    //Lu decomposition
- for(m=0;m<N;m++){ dd *= M[m][m];}  //determinant using LU
- for(n=0;n<N;n++) {
- for(m=0;m<N;m++) col[m]=0.0;
- col[n]=1.0;
- lubksb(M,N,indx,col);
- for(m=0;m<N;m++) inverse[m][n]=col[m];  // inverse using LU decomposition
- }
- pdf=R_pow(2*M_PI,-N/2)*R_pow(dd,-0.5)*exp(-0.5*QFORM(inverse,dat,dat,N)) ;   
- R_Free(indx);R_Free(col);
- for(i=0;i<N;i++)  {R_Free (inverse[i]);}R_Free(inverse);
-return(pdf);
+    for (i = 0; i < N; i++) {
+        inverse[i] = (double *) R_Calloc(N, double);
+    }
+    ludcmp(M, N, indx, &dd);
+    dd = 1.0;
+    for (m = 0; m < N; m++) {
+        dd *= M[m][m];
+    }
+    for (n = 0; n < N; n++) {
+        for (m = 0; m < N; m++) {
+            col[m] = 0.0;
+        }
+        col[n] = 1.0;
+        lubksb(M, N, indx, col);
+        for (m = 0; m < N; m++) {
+            inverse[m][n] = col[m];
+        }
+    }
+    pdf = R_pow(2 * M_PI, -N / 2) * R_pow(dd, -0.5) * exp(-0.5 * QFORM(inverse, dat, dat, N));
+    R_Free(indx);
+    R_Free(col);
+    for (i = 0; i < N; i++) {
+        R_Free(inverse[i]);
+    }
+    R_Free(inverse);
+    return pdf;
 }
+
 
 /*
 void mult_pmnorm( int *nvar , double *lower , double *upper , int *infin , double *corr , int *maxpts , double *abseps , double *releps , double *esterror , double *result , int *fail )
@@ -2286,45 +2344,46 @@ double inverse_lamb(double x,double tail)
 }
 
 
-double biv_tukey_hh(double corr,double data_i,double data_j,double mui,double muj,
-    double sill,double hl,double hr)
-           
-{
-  double res = 0.0,A=0.0,B=0.0,hl_i,hr_i,hl_j,hr_j;
-  double  Lhl_i=1.0,Lhr_i=1.0,Lhl_j=1.0,Lhr_j=1.0;
-  double z_i = (data_i - mui)/sqrt(sill);
-  double z_j = (data_j - muj)/sqrt(sill);
-  hl_i = inverse_lamb(z_i,hl);
-  hl_j = inverse_lamb(z_j,hl);
-  hr_i = inverse_lamb(z_i,hr);
-  hr_j = inverse_lamb(z_j,hr);
-  Lhl_i = (1 + LambertW(hl*z_i*z_i));
-  Lhl_j = (1 + LambertW(hl*z_j*z_j));
-  Lhr_i = (1 + LambertW(hr*z_i*z_i));
-  Lhr_j = (1 + LambertW(hr*z_j*z_j));
-if(fabs(corr)>1e-30){
-if(z_i>=0&&z_j>=0)
-{res=dbnorm(hr_i,hr_j,0,0,1,corr)*hr_i*hr_j/(z_i*z_j*Lhr_i*Lhr_j);}
-if( (z_i>=0&&z_j<0) || (z_i<0&&z_j>=0))
-{res=dbnorm(hr_i,hl_j,0,0,1,corr)*hr_i*hl_j/(z_i*z_j*Lhr_i*Lhl_j);}
-//if(z_i<0&&z_j>=0)
-//{res=dbnorm(hl_i,hr_j,0,0,1,corr)*hl_i*hr_j/(z_i*z_j*Lhl_i*Lhr_j);}
-if(z_i<0&&z_j<0)
-{res=dbnorm(hl_i,hl_j,0,0,1,corr)*hl_i*hl_j/(z_i*z_j*Lhl_i*Lhl_j);}
-}
-else
-{
-if(z_i>=0)
-{A=dnorm(hr_i,0,1,0)*hr_i/(z_i*Lhr_i);}
-if(z_i<0)
-{A=dnorm(hl_i,0,1,0)*hl_i/(z_i*Lhl_i);}
-if(z_j>=0)
-{B=dnorm(hr_j,0,1,0)*hr_j/(z_j*Lhr_j);}
-if(z_j<0)
-{B=dnorm(hl_j,0,1,0)*hl_j/(z_j*Lhl_j);}
-res=A*B;
-}
-return(res/sill);
+double biv_tukey_hh(double corr, double data_i, double data_j, double mui, double muj,
+    double sill, double hl, double hr) {
+
+    double res = 0.0, A = 0.0, B = 0.0, z_i, z_j, hl_i, hr_i, hl_j, hr_j;
+    double Lhl_i, Lhr_i, Lhl_j, Lhr_j;
+    z_i = (data_i - mui) / sqrt(sill);
+    z_j = (data_j - muj) / sqrt(sill);
+    // Calcolare inverse_lamb e LambertW solo una volta per ogni valore di z
+    hl_i = inverse_lamb(z_i, hl);
+    hl_j = inverse_lamb(z_j, hl);
+    hr_i = inverse_lamb(z_i, hr);
+    hr_j = inverse_lamb(z_j, hr);
+    Lhl_i = (1 + LambertW(hl * z_i * z_i));
+    Lhl_j = (1 + LambertW(hl * z_j * z_j));
+    Lhr_i = (1 + LambertW(hr * z_i * z_i));
+    Lhr_j = (1 + LambertW(hr * z_j * z_j));
+    if (fabs(corr) > 1e-30) {
+        // Ottimizzare i casi basati su z_i e z_j
+        if (z_i >= 0 && z_j >= 0) {
+            res = dbnorm(hr_i, hr_j, 0, 0, 1, corr) * hr_i * hr_j / (z_i * z_j * Lhr_i * Lhr_j);
+        } else if ((z_i >= 0 && z_j < 0) || (z_i < 0 && z_j >= 0)) {
+            res = dbnorm(hr_i, hl_j, 0, 0, 1, corr) * hr_i * hl_j / (z_i * z_j * Lhr_i * Lhl_j);
+        } else if (z_i < 0 && z_j < 0) {
+            res = dbnorm(hl_i, hl_j, 0, 0, 1, corr) * hl_i * hl_j / (z_i * z_j * Lhl_i * Lhl_j);
+        }
+    } else {
+        // Calcolare A e B solo una volta per z_i e z_j
+        if (z_i >= 0) {
+            A = dnorm(hr_i, 0, 1, 0) * hr_i / (z_i * Lhr_i);
+        } else {
+            A = dnorm(hl_i, 0, 1, 0) * hl_i / (z_i * Lhl_i);
+        }
+        if (z_j >= 0) {
+            B = dnorm(hr_j, 0, 1, 0) * hr_j / (z_j * Lhr_j);
+        } else {
+            B = dnorm(hl_j, 0, 1, 0) * hl_j / (z_j * Lhl_j);
+        }
+        res = A * B;
+    }
+    return res / sill;
 }
 
 
@@ -2373,39 +2432,70 @@ void vpbnorm(int *cormod, double *h, double *u, int *nlags, int *nlagt,
 }
 
 /**********************************************************************/
-double aux_biv_binomneg_simple(int NN, int u, double p01,double p10,double p11)
-{
-          int i=0;
-  double kk1=0.0,dens=0.0;
-
-    for(i=fmax_int(0,NN-u-1);i<=NN-1;i++){
-      kk1=exp(lgammafn(NN-1+u+1)-(lgammafn(i+1)+lgammafn(NN-i)+lgammafn(NN-i)+lgammafn(u-NN+2+i)));
-      dens+=kk1*R_pow(p11,i+1)*R_pow(1+p11-(p01+p10),u-NN+1+i)*R_pow(p01-p11,NN-1-i)*R_pow(p10-p11,NN-1-i);
-       }
-         return(dens);
+double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11) {
+    int i = 0;
+    double kk1 = 0.0, dens = 0.0;
+    double lgamma_NN_u_1 = lgammafn(NN - 1 + u + 1);
+    double lgamma_u_NN_2 = lgammafn(u - NN + 2);
+    for (i = fmax_int(0, NN - u - 1); i <= NN - 1; i++) {
+        double lgamma_i1 = lgammafn(i + 1);
+        double lgamma_NN_i = lgammafn(NN - i);
+        kk1 = exp(lgamma_NN_u_1 - (lgamma_i1 + lgamma_NN_i + lgamma_NN_i + lgamma_u_NN_2 + i));
+        double term1 = R_pow(p11, i + 1);
+        double term2 = R_pow(1 + p11 - (p01 + p10), u - NN + 1 + i);
+        double term3 = R_pow(p01 - p11, NN - 1 - i);
+        double term4 = R_pow(p10 - p11, NN - 1 - i);
+        dens += kk1 * term1 * term2 * term3 * term4;
+    }
+    return dens;
 }
-double aux_biv_binomneg (int NN, int u, int v, double x,double y,double p11)
-{
-  int a=0,i=0;
-  double kk1=0.0,kk2=0.0,dens1=0.0,dens2=0.0;
 
-    for(a=fmax_int(0,u-v+NN-1);a<=NN-2;a++){
-   for(i=fmax_int(0,a-u);i<=fmin_int(a,NN-1);i++){
-    kk1=exp(lgammafn(NN+u)-(lgammafn(i+1)+lgammafn(NN-i)+lgammafn(a-i+1)+lgammafn(u-a+i+1)));         
-    kk2=exp(lgammafn(v-u)-(lgammafn(v+a-NN-u+2)+lgammafn(NN-a-1)));                        
-    dens1+=kk1*kk2*R_pow(p11,i+1)*R_pow(1+p11-(x+y),u-a+i)*
-             R_pow(x-p11,NN-i-1)*R_pow(y-p11,a-i)*R_pow(1-y,v-u-NN+a+1)*R_pow(y,NN-a-1);
-  }}
+double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11) {
+    int a = 0, i = 0;
+    double kk1 = 0.0, kk2 = 0.0, dens1 = 0.0, dens2 = 0.0;
+    
+    // Pre-calcoliamo i termini di lgammafn per evitare chiamate ripetute
+    double lgamma_NN_u = lgammafn(NN + u);
+    double lgamma_v_u = lgammafn(v - u);
+    for (a = fmax_int(0, u - v + NN - 1); a <= NN - 2; a++) {
+        double lgamma_i1 = lgammafn(1); // lgammafn(i+1) quando i=0
+        double lgamma_NN_i = lgammafn(NN);
+        for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
+            lgamma_i1 = lgammafn(i + 1);  // lgammafn(i+1)
+            lgamma_NN_i = lgammafn(NN - i); // lgammafn(NN-i)
+            double lgamma_a_i_1 = lgammafn(a - i + 1); // lgammafn(a-i+1)
+            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1); // lgammafn(u-a+i+1)
+            kk1 = exp(lgamma_NN_u - (lgamma_i1 + lgamma_NN_i + lgamma_a_i_1 + lgamma_u_a_i_1));
+            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 2);
+            double lgamma_NN_a_1 = lgammafn(NN - a - 1);
+            kk2 = exp(lgamma_v_u - (lgamma_v_a_NN_u + lgamma_NN_a_1));
+            
+            dens1 += kk1 * kk2 * R_pow(p11, i + 1) * R_pow(1 + p11 - (x + y), u - a + i) *
+                     R_pow(x - p11, NN - i - 1) * R_pow(y - p11, a - i) * R_pow(1 - y, v - u - NN + a + 1) * R_pow(y, NN - a - 1);
+        }
+    }
 
-    for(a=fmax_int(0,u-v+NN);a<=NN-1;a++){
-    for(i=fmax_int(0,a-u);i<=fmin_int(a,NN-1);i++){
-    kk1=exp(lgammafn(NN+u)-(lgammafn(i+1)+lgammafn(NN-1-i+1)+lgammafn(a-i+1)+lgammafn(u-a+i+1)));
-    kk2=exp(lgammafn(v-u)-(lgammafn(v+a-NN-u+1)+lgammafn(NN-a)));                      
-    dens2+=kk1*kk2*R_pow(p11,i)*R_pow(1+p11-(x+y),u-a+i)*
-                 R_pow(x-p11,NN-i)*R_pow(y-p11,a-i)*R_pow(1-y,v-u-NN+a)*R_pow(y,NN-a);
-  }}
-  return(dens1+dens2);
+    for (a = fmax_int(0, u - v + NN); a <= NN - 1; a++) {
+        double lgamma_i1 = lgammafn(1); // lgammafn(i+1) quando i=0
+        double lgamma_NN_1_i = lgammafn(NN - 1); // lgammafn(NN-1-i) quando i=0
+        for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
+            // Pre-calcoliamo i valori di lgammafn all'interno dei cicli
+            lgamma_i1 = lgammafn(i + 1);  // lgammafn(i+1)
+            lgamma_NN_1_i = lgammafn(NN - 1 - i + 1); // lgammafn(NN-1-i)
+            double lgamma_a_i_1 = lgammafn(a - i + 1); // lgammafn(a-i+1)
+            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1); // lgammafn(u-a+i+1)
+            kk1 = exp(lgamma_NN_u - (lgamma_i1 + lgamma_NN_1_i + lgamma_a_i_1 + lgamma_u_a_i_1));
+            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 1);
+            double lgamma_NN_a = lgammafn(NN - a);
+            kk2 = exp(lgamma_v_u - (lgamma_v_a_NN_u + lgamma_NN_a));
+            
+            dens2 += kk1 * kk2 * R_pow(p11, i) * R_pow(1 + p11 - (x + y), u - a + i) *
+                     R_pow(x - p11, NN - i) * R_pow(y - p11, a - i) * R_pow(1 - y, v - u - NN + a) * R_pow(y, NN - a);
+        }
+    }
+    return dens1 + dens2;
 }
+
 
 void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res)
 {
@@ -2441,18 +2531,26 @@ void biv_binom_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11
 }
 
 
-double biv_binom(int NN, int u, int v, double p01,double p10,double p11)
-{
-    
-int a;
-double kk=0.0,dens=0.0;
-for(a=fmax_int(0,u+v-NN);a<=fmin_int(u,v);a++){
-kk=exp(lgammafn(NN+1)-(lgammafn(a+1)+lgammafn(u-a+1)+lgammafn(v-a+1)+lgammafn(NN-u-v+a+1)));
-dens=dens+ kk*(R_pow(p11,a)*R_pow(p01-p11,u-a)*R_pow(p10-p11,v-a)*R_pow(1+p11-(p01+p10),NN-u-v+a));
- }
+double biv_binom(int NN, int u, int v, double p01, double p10, double p11) {   
+    int a;
+    double kk = 0.0, dens = 0.0;
+    double lgamma_NN_1 = lgammafn(NN + 1);
+    for (a = fmax_int(0, u + v - NN); a <= fmin_int(u, v); a++) {
+        double lgamma_a1 = lgammafn(a + 1);
+        double lgamma_u_a1 = lgammafn(u - a + 1);
+        double lgamma_v_a1 = lgammafn(v - a + 1);
+        double lgamma_NN_uv_a1 = lgammafn(NN - u - v + a + 1);
+        kk = exp(lgamma_NN_1 - (lgamma_a1 + lgamma_u_a1 + lgamma_v_a1 + lgamma_NN_uv_a1));
+        double term1 = R_pow(p11, a);
+        double term2 = R_pow(p01 - p11, u - a);
+        double term3 = R_pow(p10 - p11, v - a);
+        double term4 = R_pow(1 + p11 - (p01 + p10), NN - u - v + a);
+        dens += kk * term1 * term2 * term3 * term4;
+    }
 
-    return(dens);
+    return dens;
 }
+
 
 
 double aux_biv_binom(int n1,int n2, int u, int v,double p01,double p10,double p11)
@@ -3332,62 +3430,58 @@ void hypergeo_call(double *a,double *b,double *c,double *x, double *res)
 
 /***********************************************************/
 /*********** bivariate T distribution*********************/
-double biv_T(double rho,double zi,double zj,double nuu,double nugget)
+double biv_T(double rho, double zi, double zj, double nuu, double nugget)
 {
-  int k=0;
-  double nu=1/nuu;
-  double res0=0.0,RR=0.0,pp1=0.0,pp2=0.0;
-  double  r2=rho*rho;
-  double bb1,bb2;
-  double x=zi;double y=zj;        
-  double cc=(nu+1)/2; double nu2=nu/2;
-  double rho1=rho*(1-nugget);
-  double rn=rho1*rho1;
-  double rho2=pow1p(-r2,-nu2-1);    // pow1p(x, y) computes (1 + x)^y
-  double rho12=pow1p(-rho1*rho1,-nu-0.5);
-  double x1=(x*x*(1-r2)+nu*(1-rn));
-  double y1=(y*y*(1-r2)+nu*(1-rn));
-  double C,B;
-
-  double b1 = exp( nu*log(nu)-cc*log(x1*y1)+2*lgammafn(cc));
-  double c1 = exp(log(M_PI)+ 2*lgammafn(nu/2)+log(rho12)+log(rho2));
-
-  double b2 = rho1*x*y*R_pow(nu,nu+2)*R_pow(x1*y1,-nu2-1);
-  double c2 = 2*M_PI*pow1p(-rn,-nu-0.5)*pow1p(-r2,-nu2-2);
-
-  double a1 = 0; double a2 = 0;
-  double aux  = R_pow(rho1*x*y,2)*pow1p(-r2,2)/(x1*y1);
-  double aux1 = R_pow(rho*nu,2)*pow1p(-rn,2)/(x1*y1);
- 
-  
-  if(rho> DEPSILON){
-  while( k<=3000 )
-   {
-   // pp1=hypergeo(cc+k,cc+k,0.5,aux);
-    pp1=(0.5-2*(cc+k))*log1p(-aux)+log(hypergeo(0.5-(cc+k),0.5-(cc+k),0.5,aux)); //euler
-    bb1=pp1+k*log(aux1)+2*(lgammafn(cc+k)-lgammafn(cc))-lgammafn(k+1)-lgammafn(nu2+k)+lgammafn(nu2);
-    a1 = a1 + exp(bb1);
-   // pp2=hypergeo(nu2+1+k,nu2+1+k,1.5,aux);
-    pp2=(1.5-2*(nu2+1+k))*log1p(-aux)+log(hypergeo(1.5-(nu2+1+k),1.5-(nu2+1+k),1.5,aux));//euler
-    bb2=pp2+k*log(aux1)+2*log((1+k/nu2))+lgammafn(nu2+k)-lgammafn(k+1)-lgammafn(nu2);
-    a2 = a2 + exp(bb2);
-
-   // if(!R_FINITE(a1)||!R_FINITE(a2)){break;}
-    RR=(b1/c1)*a1+(b2/c2)*a2;
-  // if(!R_FINITE(RR)) return(res0);
-    if((fabs(RR-res0)<1e-10||!R_FINITE(RR))  ) {break;}
-    else {res0=RR;}
-        k++;
+    int k = 0;
+    double nu = 1 / nuu;
+    double res0 = 0.0, RR = 0.0, pp1 = 0.0, pp2 = 0.0;
+    double r2 = rho * rho;
+    double bb1, bb2;
+    double x = zi, y = zj;
+    double cc = (nu + 1) / 2;
+    double nu2 = nu / 2;
+    double rho1 = rho * (1 - nugget);
+    double rn = rho1 * rho1;
+    double rho2 = pow1p(-r2, -nu2 - 1); // pow1p(x, y) computes (1 + x)^y
+    double rho12 = pow1p(-rho1 * rho1, -nu - 0.5);
+    double x1 = (x * x * (1 - r2) + nu * (1 - rn));
+    double y1 = (y * y * (1 - r2) + nu * (1 - rn));
+    double C, B;
+    double b1 = exp(nu * log(nu) - cc * log(x1 * y1) + 2 * lgammafn(cc));
+    double c1 = exp(log(M_PI) + 2 * lgammafn(nu / 2) + log(rho12) + log(rho2));
+    double b2 = rho1 * x * y * R_pow(nu, nu + 2) * R_pow(x1 * y1, -nu2 - 1);
+    double c2 = 2 * M_PI * pow1p(-rn, -nu - 0.5) * pow1p(-r2, -nu2 - 2);
+    double a1 = 0, a2 = 0;
+    double aux = R_pow(rho1 * x * y, 2) * pow1p(-r2, 2) / (x1 * y1);
+    double aux1 = R_pow(rho * nu, 2) * pow1p(-rn, 2) / (x1 * y1);
+    if (rho > DEPSILON)
+    {
+        while (k <= 3000)
+        {
+            // pp1 = hypergeo(cc + k, cc + k, 0.5, aux);
+            pp1 = (0.5 - 2 * (cc + k)) * log1p(-aux) + log(hypergeo(0.5 - (cc + k), 0.5 - (cc + k), 0.5, aux)); // Euler
+            bb1 = pp1 + k * log(aux1) + 2 * (lgammafn(cc + k) - lgammafn(cc)) - lgammafn(k + 1) - lgammafn(nu2 + k) + lgammafn(nu2);
+            a1 += exp(bb1);
+            // pp2 = hypergeo(nu2 + 1 + k, nu2 + 1 + k, 1.5, aux);
+            pp2 = (1.5 - 2 * (nu2 + 1 + k)) * log1p(-aux) + log(hypergeo(1.5 - (nu2 + 1 + k), 1.5 - (nu2 + 1 + k), 1.5, aux)); // Euler
+            bb2 = pp2 + k * log(aux1) + 2 * log((1 + k / nu2)) + lgammafn(nu2 + k) - lgammafn(k + 1) - lgammafn(nu2);
+            a2 += exp(bb2);
+            RR = (b1 / c1) * a1 + (b2 / c2) * a2;
+            if (fabs(RR - res0) < 1e-10 || !R_FINITE(RR)) { break; }
+            else { res0 = RR; }
+            k++;
+        }
+        if (!R_finite(RR)) RR = 1e-320;
     }
-   if(!R_finite(RR)) RR=1e-320;
-}
-  if(rho<= DEPSILON)
-  {
-    C = lgammafn(cc)+log(R_pow((1+x*x/nu),-cc))-log(sqrt(M_PI*nu))-lgammafn(nu/2);
-    B = lgammafn(cc)+log(R_pow((1+y*y/nu),-cc))-log(sqrt(M_PI*nu))-lgammafn(nu/2);
-    RR=exp(B)*exp(C);
-  }
-  return(RR);
+
+    if (rho <= DEPSILON)
+    {
+        C = lgammafn(cc) + log(R_pow((1 + x * x / nu), -cc)) - log(sqrt(M_PI * nu)) - lgammafn(nu / 2);
+        B = lgammafn(cc) + log(R_pow((1 + y * y / nu), -cc)) - log(sqrt(M_PI * nu)) - lgammafn(nu / 2);
+        RR = exp(B) * exp(C);
+    }
+
+    return RR;
 }
 
 /*********** Appell F4 function ********/
@@ -3489,9 +3583,6 @@ double zjstd=(zj-muj)/sqrt(sill);
          {res=0.5*2*exp((nu/2)*log(nu)+lgammafn((nu+1)/2)-((nu+1)/2)*log(R_pow(zistd/etamos,2)+nu)-0.5*log(M_PI)-lgammafn(nu/2));}
          if(zj<muj)
          {res=0.5*2*exp((nu/2)*log(nu)+lgammafn((nu+1)/2)-((nu+1)/2)*log(R_pow(zjstd/etamas,2)+nu)-0.5*log(M_PI)-lgammafn(nu/2));}
-     
-     
-    
       }
 return(res/sill);
     
@@ -3512,32 +3603,30 @@ double kk=0, dens=0,a=0,b=0,rho2=1-rho*rho;
   return(dens);
 }
 /***** bivariate two piece gaussian *****/
-double biv_two_pieceGaussian(double rho,double zi,double zj,double sill,double eta,
-             double p11,double mui,double muj)
+double biv_two_pieceGaussian(double rho, double zi, double zj, double sill, double eta,
+                              double p11, double mui, double muj)
 {
-double res=0.0;  
-double etamas=1+eta;
-double etamos=1-eta;
-double zistd=(zi-mui)/sqrt(sill);
-double zjstd=(zj-muj)/sqrt(sill);
-
-
-if( (zistd>=0)&&(zjstd>=0))
-{res=          (p11/R_pow(etamos,2))*biv_half_Gauss(rho,zistd/etamos,zjstd/etamos);}
-
-if((zistd>=0)&&(zjstd<0))
-{res=((1-eta-2*p11)/(2*(1-eta*eta)))*biv_half_Gauss(rho,zistd/etamos,-zjstd/etamas);}
-
-if((zistd<0)&&(zjstd>=0))
-{res=((1-eta-2*p11)/(2*(1-eta*eta)))*biv_half_Gauss(rho,-zistd/etamas,zjstd/etamos);}
-
-    if((zistd<0)&&(zjstd<0))
-{ //Rprintf("%f %f \n",zistd,zjstd);
-    res=    ((p11+eta)/R_pow(etamas,2))*biv_half_Gauss(rho,-zistd/etamas,-zjstd/etamas);}
-
-return(res/sill);
-}  
-
+    double res = 0.0;
+    double etamas = 1 + eta;
+    double etamos = 1 - eta;
+    double zistd = (zi - mui) / sqrt(sill);
+    double zjstd = (zj - muj) / sqrt(sill);
+    
+    double z1 = (zistd >= 0) ? zistd / etamos : -zistd / etamas;
+    double z2 = (zjstd >= 0) ? zjstd / etamos : -zjstd / etamas;
+    
+    if (zistd >= 0 && zjstd >= 0) {
+        res = (p11 / R_pow(etamos, 2)) * biv_half_Gauss(rho, z1, z2);
+    } else if (zistd >= 0 && zjstd < 0) {
+        res = ((1 - eta - 2 * p11) / (2 * (1 - eta * eta))) * biv_half_Gauss(rho, z1, -z2);
+    } else if (zistd < 0 && zjstd >= 0) {
+        res = ((1 - eta - 2 * p11) / (2 * (1 - eta * eta))) * biv_half_Gauss(rho, -z1, z2);
+    } else if (zistd < 0 && zjstd < 0) {
+        res = ((p11 + eta) / R_pow(etamas, 2)) * biv_half_Gauss(rho, -z1, -z2);
+    }
+    
+    return res / sill;
+}
 
 
 
@@ -3908,144 +3997,219 @@ double  binomialCoeff(int n, int k)
 /*******************************************************************************/
 /*******************************************************************************/
 
+double Prt(double corr, int r, int t, double mean_i, double mean_j) {
+    const double rho2 = R_pow(corr, 2);
+    const double one_minus_rho2 = 1.0 - rho2;
+    const double log_rho2 = log(rho2);
+    const double log_rho2_ratio = log_rho2 - log1p(-rho2);
+    const double log_mean_i = log(mean_i);
+    const double auxi = mean_i / one_minus_rho2;
+    const double auxj = mean_j / one_minus_rho2;
+    const double rho2auxi = rho2 * auxi;
 
-double Prt(double corr,int r, int t, double mean_i, double mean_j){
-    double rho2= R_pow(corr,2);
-    double prt=0.0,q1,q2,term =0, term1 =0, res0=0.0,res00=0.0,sum = 0.0, sum1 = 0,aux2=0, aux3=0, aux4=0,aux=0, aux1=0;
-    double auxi= mean_i/(1-rho2);
-    double auxj= mean_j/(1-rho2);
-    double lrho2=log(rho2);
-    double lmi=log(mean_i);
-    double rho2auxi=rho2*auxi;
-    int n,k=0,m=0,cc=0,tm=0, iter1=4000, iter2=3000;
-    n= r-t;
-        while(m<=iter1){
-            res0=0.0;
-            tm=t+m;
-                for(k=0;k<=iter2;k++){
-                        cc=t+m+n+k+1;
-                        aux2= (k+m)*(lrho2-log1p(-rho2))+lgammafn(tm);
-                        aux3= lgammafn(m+1)+lgammafn(t);
-                        aux4= (cc-1)*lmi+log(igam(1+k+tm,auxj));
-                        q1=exp(log(hyperg(n,cc, rho2*auxi))-lgammafn(cc));  
-                        if(!R_finite(q1)) q1=aprox_reg_1F1(n,tm+n+k+1,rho2auxi);                     
-                        term= exp(aux2-aux3+aux4+log(q1));
-                      if(!R_finite(term))   {break;}
-                       sum =sum+ term;     
-                         if((fabs(sum-res0)<1e-10)  ) {break;}
-                  else {res0=sum;}
-            }
-        aux= m*(lrho2-log1p(-rho2)); 
-        aux1= lgammafn(tm)+(tm+n)*lmi-lgammafn(m+1)-lgammafn(t);
-        q2=exp(log(hyperg(n+1,tm+n+1, rho2*auxi))-lgammafn(tm+n+1));         
-        if(!R_finite(q2)) q2=aprox_reg_1F1(n+1,tm+n+1,rho2auxi);        
-        term1= exp(aux+aux1+log(q2)+log(igam(tm, auxj)));
-        if(!R_finite(term1))   {break;}
-           sum1 =sum1+ term1;     
-                         if((fabs(sum1-res00)<1e-10)  ) {break;}
-                         else {res00=sum1;}
-      
-        m++;
+    const int n = r - t;
+    const int iter1 = 4000;
+    const int iter2 = 3000;
+
+    double sum = 0.0, sum1 = 0.0;
+    double  prev_sum1 = 0.0;
+
+    for (int m = 0; m <= iter1; m++) {
+        int tm = t + m;
+        double gamma_tm = lgammafn(tm);
+        double gamma_m1 = lgammafn(m + 1);
+        double gamma_t = lgammafn(t);
+
+        // Prima somma (con k)
+        double inner_sum = 0.0;
+        double prev_inner_sum = 0.0;
+
+        for (int k = 0; k <= iter2; k++) {
+            int cc = t + m + n + k + 1;
+            double gamma_cc = lgammafn(cc);
+            double log_igam = log(igam(1 + k + tm, auxj));
+            double hyper = hyperg(n, cc, rho2auxi);
+
+            double log_q1 = R_finite(hyper) ? log(hyper) - gamma_cc
+                                            : log(aprox_reg_1F1(n, cc, rho2auxi));
+
+            double term = (k + m) * log_rho2_ratio
+                          + gamma_tm
+                          - gamma_m1 - gamma_t
+                          + (cc - 1) * log_mean_i
+                          + log_igam
+                          + log_q1;
+
+            double val = exp(term);
+            if (!R_finite(val) || val < 1e-12) break;
+
+            inner_sum += val;
+            if (fabs(inner_sum - prev_inner_sum) < 1e-10) break;
+            prev_inner_sum = inner_sum;
+        }
+        sum += inner_sum;
+        // Seconda somma
+        double q2_val;
+        int cc2 = tm + n + 1;
+        double hyper2 = hyperg(n + 1, cc2, rho2auxi);
+        if (R_finite(hyper2))
+            q2_val = exp(log(hyper2) - lgammafn(cc2));
+        else
+            q2_val = aprox_reg_1F1(n + 1, cc2, rho2auxi);
+        double term1 = m * log_rho2_ratio
+                       + gamma_tm
+                       + (tm + n) * log_mean_i
+                       - gamma_m1 - gamma_t
+                       + log(q2_val)
+                       + log(igam(tm, auxj));
+        double val1 = exp(term1);
+        if (!R_finite(val1) || val1 < 1e-12) break;
+
+        sum1 += val1;
+        if (fabs(sum1 - prev_sum1) < 1e-10) break;
+        prev_sum1 = sum1;
     }
 
-     prt= exp(-auxi+log(sum1))- exp(-auxi+log(sum));
-    return(prt);
+    double prt = exp(-auxi + log(sum1)) - exp(-auxi + log(sum));
+    return prt;
 }
+
 
 //*****************************************************************************/
+double Prr(double corr, int r, int t, double mean_i, double mean_j) {
+    double rho2 = R_pow(corr, 2);    
+    double prr = 0.0, term = 0.0, term1 = 0.0, term2 = 0.0, term3 = 0.0;
+    double sum = 0.0, res00 = 0.0, res11 = 0.0, sum1 = 0.0, sum2 = 0.0, rho2k = 0.0;
+    int k = 0, m = 0;
 
-double Prr(double corr,int r, int t, double mean_i, double mean_j){
+    // Precompute constants that do not change during loops
+    double auxi = mean_i / (1 - rho2);
+    double auxj = mean_j / (1 - rho2);
+    double ei = exp(-mean_i);
+    double ej = exp(-mean_j);
+    int iter1 = 1500, iter2 = 1000;
 
-    double rho2= R_pow(corr,2);    
-    double prr,  term=0.0,term1=0.0, term2=0.0, term3=0.0,aa=0.0,bb=0.0,cc=0.0,dd=0.0;
-    double sum = 0.0, res00=0.0,res11=0.0, sum1 = 0.0, sum2 = 0.0,rho2k=0.0;
-    int k = 0, m=0;
-    double auxi= mean_i/(1-rho2);
-    double auxj= mean_j/(1-rho2);
-    double ei=exp(-mean_i);
-    double ej=exp(-mean_j);
-    int iter1=1500;  int iter2=1000;
+    // Loop over k
+    while (k < iter1) {
+        rho2k = R_pow(rho2, k);  // Precompute powers of rho2
+        // Inner loop over m
+        m = 0;
+        while (m < iter2) {
+            term = (1 - rho2) * rho2k * R_pow(rho2, m) * 
+                   exp(lgammafn(r + m) - lgammafn(r) - lgammafn(m + 1) + 
+                        log(igam(r + k + m + 1, auxi)) + log(igam(r + k + m + 1, auxj)));
 
-    while(k<iter1){
-       rho2k= R_pow(rho2,k);
-//+++++++++++++++++++++++++++++++++++++++//
-      m=0; 
-      while(m<iter2){
-                      //Rprintf("%d %d\n",m,k);      
-term=(1-rho2)*rho2k*R_pow(rho2,m)*exp(lgammafn(r+m)-lgammafn(r)-lgammafn(m+1)+log(igam(r+k+m+1,auxi))+log(igam(r+k+m+1,auxj)));
-        if((fabs(term)<1e-10)||!R_finite(term))   {break;}
-        sum =sum+term;
-                  m++;    
-                 }
-//+++++++++++++++++++++++++++++++++++++++//
-        aa=lgammafn(k+1)+lgammafn(r); bb=lgammafn(r+k);
-        cc=igam(r+k,      auxi);  dd=igam(r+k,      auxj);
-
-term1 = rho2k*                exp(bb + log(cc)                  +log(dd)-aa);
-term2 =ei*R_pow(1/rho2,r)*exp(bb + log(igam(r+k, rho2*auxi))+log(dd)-aa);
-term3 =ej*R_pow(1/rho2,r)*exp(bb + log(cc)                  +log(igam(r+k, rho2*auxj))-aa);
-
-if(!R_finite(term1)||!R_finite(term2)||!R_finite(term3))   {break;}
-      sum1 =sum1+ term1;
-      sum2 =sum2+ term2+term3;
-
-            if((fabs(sum1-res00)<1e-10)&&(fabs(sum2-res11)<1e-10)  ) {break;}
-                  else {res00=sum1;res11=sum2;}
-          k++;      
-      }
-    prr= pow1p(-rho2, r)*(- sum1 + sum2  + sum);//Rprintf("%d %d\n",m,k); 
-    return(prr);
-   
+            // Early exit if term is small or non-finite
+            if (fabs(term) < 1e-10 || !R_finite(term)) {
+                break;
+            }
+            sum += term;
+            m++;
+        }
+        // Recompute terms based on k
+        double aa = lgammafn(k + 1) + lgammafn(r);
+        double bb = lgammafn(r + k);
+        double cc = igam(r + k, auxi);
+        double dd = igam(r + k, auxj);
+        term1 = rho2k * exp(bb + log(cc) + log(dd) - aa);
+        term2 = ei * R_pow(1 / rho2, r) * exp(bb + log(igam(r + k, rho2 * auxi)) + log(dd) - aa);
+        term3 = ej * R_pow(1 / rho2, r) * exp(bb + log(cc) + log(igam(r + k, rho2 * auxj)) - aa);
+        // Early exit if any of the terms are non-finite
+        if (!R_finite(term1) || !R_finite(term2) || !R_finite(term3)) {
+            break;
+        }
+        sum1 += term1;
+        sum2 += term2 + term3;
+        // Check for convergence
+        if (fabs(sum1 - res00) < 1e-10 && fabs(sum2 - res11) < 1e-10) {
+            break;
+        } else {
+            res00 = sum1;
+            res11 = sum2;
+        }
+        k++;
+    }
+    // Final computation for prr
+    prr = pow1p(-rho2, r) * (-sum1 + sum2 + sum);
+    return prr;
 }
+
+
 
 /***************************************************************/
-double Pr0(double corr,int r, int t, double mean_i, double mean_j){
+double Pr0(double corr, int r, int t, double mean_i, double mean_j) {
+    double rho2 = R_pow(corr, 2);
+    double one_minus_rho2 = 1.0 - rho2;
+    double log_rho2 = log(rho2);
+    double log_one_minus_rho2 = log1p(-rho2);
+    double log_rho_ratio = log_rho2 - log_one_minus_rho2;
 
-
-    double rho2= R_pow(corr,2),term=0.0;
-    double pr0,q2, res0 =0.0, sum = 0.0,aux=0, aux1=0;
-    double auxi= mean_i/(1-rho2);
-    double auxj= mean_j/(1-rho2);
-    int n,m=0, iter=4000;
-    n= r-t;
-        while(m<=iter){
-            aux= m*(log(rho2)-log1p(-rho2)); 
-            aux1= (m+n)*log(mean_i);
-            q2=exp(log(hyperg(n,m+n+1, rho2*auxi))-lgammafn(m+n+1));         
-            term=exp(aux+aux1+log(q2)+log(igam(m+1, auxj)));
-                   if(!R_finite(term))   {break;}
-            sum=sum+term;
-            if((fabs(sum-res0)<1e-10) ) {break;}
-             else {res0=sum;}
+    double auxi = mean_i / one_minus_rho2;
+    double auxj = mean_j / one_minus_rho2;
+    double log_mean_i = log(mean_i);
+    
+    double term = 0.0, q2 = 0.0, sum = 0.0, res0 = 0.0;
+    double aux = 0.0, aux1 = 0.0;
+    
+    int n = r - t;
+    int m = 0;
+    const int iter = 4000;
+    while (m <= iter) {
+        aux = m * log_rho_ratio;
+        aux1 = (m + n) * log_mean_i;
+        double hyper = hyperg(n, m + n + 1, rho2 * auxi);
+        if (!R_finite(hyper)) break;
+        q2 = exp(log(hyper) - lgammafn(m + n + 1));
+        double ig = igam(m + 1, auxj);
+        if (!R_finite(q2) || !R_finite(ig)) break;
+        term = exp(aux + aux1 + log(q2) + log(ig));
+        if (term < 1e-12) break;
+        sum += term;
+        if (fabs(sum - res0) < 1e-10) break;
+        res0 = sum;
         m++;
     }
+    double part1 = exp(-mean_i + n * log_mean_i - lgammafn(n + 1));
+    double part2 = exp(-auxi + log(sum));
+    double pr0 = part1 - part2;
 
-     pr0= exp(-mean_i+n*log(mean_i)-lgammafn(n+1))-exp(-auxi+log(sum)) ;
-     //  if(pr0<1e-320) pr0=1e-320;
-     //if(!R_finite(pr0)) pr0=1e-320;
-    return(pr0);
-
+    return pr0;
 }
+
 
 /*******************************************************************************/
-double P00(double corr,int r, int t, double mean_i, double mean_j){
+double P00(double corr, int r, int t, double mean_i, double mean_j) {
+    const double rho2 = R_pow(corr, 2);
+    const double one_minus_rho2 = 1.0 - rho2;
+    const double log_rho2 = log(rho2);
+    const double auxi = mean_i / one_minus_rho2;
+    const double auxj = mean_j / one_minus_rho2;
 
-    double rho2= R_pow(corr,2);
-    int k = 0;
-    double p00,sum = 0.0,res0=0.0,term=0.0;
-    double auxi= mean_i/(1-rho2);
-    double auxj= mean_j/(1-rho2);
-    while(k<4000){
-             term=exp( k*log(rho2) + log(igam(k+1, auxi)) + log(igam(k+1, auxj) )) ;
-                 if(!R_finite(term))   {break;}
-             sum =sum+term;
-             if((fabs(sum-res0)<1e-10 )) {break;}
-             else {res0=sum;}
-        k++;}
-    p00 = -1+ exp(-mean_i)+ exp(-mean_j)+(1-rho2)*sum;
-    return(p00);
-   
+    double sum = 0.0, prev_sum = 0.0;
+
+    for (int k = 0; k < 4000; ++k) {
+        int kp1 = k + 1;
+
+        double igam_i = igam(kp1, auxi);
+        double igam_j = igam(kp1, auxj);
+
+        if (igam_i == 0 || igam_j == 0) break;
+
+        double log_term = k * log_rho2 + log(igam_i) + log(igam_j);
+        double term = exp(log_term);
+
+        if (!R_finite(term) || term < 1e-12) break;
+
+        sum += term;
+
+        if (fabs(sum - prev_sum) < 1e-10) break;
+        prev_sum = sum;
+    }
+
+    double p00 = -1 + exp(-mean_i) + exp(-mean_j) + one_minus_rho2 * sum;
+    return p00;
 }
+
 
 
 void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *mean_j,double *res)
@@ -4114,35 +4278,54 @@ return(dens);
 
 
 
-double biv_Mis_PoissonZIP(double corr,double data_i, double data_j,
-                             double mean_i, double mean_j,double mup,double nugget1,double nugget2)
-{
-int N=2,i=0;
-double **M;M= (double **) R_Calloc(N,double *);
-for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-double *dat;dat=(double *) R_Calloc(N,double);
-double dens=0.0,p,p00,p10,p01,p11,pdf2,corr1,pdf1i,pdf1j;
 
-p=pnorm(mup,0,1,1,0);
-p00=pbnorm22(mup,mup,(1-nugget2)*corr);p01=p-p00;p10=p01;p11=1-2*p+p00;
 
-corr1=corr_pois((1-nugget1)*corr,mean_i,mean_j);
-M[0][0]=mean_i; M[1][1]=mean_j;M[0][1]=sqrt(mean_i*mean_j)*corr1;M[1][0]= M[0][1];
-                        dat[0]=data_i-mean_i;dat[1]=data_j-mean_j;
-                     
-pdf2=dNnorm(N,M,dat); // bivariate Gaussian pdf
-pdf1i=dnorm(data_i,mean_i,sqrt(mean_i),0); // univariate Gaussian pdf
-pdf1j=dnorm(data_j,mean_j,sqrt(mean_j),0);
+double biv_Mis_PoissonZIP(double corr, double data_i, double data_j,
+                          double mean_i, double mean_j, double mup,
+                          double nugget1, double nugget2) {
+    const int N = 2;
+    double M[2][2];
+    double dat[2];
+    double dens = 0.0;
 
-if(data_i>0.0&&data_j>0.0)   dens=p11*pdf2; 
-if(data_i>0.0&&data_j==0.0)  dens=p11*pdf2+p10*pdf1i;  
-if(data_i==0.0&&data_j>0.0)  dens=p11*pdf2+p01*pdf1j;
-if(data_i==0.0&&data_j==0.0)  dens=p11*pdf2+p01*pdf1i+p10*pdf1j+p00;
-for(i=0;i<N;i++)  {R_Free(M[i]);}
-R_Free(M);
-R_Free(dat);
-return(dens);
+    double p = pnorm(mup, 0, 1, 1, 0);
+    double one_minus_nug2_corr = (1.0 - nugget2) * corr;
+    double one_minus_nug1_corr = (1.0 - nugget1) * corr;
+
+    double p00 = pbnorm22(mup, mup, one_minus_nug2_corr);
+    double p01 = p - p00;
+    double p10 = p01;
+    double p11 = 1.0 - 2.0 * p + p00;
+
+    double corr1 = corr_pois(one_minus_nug1_corr, mean_i, mean_j);
+
+    double sqrt_mean_i = sqrt(mean_i);
+    double sqrt_mean_j = sqrt(mean_j);
+
+    M[0][0] = mean_i;
+    M[1][1] = mean_j;
+    M[0][1] = M[1][0] = sqrt(mean_i * mean_j) * corr1;
+
+    dat[0] = data_i - mean_i;
+    dat[1] = data_j - mean_j;
+
+    double pdf2 = dNnorm(N, (double **)M, dat); // Bivariate normal
+    double pdf1i = dnorm(data_i, mean_i, sqrt_mean_i, 0); // Univariate marginals
+    double pdf1j = dnorm(data_j, mean_j, sqrt_mean_j, 0);
+
+    if (data_i > 0.0 && data_j > 0.0)
+        dens = p11 * pdf2;
+    else if (data_i > 0.0 && data_j == 0.0)
+        dens = p11 * pdf2 + p10 * pdf1i;
+    else if (data_i == 0.0 && data_j > 0.0)
+        dens = p11 * pdf2 + p01 * pdf1j;
+    else // data_i == 0.0 && data_j == 0.0
+        dens = p11 * pdf2 + p01 * pdf1i + p10 * pdf1j + p00;
+
+    return dens;
 }
+
+
 /*****/
 double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,
     double nugget1,double nugget2,double mup)
@@ -4197,194 +4380,279 @@ return(res);
 
 
 /************* POIsson gammma ************/
-double PG00(double corr,int r, int t, double mean_i, double mean_j, double a){ //alpha=a
-    double rho2= R_pow(corr,2);
-    double beta_i= a/mean_i;
-    double beta_j= a/mean_j;
-    double beta_ij=beta_i*beta_j;
-    int k = 0, l = 0;
-    double p00,sum = 0.0,res0=0.0,term=0.0,aa=0.0,bb=0.0;
-    double auxi= 1/(1+beta_i);
-    double auxj= 1/(1+beta_j);
-    double auxij=auxi*auxj;
-    int iter1=600;  int iter2=600;
-    for(k=0;k<iter1;k++){
-        l=0;    
-        while(l<iter2){
-          aa=R_pow(beta_ij,l+a-1)*R_pow(rho2,k+l)*pow1p(-rho2, a+1)*R_pow(auxij,k+l+a);
-          bb=2*lgammafn(k+l+a+1)-2*lgammafn(k+2)-lgammafn(l+1)-lgammafn(a)-lgammafn(l+a);
-          term=aa*hypergeo(1,1-l-a,k+2,-1/beta_i)*hypergeo(1,1-l-a,k+2,-1/beta_j)*exp(bb);
-            if((fabs(term)<1e-30)||!R_finite(term))   {break;}
-            sum =sum+term;
-             l++;
+double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    double rho2 = corr * corr;
+    double beta_i = a / mean_i;
+    double beta_j = a / mean_j;
+    double beta_ij = beta_i * beta_j;
+
+    double auxi = 1.0 / (1.0 + beta_i);
+    double auxj = 1.0 / (1.0 + beta_j);
+    double auxij = auxi * auxj;
+
+    double log_beta_ij = log(beta_ij);
+    double log_rho2 = log(rho2);
+    double log_auxij = log(auxij);
+    double log_p1mrho2 = log1p(-rho2);  // log(1 - rho2)
+
+    double sum = 0.0, res0 = 0.0;
+    const int iter1 = 600, iter2 = 600;
+
+    for (int k = 0; k < iter1; ++k) {
+        for (int l = 0; l < iter2; ++l) {
+            double log_aa = (l + a - 1) * log_beta_ij + (k + l) * log_rho2 +
+                            (k + l + a) * log_auxij + (a + 1) * log_p1mrho2;
+
+            double bb = 2 * lgammafn(k + l + a + 1) - 2 * lgammafn(k + 2)
+                        - lgammafn(l + 1) - lgammafn(a) - lgammafn(l + a);
+
+            double hg1 = hypergeo(1, 1 - l - a, k + 2, -1.0 / beta_i);
+            double hg2 = hypergeo(1, 1 - l - a, k + 2, -1.0 / beta_j);
+
+            if (!R_finite(hg1) || !R_finite(hg2)) continue;
+
+            double term = exp(log_aa + bb) * hg1 * hg2;
+
+            if (!R_finite(term) || fabs(term) < 1e-30) break;
+
+            sum += term;
         }
-        if((fabs(sum-res0)<1e-30)) {break;} else {res0=sum;}
-        }
-    p00 = -1+R_pow(auxi*beta_i,a)+R_pow(auxj*beta_j,a)+sum;
-      if(p00<1e-320) p00=1e-320;
-    return(p00);
-   }
-double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a){
 
-    double rho2= R_pow(corr,2);
-    double beta_i= a/mean_i;
-    double beta_j= a/mean_j;
-    double beta_ij=beta_i*beta_j;
-    double bmi=-1/beta_i;double bmj=-1/beta_j;
-    double prr,  term=0.0,term1=0.0, term2=0.0, term3=0.0,aa=0.0,bb=0.0,aa1=0.0,bb1=0.0,ff=0.0;
-    double sum = 0.0, res00=0.0,res11=0.0, sum1 = 0.0, sum2 = 0.0;
-    int k = 0, l=0, l1=0 ,mm=0, kll1=0,mml1=0;
-
-    double auxi= 1/(beta_i+1);
-    double auxj= 1/(beta_j+1);
-    double auxij=auxj*auxi;
-    double bri=1+beta_i-rho2;
-    double brj=1+beta_j-rho2;
-    double fji=brj*beta_i*auxij;
-    double fij=bri*beta_j*auxij;
-    double ra=r+a;
-    double r2br=-rho2/bri;
-    int iter1=600;  int iter2=500; int iter3=400;
-
-    while(k<iter1){
-      l1=0;
-      mm=r+k+1;
-      while(l1<iter2){
-        l=0;
-        ff=1-l1-a;
-        while(l<iter3){
-            mml1=mm+l+1;
-            kll1=k+l+l1;
-            aa=R_pow(beta_ij,l1+a-1)*R_pow(rho2,kll1)*pow1p(-rho2, ra+1)*R_pow(auxij,ra+kll1);
-            bb=lgammafn(r+l)+2*lgammafn(mm+l+l1+a)-2*lgammafn(mml1)-lgammafn(l+1)-lgammafn(l1+1)-lgammafn(r)-lgammafn(a)-lgammafn(l1+a);
-            term= aa*hypergeo(1,1-l1-a,mml1,bmi)*hypergeo(1,ff,mml1,bmj)*exp(bb);
-            if((fabs(term)<1e-30)||!R_finite(term))   {break;}
-            sum =sum+term;
-            l++;
-        }
-        aa1= R_pow(beta_ij,l1+a)*R_pow(rho2,k+l1)*pow1p(-rho2, ra)*R_pow(auxij,ra+k+l1);
-        bb1= exp(lgammafn(r+k)+2*lgammafn(ra+k+l1)-2*lgammafn(mm)-lgammafn(k+1)-lgammafn(l1+1)-lgammafn(r)-lgammafn(a)-lgammafn(l1+a));
-        term1 = aa1*hypergeo(1,ff,mm,bmi)      *hypergeo(1,ff,mm,bmj)*R_pow(beta_ij*auxij,-1) *bb1;
-        term2 = aa1*hypergeo(1,ff,mm,r2br)*hypergeo(1,ff,mm,bmj)*R_pow(fij,-1)* bb1;
-        term3 = aa1*hypergeo(1,ff,mm,bmi)      *hypergeo(1,ff,mm,-rho2/brj)*R_pow(fji,-1)* bb1;
-
-        if(fabs(term1)<1e-30||fabs(term2)<1e-30||fabs(term3)<1e-30||!R_finite(term1)||!R_finite(term2)||!R_finite(term3))   {break;}
-
-        sum1 = sum1+ term1;
-        sum2 = sum2+ term2+term3;
-        l1++;
-      }
-          if((fabs(sum1-res00)<1e-30)&&(fabs(sum2-res11)<1e-30)  ) {break;}
-          else {res00=sum1;res11=sum2;}
-          k++;
-      }
-    prr= - sum1 + sum2  + sum ;
-    if(prr<1e-320) prr=1e-320;
-
-    return(prr);
-}
-
-double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a){
-
-    double rho2= R_pow(corr,2);
-    double beta_i= a/mean_i;
-    double beta_j= a/mean_j;
-    double pr0=0.0,  term1=0.0,aa=0.0,bb=0.0,l1a=0.0;
-    double  sum1 = 0.0;
-
-    double auxi= 1/(beta_i+1);
-    double auxj= 1/(beta_j+1);
-    double auxij=auxi*auxj;double brho=beta_i-rho2;
-
-    int n, l=0, l1=0 ,cc=0,ii=0,q=0,nq=0;
-    int iter1=700;  int iter2=500;
-    n= r-t;
-    double an=a+n;
-    double rb=-rho2/(1+brho);
-    double ib=-1/beta_j;
-    double aux1= R_pow(beta_i,a)*R_pow(auxi,n+a)*exp(lgammafn(n+a)-lgammafn(n+1)-lgammafn(a));
-
-    while(l<iter1){
-        l1=0;
-        q=l+1;
-        nq=n+q;
-        while(l1<iter2){
-            ii=l+l1;
-            cc=ii+a;
-            l1a=l1+a;
-            aa= R_pow(beta_i,l1a)*R_pow(beta_j,l1a-1)*R_pow(rho2,ii)*pow1p(-rho2, an)*R_pow(auxij,cc)*pow1p(brho,-n);
-            bb= lgammafn(n+cc)+lgammafn(cc+1)-lgammafn(nq)-lgammafn(q+1)-lgammafn(l1+1)-lgammafn(a)-lgammafn(l1a);
-            term1 = aa*hypergeo(n,1-l1a,nq,rb)*hypergeo(1,1-l1a,q+1,ib)* exp(bb);
-            if(fabs(term1)<1e-30)   {break;}
-            sum1 =sum1+ term1;
-            l1++;
-        }
-        //if((fabs(sum1-res00)<1e-15) ) {break;}else {res00=sum1;}
-        l++;
+        if (fabs(sum - res0) < 1e-30) break;
+        res0 = sum;
     }
-     pr0= aux1-sum1 ;
-if(pr0<1e-320) pr0=1e-320;
-    return(pr0);
+
+    double p00 = -1.0 + pow(auxi * beta_i, a) + pow(auxj * beta_j, a) + sum;
+    if (p00 < 1e-320) p00 = 1e-320;
+
+    return p00;
 }
 
 
-double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a){
+double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    const double rho2 = corr * corr;
+    const double beta_i = a / mean_i;
+    const double beta_j = a / mean_j;
+    const double beta_ij = beta_i * beta_j;
+    const double bmi = -1.0 / beta_i;
+    const double bmj = -1.0 / beta_j;
 
-    double rho2= R_pow(corr,2);
-    double beta_i= a/mean_i;
-    double beta_j= a/mean_j;
-    double prt=0.0,  term1=0.0,term2=0.0,aa=0.0,bb=0.0,aa1=0.0,bb1=0.0;
-    double res11=0.0, sum1 = 0.0,  sum2 = 0.0, jj=0.0,mm=0.0,jj1=0.0;
-    double auxi= 1/(beta_i+1);
-    double auxj= 1/(beta_j+1);
-    double auxij=auxi*auxj;
-    double brho=beta_i-rho2;
-    double rtrho=-rho2/(1+brho);
-    double mbj=-1/beta_j;
-    int n=0,s=0, k=0, l=0, l1=0, u=0,us=0,cc=0 ,ii=0,u1=0,tl=0,tna=0,ll1=0,f=0,d=0;
-    int iter1=700;  int iter2=500; int iter3=400;
-    n= r-t;
-    s=n+1;
-    tna=t+n+a;
-    while(l<iter1){
-        tl=t+l;
-        u=t+l;
-        u1=u+1;
-        us=u+s;
-        f=l+1;
-                l1=0;
-        while(l1<iter2){
-            jj=l1+a;
-            mm=u+jj;
-            jj1=1-jj;
-            ll1=l+l1;
-            d=l1+1;
-                k=0;
-            while(k<iter3){
-                cc=u+k;
-                ii=cc+n;
-                aa= R_pow(beta_i,jj)*R_pow(beta_j,jj-1)*R_pow(rho2,k+ll1)*pow1p(-rho2, tna)*R_pow(auxij,cc+jj)*pow1p(brho,-n);
-                bb= lgammafn(tl)+lgammafn(ii+jj)+lgammafn(cc+jj+1)-lgammafn(ii+1)-lgammafn(cc+2)-lgammafn(d)-lgammafn(f)-lgammafn(t)-lgammafn(a)-lgammafn(jj);
-                term1 = aa*hypergeo(n,jj1,ii+1,rtrho)*hypergeo(1,jj1,cc+2,mbj)*exp(bb);
-                if(fabs(term1)<1e-30||!R_finite(term1))   {break;}
-                sum1 =sum1+ term1;
-                k++; 
+    const double auxi = 1.0 / (1.0 + beta_i);
+    const double auxj = 1.0 / (1.0 + beta_j);
+    const double auxij = auxi * auxj;
+
+    const double bri = 1.0 + beta_i - rho2;
+    const double brj = 1.0 + beta_j - rho2;
+    const double fji = brj * beta_i * auxij;
+    const double fij = bri * beta_j * auxij;
+
+    const double ra = r + a;
+    const double log_rho2 = log(rho2);
+    const double log_beta_ij = log(beta_ij);
+    const double log_auxij = log(auxij);
+    const double log1mrho2 = log1p(-rho2);
+    const double r2br = -rho2 / bri;
+
+    const int iter1 = 600, iter2 = 500, iter3 = 400;
+
+    double sum = 0.0, sum1 = 0.0, sum2 = 0.0;
+    double res00 = 0.0, res11 = 0.0;
+
+    for (int k = 0; k < iter1; ++k) {
+        int mm = r + k + 1;
+
+        for (int l1 = 0; l1 < iter2; ++l1) {
+            double ff = 1.0 - l1 - a;
+
+            for (int l = 0; l < iter3; ++l) {
+                int mml1 = mm + l + 1;
+                int kll1 = k + l + l1;
+                double log_aa = (l1 + a - 1) * log_beta_ij + kll1 * log_rho2 + (ra + kll1) * log_auxij + (ra + 1) * log1mrho2;
+                double bb = lgammafn(r + l) + 2 * lgammafn(mm + l + l1 + a) - 2 * lgammafn(mml1) -
+                            lgammafn(l + 1) - lgammafn(l1 + 1) - lgammafn(r) - lgammafn(a) - lgammafn(l1 + a);
+
+                double hg1 = hypergeo(1, 1 - l1 - a, mml1, bmi);
+                double hg2 = hypergeo(1, ff, mml1, bmj);
+                if (!R_finite(hg1) || !R_finite(hg2)) break;
+
+                double term = exp(log_aa + bb) * hg1 * hg2;
+                if (fabs(term) < 1e-30 || !R_finite(term)) break;
+
+                sum += term;
             }
-            aa1= R_pow(beta_i,jj)*R_pow(beta_j,-jj1)*R_pow(rho2,ll1)*pow1p(-rho2,tna)*R_pow(auxij,mm-1)* pow1p(brho,-s);
-            bb1= lgammafn(tl)+lgammafn(n+mm)+lgammafn(mm)-lgammafn(us)-lgammafn(u1)-lgammafn(d)-lgammafn(f)-lgammafn(t)-lgammafn(a)-lgammafn(jj);
-            term2 = aa1*hypergeo(s,jj1,us,rtrho)*hypergeo(1,jj1,u1,mbj)*exp(bb1);
-            if(fabs(term2)<1e-30)   {break;}
-            sum2 =sum2+ term2;
-            l1++;
+
+            // Term1, Term2, Term3
+            int kl1 = k + l1;
+            double log_aa1 = (l1 + a) * log_beta_ij + kl1 * log_rho2 + (ra + kl1) * log_auxij + ra * log1mrho2;
+            double bb1 = exp(lgammafn(r + k) + 2 * lgammafn(ra + kl1) - 2 * lgammafn(mm) -
+                             lgammafn(k + 1) - lgammafn(l1 + 1) - lgammafn(r) - lgammafn(a) - lgammafn(l1 + a));
+
+            double h1 = hypergeo(1, ff, mm, bmi);
+            double h2 = hypergeo(1, ff, mm, bmj);
+            double h3 = hypergeo(1, ff, mm, r2br);
+            double h4 = hypergeo(1, ff, mm, -rho2 / brj);
+
+            if (!R_finite(h1) || !R_finite(h2) || !R_finite(h3) || !R_finite(h4)) break;
+
+            double aa1 = exp(log_aa1);
+            double term1 = aa1 * h1 * h2 * bb1 / (beta_ij * auxij);
+            double term2 = aa1 * h3 * h2 * bb1 / fij;
+            double term3 = aa1 * h1 * h4 * bb1 / fji;
+
+            if (fabs(term1) < 1e-30 || fabs(term2) < 1e-30 || fabs(term3) < 1e-30) break;
+
+            sum1 += term1;
+            sum2 += term2 + term3;
         }
-        if((fabs(sum2-res11)<1e-30) ) {break;}
-             else {res11=sum2;}
-        l++;
+
+        if (fabs(sum1 - res00) < 1e-30 && fabs(sum2 - res11) < 1e-30) break;
+
+        res00 = sum1;
+        res11 = sum2;
     }
 
-     prt= sum2 - sum1;
-     if(prt<1e-320) prt=1e-320;
-    return(prt);
+    double prr = -sum1 + sum2 + sum;
+    if (prr < 1e-320) prr = 1e-320;
+    return prr;
+}
+
+double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    const double rho2 = corr * corr;
+    const double beta_i = a / mean_i;
+    const double beta_j = a / mean_j;
+    const double auxi = 1.0 / (1.0 + beta_i);
+    const double auxj = 1.0 / (1.0 + beta_j);
+    const double auxij = auxi * auxj;
+    const double brho = beta_i - rho2;
+
+
+    const int n = r - t;
+    const double an = a + n;
+    const double rb = -rho2 / (1.0 + brho);
+    const double ib = -1.0 / beta_j;
+    const double beta_i_pow_a = R_pow(beta_i, a);
+    const double auxi_pow_na = R_pow(auxi, n + a);
+    const double aux1 = beta_i_pow_a * auxi_pow_na *
+                        exp(lgammafn(n + a) - lgammafn(n + 1) - lgammafn(a));
+
+    double sum1 = 0.0;
+    const int iter1 = 700;
+    const int iter2 = 500;
+
+    for (int l = 0; l < iter1; l++) {
+        const int q = l + 1;
+        const int nq = n + q;
+
+        for (int l1 = 0; l1 < iter2; l1++) {
+            const int ii = l + l1;
+            const double l1a = l1 + a;
+            const int cc = ii + (int)a;
+
+            const double beta_i_l1a = R_pow(beta_i, l1a);
+            const double beta_j_l1a_1 = R_pow(beta_j, l1a - 1.0);
+            const double rho2_pow_ii = R_pow(rho2, ii);
+            const double auxij_pow_cc = R_pow(auxij, cc);
+
+            const double aa = beta_i_l1a * beta_j_l1a_1 * rho2_pow_ii *
+                              pow1p(-rho2, an) * auxij_pow_cc * pow1p(brho, -n);
+
+            const double bb = lgammafn(n + cc) + lgammafn(cc + 1) -
+                              lgammafn(nq) - lgammafn(q + 1) -
+                              lgammafn(l1 + 1) - lgammafn(a) - lgammafn(l1a);
+
+            double hg1 = hypergeo(n, 1.0 - l1a, nq, rb);
+            double hg2 = hypergeo(1.0, 1.0 - l1a, q + 1, ib);
+
+            double term1 = aa * hg1 * hg2 * exp(bb);
+            if (fabs(term1) < 1e-30 || !R_finite(term1))
+                break;
+
+            sum1 += term1;
+        }
+    }
+
+    double pr0 = aux1 - sum1;
+    if (pr0 < 1e-320) pr0 = 1e-320;
+    return pr0;
+}
+
+double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    double rho2 = R_pow(corr, 2);
+    double beta_i = a / mean_i;
+    double beta_j = a / mean_j;
+    double brho = beta_i - rho2;
+
+    double auxi = 1 / (beta_i + 1);
+    double auxj = 1 / (beta_j + 1);
+    double auxij = auxi * auxj;
+    double rtrho = -rho2 / (1 + brho);
+    double mbj = -1 / beta_j;
+
+    double sum1 = 0.0, sum2 = 0.0;
+    double res11 = 0.0;
+    double prt = 0.0;
+
+    int n = r - t;
+    int s = n + 1;
+    int tna = t + n + a;
+
+    int iter1 = 700, iter2 = 500, iter3 = 400;
+
+    for (int l = 0; l < iter1; l++) {
+        int tl = t + l;
+        int u = t + l;
+        int u1 = u + 1;
+        int us = u + s;
+        int f = l + 1;
+
+        for (int l1 = 0; l1 < iter2; l1++) {
+            double jj = l1 + a;
+            double jj1 = 1 - jj;
+            int mm = u + jj;
+            int ll1 = l + l1;
+            int d = l1 + 1;
+
+            for (int k = 0; k < iter3; k++) {
+                int cc = u + k;
+                int ii = cc + n;
+
+                double aa = R_pow(beta_i, jj) * R_pow(beta_j, jj - 1) *
+                            R_pow(rho2, k + ll1) * pow1p(-rho2, tna) *
+                            R_pow(auxij, cc + jj) * pow1p(brho, -n);
+
+                double bb = lgammafn(tl) + lgammafn(ii + jj) + lgammafn(cc + jj + 1) -
+                            lgammafn(ii + 1) - lgammafn(cc + 2) - lgammafn(d) -
+                            lgammafn(f) - lgammafn(t) - lgammafn(a) - lgammafn(jj);
+
+                double term1 = aa * hypergeo(n, jj1, ii + 1, rtrho) *
+                               hypergeo(1, jj1, cc + 2, mbj) * exp(bb);
+
+                if (fabs(term1) < 1e-30 || !R_finite(term1)) break;
+                sum1 += term1;
+            }
+
+            double aa1 = R_pow(beta_i, jj) * R_pow(beta_j, -jj1) *
+                         R_pow(rho2, ll1) * pow1p(-rho2, tna) *
+                         R_pow(auxij, mm - 1) * pow1p(brho, -s);
+
+            double bb1 = lgammafn(tl) + lgammafn(n + mm) + lgammafn(mm) -
+                         lgammafn(us) - lgammafn(u1) - lgammafn(d) -
+                         lgammafn(f) - lgammafn(t) - lgammafn(a) - lgammafn(jj);
+
+            double term2 = aa1 * hypergeo(s, jj1, us, rtrho) *
+                           hypergeo(1, jj1, u1, mbj) * exp(bb1);
+
+            if (fabs(term2) < 1e-30 || !R_finite(term2)) break;
+            sum2 += term2;
+        }
+
+        if (fabs(sum2 - res11) < 1e-30) break;
+        res11 = sum2;
+    }
+
+    prt = sum2 - sum1;
+    if (prt < 1e-320) prt = 1e-320;
+    return prt;
 }
 
 

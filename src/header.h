@@ -503,7 +503,7 @@ double aux_biv_binomneg_simple(int NN, int u, double p01,double p10,double p11);
 double aux_euv_binomneg (int N, double p1,double p2,double p11);
 double aux_biv_binom(int n1,int n2, int u, int v,double p01,double p10,double p11);
 double corr_binomneg (int N, double p1,double p2,double p11);
-double psi(int i, int j, double p1, double p2, double p12);
+double psi(int i, int j, double p1, double p2, double p12,double**cache);
 double cov_binom_neg(int m,double p11,double p1, double p2);
 double biv_poisbin (int NN,  int u, int v, double p01,double p10,double p11);
 double biv_poisbinneg(int NN, int u, int v, double p01,double p10,double p11);

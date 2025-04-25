@@ -758,8 +758,7 @@ else  { coordx=estobj$coordx;
    radius=estobj$radius
    copula=estobj$copula
    anisopars=estobj$anisopars
-   if(ncol(estobj$X)==1) X=NULL
-   else X=estobj$X
+   X=estobj$X
 }
 ################# end extracting information###################################################
 if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
@@ -999,6 +998,7 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
     if(!initparam$bivariate){namesnuis = NuisParam(model, bivariate,ncol(initparam$X),copula)}
     else                    {namesnuis =initparam$namesnuis}
 
+if(is.null(X)) initparam$X=NULL
 #######################################
     # Return the objects list:
     CovMat <- list(bivariate =  initparam$bivariate,

@@ -124,6 +124,7 @@ return(simu)
     numxgrid=numygrid=NULL
     spacetime_dyn=FALSE
 
+param <- lapply(param, unname) ## carlo
 
 ### some check for parallel #######
  coremax=parallel::detectCores()

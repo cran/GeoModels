@@ -81,14 +81,11 @@ else  { coordx=estobj$coordx; coordy=estobj$coordy; coordz=estobj$coordz} # grid
    radius=estobj$radius
    copula=estobj$copula
    anisopars=estobj$anisopars
-   if(ncol(estobj$X)==1) X=NULL
-   else X=estobj$X
+   X=estobj$X
 }
 ##################################
 ###### end check geofit object####
 ##################################
-
-
 
 
 if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
@@ -244,6 +241,7 @@ Mtemp=NULL
 ##### computing covariance matrix  ##################
 #####################################################
 
+
     covmatrix = GeoCovmatrix(coordx=coordx, coordy=coordy,coordz=coordz, coordt=coordt, coordx_dyn=coordx_dyn,
          corrmodel=corrmodel, distance= distance,grid=grid,maxdist= maxdist,maxtime=maxtime,model=model,n=n,
           param=param, anisopars=anisopars, radius=radius,sparse=sparse,taper=taper,tapsep=tapsep,type=type,copula=copula,X=X)
@@ -272,7 +270,10 @@ Mtemp=NULL
           if(!is.null(Mtemp)) param$mean=0
           covmatrix$namesnuis=unique(c(meantemp,covmatrix$namesnuis))   
     }
-    else { X=covmatrix$X }
+    else { if(!is.null(X)) X=covmatrix$X 
+           else            X=matrix(1,nrow=dimat,ncol=1)
+          
+    }
 
     ###############
     num_betas=ncol(X); NS=0
@@ -755,6 +756,8 @@ if(covmatrix$model %in% c(21,24,26,22)&&type_krig=="Simple")
 }     ####simple kriging
       
 else  {   ## bivariate  case   cokriging
+
+
           dat = c(dataT) - as.numeric(c(rep(covmatrix$param['mean_1'],covmatrix$ns[1]),
                                         rep(covmatrix$param['mean_2'],covmatrix$ns[2])))
 
@@ -794,6 +797,10 @@ else  {   ## bivariate  case   cokriging
 cvv=c(vv)
 ##### setting almost zero when zero mse
 if(mse) {
+       if(anyNA(cvv)) 
+     {selna=is.na(cvv)
+     cvv[selna]=1e-30
+    }
     selp=(cvv<=0); 
     if(any(selp)) {cvv[selp]=1e-30}
     }
@@ -982,7 +989,12 @@ corri=ccorr$corri
 cvv=c(vv)
 ##### setting almost zero when zero mse
 if(mse) {
-    selp=(cvv<=0); if(any(selp)) {cvv[selp]=1e-30}
+   if(anyNA(cvv)) 
+     {selna=is.na(cvv)
+     cvv[selna]=1e-30
+    }
+    selp=(cvv<=0); 
+    if(any(selp)) {cvv[selp]=1e-30}
     }
 ####   formatting data  
 if(spacetime||bivariate) {

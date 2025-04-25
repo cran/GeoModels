@@ -15,22 +15,14 @@ GeoScatterplot <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, 
     spatial=TRUE
     spacetime=FALSE
     maxtime=ns=NULL
+    type_dist=CheckDistance(distance)
     ### Check the parameters given in input
     # Checks if its a spatial or spatial-temporal random field:
-    if(bivariate) {coordt=c(0,1);corrmodel="Bi_Matern_sep"}
+    if(bivariate) {coordt=c(0,1)}
     if(!is.null(coordt))
-      if(is.numeric(coordt)&&is.numeric(times)) if(length(coordt)>1&&length(times)>=1) {corrmodel <- 'gneiting'; spacetime=TRUE}
-    # Checks the input:
-    checkinput <- CkInput(coordx, coordy,coordz, coordt, coordx_dyn, corrmodel, data, distance, "Fitting", NULL, grid,
-                             'None', maxdist, maxtime, model,NULL, 'Nelder-Mead', NULL,
-                             radius,  NULL, NULL,NULL, 'GeoWLS', FALSE, FALSE,NULL,NULL)
+      if(is.numeric(coordt)&&is.numeric(times)) if(length(coordt)>1&&length(times)>=1) {spacetime=TRUE}
 
-
-    # Checks if there are errors in the input:
-  #if(is.null(maxdist))         stop('maxdist must be specified\n')
-  if(!is.null(checkinput$error))
-      stop(checkinput$error)
-  if(spatial||bivariate){
+   if(spatial||bivariate){
          if(!is.null(numbins) & !is.integer(numbins))
            if(numbins < 0)
               stop('insert a positive integer value for the number of bins\n')
@@ -43,11 +35,7 @@ GeoScatterplot <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, 
      }
 
          n=1
-    if(is.null(neighb)) {initparam <- StartParam(coordx, coordy, coordz,coordt,coordx_dyn, corrmodel, data,distance, "Fitting",
-                           NULL, grid, 'None', maxdist,neighb,
-                           maxtime, model, n, NULL, NULL, FALSE, radius, 
-                           NULL, NULL, NULL, 'GeoWLS', 'GeoWLS', FALSE,
-                           FALSE,NULL,NULL,FALSE)}
+
   
     ### END -- Specific checks of the Empirical Variogram    
     if(grid)     {
@@ -111,7 +99,7 @@ if(!bivariate&&!spacetime)
     v2 = rep(exp(-99),n_pairs)
 
     V  = .C("pairs",as.integer(numcoords),as.double(data),as.double(coords[,1]),as.double(coords[,2]),as.double(coords[,3]),as.double(numbins), 
-            as.double(bins),as.double(v0),as.double(v1),as.double(v2),as.double(maxdist),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
+            as.double(bins),as.double(v0),as.double(v1),as.double(v2),as.double(maxdist),as.integer(type_dist), as.double(radius),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
     
     v0 = as.numeric(unlist(V[7]));v0 = v0[v0 != -1]
     v1 = as.numeric(unlist(V[8]));v1 = v1[v1 != exp(-99)]
@@ -152,7 +140,7 @@ if(bivariate)
     v11 = rep(exp(-99),n_pairs1)
     v21 = rep(exp(-99),n_pairs1)
  V1  = .C("pairs",as.integer(numcoords1),as.double(data1),as.double(coords1[,1]),as.double(coords1[,2]),as.double(coords1[,3]),as.double(numbins), 
-            as.double(bins1),as.double(v01),as.double(v11),as.double(v21),as.double(maxdist[1]),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
+            as.double(bins1),as.double(v01),as.double(v11),as.double(v21),as.double(maxdist[1]),as.integer(type_dist), as.double(radius),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
  ################################################################
     numcoords2 = nrow(coords2)
     bins2 = seq(0,maxdist[2],maxdist[2]/numbins)
@@ -161,7 +149,7 @@ if(bivariate)
     v12 = rep(exp(-99),n_pairs2)
     v22 = rep(exp(-99),n_pairs2)
  V2  = .C("pairs",as.integer(numcoords2),as.double(data2),as.double(coords2[,1]),as.double(coords2[,2]),as.double(coords2[,3]),as.double(numbins), 
-            as.double(bins2),as.double(v02),as.double(v12),as.double(v22),as.double(maxdist[2]),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
+            as.double(bins2),as.double(v02),as.double(v12),as.double(v22),as.double(maxdist[2]),as.integer(type_dist), as.double(radius),PACKAGE='GeoModels', DUP = TRUE,NAOK = TRUE) 
    
     v01 = as.numeric(unlist(V1[7]));v01 = v01[v01 != -1]
     v11 = as.numeric(unlist(V1[8]));v11 = v11[v11 != exp(-99)]

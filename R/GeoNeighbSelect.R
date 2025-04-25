@@ -39,17 +39,9 @@ if(!inherits(vario,"GeoVariogram"))  stop("A GeoVariogram object is needed as in
 else stop("A GeoVariogram object is needed as input for vario\n")
 ######################################################################
 
-
-######################################################
-
-
-
-####################
 coremax=parallel::detectCores()
 if(is.na(coremax)||coremax==1) parallel=FALSE
 ####################
-
-
 K=length(neighb); res=double(K)
 
 P=NULL
@@ -67,15 +59,12 @@ M=1
 ##################################### spatial not parallel ############################
 if(!parallel)
 {
-
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:K)
 
 for(M in 1:K) {
-
     pb(sprintf("k=%g", M)) 
-
   aa=GeoFit(data=data, coordx=coordx, coordy=coordy, coordz=coordz,coordt=coordt,coordx_dyn=coordx_dyn,copula=copula,corrmodel=corrmodel, distance=distance,
                          fixed=fixed,anisopars=anisopars,est.aniso=est.aniso, grid=grid, likelihood=likelihood, 
                          lower=lower,neighb=neighb[M],
@@ -83,13 +72,6 @@ for(M in 1:K) {
                           optimizer=optimizer, 
                          radius=radius, start=start,  
                          type=type, upper=upper,  weighted=weighted,X=X,nosym=nosym,spobj=spobj,spdata=spdata)
- #res=GeoResiduals(aa) 
- #vario = GeoVariogram(data=res$data, coordx=coords,coordy=coordy, coordz=coordz,coordt=coordt,coordx_dyn=coordx_dyn,cloud=FALSE,distance=distance,
-    # grid=grid,maxdist
-       #maxdist=0.3) # empirical variogram 
- #semiv=GeoCovariogram(res, show.vario=TRUE, vario=vario,pch=20)
-
-
 
  clest=  aa$param
  estimates=rbind(estimates,unlist(clest))
@@ -130,8 +112,6 @@ k=1
 results <- foreach(M = 1:K, .combine = rbind,
                    .options.future = list(seed = TRUE)) %dofuture% {
  
-  
-  # Ejecutar la función GeoFit
   aa <- GeoFit(data = data, coordx = coordx, coordy = coordy, coordz=coordz,coordt = coordt, coordx_dyn = coordx_dyn,
                copula = copula, corrmodel = corrmodel, distance = distance, fixed = fixed, anisopars = anisopars,
                est.aniso = est.aniso, grid = grid, likelihood = likelihood, lower = lower, neighb = neighb[M],
@@ -139,20 +119,11 @@ results <- foreach(M = 1:K, .combine = rbind,
                radius = radius, start = start, type = type, upper = upper, weighted = weighted,
                X = X, nosym = nosym, spobj = spobj, spdata = spdata)
 
-  # Almacenar resultados
-  #clest <- aa$param
   estimates <- unlist(aa$param)
 
   cc <- GeoCovariogram(fitted = aa, distance = distance, show.vario = TRUE, vario = semiv, pch = 20, invisible = TRUE)
   res=ifelse(aa$convergence == "Successful",cc,Inf)
-  
-  # Calcular el resultado de acuerdo a la convergencia
-  #if (aa$convergence == "Successful") {
-#
- #   res <- cc
-  #} else {
-   # res <- Inf
-  #}
+
     pb(sprintf("k=%g", M))  # Actualizar el progreso
   # Retornar los resultados como una fila
   c(estimates, res = res)
@@ -231,7 +202,6 @@ if(parallel)
       for (M in 1:K) {
         progressr::with_progress({
           pb(sprintf("k=%g", iteration_count))
-
           # Llamada a la función GeoFit con los parámetros específicos
           aa <- GeoFit(data = data, coordx = coordx, coordy = coordy, coordz=coordz,coordt = coordt, coordx_dyn = coordx_dyn,
                        copula = copula, corrmodel = corrmodel, distance = distance, fixed = fixed, anisopars = anisopars,

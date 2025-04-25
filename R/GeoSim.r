@@ -86,6 +86,9 @@ else {if(grid) stop("grid can not be coupled with coordz \n ")}
 
 
 spacetime_dyn=FALSE
+
+
+param <- lapply(param, unname) ## carlo
 ##############################################################################
 ###### extracting sp object informations if necessary              ###########
 ##############################################################################

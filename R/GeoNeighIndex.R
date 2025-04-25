@@ -3,205 +3,196 @@ GeoNeighIndex<-function(coordx,coordy=NULL,coordz=NULL,coordt=NULL,coordx_dyn=NU
                               distance="Eucl",neighb=4,maxdist=NULL,maxtime=1,radius=6371,bivariate=FALSE)
 {
 
-#########################################
-indices <- function(X,Y)
- {
-             res = NULL;res_d = NULL
-             for(i in 2:ncol(X))
-             {
-                sol = cbind(X[,1],X[,i])
-                res = rbind(res,sol)
-                sol_d = cbind(Y[,1],Y[,i])
-                res_d = rbind(res_d,sol_d)
-             }
-         
-            return(list(xy = res,d = res_d[,2]))
- }
-##########################################
-nn2Geo <- function(x,y, K = 1,distance=0,maxdist=NULL,radius=6371)  
-  {
-            if(is.null(maxdist)) 
-               {
-               #nearest = RANN::nn2(x,y,k = K,treetype = c("kd"))} ### case neighboord
-               nearest = nabor::knn(x,y,k = K)} ### case neighboord
-            else     {
-
-
-
-  if(distance==2||distance==1){
-                                   prj=mapproj::mapproject(x[,1], x[,2], projection="sinusoidal") 
-                                   x1=y1=radius*cbind(prj$x,prj$y)
-                                   K=round(nrow(x)/2 )
-                                   nearest = nabor::knn(x1,y1,radius = maxdist,k=K)
-                               }     
-else{
-
-                     K=min(K-1,nrow(x)) # case of  maxdist 
-                       nearest = nabor::knn(x,y,radius = maxdist,k=K  )}
-                     }
-            #########  cases geod (2) or chordal (1) distances :  to improve this  code!!
-     
-            if(distance==2||distance==1){
-                  nn=nrow(x); 
-                  nnd=ncol(nearest$nn.dists)
-                  mm=matrix(0,nrow=nn,ncol=nnd)
-                  for(i in 1:nn){   ## can we improve that?
-                  si=nearest$nn.idx[i,];sel1=si[si>0]
-                  a=fields::rdist.earth.vec(x1=matrix(x[i,],ncol=2),
-                                            x2=matrix(x[sel1,],ncol=2), miles = FALSE, R = 1)
-                  mm[i,][1:length(a)]=a
-                
-                 }
-
-              mm[,1]=0 # just to be sure
-             if(distance==2)  mm=radius*mm              # geodesic
-             if(distance==1)  mm=2*radius*sin(0.5*mm)   # chordal  
-             nearest$nn.dists=mm
-             }
-            ########################################### 
-            sol = indices(nearest$nn.idx,nearest$nn.dists)
-            if(is.null(maxdist)) {lags <- sol$d;rowidx <- sol$xy[,1];colidx <- sol$xy[,2]}
-            if(!is.null(maxdist)){
-                                    sel = sol$xy[,2]>0
-                                    lags=sol$d[sel];rowidx <- sol$xy[,1][sel];colidx <- sol$xy[,2][sel]
-                                 }
-         return(list (lags=lags, rowidx = rowidx, colidx = colidx))
-   }
-##############################################################
-spacetime_index=function(coords,coordx_dyn=NULL,N,K=4,coordt=NULL
-                         ,numtime,maxtime=1,maxdist=NULL,distance="Eucl",radius=6371)
-{
-  ##############
-  m_s=list();m_t=m_st=NULL;
-  ##############         
-  ## building marginal spatial indexes
-  if(is.null(coordx_dyn)) 
-  {
-    inf=nn2Geo(coords,coords,K+1,distance,maxdist,radius)
-    aa=cbind(inf$rowidx,inf$colidx)   ## spatial index (fixed coordinates) 
-    for(i in 1:numtime) {
-      # i = 1
-      # repito las coordenadas numtime veces en elementos de una lista
-      m_s[[i]]=data.frame(cbind(aa+N*(i-1),0,inf$lags))
-      }
-  }
- else  ## spatial index (dynamic coordinates)
-  {   
-           if(ncol(coords)==2)  ns=lengths(coordx_dyn)/2 
-           if(ncol(coords)==3)  ns=lengths(coordx_dyn)/3
-  for(i in 1:numtime){
-    inf=nn2Geo(coordx_dyn[[i]],coordx_dyn[[i]],K+1,distance,maxdist,radius)
-    aa=cbind(inf$rowidx,inf$colidx)
-    m_s[[i]]=cbind( aa+ns[i]*(i-1),0,inf$lags)    
-  }
-  }
-  ## building  temporal  and spatiotemporal indexes
-  
-
-    ## second way
-      a=sort(unique(c(nabor::knn(coordt,coordt,k=round(maxtime)+1)$nn.dists)))
-   nn=a[a>0]
-  tnn=length(nn)   
-  # sol <- NULL
-  m_t <- list()
-  m_st <- list()
-  contador <- 1
-  
-  for(j in 1:tnn){
-    for(k in 1:(numtime-tnn)){
-      # j = 1;k = 1
-      bb=nrow(m_s[[k]])
-      m_t[[contador]] =data.frame(cbind( m_s[[k]][,1], m_s[[k+j]][,1], rep(nn[j],bb),rep(0,bb)) )
-      m_st[[contador]]=data.frame(cbind( m_s[[k]][,1], m_s[[k+j]][,2], rep(nn[j],bb), m_s[[k]][,4]) )
-      contador  <- contador +1
-    }
-  }
-  ######
-  # SS = data.table::rbindlist(m_s)
-  # TT = data.table::rbindlist(m_t)
-  # ST = data.table::rbindlist(m_st)
-  # ##final space-time indexes and distances
-  # final=data.table::rbindlist(list(SS,TT,ST))
-
-
-
-  SS <- do.call(rbind, m_s)
-  TT <- do.call(rbind, m_t)
-  ST <- do.call(rbind, m_st)
-
-  # Final space-time indexes and distances
-  final <- do.call(rbind, list(SS, TT, ST))
-  
-  return(as.matrix(final))
+indices <- function(X, Y) {
+  # Versione vettorizzata senza loop
+  n <- ncol(X) - 1
+  xy <- cbind(rep(X[, 1], times = n),as.vector(X[, -1]))
+  d <- as.vector(Y[, -1])
+  list(xy = xy, d = d)
 }
 ##############################################################
-bivariate_index=function(coords,coordx_dyn,N,K,maxdist,distance,radius)
-  {
- 
- if(length(K)==3) {K1=K[1];K2=K[2];K3=K[3]}
- else   K1=K2=K3=K
-
- 
- if(length(maxdist)==3) {maxdist1=maxdist[1];maxdist2=maxdist[2];maxdist3=maxdist[3]}
-else  maxdist1=maxdist2=maxdist3=maxdist
-
-
-
-
-if(is.null(coordx_dyn)) 
-   {  
-         cm=coords[1:(N/2),]
-         inf1=nn2Geo(cm,cm,K1+1,distance,maxdist1,radius)
-         inf2=nn2Geo(cm,cm,K3+1,distance,maxdist3,radius)
-         inf3=nn2Geo(cm,cm,K2+1,distance,maxdist2,radius)
-         inf4=inf3
-          aa1=cbind(inf1$rowidx,  inf1$colidx,0,0,inf1$lags)
-          aa2=cbind(inf2$rowidx+N/2,inf2$colidx+N/2,1,1,inf2$lags)
-          aa3=cbind(inf3$rowidx  ,inf3$colidx+N/2,0,1,inf3$lags)
-          aa4=cbind(inf4$rowidx+N/2  ,inf4$colidx,1,0,inf4$lags)
-
-          #aa5=cbind(rep(1:(N/2),K1),rep(1:(N/2),K1)+N,0,1,0)
-          # aa6=cbind(rep(1:(N/2),K1)+N,rep(1:(N/2),K1),1,0,0)
-           a5 =nabor::knn(cm,k = K2)
-           aa5=cbind(a5$nn.idx[,1],a5$nn.idx[,1]+N/2,0,1,0)
-           aa6=cbind(a5$nn.idx[,1]+N/2,a5$nn.idx[,1],1,0,0)
-     
-          SS= cbind(rbind(aa1,aa2,aa3,aa4,aa5,aa6))  
-
-          
-      # inf=nn2Geo(A0, A0,K2+1,distance,maxdist2,radius)
-      # sel=!inf$lags
-      # inf$lags[sel];inf$rowidx[sel];inf$colidx[sel]
-      # aa5=cbind(inf$rowidx ,inf$colidx,    1,0,inf$lags)[1:(2*N),]
-     #  print(A0)
-     #  print(aa5)
-        
-
-         # aa1=cbind(inf1$rowidx     ,inf1$colidx,    0,0,inf1$lags)
-         # aa2=cbind(inf2$rowidx+N/2 ,inf2$colidx+N/2,1,1,inf2$lags)
-         # aa3=cbind(inf3$rowidx     ,inf3$colidx+N/2,0,1,inf3$lags)
-         # aa4=cbind(inf4$rowidx+N/2,inf4$colidx,    1,0,inf4$lags)
-         # SS= as.matrix(rbind(aa1,aa2,aa3,aa4))     
-        
-   }
-else #### coordx_dyn case
-  {       
-     if(ncol(coords)==2)  ns=lengths(coordx_dyn)/2
-     if(ncol(coords)==3)  ns=lengths(coordx_dyn)/3
-    inf1=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[1]],  K1+1,distance,maxdist1,radius)
-    inf2=nn2Geo(coordx_dyn[[2]],  coordx_dyn[[2]],  K3+1,distance,maxdist3,radius)
-    inf3=nn2Geo(coordx_dyn[[1]],  coordx_dyn[[2]],  K2+1,distance,maxdist2,radius)
-    inf4=nn2Geo(coordx_dyn[[2]],  coordx_dyn[[1]],  K2+1,distance,maxdist2,radius)
-          aa1=cbind(inf1$rowidx,      inf1$colidx,0,0,inf1$lags)
-          aa2=cbind(inf2$rowidx+ns[1],inf2$colidx+ns[1],1,1,inf2$lags)
-          aa3=cbind(inf3$rowidx  ,    inf3$colidx+ns[1],0,1,inf3$lags)
-          aa4=cbind(inf4$rowidx+ns[1],inf4$colidx,1,0,inf4$lags)
-          SS= as.matrix(rbind(aa1,aa2,aa3,aa4))   
+nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius = 6371) {
+  # Controlli input base
+  if (!is.matrix(x) || !is.matrix(y)) stop("x e y devono essere matrici")
+  n_x <- nrow(x)
+  n_y <- nrow(y)
+  
+  # Imposta K massimo per evitare errori
+  K <- min(K, n_x, n_y)
+  
+  # Funzione helper per proiezione sinusoidale
+  project_coords <- function(coords) {
+    prj <- mapproj::mapproject(coords[,1], coords[,2], projection = "sinusoidal")
+    radius * cbind(prj$x, prj$y)
   }
-##final bivariate  indexes and distances
-return(SS)
+  # Calcolo nearest neighbors con o senza maxdist
+  if (is.null(maxdist)) {
+    nearest <- nabor::knn(x, y, k = K)
+  } else {
+    if (distance %in% c(1, 2)) {
+      x_proj <- project_coords(x)
+      y_proj <- project_coords(y)
+      nearest <- nabor::knn(x_proj, y_proj, k = K, radius = maxdist)
+    } else {
+      nearest <- nabor::knn(x, y, k = K, radius = maxdist)
+    }
   }
+  # Calcolo distanze geografiche se richiesto
+  if (distance %in% c(1, 2)) {
+    # Funzione vettoriale per calcolare distanze geografiche
+    calc_dist_row <- function(i) {
+      idx <- nearest$nn.idx[i, ]
+      valid_idx <- idx > 0
+      if (!any(valid_idx)) return(numeric(0))
+      fields::rdist.earth.vec(
+        x1 = matrix(x[i, ], nrow = 1),
+        x2 = x[idx[valid_idx], , drop = FALSE],
+        miles = FALSE, R = 1
+      )
+    }
+    # Applico la funzione a tutte le righe (vettorizzazione parziale)
+    dists_list <- lapply(seq_len(n_x), calc_dist_row)
+    # Preallocazione matrice distanze con NA
+    dists_mat <- matrix(NA_real_, nrow = n_x, ncol = K)
+    for (i in seq_len(n_x)) {
+      valid_len <- length(dists_list[[i]])
+      if (valid_len > 0) dists_mat[i, seq_len(valid_len)] <- dists_list[[i]]
+    }
+    # Imposta distanza a zero per primo vicino (se è se stesso)
+    dists_mat[, 1] <- 0
+    # Calcola distanza finale in metri o approssimata
+    if (distance == 2) {
+      nearest$nn.dists <- radius * dists_mat
+    } else {
+      nearest$nn.dists <- 2 * radius * sin(0.5 * dists_mat)
+    }
+  }
+  # Estrai indici e distanze tramite funzione indices (presupposta definita)
+  sol <- indices(nearest$nn.idx, nearest$nn.dists)
+  # Filtra in base a maxdist se specificato
+  if (!is.null(maxdist)) {
+    sel <- sol$xy[, 2] > 0
+    return(list(lags = sol$d[sel], rowidx = sol$xy[sel, 1], colidx = sol$xy[sel, 2]))
+  } else {
+    return(list(lags = sol$d, rowidx = sol$xy[, 1], colidx = sol$xy[, 2]))
+  }
+}
+
+
 ##############################################################
+spacetime_index <- function(coords, coordx_dyn = NULL, N, K = 4, coordt = NULL,
+                            numtime, maxtime = 1, maxdist = NULL, 
+                            distance = "Eucl", radius = 6371) {
+  
+  m_s <- vector("list", numtime)
+  
+  # -------------------------------
+  # 1. Marginal Spatial Indexes
+  # -------------------------------
+  if (is.null(coordx_dyn)) {
+    inf <- nn2Geo(coords, coords, K + 1, distance, maxdist, radius)
+    aa <- cbind(inf$rowidx, inf$colidx)
+    lag <- inf$lags
+    offset_seq <- N * (0:(numtime - 1))
+    for (i in seq_len(numtime)) {
+      temp <- cbind(aa + offset_seq[i], 0L, lag)
+      m_s[[i]] <- temp
+    }
+  } else {
+    ns <- vapply(coordx_dyn, nrow, FUN.VALUE = integer(1))
+    for (i in seq_len(numtime)) {
+      inf <- nn2Geo(coordx_dyn[[i]], coordx_dyn[[i]], K + 1, distance, maxdist, radius)
+      aa <- cbind(inf$rowidx, inf$colidx)
+      lag <- inf$lags
+      temp <- cbind(aa + ns[i] * (i - 1L), 0L, lag)
+      m_s[[i]] <- temp
+    }
+  }
+  # -------------------------------
+  # 2. Temporal & Spatio-Temporal
+  # -------------------------------
+  time_dists <- sort(unique(nabor::knn(coordt, coordt, k = round(maxtime) + 1)$nn.dists))
+  nn <- time_dists[time_dists > 0]
+  tnn <- length(nn)
+  
+  m_t <- vector("list", tnn * (numtime - tnn))
+  m_st <- vector("list", tnn * (numtime - tnn))
+  
+  counter <- 1L
+  for (j in seq_len(tnn)) {
+    for (k in seq_len(numtime - j)) {
+      bb <- nrow(m_s[[k]])
+      m_t[[counter]] <- cbind(m_s[[k]][, 1], m_s[[k + j]][, 1], rep_len(nn[j], bb), rep_len(0L, bb))
+      m_st[[counter]] <- cbind(m_s[[k]][, 1], m_s[[k + j]][, 2], rep_len(nn[j], bb), m_s[[k]][, 4])
+      counter <- counter + 1L
+    }
+  }
+
+  # -------------------------------
+  # 3. Final Result
+  # -------------------------------
+  final <- do.call(rbind, c(m_s, m_t, m_st))
+  return(final)
+}
+
+
+
+bivariate_index <- function(coords, coordx_dyn = NULL, N, K = 4, maxdist, distance, radius) {
+  # Gestione parametri K e maxdist
+  if (length(K) == 3) {
+    K1 <- K[1]; K2 <- K[2]; K3 <- K[3]
+  } else {
+    K1 <- K2 <- K3 <- K
+  }
+  
+  if (length(maxdist) == 3) {
+    maxdist1 <- maxdist[1]; maxdist2 <- maxdist[2]; maxdist3 <- maxdist[3]
+  } else {
+    maxdist1 <- maxdist2 <- maxdist3 <- maxdist
+  }
+  
+  if (is.null(coordx_dyn)) {
+    # Caso statico
+    n_half <- as.integer(N / 2)
+    cm <- coords[1:n_half, ]
+    # Calcolo una volta sola i risultati che vengono riutilizzati
+    inf1 <- nn2Geo(cm, cm, K1 + 1, distance, maxdist1, radius)
+    inf2 <- nn2Geo(cm, cm, K3 + 1, distance, maxdist3, radius)
+    inf3 <- nn2Geo(cm, cm, K2 + 1, distance, maxdist2, radius)
+    # Preallocazione e costruzione matrici
+    aa1 <- cbind(inf1$rowidx, inf1$colidx, 0L, 0L, inf1$lags)
+    aa2 <- cbind(inf2$rowidx + n_half, inf2$colidx + n_half, 1L, 1L, inf2$lags)
+    aa3 <- cbind(inf3$rowidx, inf3$colidx + n_half, 0L, 1L, inf3$lags)
+    aa4 <- cbind(inf3$rowidx + n_half, inf3$colidx, 1L, 0L, inf3$lags)
+    
+    # Ottimizzazione: calcolo knn una sola volta
+    a5 <- nabor::knn(cm, k = K2)
+    aa5 <- cbind(a5$nn.idx[, 1], a5$nn.idx[, 1] + n_half, 0L, 1L, 0)
+    aa6 <- cbind(a5$nn.idx[, 1] + n_half, a5$nn.idx[, 1], 1L, 0L, 0)
+  } else {
+    # Caso dinamico
+    ns <- vapply(coordx_dyn, nrow, integer(1))
+    # Calcolo una volta sola i risultati che vengono riutilizzati
+    inf1 <- nn2Geo(coordx_dyn[[1]], coordx_dyn[[1]], K1 + 1, distance, maxdist1, radius)
+    inf2 <- nn2Geo(coordx_dyn[[2]], coordx_dyn[[2]], K3 + 1, distance, maxdist3, radius)
+    inf3 <- nn2Geo(coordx_dyn[[1]], coordx_dyn[[2]], K2 + 1, distance, maxdist2, radius)
+    # Preallocazione e costruzione matrici
+    aa1 <- cbind(inf1$rowidx, inf1$colidx, 0L, 0L, inf1$lags)
+    aa2 <- cbind(inf2$rowidx + ns[1], inf2$colidx + ns[1], 1L, 1L, inf2$lags)
+    aa3 <- cbind(inf3$rowidx, inf3$colidx + ns[1], 0L, 1L, inf3$lags)
+    aa4 <- cbind(inf3$rowidx + ns[1], inf3$colidx, 1L, 0L, inf3$lags)
+    # Ottimizzazione: calcolo knn una sola volta
+    a5 <- nabor::knn(coordx_dyn[[1]], coordx_dyn[[2]], k = K2 + 1)
+    aa5 <- cbind(a5$nn.idx[, 1], a5$nn.idx[, 1] + ns[1], 0L, 1L, 0)
+    aa6 <- cbind(a5$nn.idx[, 1] + ns[1], a5$nn.idx[, 1], 1L, 0L, 0)
+  }
+  
+  # Combinazione finale
+  rbind(aa1, aa2, aa3, aa4, aa5, aa6)
+}
+
+
+
 ######################################
 ######### start ######################
 ######################################
@@ -244,11 +235,9 @@ K=neighb
                         else {coords=1;numcoord=1}
                       }
            }  
-     
 #}             
 ##########################
 ########################## 
-
 if(spatial)   #  spatial case
 {
 ##########################################
@@ -261,7 +250,6 @@ if(spatial)   #  spatial case
              gb$maxdist=maxdist
              gb$neighb=neighb
 } #### end spatial case 
-
 ##############################################   
 if(spacetime)   #  space time  case
 { 
@@ -278,7 +266,6 @@ if(bivariate)  { #space bivariate  case
    gb=list(); gb$colidx=sol[,2];
              gb$rowidx=sol[,1] ;
              gb$lags=sol[,5]
-             #gb$lagt=NULL
              gb$first=sol[,3]
              gb$second=sol[,4]
              gb$maxdist=maxdist

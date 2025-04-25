@@ -292,7 +292,11 @@ if(!is.null(anisopars)) {
     if(initparam$spacetime) numtime=length(coordt)
     if(initparam$bivariate) numtime=2
     dimat <- initparam$numcoord#*numtime#
-    if(is.null(dim(initparam$X)))  initparam$X=as.matrix(rep(1,dimat))
+    
+       # if(is.null(dim(initparam$X)))  {
+       #       if(initparam$bivariate) initparam$X=as.matrix(rep(1,2*dimat))
+       #       else  initparam$X=as.matrix(rep(1,dimat))
+       #      }
     # Delete the global variables:
 
     #if(is.null(neighb)) .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
@@ -396,7 +400,7 @@ if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma",
                          varimat = fitted$varimat,
                          type = type,
                          weighted=initparam$weighted,
-                         X = initparam$X)
+                         X = X)
     structure(c(GeoFit, call = call), class = c("GeoFit"))
   }
 

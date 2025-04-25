@@ -226,7 +226,7 @@ fitted$fixed=unlist(fitted$fixed)
     numlags_m <- length(lags_m)
     numlagt_m <- length(lagt_m)
 if(!bivariate) {
-    if(ncol(fitted$X)==1)  X=as.matrix(rep(1,numlags_m*numlagt_m))
+    if(is.null(fitted$X))  X=as.matrix(rep(1,numlags_m*numlagt_m))
     mu=X%*%as.numeric(mm)}
   else{}  
    ###############

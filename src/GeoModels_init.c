@@ -55,7 +55,7 @@ extern void spectral_density_1d(double *norm_u, int *N, double *av, double *para
 /*****/
 
 extern void pairs(int *ncoords,double *data,double *coordx,double *coordy,double *coordz,double *numbins,
-                       double *bins,double *v0,double *v1,double *v2,double *maxdist);
+                       double *bins,double *v0,double *v1,double *v2,double *maxdist,int *typ, double *radius);
 
 
 /********************** for variogrms computations  ****************************************************/
@@ -416,12 +416,7 @@ extern void Comp_Pair_WeibullCop2mem(int *cormod, double *data1,double *data2,in
 extern void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU,int *type_cop,int *cond);
-extern void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond);
-extern void Comp_Pair_Kumaraswamy2Cop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond);
+
 extern void Comp_Pair_PoisCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *local,int *GPU,int *type_cop,int *cond);
@@ -972,7 +967,7 @@ static const R_CMethodDef CEntries[] = {
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
     {"DeleteGlobalVar2",            (DL_FUNC) &DeleteGlobalVar2,             0},
     {"Maxima_Minima_dist",          (DL_FUNC) &Maxima_Minima_dist,           7},
-    {"pairs",                       (DL_FUNC) &pairs,                       11},
+    {"pairs",                       (DL_FUNC) &pairs,                       13},
     {"SetGlobalVar2",               (DL_FUNC) &SetGlobalVar2,               12},
     {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,                 31},
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
@@ -1085,8 +1080,8 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_TCop2mem",         (DL_FUNC) &Comp_Pair_TCop2mem,         14},
     {"Comp_Pair_BetaCop2mem",         (DL_FUNC) &Comp_Pair_BetaCop2mem,         14},
     {"Comp_Pair_Beta2Cop2mem",         (DL_FUNC) &Comp_Pair_Beta2Cop2mem,         14},
-    {"Comp_Pair_KumaraswamyCop2mem",         (DL_FUNC) &Comp_Pair_KumaraswamyCop2mem,         14},
-    {"Comp_Pair_Kumaraswamy2Cop2mem",         (DL_FUNC) &Comp_Pair_Kumaraswamy2Cop2mem,         14},//90
+
+
     /*********************** for conditional composite likelihood ***************************************************/
     {"Comp_Cond_Gauss2mem",         (DL_FUNC) &Comp_Cond_Gauss2mem,         15},
     {"Comp_Cond_Tukeyh2mem",         (DL_FUNC) &Comp_Cond_Tukeyh2mem,         15},

@@ -143,6 +143,10 @@ neigh$coordx[[1]]
 neigh$coordt[[1]]
 neigh$data[[1]]
 
+plot(coords)
+points(loc_to_pred,pch=20)
+points(neigh$coordx[[1]],col="red",pch=20)
+
 ###################################################
 #### Example: bivariate  spatial neighborhood #####  
 ###################################################
@@ -159,7 +163,7 @@ data_all = GeoSim(coordx=coords,corrmodel="Bi_matern_sep",
 loc_to_pred=matrix(runif(4),2,2)
 
 neigh=GeoNeighborhood(data_all, coordx=coords,bivariate=TRUE,
-                  loc=loc_to_pred,maxdist=0.25)
+                  loc=loc_to_pred,neighb=5)
 
 plot(coords)
 points(loc_to_pred,pch=20)

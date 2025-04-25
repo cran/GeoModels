@@ -53,6 +53,8 @@ dime = nsites*ntime
 MM=0
 param=matrix$param
 
+if(is.null(matrix$X))  matrix$X=matrix(1,ncol=1,nrow=dime)
+
 
 namesnuis=matrix$namesnuis
 nuisance <- param[namesnuis]
