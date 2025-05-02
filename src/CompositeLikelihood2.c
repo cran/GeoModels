@@ -21,37 +21,48 @@ void Comp_Pair_Gauss2mem(int *cormod, double *data1, double *data2, int *N1, int
         *res = LOW; 
         return;
     }
-    
+
     // Variabili precalcolate
     const int weighted = *weigthed;
-    const int n_pairs = npairs[ 0];
+    const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
-    const double scale = 1.0 - nugget;
+    const double nn = 1.0 - nugget;
     
     double total = 0.0;
-    
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+    // Loop principale separato per i due casi (con e senza pesi)
+    if(weighted) {
+        // Caso con pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Pesi se necessario
-            double weights = 1.0;
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double weights = CorFunBohman(lag, max_dist);
+                
+                // Calcolo della verosimiglianza
+                total += log_biv_Norm(nn * corr, d1, d2, mean1[i], mean2[i], sill, 0) * weights;
             }
+        }
+    } else {
+        // Caso senza pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Calcolo della verosimiglianza
-            total += log_biv_Norm(scale * corr, d1, d2, mean1[i], mean2[i], sill, 0) * weights;
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // Calcolo della verosimiglianza
+                total += log_biv_Norm(nn * corr, d1, d2, mean1[i], mean2[i], sill, 0);
+            }
         }
     }
-    
-    // Assegnazione finale
+
+    // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
 
@@ -96,183 +107,209 @@ void Comp_Pair_WrapGauss2mem(int *cormod, double *data1, double *data2, int *N1,
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
-    const double scale = 1.0 - nugget;
+    const double nn = 1.0 - nugget;  // Rinomina da "scale" a "nn"
     const double alfa = 2.0;
     double total = 0.0;
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            const double wrap_gauss = biv_wrapped(alfa, d1, d2, mean1[i], mean2[i], 
-                                               nugget, sill, scale * corr);
-            double weights = 1.0;
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+    // Loop principale separato per i due casi (con e senza pesi)
+    if(weighted) {
+        // Caso con pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+            
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double wrap_gauss = biv_wrapped(alfa, d1, d2, mean1[i], mean2[i], 
+                                                   nugget, sill, nn * corr);  // Utilizzo di nn
+                const double weights = CorFunBohman(lag, max_dist);
+                total += log(wrap_gauss) * weights;
             }
-            total += log(wrap_gauss) * weights;
+        }
+    } else {
+        // Caso senza pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+            
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double wrap_gauss = biv_wrapped(alfa, d1, d2, mean1[i], mean2[i], 
+                                                   nugget, sill, nn * corr);  // Utilizzo di nn
+                total += log(wrap_gauss);
+            }
         }
     }
 
     // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /******************************************************************************************/
 void Comp_Pair_SinhGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    // Controllo rapido dei parametri
     const double nuis0 = nuis[0];
     const double nuis1 = nuis[1];
     const double nuis2 = nuis[2];
     const double nuis3 = nuis[3];
-    
-    if(nuis3 < 0 || nuis1 < 0 || nuis0 < 0 || nuis0 >= 1) {
+
+    if (nuis3 < 0 || nuis1 < 0 || nuis0 < 0 || nuis0 >= 1) {
         *res = LOW;
         return;
     }
 
-    // Variabili precalcolate
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
     const double scale = 1.0 - nuis0;
     double total = 0.0;
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            double weights = 1.0;
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double sinh_val = biv_sinh(scale * corr, d1, d2, mean1[i], mean2[i], nuis2, nuis3, nuis1);
+                const double weights = CorFunBohman(lag, max_dist);
+                total += weights * log(sinh_val);
             }
-            const double sinh_val = biv_sinh(scale * corr, d1, d2, mean1[i], mean2[i], 
-                                          nuis2, nuis3, nuis1);
-            total += weights * log(sinh_val);
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double sinh_val = biv_sinh(scale * corr, d1, d2, mean1[i], mean2[i], nuis2, nuis3, nuis1);
+                total += log(sinh_val);
+            }
         }
     }
 
-    // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /******************************************************************************************/
 void Comp_Pair_SkewGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    // Controllo rapido dei parametri
     const double sill = nuis[1];
     const double nugget = nuis[0];
-    if(nugget < 0 || nugget >= 1 || sill < 0) {
+    if (nugget < 0 || nugget >= 1 || sill < 0) {
         *res = LOW;
         return;
     }
 
-    // Variabili precalcolate
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
-    const double skew_param = nuis[2];  // Parametro di skewness
-    
+    const double skew_param = nuis[2];
     double total = 0.0;
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            
-            // Applicazione pesi se necessario
-            double weights = 1.0;
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double skew_val = biv_skew(corr, d1, d2, mean1[i], mean2[i], sill, skew_param, nugget);
+                const double weights = CorFunBohman(lag, max_dist);
+                total += weights * log(skew_val);
             }
-            
-            // Calcolo biv_skew e accumulo risultato
-            const double skew_val = biv_skew(corr, d1, d2, mean1[i], mean2[i], 
-                                          sill, skew_param, nugget);
-            total += weights * log(skew_val);
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double skew_val = biv_skew(corr, d1, d2, mean1[i], mean2[i], sill, skew_param, nugget);
+                total += log(skew_val);
+            }
         }
     }
 
-    // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /*********************************************************/
 void Comp_Pair_Gamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                        double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                        double *nuis, int *local, int *GPU, int *type_cop, int *cond)
-{
-    // Controllo precoce dei parametri
-    const double nugget = nuis[0];
-    const double shape_param = nuis[2]; // Parametro shape della gamma
-    
-    if(nugget < 0 || nugget >= 1 || shape_param < 0) {
-        *res = LOW;
-        return;
-    }
-
-    // Variabili precalcolate
-    const int weighted = *weigthed;
-    const int n_pairs = npairs[0];
-    const double max_dist = maxdist[0];
-    const double scale = 1.0 - nugget; // (1-nugget) precalcolato
-    
-    double total = 0.0;
-                double weights = 1.0;
-
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            
-            // Calcolo della bivariata gamma
-            const double gamma_val = biv_gamma(scale * corr, d1, d2, 
-                                             mean1[i], mean2[i], shape_param);
-            
-            // Applicazione pesi se necessario
-
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
-            }
-            
-            // Accumulo risultato
-            total += weights * log(gamma_val);
-        }
-    }
-
-    // Assegnazione finale con controllo
-    *res = R_FINITE(total) ? total : LOW;
-}
-/*********************************************************/
-void Comp_Pair_Weibull2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                           double *par, int *weigthed, double *res, double *mean1, double *mean2,
                           double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
+    const double nugget = nuis[0];
+    const double shape_param = nuis[2];
+    
+    if (nugget < 0 || nugget >= 1 || shape_param < 0) {
+        *res = LOW;
+        return;
+    }
+
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double max_dist = maxdist[0];
+    const double scale = 1.0 - nugget;
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double gamma_val = biv_gamma(scale * corr, d1, d2, mean1[i], mean2[i], shape_param);
+                weights = CorFunBohman(lag, max_dist);
+                total += weights * log(gamma_val);
+            }
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double gamma_val = biv_gamma(scale * corr, d1, d2, mean1[i], mean2[i], shape_param);
+                total += log(gamma_val);
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+/*********************************************************/
+void Comp_Pair_Weibull2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+{
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
-    const double shape_param = nuis[2]; // Parametro shape della Weibull
+    const double shape_param = nuis[2];
     
-    if(nugget < 0 || nugget >= 1 || shape_param < 0) {
+    if (nugget < 0 || nugget >= 1 || shape_param < 0) {
         *res = LOW;
         return;
     }
@@ -282,36 +319,39 @@ void Comp_Pair_Weibull2mem(int *cormod, double *data1, double *data2, int *N1, i
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
     const double scale = 1.0 - nugget;
-    
     double total = 0.0;
     double weights = 1.0;  // Valore di default
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Reset del peso a default
-            weights = 1.0;
-            
-            // Calcolo peso se necessario
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                weights = CorFunBohman(lag, max_dist); // Calcolo peso
+
+                const double wbl = biv_Weibull(scale * corr, d1, d2, mean1[i], mean2[i], shape_param);
+                total += weights * log(wbl);
             }
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Calcolo della Weibull bivariata e accumulo risultato
-            const double wbl = biv_Weibull(scale * corr, d1, d2, 
-                                         mean1[i], mean2[i], shape_param);
-            total += weights * log(wbl);
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double wbl = biv_Weibull(scale * corr, d1, d2, mean1[i], mean2[i], shape_param);
+                total += log(wbl);
+            }
         }
     }
 
-    // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
 
@@ -390,14 +430,14 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 }
 /*********************************************************/
 void Comp_Pair_LogGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                          double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                          double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                             double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double sill = nuis[1];
     const double nugget = nuis[0];
     
-    if(sill < 0 || nugget < 0 || nugget > 1) {
+    if (sill < 0 || nugget < 0 || nugget > 1) {
         *res = LOW;
         return;
     }
@@ -407,38 +447,42 @@ void Comp_Pair_LogGauss2mem(int *cormod, double *data1, double *data2, int *N1, 
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
     const double scale = 1.0 - nugget;
-    
-    double total = 0.0;  // Variabile accumulatore
+    double total = 0.0;
     double weights = 1.0; // Valore di default per i pesi
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Reset del peso a default
-            weights = 1.0;
-            
-            // Calcolo peso se necessario
-            if(weighted) {
-                weights = CorFunBohman(lag, max_dist);
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                weights = CorFunBohman(lag, max_dist); // Calcolo peso
+
+                const double lognorm_val = d2lognorm(d1, d2, sill, nugget, mean1[i], mean2[i], scale * corr);
+                total += weights * log(lognorm_val);
             }
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Calcolo della log-normale bivariata e accumulo risultato
-            const double lognorm_val = d2lognorm(d1, d2, sill, nugget, 
-                                               mean1[i], mean2[i], scale * corr);
-            total += weights * log(lognorm_val);
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+
+                const double lognorm_val = d2lognorm(d1, d2, sill, nugget, mean1[i], mean2[i], scale * corr);
+                total += log(lognorm_val);
+            }
         }
     }
 
-    // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /*********************************************************/
 void Comp_Pair_PoisbinnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
@@ -529,8 +573,8 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 /*********************************************************/
 void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                  double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -545,37 +589,63 @@ void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int 
     const double max_dist = maxdist[0];
     const int N = N1[0];  // Parametro N della Binomiale Negativa
     const double scale = 1.0 - nugget;
-    
     double total = 0.0;  // Variabile accumulatore
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        if(!ISNAN(data1[i]) && !ISNAN(data2[i])) {
-            // Calcolo correlazione e probabilità
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            const double ai = mean1[i];
-            const double aj = mean2[i];
-            
-            // Calcolo probabilità congiunta e marginali
-            const double p11 = pbnorm22(ai, aj, scale * corr);
-            const double p1 = pnorm(ai, 0, 1, 1, 0);
-            const double p2 = pnorm(aj, 0, 1, 1, 0);
-            
-            // Conversione a interi e calcolo pesi
-            const int uu = (int)data1[i];
-            const int vv = (int)data2[i];
-            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
-            
-            // Calcolo verosimiglianza e accumulo
-            const double binomneg_val = biv_binomneg(N, uu, vv, p1, p2, p11);
-            total += weights * log(binomneg_val);
+    if (weighted) {
+        // Con pesi
+        for (int i = 0; i < n_pairs; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                // Calcolo correlazione e probabilità
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double ai = mean1[i];
+                const double aj = mean2[i];
+
+                // Calcolo probabilità congiunta e marginali
+                const double p11 = pbnorm22(ai, aj, scale * corr);
+                const double p1 = pnorm(ai, 0, 1, 1, 0);
+                const double p2 = pnorm(aj, 0, 1, 1, 0);
+
+                // Conversione a interi e calcolo pesi
+                const int uu = (int)data1[i];
+                const int vv = (int)data2[i];
+                const double weights = CorFunBohman(lag, max_dist);  // Calcolo peso
+
+                // Calcolo verosimiglianza e accumulo
+                const double binomneg_val = biv_binomneg(N, uu, vv, p1, p2, p11);
+                total += weights * log(binomneg_val);
+            }
+        }
+    } else {
+        // Senza pesi
+        for (int i = 0; i < n_pairs; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                // Calcolo correlazione e probabilità
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double ai = mean1[i];
+                const double aj = mean2[i];
+
+                // Calcolo probabilità congiunta e marginali
+                const double p11 = pbnorm22(ai, aj, scale * corr);
+                const double p1 = pnorm(ai, 0, 1, 1, 0);
+                const double p2 = pnorm(aj, 0, 1, 1, 0);
+
+                // Conversione a interi e calcolo verosimiglianza
+                const int uu = (int)data1[i];
+                const int vv = (int)data2[i];
+                const double binomneg_val = biv_binomneg(N, uu, vv, p1, p2, p11);
+
+                // Accumulo risultato
+                total += log(binomneg_val);
+            }
         }
     }
 
     // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /******************************************************/
 void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -691,8 +761,8 @@ void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2, 
 }
 /******************************************************************************************/
 void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                             double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -707,40 +777,69 @@ void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
     const double max_dist = maxdist[0];
     const int N = N1[0];  // Parametro N della Binomiale
     const double scale = 1.0 - nugget;
-    
     double total = 0.0;  // Variabile accumulatore
 
-    // Loop principale ottimizzato
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Calcolo correlazione e probabilità
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            const double ai = mean1[i];
-            const double aj = mean2[i];
-            
-            // Calcolo probabilità congiunta e marginali
-            const double p11 = pbnorm22(ai, aj, scale * corr);
-            const double p1 = pnorm(ai, 0, 1, 1, 0);
-            const double p2 = pnorm(aj, 0, 1, 1, 0);
-            
-            // Conversione a interi e calcolo pesi
-            const int uu = (int)d1;
-            const int vv = (int)d2;
-            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
-            
-            // Calcolo verosimiglianza e accumulo
-            const double binom_val = biv_binom(N, uu, vv, p1, p2, p11);
-            total += weights * log(binom_val);
+    if (weighted) {
+        // Con pesi
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                // Calcolo correlazione e probabilità
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double ai = mean1[i];
+                const double aj = mean2[i];
+
+                // Calcolo probabilità congiunta e marginali
+                const double p11 = pbnorm22(ai, aj, scale * corr);
+                const double p1 = pnorm(ai, 0, 1, 1, 0);
+                const double p2 = pnorm(aj, 0, 1, 1, 0);
+
+                // Conversione a interi e calcolo pesi
+                const int uu = (int)d1;
+                const int vv = (int)d2;
+                const double weights = CorFunBohman(lag, max_dist);  // Calcolo peso
+
+                // Calcolo verosimiglianza e accumulo
+                const double binom_val = biv_binom(N, uu, vv, p1, p2, p11);
+                total += weights * log(binom_val);
+            }
+        }
+    } else {
+        // Senza pesi
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                // Calcolo correlazione e probabilità
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double ai = mean1[i];
+                const double aj = mean2[i];
+
+                // Calcolo probabilità congiunta e marginali
+                const double p11 = pbnorm22(ai, aj, scale * corr);
+                const double p1 = pnorm(ai, 0, 1, 1, 0);
+                const double p2 = pnorm(aj, 0, 1, 1, 0);
+
+                // Conversione a interi e calcolo verosimiglianza
+                const int uu = (int)d1;
+                const int vv = (int)d2;
+                const double binom_val = biv_binom(N, uu, vv, p1, p2, p11);
+
+                // Accumulo risultato
+                total += log(binom_val);
+            }
         }
     }
 
     // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /******************************************************************************************/
 void Comp_Pair_BinomLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -828,7 +927,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                  M[0][1]= fmin_int(n1,n2)*(p11-p1*p2) ;       // covariance
                  M[1][0]= M[0][1];
                  dat[0]=u-n1*p1;dat[1]=v-n2*p2; 
-                 //Rprintf("%d %f %f %f \n",fmin_int(n1,n2),p1,p2,p11 );
                    //#####
                  bl=dNnorm(N,M,dat);
                  *res+= log(bl)*weights;       
@@ -960,35 +1058,63 @@ void Comp_Pair_Pois2mem(int *cormod, double *data1, double *data2, int *N1, int 
     double total = 0.0;  // Accumulator variable
 
     // Optimized main loop
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Compute correlation
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+    if (weighted) {
+        // Con pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Compute means (exp transformed)
-            const double mui = exp(mean1[i]);
-            const double muj = exp(mean2[i]);
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                // Compute correlation
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // Compute means (exp transformed)
+                const double mui = exp(mean1[i]);
+                const double muj = exp(mean2[i]);
+                
+                // Convert to integers
+                const int uu = (int)d1;
+                const int ww = (int)d2;
+                
+                // Compute the weight
+                const double weights = CorFunBohman(lag, max_dist);
+                
+                // Compute bivariate Poisson and accumulate result
+                const double poisson_val = biv_Poisson(scale * corr, uu, ww, mui, muj);
+                total += log(poisson_val) * weights;
+            }
+        }
+    } else {
+        // Senza pesi
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Convert to integers
-            const int uu = (int)d1;
-            const int ww = (int)d2;
-            
-            // Compute weights if needed
-            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
-            
-            // Compute bivariate Poisson and accumulate result
-            const double poisson_val = biv_Poisson(scale * corr, uu, ww, mui, muj);
-            total += log(poisson_val) * weights;
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                // Compute correlation
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // Compute means (exp transformed)
+                const double mui = exp(mean1[i]);
+                const double muj = exp(mean2[i]);
+                
+                // Convert to integers
+                const int uu = (int)d1;
+                const int ww = (int)d2;
+                
+                // Compute bivariate Poisson and accumulate result
+                const double poisson_val = biv_Poisson(scale * corr, uu, ww, mui, muj);
+                total += log(poisson_val);  // No weight applied here
+            }
         }
     }
 
     // Final assignment with check
     *res = R_FINITE(total) ? total : LOW;
 }
+
 /*********************************************************/
 void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
@@ -1011,36 +1137,65 @@ void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1,
     double total = 0.0;  // Accumulator variable
 
     // Optimized main loop
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Compute correlation
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+    if (weighted) {
+        // With weights
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Compute means (exp transformed)
-            const double mui = exp(mean1[i]);
-            const double muj = exp(mean2[i]);
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                // Compute correlation
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // Compute means (exp transformed)
+                const double mui = exp(mean1[i]);
+                const double muj = exp(mean2[i]);
+                
+                // Convert to integers
+                const int uu = (int)d1;
+                const int ww = (int)d2;
+                
+                // Compute the weight
+                const double weights = CorFunBohman(lag, max_dist);
+                
+                // Compute Poisson-Gamma and accumulate result
+                const double poisgamma_val = biv_PoissonGamma(
+                    scale * corr, uu, ww, mui, muj, gamma_param);
+                total += log(poisgamma_val) * weights;
+            }
+        }
+    } else {
+        // Without weights
+        for(int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
             
-            // Convert to integers
-            const int uu = (int)d1;
-            const int ww = (int)d2;
-            
-            // Compute weights if needed
-            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
-            
-            // Compute Poisson-Gamma and accumulate result
-            const double poisgamma_val = biv_PoissonGamma(
-                scale * corr, uu, ww, mui, muj, gamma_param);
-            total += log(poisgamma_val) * weights;
+            if(!ISNAN(d1) && !ISNAN(d2)) {
+                // Compute correlation
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // Compute means (exp transformed)
+                const double mui = exp(mean1[i]);
+                const double muj = exp(mean2[i]);
+                
+                // Convert to integers
+                const int uu = (int)d1;
+                const int ww = (int)d2;
+                
+                // Compute Poisson-Gamma and accumulate result
+                const double poisgamma_val = biv_PoissonGamma(
+                    scale * corr, uu, ww, mui, muj, gamma_param);
+                total += log(poisgamma_val);  // No weight applied here
+            }
         }
     }
 
     // Final assignment with check
     *res = R_FINITE(total) ? total : LOW;
 }
+
 
 void Comp_Pair_PoisGammaZIP2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -1158,7 +1313,7 @@ void Comp_Pair_PoisZIP2mem(int *cormod, double *data1,double *data2,int *N1,int 
 
 
       if(nugget1<0||nugget1>=1||nugget2<0||nugget2>=1){*res=LOW; return;}
-  // Rprintf("%d   \n",npairs[0]);
+
       for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     mui=exp(mean1[i]);muj=exp(mean2[i]);
@@ -2190,7 +2345,6 @@ void Comp_Pair_PoisZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,i
                      muj=exp(mean2[i]);
                           uu=(int) u;  ww=(int) w;
                       bl=biv_PoissonZIP(corr,uu,ww,mui, muj,mup,nugget1,nugget2);
-                //   Rprintf("%d %d--%f %f %f  %f \n",uu,ww,lags[i],lagt[i],corr,bl);
                // if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxtime[0]);
                        *res+= log(bl)*weights;
 
@@ -2251,7 +2405,6 @@ void Comp_Pair_Gauss_misp_PoisZIP_st2mem(int *cormod, double *data1,double *data
                      muj=exp(mean2[i]);
 
                bl=biv_Mis_PoissonZIP(corr,data1[i],data2[i],mui, muj,mup,nugget1,nugget2);
-                //   Rprintf("%d %d--%f %f %f  %f \n",uu,ww,lags[i],lagt[i],corr,bl);
                // if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxtime[0]);
                        *res+= log(bl)*weights;
 
@@ -2859,7 +3012,6 @@ void Comp_Pair_Weibull_st2mem(int *cormod, double *data1,double *data2,int *N1,i
     double corr,zi,zj,weights=1.0,bl=0.0;
   double nugget=nuis[0];
      if(nugget<0||nugget>=1||nuis[2]<0) {*res=LOW;  return;}
-    //Rprintf("%d\n",npairs[0]);
        for(i=0;i<npairs[0];i++){
              if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                                 zi=data1[i];
@@ -3090,49 +3242,112 @@ void Comp_Pair_SkewGauss_biv2mem(int *cormod, double *data1,double *data2,int *N
 /******************************************************************************************/
 
 // Composite marginal (pariwise) log-likelihood for the spatial Gaussian model:
-void Comp_Pair_GaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+void Comp_Pair_GaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-     int model=1; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,sill,nugget,corr,bl;
-    sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                      *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    // === 1. Initialization and Validation ===
+    const double sill = nuis[1];
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const int weigthed_val = *weigthed;
+    const double maxdist_val = maxdist[0];
+    const int model = 1;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    // Validation of input parameters
+    if (sill < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+
+    // === 2. Main Computation ===
+    if (weigthed_val) {
+        // Loop with weights calculation
+        for (int i = 0; i < npairs_val; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag_i = lags[i];
+                const double corr = CorFct(cormod, lag_i, 0, par, 0, 0); // Pre-calculate correlation once
+                const double weights = CorFunBohman(lag_i, maxdist_val);  // Calculate weights
+
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          d1, d2, mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;  // Update total
+            }
+        }
+    } else {
+        // Loop without weights calculation
+        for (int i = 0; i < npairs_val; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0); // Pre-calculate correlation once
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          d1, d2, mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;  // Update total
+            }
+        }
+    }
+
+    // === 3. Finalization ===
+    *res = R_FINITE(total) ? total : LOW;
 }
+
 
 // Composite marginal (pariwise) log-likelihood for the spatial Gaussian model:
-void Comp_Pair_TCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
-
+void Comp_Pair_TCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                        double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                        double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-     int model=12;
-    /*############*/
-    int i=0;
-    double  weights=1.0,sill,nugget,corr,bl;
-    sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                      *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    int model = 12;
+    const double sill = nuis[1];
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const int weigthed_val = *weigthed;
+    const double maxdist_val = maxdist[0];
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (sill < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double weights = CorFunBohman(lag, maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val, data1[i], data2[i],
+                                          mean1[i], mean2[i], nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val, data1[i], data2[i],
+                                          mean1[i], mean2[i], nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
 }
+
 
 
 
@@ -3159,217 +3374,428 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 
-void Comp_Pair_Beta2Cop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
+void Comp_Pair_Beta2Cop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    int model=50; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,sill,nugget,corr,bl;
-    sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    int model = 50;
+    const double sill = nuis[1];
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const int weigthed_val = *weigthed;
+    const double maxdist_val = maxdist[0];
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
 
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    if (sill < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double weights = CorFunBohman(lag, maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
 }
-
-void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
+void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                  double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-     int model=33; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,sill,nugget,corr,bl;
-    sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    int model = 33;
+    const double sill = nuis[1];
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const int weigthed_val = *weigthed;
+    const double maxdist_val = maxdist[0];
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
 
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                        *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
-}
+    if (sill < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
 
+    double total = 0.0;
 
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double weights = CorFunBohman(lag, maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
 
-
-
-void Comp_Pair_WeibullCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-{
-    int model=26; 
-    /*############*/
-   
-    double  weights=1.0,nugget,corr,bl; int i;
-    nugget=nuis[0];
-    //if(nugget<0||nugget>1){*res=LOW; return;}
-     if(nugget<0||nugget>=1||nuis[2]<0) {*res=LOW;  return;}
-//Rprintf("%d -----\n", npairs[0]);
-      for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       //if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
-}
-
-
-void Comp_Pair_GammaCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-{
-    int model=21; 
-    /*############*/
-  
-    double  weights=1.0,nugget,corr,bl;  int i;
-    nugget=nuis[0];
-    if(nugget<0||nugget>1){*res=LOW; return;}
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                      // if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
-}
-
-void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-{
-  int model=24; 
-    /*############*/
-    int i=0;
-    double corr,weights=1.0,bl;
-    double sill=nuis[1];double nugget=nuis[0];
-
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
-      for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                    corr=CorFct(cormod,lags[i],0,par,0,0);
-                    if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                    bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
-}
-
-     
-void Comp_Pair_PoisCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-
-{
-    int model=30; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,nugget,corr,bl;
-    nugget=nuis[0];
-    if(nugget<0||nugget>1){*res=LOW; return;}
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    *res = R_FINITE(total) ? total : LOW;
 }
 
 
 
-void Comp_Pair_BinomNNGaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
 
+
+void Comp_Pair_WeibullCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    int model=11; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,nugget,corr,bl;
-    nugget=nuis[0];
-    if(nugget<0||nugget>1){*res=LOW; return;}
+    const int model = 26;
+    const double nugget = nuis[0];
+    const double shape = nuis[2];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
 
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    if (nugget < 0 || nugget >= 1 || shape < 0) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
+void Comp_Pair_GammaCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+{
+    const int model = 21;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+{
+    const int model = 24;
+    const double sill = nuis[1];
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (sill < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+     void Comp_Pair_PoisCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                           double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                           double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+{
+    const int model = 30;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
+void Comp_Pair_BinomNNGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                   double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+{
+    const int model = 11;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
 }
 
 
 
-void Comp_Pair_BinomnegGaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-
+void Comp_Pair_BinomnegGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                    double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                    double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    int model=16; 
-    /*############*/
-    int i=0;
-    double  weights=1.0,nugget,corr,bl;
-    nugget=nuis[0];
-    if(nugget<0||nugget>1){*res=LOW; return;}
+    const int model = 16;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
 
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                      corr=CorFct(cormod,lags[i],0,par,0,0);
-                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-           bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    if (nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
 }
 
-
-void Comp_Pair_LogisticCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop,int *cond)
-
+void Comp_Pair_LogisticCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-     int model=25; 
-    /*############*/
-    int i;
-    double bl,corr,weights=1.0,nugget;
-        nugget=nuis[0];
-    if(nugget>=1||nugget<0.0 ) {*res=LOW;  return;}
+    const int model = 25;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
 
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                    corr=CorFct(cormod,lags[i],0,par,0,0);
-                if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]) ;
-                       *res+= bl*weights;
-                }}
+    if (nugget >= 1 || nugget < 0.0) {
+        *res = LOW;
+        return;
+    }
 
-    if(!R_FINITE(*res))*res = LOW;
-    return;
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
 }
+

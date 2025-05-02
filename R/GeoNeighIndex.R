@@ -25,6 +25,7 @@ nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius = 6371) {
     prj <- mapproj::mapproject(coords[,1], coords[,2], projection = "sinusoidal")
     radius * cbind(prj$x, prj$y)
   }
+
   # Calcolo nearest neighbors con o senza maxdist
   if (is.null(maxdist)) {
     nearest <- nabor::knn(x, y, k = K)
@@ -108,6 +109,7 @@ spacetime_index <- function(coords, coordx_dyn = NULL, N, K = 4, coordt = NULL,
       m_s[[i]] <- temp
     }
   }
+
   # -------------------------------
   # 2. Temporal & Spatio-Temporal
   # -------------------------------
@@ -121,9 +123,22 @@ spacetime_index <- function(coords, coordx_dyn = NULL, N, K = 4, coordt = NULL,
   counter <- 1L
   for (j in seq_len(tnn)) {
     for (k in seq_len(numtime - j)) {
-      bb <- nrow(m_s[[k]])
-      m_t[[counter]] <- cbind(m_s[[k]][, 1], m_s[[k + j]][, 1], rep_len(nn[j], bb), rep_len(0L, bb))
-      m_st[[counter]] <- cbind(m_s[[k]][, 1], m_s[[k + j]][, 2], rep_len(nn[j], bb), m_s[[k]][, 4])
+      n1 <- nrow(m_s[[k]])
+      n2 <- nrow(m_s[[k + j]])
+      bb <- min(n1, n2)
+
+      m_t[[counter]] <- cbind(
+        m_s[[k]][1:bb, 1], 
+        m_s[[k + j]][1:bb, 1], 
+        rep_len(nn[j], bb), 
+        rep_len(0L, bb)
+      )
+      m_st[[counter]] <- cbind(
+        m_s[[k]][1:bb, 1], 
+        m_s[[k + j]][1:bb, 2], 
+        rep_len(nn[j], bb), 
+        m_s[[k]][1:bb, 4]
+      )
       counter <- counter + 1L
     }
   }
@@ -134,7 +149,6 @@ spacetime_index <- function(coords, coordx_dyn = NULL, N, K = 4, coordt = NULL,
   final <- do.call(rbind, c(m_s, m_t, m_st))
   return(final)
 }
-
 
 
 bivariate_index <- function(coords, coordx_dyn = NULL, N, K = 4, maxdist, distance, radius) {

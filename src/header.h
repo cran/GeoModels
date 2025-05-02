@@ -449,6 +449,10 @@ int fmin_int(int u,int v);
 
 double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c);
 
+double owens_t(double h, double a);
+double psn(double x,  double omega, double alpha, double tau);
+double dsn(double x, double omega, double alpha, double tau);
+double qsn(double p, double omega, double alpha, double tau, double tol);
 double one_log_wrapped(double alfa,double u,double mi,double sill);
 double one_log_T(double z,double m, double sill, double df);
 double one_log_tukeyh(double z,double m, double sill, double tail);
@@ -1303,8 +1307,11 @@ double hypergeometric_1F2(double a, double b, double c, double x, double tol);
 double hyp2f1_neg_c_equal_bc(double a, double b, double x);
 double hyp2f1ra(double a, double b, double c, double x,double *loss);
 double lgam(double x);
+
 double biv_unif_CopulaGauss(double dat1,double dat2,double rho);
 double biv_unif_CopulaClayton(double dat1,double dat2,double rho,double nu);
+double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho,double alpha);
+
 double lgam_sgn(double x, int *sign);
 double hyt2f1( double a, double b, double c, double x, double *loss );
 double hys2f1( double a,double b,double c,double x,double *loss );

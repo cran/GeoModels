@@ -155,57 +155,49 @@ double hypot3d(double x, double y, double z) {
     return max_val * sqrt(x * x + y * y + z * z);
 }
 
+double Dist_geodesic(double loni, double lati, double lonj, double latj, double radius) {
+    if (loni == lonj && lati == latj) return 0.0;
 
-// Computes the Geodesic distance between to coordinates:
-double Dist_geodesic(double loni, double lati, double lonj, double latj,double radius)
-{
-  double ai, bi, aj, bj, val=0.0,val2=0.0;
- if (loni == lonj && lati == latj) return val;
-  ai = (lati)*M_PI/180;
-  bi = (loni)*M_PI/180;
-  aj = (latj)*M_PI/180;
-  bj = (lonj)*M_PI/180;
-  val = sin(ai) * sin(aj) + cos(ai) * cos(aj) * cos(bi - bj);
-  if(val<= -1)  {val2=M_PI*radius;return(val2);}
-  if(val>=1)    {val2=0;return(val2);}
-  val2 = acos(val)*radius; 
-  //Rprintf("%f %f %f %f %f =%f \n",radius,loni,lati,lonj,latj,val2);
-  return(val2);
+    // Convert coordinates to radians once
+    double ai = lati * M_PI / 180.0;
+    double bi = loni * M_PI / 180.0;
+    double aj = latj * M_PI / 180.0;
+    double bj = lonj * M_PI / 180.0;
+
+    // Calculate the geodesic distance using the spherical law of cosines
+    double val = sin(ai) * sin(aj) + cos(ai) * cos(aj) * cos(bi - bj);
+    val = fmin(fmax(val, -1.0), 1.0);  // Ensure the value is within the domain of acos
+    return acos(val) * radius;
 }
 
-double Dist_chordal(double loni, double lati, double lonj, double latj,double radius)
- {
-   double val=0.0;/*,val1=0.0,ai, bi, aj, bj ;
-   if (loni == lonj && lati == latj) return val;
-   ai = (lati)*M_PI/180;
-   bi = (loni)*M_PI/180;
-   aj = (latj)*M_PI/180;
-   bj = (lonj)*M_PI/180;
- val1=radius  *sqrt(R_pow(cos(ai) * cos(bi)-cos(aj)  *cos(bj) ,2) +
-                    R_pow(cos(ai) * sin(bi)-cos(aj) * sin(bj) ,2)+
-                         R_pow(sin(ai)-sin(aj) ,2));
- */
-        val=radius*2*sin(Dist_geodesic(loni,lati,lonj,latj,1)/2);
- return(val);
- }
 
 
 
-double dist(int type_dist,double coordx,double locx,double coordy,double locy,double coordz,double locz,double radius)
-//double dist(int type_dist,double coordx,double locx,double coordy,double locy,double coordz,double locz,double radius)
-{
-double lags=0.0;
-//Rprintf("%f %f \n",coordz,locz);
-if(type_dist==0) 
-    {
-     lags=hypot(coordx-locx,coordy-locy);
-    if(fabs(coordz+locz)<EPS1){    lags=hypot3d(coordx-locx,coordy-locy,coordz-locz);}
-//Rprintf("%f %f \n",lags,sqrt( R_pow(coordx-locx,2)+R_pow(coordy-locy,2)+R_pow(coordz-locz,2)));
+double Dist_chordal(double loni, double lati, double lonj, double latj, double radius) {
+    // Compute the geodesic distance first and then use it to compute the chordal distance
+    double geodesic_dist = Dist_geodesic(loni, lati, lonj, latj, radius);
+    return radius * 2.0 * sin(geodesic_dist / (2.0 * radius));
 }
-if(type_dist==2) lags=Dist_geodesic(coordx,coordy,locx,locy,radius);           /*great circle*/
-if(type_dist==1) lags=Dist_chordal(coordx,coordy,locx,locy,radius);      /*chordal*/
 
-return(lags);
+
+
+double dist(int type_dist, double coordx, double locx, double coordy, double locy, double coordz, double locz, double radius) {
+    double lags = 0.0;
+    switch(type_dist) {
+        case 0: // Euclidean distance
+            lags = hypot(coordx - locx, coordy - locy);
+            if (fabs(coordz - locz) < EPS1) {
+                lags = hypot3d(coordx - locx, coordy - locy, coordz - locz);
+            }
+            break;
+        case 1: // Chordal distance
+            lags = Dist_chordal(coordx, coordy, locx, locy, radius);
+            break;
+        case 2: // Geodesic distance
+            lags = Dist_geodesic(coordx, coordy, locx, locy, radius);
+            break;
+    }
+    return lags;
 }
 
 

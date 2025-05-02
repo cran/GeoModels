@@ -3,17 +3,13 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
                               parallel = FALSE, ncores = NULL) {
 
   if (length(fit$coordt) == 1) fit$coordt <- NULL
-
   if (is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
-
   if (!(method %in% c("cholesky", "TB", "CE"))) stop("The method of simulation is not correct")
-
   if (is.null(optimizer)) {
     optimizer <- fit$optimizer
     lower <- fit$lower
     upper <- fit$upper
   }
-
   if (is.numeric(alpha) && !(alpha > 0 && alpha < 1)) stop("alpha must be numeric between 0 and 1")
 
   model <- fit$model
@@ -32,10 +28,8 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
   }
 
   dimat <- fit$numtime * fit$numcoord
-
   tempX <- fit$X
   if (!is.null(fit$X) && sum(fit$X[1:dimat] == 1) == dimat && ncol(fit$X) == 1) fit$X <- NULL
-
   coords <- cbind(fit$coordx, fit$coordy)
   if (fit$bivariate && is.null(fit$coordx_dyn)) coords <- coords[1:(length(fit$coordx) / 2), ]
   N <- nrow(coords)
@@ -77,8 +71,9 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
   }
 
   # Determine number of cores for parallelization
-  coremax <- parallel::detectCores(logical = FALSE)
-  if (is.na(coremax) || coremax <= 1) parallel <- FALSE
+
+coremax=parallel::detectCores()
+if(is.na(coremax)||coremax==1) parallel=FALSE
 
   # Bootstrap estimation function
   estimate_fun <- function(k) {
@@ -135,7 +130,8 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
     conv_idx <- xx[, "convergence"] == "Successful" & xx[, "logCompLik"] < 1.0e8
     res <- xx[conv_idx, colnames(xx) != "convergence" & colnames(xx) != "logCompLik", drop = FALSE]
 
-    future::plan(sequential)
+    #future::plan(sequential)
+    on.exit(future::plan(sequential), add = TRUE)
   }
 
   # Calcolo varianza e Godambe

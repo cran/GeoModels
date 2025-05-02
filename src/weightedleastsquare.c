@@ -2,32 +2,32 @@
 
 // get all pair between certain distance 
 
-void pairs(int *ncoords,double *data,double *coordx, double *coordy,double *coordz, double *numbins, double *bins, double *v0,double *v1, double *v2,double *maxdist,
-  int *typ, double *radius)
-{
-  int ncrd,numbin,h=0,k=0,i,j;
-  double max_dist;
-  
-  ncrd     = *ncoords; //printf("num coords =  %d \n",ncrd);
-  numbin   = *numbins; //printf("num bins =  %d \n",numbin);
-  max_dist = *maxdist; //printf("max distance =  %f \n",max_dist);
 
-  double distance=0.0;
-  for(h=0;h<=numbin;h++){
-      for(i=0; i<(ncrd-1);i++){
-        for(j=(i+1);j<ncrd;j++){
-          distance = dist(typ[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
-          if(distance <= max_dist){
-            if((bins[h] < distance) && (distance <= bins[(h+1)])){
-              v0[k] = bins[(h)];
-              v1[k] = data[i];
-              v2[k] = data[j];
-              k = k+1;
-         } }  
-      }
-  }}
+// Calculates the pairs of coordinates and stores the distances within the given bins:
+void pairs(int *ncoords, double *data, double *coordx, double *coordy, double *coordz, double *numbins, double *bins, double *v0, double *v1, double *v2, double *maxdist, int *typ, double *radius) {
+    int ncrd = *ncoords;
+    int numbin = *numbins;
+    double max_dist = *maxdist;
+    int k = 0;
 
-return;
+    // Loop through all coordinate pairs
+    for (int i = 0; i < (ncrd - 1); i++) {
+        for (int j = i + 1; j < ncrd; j++) {
+            double distance = dist(typ[0], coordx[i], coordx[j], coordy[i], coordy[j], coordz[i], coordz[j], *radius);
+
+            if (distance <= max_dist) {
+                // Check if the distance falls within the bins
+                for (int h = 0; h < numbin; h++) {
+                    if (bins[h] < distance && distance <= bins[h + 1]) {
+                        v0[k] = bins[h];
+                        v1[k] = data[i];
+                        v2[k] = data[j];
+                        k++;
+                    }
+                }
+            }
+        }
+    }
 }
 
 // binned spatial variogram:

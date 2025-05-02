@@ -20,17 +20,11 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
         paramcorr <- as.numeric(param[namescorr])
         nuisance <- param[namesnuis]
         sel=substr(names(nuisance),1,4)=="mean"
-
         if(is.null(MM)){ mm=as.numeric(nuisance[sel]) ### linear mean
                          Mean=c(X%*%mm)
                        }
         else           Mean=MM                     ### fixed mean
-
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
-
-############################################
-#if(!type_cop) { # not copula models 
-
         if(aniso){
             anisopar<-param[namesaniso]
             coords1=GeoAniso(coords, anisopars=anisopar)
@@ -45,9 +39,7 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
 
         }
          else
-         {
-            #print(fan)
-                  
+         {      
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
                         corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
@@ -219,8 +211,9 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
   if(!is.null(copula))
     {
         fname <- paste(fname,"Cop",sep="");
-        if(copula=="Gaussian") {type_cop=1; }
-        if(copula=="Clayton")  {type_cop=2; }
+        if(copula=="Gaussian")      {type_cop=1; }
+        if(copula=="Clayton")       {type_cop=2; }
+        if(copula=="SkewGaussian")  {type_cop=3; }
         if(all(likelihood==1,type==2)) {cond_pair=1;  fname=gsub("Cond", "Pair", fname)}
         if(all(likelihood==3,type==2)) {cond_pair=0}
     }

@@ -98,7 +98,7 @@ fit = GeoFit(data, coordx=coords, corrmodel=corrmodel,model=model,
                     start=start,fixed=fixed)
 
 #a=GeoCV(fit,K=100,estimation=TRUE,parallel=TRUE) 
-#a$rmse
+#mean(a$rmse)
 }
 
 \keyword{Composite}

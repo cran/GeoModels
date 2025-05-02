@@ -252,7 +252,7 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
     #if(is.null(bivariate)&&is.null(bivariate))
     # END Include internal functions
     if(!is.null(copula)) {
-       {if(copula!="Gaussian"&&copula!="Clayton") 
+       {if(copula!="Gaussian"&&copula!="Clayton"&&copula!="SkewGaussian") 
         error <- 'Copula model is wrong\n'
         return(list(error=error))}
        }
@@ -960,86 +960,86 @@ if(!bivariate)      {
       'Geom','Geometric','Wrapped','PoisBin','PoisBinNeg','LogGaussian','LogGauss','Logistic')))
   {
     param <- c(mm, 'nugget', 'sill')
-    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
 }
 
  if( (model %in% c('PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB')))
   {
     param <- c(mm, 'nugget1','nugget2','pmu','sill')
-    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
   }
 
    if( (model %in% c('PoissonGammaZIP')))
   {
     param <- c(mm, 'nugget1','nugget2','pmu','sill','shape')
-    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
   }
 
  if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1')))
   {
     param <- c(mm, 'nugget','pmu','sill')
-    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
   }
 
  if( (model %in% c('PoissonGammaZIP1','Gaussian_misp_PoissonGammaZIP1')))
   {
     param <- c(mm, 'nugget','pmu','sill','shape')
-    if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
   }
 
 if(model %in% c("Weibull","weibull",'Gamma','gamma','LogLogistic',"Loglogistic","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma")){
       param <- c(mm, 'nugget', 'sill','shape')
-     if(!is.null(copula))  if(copula=="Clayton") param=c(param,'nu')
+     if(!is.null(copula))  if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)} 
   
   if(model %in% c('Beta2','Kumaraswamy2')){
       param <- c(mm, 'nugget', 'sill','shape','min','max')
-     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)} 
 
 
 if((model %in% c('Beta','Kumaraswamy'))) {
       param <- c(mm, 'nugget', 'sill','shape1','shape2','min','max')
-     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}     
   # Skew Gaussian univariate random field:
    if((model %in% c('SkewGaussian','SkewGauss','TwoPieceGaussian','TwoPieceGauss',
      'Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss','BinomialNeg_TwoPieceGaussian','BinomialNeg_TwoPieceGauss'))){
       param <- c(mm, 'nugget', 'sill','skew')
-      if(!is.null(copula))if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
     # T univariate ra
   # Skew T univariate random field:
   if((model %in% c('SkewStudentT',"TwoPieceStudentT","Gaussian_misp_SkewStudentT")) ){
       param <- c(mm, 'df','nugget', 'sill','skew')
-   if(!is.null(copula))   if(copula=="Clayton") param=c(param,'nu')
+   if(!is.null(copula))   if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
   if((model %in% c("TwoPieceBimodal")) ){
       param <- c(mm, 'df','nugget', 'sill','shape','skew')
-     if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
     # T univariate random field:
   if((model %in% c('StudentT','Gaussian_misp_StudentT')) ){
       param <- c(mm, 'df','nugget', 'sill')
-      if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}  
      if( (model %in% c('Tukeyh','tukeyh'))){
       param <- c(mm, 'nugget', 'sill','tail')
-      if(!is.null(copula))if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
    if( (model %in% c('Tukeyh2','tukeyh2'))){
       param <- c(mm, 'nugget', 'sill','tail1','tail2')
-      if(!is.null(copula))if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
    # Tukeygh  or SinhAsinhGaussian univariate random field: 
   if( (model %in% c('Tukeygh','SinhAsinh',"TwoPieceTukeyh","Gaussian_misp_Tukeygh"))) {
       param <- c(mm, 'nugget', 'sill','skew','tail')
-      if(!is.null(copula)) if(copula=="Clayton") param=c(param,'nu')
+      if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
       return(param)}
 }
   #############################################################  
@@ -1433,7 +1433,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
      #
 }
 
- if(!is.null(copula)) {if(copula=="Clayton") nuisance=c(nuisance,2)}
+ if(!is.null(copula)) {if(copula=="Clayton"||copula=="SkewGaussian") nuisance=c(nuisance,2)}
 # Update the parameter vector     
   
       
@@ -1742,7 +1742,13 @@ if(distance==2) distance1="Geod";
 if(distance==1) distance1="Chor";
 
 if(all(neighb==0.5)) neighb=NULL ## ojo!!
-if(maxdist==Inf) maxdist=NULL
+
+
+
+#if(maxdist==Inf) maxdist=NULL
+
+if(sum(!is.finite(maxdist))) maxdist=NULL
+
 
 if(space)   #  spatial case
 {
@@ -1859,7 +1865,7 @@ if(bivariate)   # bivariate case
 { 
   K=neighb
   x=cbind(coordx, coordy,coordz)
- 
+
   sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
   ###    deleting symmetric indexes with associate distances
   if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)

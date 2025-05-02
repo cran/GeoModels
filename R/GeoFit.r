@@ -27,7 +27,7 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
     if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
-     { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong\n")}
+     { if((copula!="Clayton")&&(copula!="Gaussian")&&(copula!="SkewGaussian")) stop("the type of copula is wrong\n")}
 
     if(type=='Independence'&&likelihood!='Marginal') stop("Independence likelihood must be coupled with 
         Marginal likelihood\n")
@@ -77,11 +77,19 @@ space=!spacetime&&!bivariate
 
 
 ###### checking if neighb or maxdist or maxtime has been specified when using cl
-if(space||bivariate){
+if(space){
      if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
           if(is.null(neighb)&&maxdist==Inf) 
                stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
 }
+
+
+if(bivariate){
+     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
+           if(sum(is.null(neighb)&maxdist==Inf))
+               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
+}
+
 if(spacetime){
      if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
        if((is.null(neighb)&maxdist==Inf)&maxtime==Inf) 
@@ -135,7 +143,6 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
 {fixed=list(nugget=0);tempstart=start;start$nugget=NULL;allest=TRUE}
 }
 
-
 #############################################################################
     checkinput <- CkInput(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data, distance, "Fitting",fixed, grid,
                     likelihood, maxdist, maxtime, model, n,optimizer, NULL, 
@@ -159,6 +166,7 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
                          type, varest,  weighted, copula,X,memdist,nosym)#32
+
 
 
   ### fixing initparam if all parameters are estimated

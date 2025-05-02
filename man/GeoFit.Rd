@@ -260,9 +260,11 @@ random fields using Gaussian and Clayton copula (see Bevilacqua, Alvarado  and C
   search (Caamaño et al., 2023).
 
   In the second case, binary weights are set to 1 or 0 depending if the pairs have distance lower than  (\code{maxdist}).
-  This weighting scheme is less inefficient for large data.
-  The same arguments of \code{neighb} applies  for \code{maxtime} that sets
+  This weighting scheme is less inefficient for large data. The same arguments of \code{neighb} applies  for \code{maxtime} that sets
    the  order (1, 2, 3, ..) of temporal neighboords in spatial-temporal field.
+
+   The two approaces can be combined by considering  the pairs that have distances lower than  (\code{maxdist})
+   in the set of pairs that are neighboords of a certain order.
 
   For estimation of the variance-covariance matrix of  the  weighted composite likelihood  estimates
    the option \code{sensitivity=TRUE} must be specified. Then the  \code{GeoFit}  object  must be updated   using the function \code{GeoVarestbootstrap}. This allows to estimate  the Godambe Information matrix  (see  Bevilacqua et. al. (2012) , Bevilacqua and Gaetan (2013)).

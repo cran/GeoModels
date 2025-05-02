@@ -74,9 +74,9 @@ param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=param$nu),paramcorr)
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
     distance=distance,GPU=GPU, grid=grid,
      local=local,method=method,model='SkewGaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
-omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-alpha=as.numeric(param$nu/param$sill^0.5)
-unif=sn::psn(sim$data,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
+omega=as.numeric(sqrt((param$nu^2 + 1)/1))
+alpha=as.numeric(param$nu)
+unif=sn::psn(sim$data,xi=0,omega= omega,alpha= alpha)
 }
 
 
@@ -155,6 +155,7 @@ if(model=="Weibull")
          {
 p2=as.numeric(param$shape)
 simcop= exp(mm)*qweibull(unif,shape=p2,scale=1/(gamma(1+1/p2 )))
+
          }
 ########################
 if(model=="LogLogistic") 

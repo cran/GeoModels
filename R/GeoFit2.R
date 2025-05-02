@@ -19,7 +19,7 @@ GeoFit2 <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_d
 
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
     if(!is.null(copula))
-     { if((copula!="Clayton")&&(copula!="Gaussian")) stop("the type of copula is wrong")}
+     { if((copula!="Clayton")&&(copula!="Gaussian")&&(copula!="SkewGaussian")) stop("the type of copula is wrong")}
 
     if(type=='Independence') stop("use Geofit for Independence composite likelihood \n")
     ### Check the parameters given in input:

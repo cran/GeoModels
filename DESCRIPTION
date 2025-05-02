@@ -1,6 +1,6 @@
 Package: GeoModels
-Version: 2.1.2
-Date: 2025-04-04
+Version: 2.1.3
+Date: 2025-05-01
 Depends: R (>= 4.1.0), fields, mapproj, shape, codetools
 Suggests: actuar, GoFKernel,numDeriv, optimParallel
 Authors@R: c(person("Moreno", "Bevilacqua", role = c("aut", "cre","cph"),
@@ -19,11 +19,11 @@ Imports: methods, spam, scatterplot3d, dotCall64, FastGP, plotrix,
 URL: https://vmoprojs.github.io/GeoModels-page/
 BugReports: https://github.com/vmoprojs/GeoModels/issues
 NeedsCompilation: yes
-Packaged: 2025-04-25 14:29:45 UTC; morenobevilacqua
+Packaged: 2025-05-02 15:34:10 UTC; morenobevilacqua
 Author: Moreno Bevilacqua [aut, cre, cph],
   Víctor Morales-Oñate [ctb],
   Francisco Cuevas-Pacheco [ctb],
   Christian Caamaño-Carrillo [ctb]
 Maintainer: Moreno Bevilacqua <moreno.bevilacqua89@gmail.com>
 Repository: CRAN
-Date/Publication: 2025-04-25 14:50:05 UTC
+Date/Publication: 2025-05-02 16:00:05 UTC

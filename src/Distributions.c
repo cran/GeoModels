@@ -4897,45 +4897,70 @@ void biv_unif_CopulaGauss_call(double *x,double *y,double *rho, double *res)
 {
     *res = biv_unif_CopulaGauss(*x,*y,*rho);
 }
-double biv_unif_CopulaGauss(double dat1,double dat2,double rho)
+
+// bivariatte density  gaussian copula
+double biv_unif_CopulaGauss(double dat1, double dat2, double rho)
 {
+    if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
+    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.998;
 
-if(fabs(dat1-1)<0.0001) dat1=0.99;
-if(fabs(dat2-1)<0.0001) dat2=0.99;
+    // Calcola i quantili
+    double a1 = qnorm(dat1, 0, 1, 1, 0);
+    double a2 = qnorm(dat2, 0, 1, 1, 0);
 
-double a1=qnorm(dat1,0,1,1,0);
-double a2=qnorm(dat2,0,1,1,0);
-double g1=dnorm(a1,0,1,0); 
-double g2=dnorm(a2,0,1,0); 
-double res;
-//if(fabs(rho)<1e-10) {res=1;}else{
-res=biv_Norm(rho,a1,a2,0,0,1,1,0)/(g1*g2);
-//}
-return(res);
+    // Calcola le densità normali
+    double g1 = dnorm(a1, 0, 1, 0);
+    double g2 = dnorm(a2, 0, 1, 0);
+
+    // Calcola e restituisci il risultato
+    return biv_Norm(rho, a1, a2, 0, 0, 1, 1, 0) / (g1 * g2);
 }
+
+
+// bivariatte density  skewgaussian copula
+double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho, double alpha)
+{
+    if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
+    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.998;
+    
+    const double small = 1e-8;
+    const double omega = sqrt(alpha * alpha + 1);
+    
+    // Calcola i quantili in una sola riga
+    double a1 = qsn(dat1, omega, alpha, 0, small);
+    double a2 = qsn(dat2, omega, alpha, 0, small);
+
+    // Calcola le densità dei quantili
+    double g1 = dsn(a1, omega, alpha, 0);
+    double g2 = dsn(a2, omega, alpha, 0);
+
+    // Calcola e restituisci il risultato
+    return biv_skew(rho, a1, a2, 0, 0, 1, alpha, 0) / (g1 * g2);
+}
+
+
+
  /*********************/
-
-
 void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, double *res)
 {
     *res = biv_unif_CopulaClayton(*x,*y,*rho,*nu);
 }
 
-// this is the exponential of the biv_unif
-double biv_unif_CopulaClayton(double dat1,double dat2,double rho,double nu)
+// bivariate density clayton copula
+double biv_unif_CopulaClayton(double dat1, double dat2, double rho, double nu)
 {
-double res,a,a1,a2;
-double nu2=nu/2;
-double rho2=rho*rho;
-//if(fabs(rho)<1e-200) {res=1;}else{
-a=nu2+1;
-a1=R_pow(dat1,1/nu2);
-a2=R_pow(dat2,1/nu2);
-  res= a*log1p(-rho2)+log(appellF4(a, a, nu2, 1, rho2*a1*a2,rho2*(1-a1)*(1-a2)));
-//}
-return(res);
-}
+    // Precalcola variabili
+    double nu2 = nu / 2;
+    double rho2 = rho * rho;
+    double a = nu2 + 1;
 
+    // Calcola i termini a1 e a2
+    double a1 = R_pow(dat1, 1 / nu2);
+    double a2 = R_pow(dat2, 1 / nu2);
+
+    // Calcola e restituisce il risultato
+    return a * log1p(-rho2) + log(appellF4(a, a, nu2, 1, rho2 * a1 * a2, rho2 * (1 - a1) * (1 - a2)));
+}
 
 
 double cdf_kuma(double y,double a, double b){
@@ -4953,14 +4978,6 @@ double biv_cop(double rho,int type_cop,int cond,
              {
 double dens=0.0,rho1=0.0,nu=0.0;
 double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0;
-
-
-/**
- * 
- * g1 and g2 are marginal pdfs
- * a1 and a2 are marginal cdfs
-
-*/
 switch(model) // Correlation functions are in alphabetical order
     {
 
@@ -5142,38 +5159,130 @@ case 30: // Poisson
    break;
        }
 /*********************** end cases ***************/
-
-
 /******************copula gaussiana*************************/
 if(type_cop==1)  { 
-   if(!(model==16||model==11||model==30))   // continous  
+   if(!(model==16||model==11||model==30))   //continous  models
      dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);
     else                            // discrete                  
      dens= log( pbnorm22(a1,g1,rho1) -   pbnorm22(a2,g1,rho1)  - pbnorm22(a1,g2,rho1) + pbnorm22(a2,g2,rho1) );
-        
 }
-/******************copula clayton*************************/             
+/******************copula clayton and skew *************************/             
 if(type_cop==2) 
 {
+      if(!(model==16||model==11||model==30)) { // continous  models
     if(model==50||model==42) nu=nuis[5];   // for beta2 regression
     if(model==21||model==22||model==26||model==12) nu=nuis[3];   // gammma weibull t  
-    if(model==24||model==1||model==25||model==16||model==11||model==30) // loggaussian gaussian logistic pois binom binomneg 
-                      nu=nuis[2];   
-   //Rprintf("%f---%f %f\n",nu,g1,g2);
-    dens= biv_unif_CopulaClayton(a1,a2,rho1,nu)+ log(g1)+log(g2);
+    if(model==24||model==1||model==25||model==16||model==11||model==30)   nu=nuis[2]; // loggaussian gaussian logistic pois binom binomneg 
+    dens= biv_unif_CopulaClayton (a1,a2,rho1,nu)+ log(g1)+log(g2);
+               }
+     else { Rf_error("not implemented."); } // discrete   models
+
 }
-
-
+/******************copula skew gaussian *************************/ 
+if(type_cop==3) 
+{
+       if(!(model==16||model==11||model==30)) { // continous  models 
+    if(model==50||model==42) nu=nuis[5];   // for beta2 regression
+    if(model==21||model==22||model==26||model==12) nu=nuis[3];   // gammma weibull t  
+    if(model==24||model==1||model==25||model==16||model==11||model==30)   nu=nuis[2];    // loggaussian gaussian logistic pois binom binomneg 
+                    
+    dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu))+ log(g1)+log(g2);
+     }
+     else { Rf_error("not implemented."); } //   discrete   models
+}
 
 if(cond)  {
                if(!(model==16||model==11||model==30))     dens=dens-log(g2);
                else  dens=dens-log(b2);
-
           }
 return(dens);
 }
 
+/***********************/
+/***********************/
 /******* some marginals (log)pdf  *****************/
+/***********************/
+/***********************/
+
+
+
+
+double owens_t(double h, double a) {
+    if (a == 0.0) return 0.0;
+    int n = 900; 
+    double sum = 0.0;
+    double dx = a / n;
+    double h_squared = h * h;
+    for (int i = 0; i < n; i++) {
+        double x1 = i * dx;
+        double x2 = (i + 1) * dx;
+        double fx1 = exp(-0.5 * h_squared * (1 + x1 * x1)) / (1 + x1 * x1);
+        double fx2 = exp(-0.5 * h_squared * (1 + x2 * x2)) / (1 + x2 * x2);
+        sum += (fx1 + fx2) * dx / 2.0;
+    }
+    return sum / (2 * M_PI);
+}
+
+
+double psn(double x,  double omega, double alpha, double tau) {
+    double z = x / omega;
+    return pnorm(z, 0.0, 1.0, 1, 0) - 2 * owens_t(z, alpha);
+}
+double dsn(double x, double omega, double alpha, double tau) {
+    double z = x/ omega;
+    double t = alpha * z + tau;
+    return (2.0 / omega) * dnorm(z, 0.0, 1.0, 0) * pnorm(t, 0.0, 1.0, 1, 0);
+}
+
+
+double qsn(double p,  double omega, double alpha, double tau, double tol) {
+    if (omega <= 0) Rf_error("omega must be positive.");
+    if (p <= 0.0) return -INFINITY;
+    if (p >= 1.0) return INFINITY;
+
+    int lower_tail = 1, log_p = 0;
+    double max_q = sqrt(qchisq(p, 1, lower_tail, log_p)) + tau;
+    double min_q = -sqrt(qchisq(1 - p, 1, lower_tail, log_p)) + tau;
+
+    if (tau == 0) {
+        if (isinf(alpha)) {
+            return  omega * (alpha > 0 ? max_q : min_q);
+        }
+    }
+
+    double q = 0;
+        double abs_alpha = fabs(alpha);
+        double p_adj = (alpha < 0) ? (1 - p) : p;
+
+        double xa = qnorm(p_adj, 0.0, 1.0, 1, 0);
+        double xb = sqrt(qchisq(p_adj, 1, 1, 0)) + fabs(tau);
+
+        double fa = psn(xa, 1.0, abs_alpha, tau) - p_adj;
+        double fb = psn(xb, 1.0, abs_alpha, tau) - p_adj;
+
+        double xc = 0, fc = 0;
+        int use_regula = 0, iter = 0, max_iter = 100;
+
+        while (fabs(fb - fa) > tol && iter++ < max_iter) {
+            xc = use_regula ? xb - fb * (xb - xa) / (fb - fa) : 0.5 * (xa + xb);
+            fc = psn(xc,  1.0, abs_alpha, tau) - p_adj;
+
+            if (fc * fa < 0) {
+                xb = xc; fb = fc;
+            } else {
+                xa = xc; fa = fc;
+            }
+            if (fabs(fc) < tol) break;
+            use_regula = !use_regula;
+        }
+        double x = (alpha < 0) ? -xc : xc;
+        q =  omega * x;
+    
+    return q;
+}
+
+
+
 
 double one_log_SkewGauss(double z,double m, double vari, double skew)
 {
@@ -5182,12 +5291,6 @@ double one_log_SkewGauss(double z,double m, double vari, double skew)
   double q=(z-m);
   double omega=skew*skew+vari;
   res=log(2)-0.5*log(omega)+dnorm(q/sqrt(omega),0,1,1)+pnorm(skew*q/sqrt(vari*omega),0,1,1,1);
-
-  /*double y=(z-m)/sqrt(vari);
-  double alpha=skew/sqrt(vari);
-  double omega=skew*skew/vari+1;
-  res=log(2)-log(omega)+dnorm(y/sqrt(omega),0,1,1)+pnorm(alpha*y/sqrt(omega),0,1,1,1);
-*/
   return(res);
 }
 

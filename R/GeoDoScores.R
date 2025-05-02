@@ -28,8 +28,7 @@ if(covmatrix$sparse){
                Inv= spam::solve.spam(U)
                diagInv=diag(Inv)
 
-                #backsolve(U, forwardsolve(U, b))
-             
+                       
         }
      return(list(a=Invc,b=Inv,c=diagInv))
 }
