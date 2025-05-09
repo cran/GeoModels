@@ -38,7 +38,7 @@ CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,c
                          "integer","double","integer","double","double","double","double",
                           "integer","integer","integer","integer"),  
                          corrmodel ,coords[,1],coords[,2] , coordt ,  data , n , paramcorr ,  weigthed , 
-                   res=dotCall64::numeric_dc(1), Mean,0,other_nuis ,
+                   res=dotCall64::vector_dc("double",1), Mean,0,other_nuis ,
                      ns , NS , local ,GPU,
          INTENT =    c("r","r","r","r","r","r","r","r","w","r", "r","r","r","r","r","r"),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
@@ -74,7 +74,7 @@ CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,c
                          "integer","double","integer","double","double","double","double",
                           "integer","integer","integer","integer"),  
                          corrmodel ,coordx,coordy , coordz,coordt ,  data , n , paramcorr ,  weigthed , 
-                   res=dotCall64::numeric_dc(1), c(X1%*%mm1,X2%*%mm2),0,other_nuis ,
+                   res=dotCall64::vector_dc("double",1), c(X1%*%mm1,X2%*%mm2),0,other_nuis ,
                      ns , NS , local ,GPU,
          INTENT =    c("r","r","r","r","r","r","r","r","w","r", "r","r","r","r","r","r","r"),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res

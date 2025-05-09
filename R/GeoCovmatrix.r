@@ -96,19 +96,19 @@ if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
       #  if(bivariate) {if(model==1) fname <- 'CorrelationMat_biv_dyn2'}
     if(spacetime) 
        cr=dotCall64::.C64('CorrelationMat_st_dyn2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
-            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corr=dotCall64::vector_dc("double",numpairstot),coordx,coordy,coordz,coordt,
             corrmodel,nuisance,paramcorr,radius,ns,NS,
             INTENT = c("w",rep("r",10)),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
      if(bivariate) 
        cr=dotCall64::.C64('CorrelationMat_biv_dyn2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
-            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corr=dotCall64::vector_dc("double",numpairstot),coordx,coordy,coordz,coordt,
             corrmodel,nuisance,paramcorr,radius,ns,NS,
             INTENT = c("w",rep("r",10)),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
    if(!bivariate&&!spacetime)  
         cr=dotCall64::.C64('CorrelationMat2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
-            corr=dotCall64::numeric_dc(numpairstot),coordx,coordy,coordz,coordt,
+            corr=dotCall64::vector_dc("double",numpairstot),coordx,coordy,coordz,coordt,
             corrmodel,nuisance,paramcorr,radius,ns,NS,
             INTENT = c("w",rep("r",10)),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
@@ -126,7 +126,7 @@ if(type=="Tapering")  {
         #   as.integer(NS),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
 #############
 cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","double","integer","double","double","double","integer","integer"),
-     corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
+     corr=dotCall64::vector_dc("double",numpairs), coordx,coordy,coordz,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
  INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 #############
@@ -259,40 +259,85 @@ if(bivariate){}
 if(bivariate){}
 }
 ###############################################################
-if(model==20)   ##  SAS
-    {
-     if(!bivariate)
-{
-    corr=cr$corr*(1-as.numeric(nuisance['nugget']))
-    d=as.numeric(nuisance['tail']); e=as.numeric(nuisance['skew'])
-    mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-    vv=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-(mm)^2
-#############################
- integrand=function(z,alpha,kappa,j,r)
- { 
-     aa=z+sqrt(z^2+1)
-     bb=exp(-z^2/2)*z^(j-2*r)*(exp(alpha/kappa)*(aa)^(1/kappa) -  exp(-alpha/kappa)*(aa)^(-1/kappa) )
-     return(bb)
- }
- II=function(alpha,kappa,j,r) integrate(integrand, lower = -Inf, upper = Inf,alpha=alpha,kappa=kappa,j=j,r=r)
- v.II<- Vectorize(II,c("r"))
- coeff_j=function(alpha,kappa,j)
- {
- rr=seq(0,floor(j/2),1)
- res= sum((unlist(v.II(alpha,kappa,j,rr)[1,])*(-1)^rr)/(2^(rr+1)*gamma(rr+1)*gamma(j-2*rr+1)))
- res1=gamma(j+1)*res/sqrt(2*pi)
- return(res1)
- }
-coeff_jvec<- Vectorize(coeff_j,c("j"))
 
-corrsas<-function(skew,tail,N,vv1,rho) {jj=seq(1,N) ; sum(coeff_jvec(skew,tail,jj)^2*rho^(jj)/gamma(jj+1)) /vv1}
 
-CorrSAS<-Vectorize(corrsas, c("rho"))
-###########################
-corr=CorrSAS(e,d,5,vv,corr)
-vv=as.numeric(nuisance['sill'])*vv;
-}
-if(bivariate){}
+
+
+###############################################################
+###############################################################
+if (model == 20) {  ## SAS
+  if (!bivariate) {
+    # Estrazione parametri una volta sola
+    nugget <- as.numeric(nuisance['nugget'])
+    d <- as.numeric(nuisance['tail'])
+    e <- as.numeric(nuisance['skew'])
+    sill <- as.numeric(nuisance['sill'])
+    corr <- cr$corr * (1 - nugget)
+    # Calcolo mm e vv con costanti precalcolate
+    sqrt_8pi <- sqrt(8 * pi)
+    sqrt_32pi <- sqrt(32 * pi)
+    besselK_1 <- besselK(0.25, (d + 1)/(2*d))
+    besselK_2 <- besselK(0.25, (1 - d)/(2*d))
+    besselK_3 <- besselK(0.25, (d + 2)/(2*d))
+    besselK_4 <- besselK(0.25, (2 - d)/(2*d))
+    sinh_e_d <- sinh(e/d);cosh_2e_d <- cosh(2*e/d);exp_0.25 <- exp(0.25)
+    mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
+    vv <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
+    # Funzione integranda ottimizzata
+    integrand <- function(z, alpha, kappa, j, r) {
+      z_sq <- z^2
+      z_pow <- if(j - 2*r == 0) 1 else z^(j - 2*r)
+      aa <- z + sqrt(z_sq + 1)
+      aa_pow1 <- aa^(1/kappa)
+      aa_pow2 <- aa^(-1/kappa)
+      exp(-z_sq/2) * z_pow * (exp(alpha/kappa) * aa_pow1 - exp(-alpha/kappa) * aa_pow2)
+    }
+    # II funzione con memorization per evitare ricalcoli
+    II_cache <- new.env(hash = TRUE)
+    II <- function(alpha, kappa, j, r) {
+      key <- paste(alpha, kappa, j, r, sep = "_")
+      if (exists(key, envir = II_cache)) {
+        return(get(key, envir = II_cache))
+      }
+      val <- integrate(integrand, lower = -Inf, upper = Inf, 
+                       alpha = alpha, kappa = kappa, j = j, r = r)$value
+      assign(key, val, envir = II_cache)
+      val
+    }
+    # coeff_j ottimizzata con preallocazione e calcolo gamma efficiente
+    coeff_j <- function(alpha, kappa, j) {
+      max_r <- floor(j/2)
+      if (max_r < 0) return(0)
+      rr <- 0:max_r
+      II_vals <- numeric(length(rr))
+      terms <- numeric(length(rr))
+      for (i in seq_along(rr)) {
+        II_vals[i] <- II(alpha, kappa, j, rr[i])
+        terms[i] <- II_vals[i] * (-1)^rr[i] / 
+          (2^(rr[i] + 1) * gamma(rr[i] + 1) * gamma(j - 2*rr[i] + 1))
+      }
+      gamma(j + 1) * sum(terms) / sqrt(2 * pi)
+    }
+    # Pre-calcolo dei coefficienti per j=1:5
+    j_vec <- 1:5
+    coeffs <- sapply(j_vec, function(j) coeff_j(e, d, j))
+    # Funzione principale corr_sas vettorizzata
+    corrsas <- function(rho) {
+      sum(coeffs^2 * rho^j_vec / gamma(j_vec + 1)) / vv
+    }
+    # Applicazione vettorizzata
+    corr <- if (length(corr) > 1) {
+      sapply(corr, corrsas)
+    } else {
+      corrsas(corr)
+    }
+    
+    vv <- sill * vv
+  }
+  
+  if (bivariate) {
+    # TODO: implementare la parte bivariata se necessario
+  }
 }
 
 ###############################################################
@@ -641,7 +686,7 @@ if(type=="Standard")  {
 
   cr=dotCall64::.C64(fname,SIGNATURE =
       c("double","double","double","double","double","integer","double","integer","double","double","double","integer","integer","integer"),
-        corr=dotCall64::numeric_dc(numpairstot), coordx,coordy,coordz, coordt,corrmodel,c(mu), n,other_nuis,paramcorr,radius,ns,NS,model,
+        corr=dotCall64::vector_dc("double",numpairstot), coordx,coordy,coordz, coordt,corrmodel,c(mu), n,other_nuis,paramcorr,radius,ns,NS,model,
   INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r", "r", "r", "r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
@@ -662,34 +707,29 @@ if(type=="Standard")  {
         fname <- "CorrelationMat_dis_tap"
         if(spacetime) fname <- "CorrelationMat_st_dis_tap"
      
- if(spacetime)
-     {cr=.C("CorrelationMat_st_dis_tap",  corr=double(numpairs), as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),
-        as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
-           as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-     }
- else
-    {cr=.C("CorrelationMat_dis_tap",  corr=double(numpairs), as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),
-        as.integer(corrmodel), as.double(other_nuis), as.double(paramcorr),as.double(radius),as.integer(ns),
-           as.integer(NS),as.integer(n[idx[,1]]),as.integer(n[idx[,2]]),as.double(mu[idx[,1]]),as.double(mu[idx[,2]]),as.integer(model),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+if(spacetime){
+
+
+cr<-dotCall64::.C64("CorrelationMat_st_dis_tap",corr=dotCall64::vector_dc("double",numpairs),coordx,coordy,coordz,coordt,
+    corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
+    SIGNATURE=c("double","double","double","double","double","integer","double",
+        "double","double","integer","integer","integer","integer","double","double","integer"),
+    INTENT=c("w",rep("r",15)),
+          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 }
-
-#if(spacetime)
-#     cr=dotCall64::.C64("CorrelationMat_st_dis_tap",SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
-#        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
-#        INTENT = c("w",rep("r",15)),
-#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-#else 
-#   cr=dotCall64::.C64("CorrelationMat_dis_tap",SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer","integer","integer","double","double","integer"),
-#        corr=dotCall64::numeric_dc(numpairs), coordx,coordy,coordz, coordt,corrmodel,other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
-#        INTENT = c("w",rep("r",15)),
-#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-
-        varcov <-new("spam",entries=cr$corr,colindices=setup$ja,
-                         rowpointers=setup$ia,dimension=as.integer(rep(dime,2)))
+else
+{
+cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",numpairs),coordx,coordy,coordz,coordt,corrmodel,
+    other_nuis,paramcorr,radius,ns,NS,n[idx[,1]],n[idx[,2]],mu[idx[,1]],mu[idx[,2]],model,
+   SIGNATURE=c("double","double","double","double","double","integer","double",
+        "double","double","integer","integer","integer","integer","double","double","integer"),
+    INTENT=c("w",rep("r",15)),
+           PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+}
+    varcov <-new("spam",entries=cr$corr,colindices=setup$ja,
+            rowpointers=setup$ia,dimension=as.integer(rep(dime,2)))
 
         }
-
-
             ## updating the diagonal with variance
   if(model %in% c(2,11)) { pg=pnorm(mu);  vv=pg*(1-pg)*n; diag(varcov)=vv }
   if(model %in% c(14))   { pg=pnorm(mu); vv=  (1-pg)/pg^2; diag(varcov)=vv }
@@ -927,7 +967,7 @@ if(is.null(coordx_dyn)){
 if(is.null(tapsep)) tapsep=1
    tp=dotCall64::.C64(fname,SIGNATURE =
          c("double","double","double","double","double","integer","double","double","double","integer","integer"),
-        tapcorr=dotCall64::numeric_dc(initparam$numpairs),
+        tapcorr=dotCall64::vector_dc("double",initparam$numpairs),
         cc[,1],cc[,2],ccz,initparam$coordt,tapmod, 1,tapsep,1,1,1,
   INTENT = c("w","r","r","r","r","r","r","r", "r", "r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)

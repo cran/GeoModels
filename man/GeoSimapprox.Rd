@@ -210,11 +210,5 @@ dim(data)
 #quilt.plot(coords,data[1,],col=terrain.colors(100),main="1",xlab="",ylab="")
 #quilt.plot(coords,data[2,],col=terrain.colors(100),main="2",xlab="",ylab="")
 
-
-
-
-
-
-
 }
 \keyword{Simulation}

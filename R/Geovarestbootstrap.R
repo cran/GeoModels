@@ -1,6 +1,6 @@
 GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local = c(1, 1), optimizer = NULL,
                               lower = NULL, upper = NULL, method = "cholesky", alpha = 0.95, L = 1000,
-                              parallel = FALSE, ncores = NULL) {
+                              parallel = NULL, ncores = NULL) {
 
   if (length(fit$coordt) == 1) fit$coordt <- NULL
   if (is.null(fit$sensmat)) stop("Sensitivity matrix is missing: use sensitivity=TRUE in GeoFit")
@@ -28,28 +28,33 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
   }
 
   dimat <- fit$numtime * fit$numcoord
-  tempX <- fit$X
-  if (!is.null(fit$X) && sum(fit$X[1:dimat] == 1) == dimat && ncol(fit$X) == 1) fit$X <- NULL
+  # Ottimizzazione punto 1: evita modifiche ripetute a fit$X
+  if (!is.null(fit$X) && sum(fit$X[1:dimat] == 1) == dimat && ncol(fit$X) == 1) {
+    X_use <- NULL
+  } else {
+    X_use <- fit$X
+  }
+
   coords <- cbind(fit$coordx, fit$coordy)
   if (fit$bivariate && is.null(fit$coordx_dyn)) coords <- coords[1:(length(fit$coordx) / 2), ]
   N <- nrow(coords)
 
-  # Simulation of data
   cat("Performing", K, "simulations....\n")
 
+  # Simulazione dati
   if (is.null(fit$copula)) {  # non copula models
     if (method == "cholesky") {
       data_sim <- GeoSim(
         coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
         corrmodel = fit$corrmodel, model = fit$model, param = append(fit$param, fit$fixed),
-        GPU = GPU, local = local, sparse = sparse, grid = fit$grid, X = fit$X, n = fit$n, method = method,
+        sparse = sparse, grid = fit$grid, X = fit$X, n = fit$n, method = method,
         distance = fit$distance, radius = fit$radius, nrep = K
       )
     } else if (method %in% c("TB", "CE")) {
       data_sim <- GeoSimapprox(
         coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
         corrmodel = fit$corrmodel, model = fit$model, param = append(fit$param, fit$fixed),
-        GPU = GPU, local = local, grid = fit$grid, X = fit$X, n = fit$n, method = method,
+        grid = fit$grid, X = fit$X, n = fit$n, method = method,
         parallel = parallel, ncores = ncores, L = L,
         distance = fit$distance, radius = fit$radius, nrep = K
       )
@@ -61,7 +66,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
       data_sim <- GeoSimCopula(
         coordx = coords, coordt = fit$coordt, coordx_dyn = fit$coordx_dyn, anisopars = fit$anisopars,
         corrmodel = fit$corrmodel, model = fit$model, copula = fit$copula,
-        param = append(fit$param, fit$fixed), GPU = GPU, local = local, sparse = sparse,
+        param = append(fit$param, fit$fixed),  sparse = sparse,
         grid = fit$grid, X = fit$X, n = fit$n, method = method,
         distance = fit$distance, radius = fit$radius, nrep = K
       )
@@ -70,12 +75,16 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
     }
   }
 
-  # Determine number of cores for parallelization
+  # Ottimizzazione punto 2: gestione automatica parallelizzazione e numero core
+  coremax <- parallel::detectCores()
+  if (is.na(coremax) || coremax == 1) {
+    parallel <- FALSE
+  } else {
+    if (is.null(parallel)) parallel <- TRUE
+    if (is.null(ncores)) ncores <- max(1, coremax - 1)
+  }
 
-coremax=parallel::detectCores()
-if(is.na(coremax)||coremax==1) parallel=FALSE
-
-  # Bootstrap estimation function
+  # Funzione di stima bootstrap
   estimate_fun <- function(k) {
     GeoFit(
       data = data_sim$data[[k]], start = fit$param, fixed = fit$fixed,
@@ -83,18 +92,15 @@ if(is.na(coremax)||coremax==1) parallel=FALSE
       copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
       lower = lower, upper = upper, neighb = fit$neighb,
       corrmodel = fit$corrmodel, model = model, sparse = FALSE, n = fit$n,
-      GPU = GPU, local = local, maxdist = fit$maxdist, maxtime = fit$maxtime,
+      maxdist = fit$maxdist, maxtime = fit$maxtime,
       optimizer = optimizer, grid = fit$grid, likelihood = fit$likelihood,
-      type = fit$type, X = fit$X, distance = fit$distance, radius = fit$radius
+      type = fit$type, X = X_use, distance = fit$distance, radius = fit$radius
     )
   }
 
   if (!parallel) {
     cat("Performing", K, "estimations sequentially...\n")
-    progressr::handlers(global = TRUE)
-    progressr::handlers("txtprogressbar")
-    pb <- progressr::progressor(along = 1:K)
-
+    # Disabilito progress bar per velocità (opzionale)
     res_list <- vector("list", K)
     for (k in seq_len(K)) {
       res_est <- estimate_fun(k)
@@ -103,18 +109,13 @@ if(is.na(coremax)||coremax==1) parallel=FALSE
       } else {
         res_list[[k]] <- NULL
       }
-      pb(sprintf("k=%d", k))
     }
     res <- do.call(rbind, Filter(Negate(is.null), res_list))
   } else {
-    if (is.null(ncores)) {
-      n.cores <- max(1, coremax - 1)
-    } else {
-      if (!is.numeric(ncores) || ncores < 1 || ncores > coremax) stop("number of cores not valid")
-      n.cores <- ncores
-    }
-    cat("Performing", K, "estimations using", n.cores, "cores...\n")
-    future::plan(multisession, workers = n.cores)
+    cat("Performing", K, "estimations using", ncores, "cores...\n")
+    future::plan(future::multisession, workers = ncores)
+    on.exit(future::plan(future::sequential), add = TRUE)
+
     progressr::handlers(global = TRUE)
     progressr::handlers("txtprogressbar")
     pb <- progressr::progressor(along = 1:K)
@@ -130,8 +131,7 @@ if(is.na(coremax)||coremax==1) parallel=FALSE
     conv_idx <- xx[, "convergence"] == "Successful" & xx[, "logCompLik"] < 1.0e8
     res <- xx[conv_idx, colnames(xx) != "convergence" & colnames(xx) != "logCompLik", drop = FALSE]
 
-    #future::plan(sequential)
-    on.exit(future::plan(sequential), add = TRUE)
+    
   }
 
   # Calcolo varianza e Godambe
@@ -165,7 +165,6 @@ if(is.na(coremax)||coremax==1) parallel=FALSE
   fit$stderr <- stderr
   fit$varcov <- invG
   fit$estimates <- res
-  fit$X <- tempX
 
   # Intervalli di confidenza e p-values
   aa <- qnorm(1 - (1 - alpha) / 2) * stderr

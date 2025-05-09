@@ -35,23 +35,38 @@ GeoCovariogram <- function(fitted, distance="Eucl", answer.cov=FALSE, answer.var
            NAOK=TRUE)
         return(p$rho)
     }            
-    CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu,model, nuisance,param,N)
-    {
-       if(!bivariate) { 
-                             p=.C('VectCorrelation', corr=double(numlags*numlagt), as.integer(corrmodel), as.double(lags),
-                             as.integer(numlags), as.integer(numlagt), as.double(mu),as.integer(model),as.double(nuisance),as.double(param),
-                             as.double(lagt),as.integer(N), PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-                             cc=p$corr
-                    }
-        else    {
-                             p=.C('VectCorrelation_biv', corr=double(numlags*4),vario=double(numlags*4), as.integer(corrmodel), as.double(lags),
-                             as.integer(numlags), as.integer(numlagt),  as.double(mu),as.integer(model),as.double(nuisance), as.double(param),
-                             as.double(lagt), as.integer(N),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-                             cc=c(p$corr,p$vario)   
+    
 
-                    }
-        return(cc)
-    }
+
+CorrelationFct <- function(bivariate, corr_model, lags, lag_t, num_lags, num_lag_t, mu, model, nuisance, param, N) {
+  if (!bivariate) {
+    result <- dotCall64::.C64(
+      "VectCorrelation",
+      SIGNATURE = c("double", "integer", "double", "integer", "integer", "double", "integer", "double", "double", "double", "integer"),
+      INTENT = c("w", rep("r", 10)),
+      corr = dotCall64::vector_dc("double", num_lags * num_lag_t),
+      corr_model = corr_model,
+      lags = lags,num_lags = num_lags,num_lag_t = num_lag_t,mu = mu,
+      model = model,nuisance = nuisance,param = param,lag_t = lag_t,N = N,PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+    
+    cc <- result$corr
+  } else {
+    result <- dotCall64::.C64(
+      "VectCorrelation_biv",
+      SIGNATURE = c("double", "double", "integer", "double", "integer", "integer", "double", "integer", "double", "double", "double", "integer"),
+      INTENT = c("w", "w", rep("r", 10)),
+      corr = dotCall64::vector_dc("double", num_lags * 4),vario = dotCall64::vector_dc("double", num_lags * 4),corr_model = corr_model,
+      lags = lags,num_lags = num_lags,num_lag_t = num_lag_t,mu = mu,
+      model = model,nuisance = nuisance,param = param,lag_t = lag_t,N = N,PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+    
+    cc <- c(result$corr, result$vario)
+  }
+  cc
+}
+
+
+
+
 if(show.range)  {
     # Pratical range in the Gaussian case:
     PracRangeNorm <- function(corrmodel, lags, lagt, nuisance, numlags, numlagt, param, pract.range)
@@ -72,8 +87,10 @@ if(show.range)  {
     if(bivariate) fitted$numtime=1
     ispatim <- fitted$spacetime
     dyn<- is.list(fitted$coordx_dyn)
+
     
     if(!isvario) stop("an object vario is needed\n")
+    if(!is.null(fitted$copula)) stop("copula models are not supported \n")
 
 if (fitted$model %in% c("Weibull", "Poisson","PoissonGamma", "Binomial", "Gamma", 
         "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
@@ -248,8 +265,7 @@ else                                     nui['nugget']=nuisance['nugget']
         #correlation <- CorrelationFct(bivariate,corrmodel, lags_m, lagt_m, numlags_m, numlagt_m,mu,
          #                            CkModel(fitted$model), nui,param,fitted$n)
 
-#print(correlation);print(lags_m);print(lagt_m)
-#print("hjhjhj")
+
 
 ##########################################
 ########### starting cases ###############
@@ -912,7 +928,12 @@ OLS=NULL
             if(bivariate){
                 if(gaussian) {result$variogram11 <- variogram11;result$variogram12 <- variogram12;result$variogram22 <- variogram22}
                 }}}
-    
-    if(!is.null(result))invisible()
-    return(OLS)
+   ########################################################## 
+if(!is.null(result)) {
+        invisible(result)
+    } else if(!is.null(OLS)) {
+        invisible(OLS)
+    } else {
+        invisible()
+    }
   }

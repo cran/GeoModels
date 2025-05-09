@@ -145,15 +145,16 @@ x = runif(200, 0, 1)
 y = runif(200, 0, 1)
 coords = cbind(x,y)
 # Set the model's parameters:
-corrmodel = "Exponential"
+corrmodel = "Matern"
 mean = 0
 sill = 1
 nugget = 0
 scale = 0.3/3
+smooth=0.5
 
 # Simulation of the spatial Gaussian random field:
 data = GeoSim(coordx=coords, corrmodel=corrmodel, param=list(mean=mean,
-              sill=sill, nugget=nugget, scale=scale))$data
+              smooth=smooth,sill=sill, nugget=nugget, scale=scale))$data
 
 # Empirical spatial semi-variogram estimation:
 vario = GeoVariogram(coordx=coords,data=data,maxdist=0.6)

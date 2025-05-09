@@ -1861,39 +1861,43 @@ double CorFunWave(double lag, double scale)
 // F_sphere class of correlation models:
 double CorFunSmoke(double lag, double scale, double smooth)
 {
-//Rprintf( "%f %f\n",lag,REARTH[0]);
-  double rho=0.0,a=0.0,kk1=0.0,iscale=0.0;
-  lag=lag/1;//REARTH[0];
-  iscale=1/(scale);
-a=0.5+smooth;
-  // Computes the correlation:
-  if(lag==0) {rho=1;}
-  else  {
+    if (lag == 0.0) return 1.0;
+    double iscale = 1.0 / scale;
+    double a = 0.5 + smooth;
+    double coslag = cos(lag);
+    double one_minus_coslag = 1.0 - coslag;
 
-  kk1=(lgammafn(iscale+a)+lgammafn(iscale+smooth))-(lgammafn(2/scale+a)+lgammafn(smooth));
-  rho=exp(kk1)*  pow(1-cos(lag),smooth)*hypergeo(1/scale+a,1/scale+smooth,2/scale+a,cos(lag));
-    }
-  return(rho);
+    // Calcolo log-gamma solo una volta per ogni termine
+    double logg1 = lgammafn(iscale + a);
+    double logg2 = lgammafn(iscale + smooth);
+    double logg3 = lgammafn(2.0 / scale + a);
+    double logg4 = lgammafn(smooth);
+    double pow_term = pow(one_minus_coslag, smooth);
+    double hyperg = hypergeo(1.0 / scale + a, 1.0 / scale + smooth, 2.0 / scale + a, coslag);
+    double log_coeff = logg1 + logg2 - logg3 - logg4;
+    double rho = exp(log_coeff) * pow_term * hyperg;
+    return rho;
 }
+
 
 // Whittle=matern class of correlation models:
 double CorFunWitMat(double lag, double scale, double smooth)
 {
-  double rho=0.0;
-  double a=lag/scale;
-  // Computes the correlation:
-  if(lag<1e-150) {rho=1; return(rho);}
-  if(smooth==0.5) {rho=exp(-a); return(rho);}
-  if(smooth==1.5) {rho=exp(-a)*(1+a);return(rho);}
-  if(smooth==2.5) {rho=exp(-a)*(1+a+ R_pow(a,2)/3);return(rho);}
-  if(smooth==3.5) {rho=exp(-a)*(1+a+ R_pow(a,2)*0.4+R_pow(a,3)*0.0666667);return(rho);}
-  //rho=(R_pow(a,smooth)*bessel_k(a,smooth,1))/(R_pow(2,smooth-1)*gammafn(smooth));
-  //rho=(R_pow(a,smooth)*bessel_k(a,smooth,2))/(exp(a)*R_pow(2,smooth-1)*gammafn(smooth));
+    double a = lag / scale;
+    if (lag < 1e-150) return 1.0;
+    if (smooth == 0.5)  return exp(-a);
+    if (smooth == 1.5)  return exp(-a) * (1.0 + a);
+    if (smooth == 2.5)  return exp(-a) * (1.0 + a + (a * a) / 3.0);
+    if (smooth == 3.5)  return exp(-a) * (1.0 + a + 0.4 * a * a + 0.0666667 * a * a * a);
 
-   rho=(R_pow(a,smooth)*exp(log(bessel_k(a,smooth,2))-a))/(R_pow(2,smooth-1)*gammafn(smooth));
- 
-  return(rho);
+    // Generale: Matérn con nu = smooth
+    // rho = (a^nu * K_nu(a)) / (2^{nu-1} * Gamma(nu)), con normalizzazione per exp(a)
+    double log_besselk = log(bessel_k(a, smooth, 2)); // log(K_nu(a)), 2=expon.scaled
+    double log_num = smooth * log(a) + log_besselk - a;
+    double log_den = (smooth - 1.0) * log(2.0) + lgammafn(smooth);
+    return exp(log_num - log_den);
 }
+
 
 double Shkarofski(double lag, double a,double b, double k)
 {
@@ -1927,83 +1931,91 @@ double CorFunBohman(double lag,double scale)
 }
 
 /* wendland function alpha=0*/
-double CorFunW0(double lag,double scale,double smoo)
+double CorFunW0(double lag, double scale, double smoo)
 {
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1) rho=  R_pow(1-x,smoo);
-    else rho=0;
-    return rho;
+    double x = lag / scale;
+    if (x <= 1.0)
+        return R_pow(1.0 - x, smoo);
+    else
+        return 0.0;
 }
+
 /* wendland function alpha=1*/
-double CorFunW1(double lag,double scale,double smoo)
+double CorFunW1(double lag, double scale, double smoo)
 {
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1)  rho=R_pow(1-x,smoo+1)*(1+(smoo+1)*x);
-    else rho=0;
-    return rho;
+    double x = lag / scale;
+
+    if (x <= 1.0) {
+        double s1 = smoo + 1.0;
+        return R_pow(1.0 - x, s1) * (1.0 + s1 * x);
+    } else {
+        return 0.0;
+    }
 }
+
 /* wendland function alpha=2*/
-double CorFunW2(double lag,double scale,double smoo)
+double CorFunW2(double lag, double scale, double smoo)
 {
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1)  rho=R_pow(1-x,smoo+2)*(3+x*(3*smoo+6)+x*x*(R_pow(smoo,2)+4*smoo+3))/3;
-    else rho=0;
+    double x = lag / scale;
+    if (x <= 1.0) {
+        double s2 = smoo + 2.0;
+        double x2 = x * x;
+        double s = smoo;
+        double poly = 3.0 + x * (3.0 * s + 6.0) + x2 * (s * s + 4.0 * s + 3.0);
+        return R_pow(1.0 - x, s2) * poly / 3.0;
+    } else {
+        return 0.0;
+    }
+}
+
+
+double CorFunHyperg2(double lag, double R_power, double R_power1, double smooth, double scale)
+{
+    const double d = 2.0;
+    double x = lag / scale;
+    if (x < 1e-32) return 1.0;
+    if (x > 1.0)   return 0.0;
+    double beta = R_power;
+    double gamma = R_power1;
+    double a = beta - smooth;
+    double b = gamma - smooth;
+    double c = beta - smooth + gamma - d/2.0;
+    double logg1 = lgammafn(beta - d/2.0);
+    double logg2 = lgammafn(gamma - d/2.0);
+    double logg3 = lgammafn(c);
+    double logg4 = lgammafn(smooth - d/2.0);
+    double one_minus_x2 = 1.0 - x*x;
+    double pow_term = R_pow(one_minus_x2, c - 1.0);
+    double hyperg = hypergeo(a, b, c, one_minus_x2);
+
+    double rho = exp(logg1 + logg2 - logg3 - logg4) * pow_term * hyperg;
     return rho;
 }
 
-
-double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale)  // mu alpha beta
-{
-    double rho=0.0,x=0.0;double d=2.0;
-
-    x=lag/scale;
-    if(x<1e-32) {rho=1; return(rho);}
-
-//R_power is beta  R_power1 is gammma
-
-
-    if(x<=1)
-         {
-                // Rprintf("%f %f %f\n",R_power, R_power1,smooth);
-             rho=(exp((lgammafn(R_power-d/2)+lgammafn(R_power1-d/2))-(lgammafn(R_power-smooth+R_power1-d/2)+lgammafn(smooth-d/2)))
-         *R_pow(1-x*x,R_power-smooth+R_power1-d/2-1)*hypergeo(R_power-smooth,R_power1-smooth,R_power-smooth+R_power1-d/2, 1-x*x));
-      }
-  else {rho=0;}
-
-    return(rho);
-}
 
 
    
 
 
 /* optimal  hypergeometric correlation  function*/
-double CorFunHyperg(double lag,double R_power,double smooth,double scale)    
+/* Optimal hypergeometric correlation function (ottimizzata) */
+double CorFunHyperg(double lag, double R_power, double smooth, double scale)
 {
-    double rho=0.0,x=0.0;
-    double d=2.0;
-    double gamma1=0.0,gamma2=0.0,gamma3=0.0,gamma4=0.0;
+    const double d = 2.0;
+    double x = lag / scale;
+    if (x < 1e-32) return 1.0;
+    if (x > 1.0) return 0.0;
 
+    double pow_x2 = R_pow(x, 2);
+    double one_minus_x2 = 1.0 - pow_x2;
+    double gamma1 = gamma(smooth + (R_power + 1) / 2.0);
+    double gamma2 = gamma(2 * smooth + (d + R_power + 1) / 2.0);
+    double gamma3 = gamma(R_power + (d + 1) / 2.0 + 2 * smooth);
+    double gamma4 = gamma(smooth + 0.5);
+    double term1 = R_pow(one_minus_x2, R_power + (d - 1) / 2.0 + 2 * smooth);
+    double hyperg = hypergeo(R_power / 2.0, (R_power + d) / 2.0 + smooth, R_power + (d + 1) / 2.0 + 2 * smooth, one_minus_x2);
 
-    x=lag/scale;
-    if(x<1e-32) {rho=1; return(rho);}
-
-    if(x<=1)
-         {
-    gamma1 = gamma(smooth + (R_power + 1) / 2.0);
-     gamma2 = gamma(2 * smooth + (d + R_power + 1) / 2.0);
-     gamma3 = gamma(R_power  + (d + 1) / 2.0 + 2 * smooth);
-     gamma4 = gamma(smooth + 0.5);
-
-    double term1 = R_pow(1 - R_pow(x, 2), R_power + (d - 1) / 2.0 + 2 * smooth);
-    double hyperg = hypergeo(R_power / 2.0, (R_power + d) / 2.0 + smooth, R_power + (d + 1) / 2.0 + 2 * smooth, 1 - R_pow(x, 2));
-    rho=gamma1 * gamma2 / (gamma3 * gamma4) * term1 * hyperg;
-      }
-  else {rho=0;}
-    return(rho);
+    return (gamma1 * gamma2 / (gamma3 * gamma4)) * term1 * hyperg;
 }
 
 
@@ -2157,60 +2169,56 @@ double CorFunWitMathole(double lag, double scale, double smooth,double R_power1)
 /*******************************************************************************/
 /*******************************************************************************/
 /*******************************************************************************/
-double CorFunW_genhole(double lag,double R_power1,double smooth,double scale,double kk)  // mu alpha beta
+double CorFunW_genhole(double lag, double R_power1, double smooth, double scale, double kk)
 {
- double rho=0.0;
- double d=2.0; 
- double x=lag/scale;
- if(x<1e-32) {rho=1; return(rho);}
- double mu=R_power1;
+    const double d = 2.0;
+    double x = lag / scale;
+    if (x < 1e-32) return 1.0;
 
-
-int k = (int) kk;
-if(k==0) {rho=CorFunW_gen(lag,mu,smooth,scale);
-             return(rho);}  
-else
-             {
-double alpha,beta,gama,a1,a2,a3,a4,A,B,B1,B2,cc,tt,uu,c1,c2,c3,c4,C;
- if(x<=1)
-    {
-alpha=smooth+(d+1)/2+k;
-beta=alpha+mu/2;
-gama=beta+0.5;
-double x2=x*x;
-int n;
-A=0.0;
-for(n=0;n<=k;n++){
-    cc=1+d/2+k;
-//a1=R_pow(-1,n)*poch(cc-beta,n)*poch(cc-gama,n)/(poch(1-d/2-n,n)*poch(cc-alpha,n));
-a1=(R_pow(-1,n)/poch(-n,n))* (poch(cc-beta,n)*poch(cc-gama,n))/poch(cc-alpha,n);
-a2=gammafn(n+1)*gammafn(k-n+1)/gammafn(k+1);
-a3=R_pow(x,2*n);
-a4=hypergeo(cc-beta+n , cc-gama+n, cc-alpha+n,x2);
-A=A+(a1*a3*a4/a2);
+    double mu = R_power1;
+    int k = (int)kk;
+    if (k == 0) {
+        return CorFunW_gen(lag, mu, smooth, scale);
+    } else if (x <= 1.0) {
+        double alpha = smooth + (d + 1.0) / 2.0 + k;
+        double beta  = alpha + mu / 2.0;
+        double gama  = beta + 0.5;
+        double x2 = x * x;
+        int n;
+        double cc = 1.0 + d / 2.0 + k;
+        double A = 0.0;
+        for (n = 0; n <= k; n++) {
+            double sign = (n % 2 == 0) ? 1.0 : -1.0;
+            double poch1 = poch(cc - beta, n);
+            double poch2 = poch(cc - gama, n);
+            double poch3 = poch(cc - alpha, n);
+            double poch4 = poch(-n, n);
+            double a1 = sign * poch1 * poch2 / (poch4 * poch3);
+            double a2 = gammafn(n + 1.0) * gammafn(k - n + 1.0) / gammafn(k + 1.0);
+            double a3 = R_pow(x, 2 * n);
+            double a4 = hypergeo(cc - beta + n, cc - gama + n, cc - alpha + n, x2);
+            A += (a1 * a3 * a4) / a2;
+        }
+        double uu = d / 2.0 + k;
+        double B1 = gammafn(beta - uu) * gammafn(gama - uu) * gammafn(d / 2.0) * gammafn(uu - alpha);
+        double B2 = gammafn(uu) * gammafn(alpha - uu) * gammafn(beta - alpha) * gammafn(gama - alpha);
+        double B = B1 / B2;
+        double tt = 1.0 + alpha;
+        double C = 0.0;
+        for (n = 0; n <= k; n++) {
+            double sign = ((n + k) % 2 == 0) ? 1.0 : -1.0;
+            double c1 = sign * poch(1.0 - alpha, k - n) * poch(1.0 + alpha - beta, n) * poch(1.0 + alpha - gama, n) / poch(1.0 + alpha - uu, n);
+            double c2 = gammafn(n + 1.0) * gammafn(k - n + 1.0) / gammafn(k + 1.0);
+            double c3 = R_pow(x, 2.0 * alpha - d - 2.0 * (k - n));
+            double c4 = hypergeo(tt - beta + n, tt - gama + n, tt - d / 2.0 - k + n, x2);
+            C += (c1 * c3 * c4) / c2;
+        }
+        return A + B * C;
+    } else {
+        return 0.0;
+    }
 }
 
-uu=d/2+k;
-
-B1=gammafn(beta-uu)*gammafn(gama-uu)*gammafn(d/2)*gammafn(uu-alpha);
-B2=gammafn(uu)*gammafn(alpha-uu)*gammafn(beta-alpha)*gammafn(gama-alpha);
-B=B1/B2;
-
-tt=1+alpha;
-C=0.0;
-for(n=0;n<=k;n++){
-c1=R_pow(-1,n+k)*poch(1-alpha,k-n)*poch(1+alpha-beta,n)*poch(1+alpha-gama,n)/poch(1+alpha-uu,n);
-c2=gammafn(n+1)*gammafn(k-n+1)/gammafn(k+1);
-c3=R_pow(x,2*alpha-d-2*(k-n));
-c4=hypergeo(tt-beta+n , tt-gama+n, tt-d/2-k+n,x2);
-C=C+(c1*c3*c4/c2);
-}
-rho=A+B*C;
-}
-else {rho=0;}
-return(rho);
-}
-}
 /*******************************************************************************/
 double Corschoenberg(double lag,double scale)
 {
@@ -2226,50 +2234,61 @@ return(rho);
 
 
 /* generalized wendland function*/
-double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu alpha beta
+double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
 {
-    double rho=0.0,x=0.0;
-
-    x=lag/scale;
-    if(x<1e-32) {rho=1; return(rho);}
-    if(smooth==0) {
-         if(x<1)    rho=R_pow(1-x,R_power1);//rho=exp(R_power1*log1p(-x));
-         else rho=0;
-         return(rho);
+    double x = lag / scale;
+    if (x < 1e-32) return 1.0;
+    // Casi speciali per smooth intero
+    if (smooth == 0) {
+        if (x < 1.0)
+            return R_pow(1.0 - x, R_power1);
+        else
+            return 0.0;
     }
-    if(smooth==1) {
-         if(x<1) rho=R_pow(1-x,R_power1+1)*(1+x*(R_power1+1));
-         else rho=0;
-         return(rho);
+    if (smooth == 1) {
+        if (x < 1.0) {
+            double p = R_power1 + 1.0;
+            return R_pow(1.0 - x, p) * (1.0 + p * x);
+        } else
+            return 0.0;
     }
-    if(smooth==2) {
-         if(x<1) rho=R_pow(1-x,R_power1+2)*(1+x*(R_power1+2)+x*x*(R_power1*R_power1 +4*R_power1 +3 )/3  );
-         else rho=0;
-         return(rho);
+    if (smooth == 2) {
+        if (x < 1.0) {
+            double p = R_power1 + 2.0;
+            double x2 = x * x;
+            return R_pow(1.0 - x, p) * (1.0 + p * x + x2 * (R_power1 * R_power1 + 4.0 * R_power1 + 3.0) / 3.0);
+        } else
+            return 0.0;
     }
-    if(smooth==3) {
-       if(x<1) rho=R_pow(1-x,R_power1+3)*( 1+R_pow(x,1)*(R_power1+3)+
-                    R_pow(x,2)*(2*R_pow(R_power1,2) +12*R_power1 +15 )/5 +
-                    R_pow(x,3)*(R_pow(R_power1,3)+9*R_pow(R_power1,2)+ 23*R_power1+15)/15);
-         else rho=0;
-         return(rho);
+    if (smooth == 3) {
+        if (x < 1.0) {
+            double p = R_power1 + 3.0;
+            double x2 = x * x;
+            double x3 = x2 * x;
+            double rp = R_power1;
+            return R_pow(1.0 - x, p) * (
+                1.0 + p * x +
+                x2 * (2.0 * rp * rp + 12.0 * rp + 15.0) / 5.0 +
+                x3 * (rp * rp * rp + 9.0 * rp * rp + 23.0 * rp + 15.0) / 15.0
+            );
+        } else
+            return 0.0;
     }
-
-    if(x<=1)
-    {rho=exp((lgammafn(smooth)+lgammafn(2*smooth+R_power1+1))-(lgammafn(2*smooth)+
-            lgammafn(smooth+R_power1+1)))*R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo_sem(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
+    // Caso generale
+    if (x <= 1.0) {
+        double s = smooth;
+        double rp = R_power1;
+        double log_coeff = lgammafn(s) + lgammafn(2.0 * s + rp + 1.0)
+                         - (lgammafn(2.0 * s) + lgammafn(s + rp + 1.0));
+        double coeff = exp(log_coeff) * R_pow(2.0, -rp - 1.0);
+        double pow_term = R_pow(1.0 - x * x, s + rp);
+        double hyperg = hypergeo_sem(rp / 2.0, (rp + 1.0) / 2.0, s + rp + 1.0, 1.0 - x * x);
+        return coeff * pow_term * hyperg;
+    } else {
+        return 0.0;
     }
-    else rho=0;
-   /*/second version
-        x=lag;
-        double *param;
-        param=(double *) R_Calloc(3,double);
-        param[0]=R_power1;param[1]=smooth;param[2]=scale;  //mu,alpha //beta
-        rho=wendintegral(x,param);
-        R_Free(param);*/
-    return(rho);
-     
 }
+
 
 double CorFunWend0_tap(double lag,double scale,double smoo)
 {
@@ -2376,13 +2395,21 @@ double CorFunWendhole(double lag,double scale)
 /************************************************************************************************/
 /************************************************************************************************/
 // Computation of the upper (lower) triangular spatial correlation matrix: spatial case
+/************************************************************************************************/
+/************************************************************************************************/
+/************************************************************************************************/
+/************************************************************************************************/
+/****************** SPATIAL CORRELATION MATRIX (upper trinagular) *******************************/
+/************************************************************************************************/
+/************************************************************************************************/
+// Computation of the upper (lower) triangular spatial correlation matrix: spatial case
 void CorrelationMat2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod,
  double *nuis, double *par,double *radius,int *ns, int *NS)
 {
   int i=0,j=0,h=0;// check the paramaters range:
   double dd=0.0;
      for(i=0;i<(ncoord[0]-1);i++){
-	    for(j=(i+1);j<ncoord[0];j++){
+        for(j=(i+1);j<ncoord[0];j++){
         dd=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
     rho[h]=CorFct(cormod,dd,0,par,0,0);
       //Rprintf("%d- %f %f %f %f -- %f %f %f --%f\n",type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],dd,rho[h]);
@@ -2855,15 +2882,15 @@ void Corr_c(double *cc,double *coordx, double *coordy,double *coordz, double *co
   int *ncoord, int *nloc,int *tloc,int *ns,int *NS,int *ntime, double *par, int *spt, int *biv, double *time,int *type, int *which,double *radius)
 {
 
-if(!spt[0]&&!biv[0])	{   //spatial case
+if(!spt[0]&&!biv[0])    {   //spatial case
 int i=0,j=0,h=0;
 double dis=0.0;
      for(j=0;j<(*nloc);j++){
-	     for(i=0;i<(*ncoord);i++){
+         for(i=0;i<(*ncoord);i++){
            dis=dist(type[0],coordx[i],locx[j],coordy[i],locy[j],coordz[i],locz[j],radius[0]);
-	      cc[h]=CorFct(cormod,dis,0,par,0,0);
-	      h++;
-	      }}}
+          cc[h]=CorFct(cormod,dis,0,par,0,0);
+          h++;
+          }}}
 
 if(spt[0]) {
   int t=0,v=0,i=0,j=0,h=0;
@@ -3039,19 +3066,19 @@ int i,j,h=0,*modtap;
 double *partap,dis=0.0;
 
 modtap=(int *) R_Calloc(1,int);*modtap=*cormodtap+1;
-if(!spt[0]&&!biv[0])	{   //spatial case
+if(!spt[0]&&!biv[0])    {   //spatial case
 
 partap=(double *) R_Calloc(1,double);
 partap[0]=*mxd; // compact support
 // in case of an irregular grid of coordinates:
     for(j=0;j<(*nloc);j++){
-	  for(i=0;i<(*ncoord);i++){
-	      // dis=dist(type[0],coordx[i],locx[j],coordy[i],locy[j],radius[0]);
+      for(i=0;i<(*ncoord);i++){
+          // dis=dist(type[0],coordx[i],locx[j],coordy[i],locy[j],radius[0]);
                dis=dist(type[0],coordx[i],locx[j],coordy[i],locy[j],coordz[i],locz[j],radius[0]);
-	      cc[h]=CorFct(cormod,dis,0,par,0,0);
-	      cc_tap[h]=cc[h]*CorFct(modtap,dis,0,partap,0,0);
-	      h++;
-	      }}
+          cc[h]=CorFct(cormod,dis,0,par,0,0);
+          cc_tap[h]=cc[h]*CorFct(modtap,dis,0,partap,0,0);
+          h++;
+          }}
 
     R_Free(partap);
 }
@@ -3065,16 +3092,16 @@ if(*spt) {
     partap[1]=mxt[0]; // temporal compact support
 
  // in case of an irregular grid of coordinates:
-	          for(j=0;j<(*nloc);j++){
+              for(j=0;j<(*nloc);j++){
         for(v=0;v<(*tloc);v++){
            for(t=0;t<*ntime;t++){
                       dit=fabs(coordt[t]-time[v]);
                for(i=0;i<ns[t];i++){
                 //  dis=dist(type[0],coordx[(i+NS[t])],locx[j],coordy[(i+NS[t])],locy[j],radius[0]);
                    dis=dist(type[0],coordx[(i+NS[t])],locx[j],coordy[(i+NS[t])],locy[j],coordz[(i+NS[t])],locz[j],radius[0]);
-		    cc[h]=CorFct(cormod,dis,dit,par,t,v);
-	         cc_tap[h]=cc[h]*CorFct(modtap,dis,dit,partap,t,v);
-		    h++;}}}}
+            cc[h]=CorFct(cormod,dis,dit,par,t,v);
+             cc_tap[h]=cc[h]*CorFct(modtap,dis,dit,partap,t,v);
+            h++;}}}}
 
     R_Free(partap);}
     if(*biv)  {
@@ -4140,6 +4167,9 @@ void VectCorrelation(double *rho, int *cormod, double *h, int *nlags, int *nlagt
 
 
 // Vector of spatio-temporal correlations:
+
+
+// Vector of spatio-temporal correlations:
 void VectCorrelation_biv(double *rho, double *vario,int *cormod, double *h, int *nlags, int *nlagt,double *mean,int *model,
                      double *nuis,double *par, double *u,int *N)
 {
@@ -4152,6 +4182,7 @@ void VectCorrelation_biv(double *rho, double *vario,int *cormod, double *h, int 
         t++;}
     return;
 }
+
 
 
 

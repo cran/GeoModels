@@ -2320,39 +2320,48 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
     if(!R_FINITE(*res)) *res = LOW;
     return;
-}
-/*********************************************************/
-void Comp_Cond_TWOPIECET_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+}void Comp_Cond_TWOPIECET_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                double *nuis, int *local, int *GPU, int *type_cop, int *cond)
 {
-    int i;double bl,corr,zi,zj,weights=1.0,p11,qq,l2=0.0;
-    double eta=nuis[3];  //skewness parameter
-    double sill=nuis[2];
-    double nugget=nuis[1];
-    double df=nuis[0];
-    if(sill<0||nugget<0||nugget>=1 ||fabs(eta)>1|| df >0.5||df<0) {*res=LOW;  return;}
+    int i;
+    double bl, corr, zi, zj, weights = 1.0, p11, qq, l2 = 0.0;
+    double eta = nuis[3];  // skewness parameter
+    double sill = nuis[2];
+    double nugget = nuis[1];
+    double df = nuis[0];
 
-       qq=qnorm((1-eta)/2,0,1,1,0);
-      for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                zi=data1[i];zj=data2[i];
-                corr=CorFct(cormod,lags[i],lagt[i],par,0,0);
-               // l1=one_log_two_pieceT(zi,mean1[i],sill,df,eta);
-                l2=one_log_two_pieceT(zj,mean2[i],sill,df,eta);
-                 p11=pbnorm22(qq,qq,corr);
-                            if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxtime[0]);
-                 /********************************************************/
-    // bl=2*log(biv_two_pieceT(corr,zi,zj,sill,df,eta,p11,mean1[i],mean2[i],nugget))-(l1+l2);
-    bl=log(biv_two_pieceT(corr,zi,zj,sill,df,eta,p11,mean1[i],mean2[i],nugget))-l2;
-                 /********************************************************/
-                         *res+= weights*bl;
-                }}
+    // Pre-check to avoid unnecessary computations
+    if (sill < 0 || nugget < 0 || nugget >= 1 || fabs(eta) > 1 || df > 0.5 || df < 0) {
+        *res = LOW;
+        return;
+    }
 
-    if(!R_FINITE(*res)) *res = LOW;
+    qq = qnorm((1 - eta) / 2, 0, 1, 1, 0);
+
+    // Pre-calculate npairs[0] once if it is used multiple times
+    int npairs_val = npairs[0];
+    
+    for (i = 0; i < npairs_val; i++) {
+        // Check for NaN in data1 and data2 before processing
+        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+            zi = data1[i];
+            zj = data2[i];
+            corr = CorFct(cormod, lags[i], lagt[i], par, 0, 0);
+            l2 = one_log_two_pieceT(zj, mean2[i], sill, df, eta);
+            p11 = pbnorm22(qq, qq, corr);
+            if (*weigthed) {
+                weights = CorFunBohman(lags[i], maxdist[0]) * CorFunBohman(lagt[i], maxtime[0]);
+            }
+            bl = log(biv_two_pieceT(corr, zi, zj, sill, df, eta, p11, mean1[i], mean2[i], nugget)) - l2;
+            *res += weights * bl;
+        }
+    }
+    if (!R_FINITE(*res)) {
+        *res = LOW;
+    }
     return;
 }
-/*********************************************************/
 
 void Comp_Cond_TWOPIECEGauss_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                    double *par, int *weigthed, double *res, double *mean1, double *mean2,

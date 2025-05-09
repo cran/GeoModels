@@ -14,10 +14,6 @@ biv_unif_CopulaClayton<- function(a,b,c,d)
   sol = .C("biv_unif_CopulaClayton_call", as.double(a), as.double(b),
            as.double(c),as.double(d), ress = double(1),
            PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
- #sol=dotCall64::.C64('biv_unif_CopulaClayton_call',SIGNATURE = c(rep("double",5)),  
-  #                     a, b,c,d,ress=dotCall64::numeric_dc(1),
-   #                     INTENT=c(rep("r",4),"rw"),
-    #                    PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
   return(exp(sol$ress))
 }
 biv_unif_CopulaGauss<- function(a,b,c)
@@ -25,10 +21,6 @@ biv_unif_CopulaGauss<- function(a,b,c)
   sol = .C("biv_unif_CopulaGauss_call", as.double(a), as.double(b),
            as.double(c),ress = double(1),
            PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-  # sol=dotCall64::.C64("biv_unif_CopulaGauss_call",SIGNATURE = c(rep("double",4)),  
-   #                      a, b,c,ress=dotCall64::numeric_dc(1),
-    #                    INTENT =    c("r", "r","r","rw"),
-     #                   PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
   return(sol$ress)
 }
 ###################
@@ -68,7 +60,7 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
                            #  cc=p$corr
                          p=dotCall64::.C64('VectCorrelation',SIGNATURE = c("double","integer","double","integer", "integer",
                           "double","integer","double","double","double","integer"),  
-                        corr=dotCall64::numeric_dc(numlags*numlagt), corrmodel, lags,numlags,numlagt, mu,model,nuisance,param,lagt,N,
+                        corr=dotCall64::vector_dc("double",numlags*numlagt), corrmodel, lags,numlags,numlagt, mu,model,nuisance,param,lagt,N,
                         INTENT =    c("rw","r","r","r", "r", "r","r", "r","r", "r","r"),
                         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
         else    
@@ -79,7 +71,7 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
                        p=dotCall64::.C64('VectCorrelation_biv',SIGNATURE = c("double","double","integer", "double",
                        "integer", "integer","double","integer","double","double",
                        "double","integer"),  
-                        corr=dotCall64::numeric_dc(numlags*4),vario=numlags*4, corrmodel, lags,numlags,numlagt,mu,model,nuisance, param,lagt, N,
+                        corr=dotCall64::vector_dc("double",numlags*4),vario=numlags*4, corrmodel, lags,numlags,numlagt,mu,model,nuisance, param,lagt, N,
                         INTENT =    c("rw","r","r","r", "r", "r","r", "r","r", "r","r"),
                         PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE) 
         return(p$corr)

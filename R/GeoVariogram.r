@@ -107,17 +107,16 @@ GeoVariogram <- function(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coo
                moments_cross<-double(0.5*n_var*(n_var-1)*numvario)  # vect of square differences for cross components (12)
                lenbins_cross<-integer(0.5*n_var*(n_var-1)*numvario) #
 
-            #   DEV=dotCall64::.C64("Binned_Variogram_biv2", 
-            #         SIGNATURE = c(rep("double",6), "integer","double","integer","integer","double","integer","integer"),
-             #        bins=bins, coordx,coordy,coordz,coordt,data,lenbins_cross=lenbins_cross, moments_cross=moments_cross, numbins,lenbins_marg=lenbins_marg,
-            #           moments_marg=moments_marg,ns,NS,INTENT = c("rw",rep("r",5),rep("rw",5),"r","r"),NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
-              
+         
 
-              DEV=.C("Binned_Variogram_biv2", 
-                 bins=as.double(bins), as.double(coordx), as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
-                 lenbins_cross=as.integer(lenbins_cross), moments_cross=as.double(moments_cross), as.integer(numbins),lenbins_marg=as.integer(lenbins_marg),
-                  moments_marg=as.double(moments_marg),as.integer(ns),as.integer(NS),
-                   PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+  DEV=dotCall64::.C64("Binned_Variogram_biv2",bins=bins,coordx=coordx,coordy=coordy,coordz=coordz,
+    coordt=coordt,data=data,lenbins_cross=lenbins_cross,moments_cross=moments_cross,
+    numbins=numbins,lenbins_marg=lenbins_marg,moments_marg=moments_marg,ns=ns,NS=NS,
+    SIGNATURE=c("double","double","double","double","double","double","integer","double",
+      "integer","integer","double","integer","integer"),
+    INTENT=c("rw","r","r","r","r","r","rw","rw","r","rw","rw","r","r"),
+    NAOK=TRUE,PACKAGE="GeoModels",VERBOSE=0)
+
 
 
 
@@ -217,39 +216,32 @@ if(initparam$spacetime){
   if(!memdist)  { 
 
 
-        #  if(!spacetime_dyn)
-         #           EV=dotCall64::.C64('Binned_Variogram_st2', 
-          #        SIGNATURE = c(rep("double",7),
-           #                    rep("integer",3),rep("double",3),
-            #                    rep("integer",4)),
-             #                   bins=bins, bint=bint,coordx,coordy,coordz,coordt,data,lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,
-              #                   moments=moments,momentst=momentst,momentt=momentt,numbins,numbint,ns,NS,
-               #                  INTENT = c("rw","rw",rep("r",5),"rw","rw","rw","rw","rw","rw", rep("r",4)), 
-                #                 NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
-     #       if(spacetime_dyn)
-      #              EV=dotCall64::.C64('Binned_Variogram_st2_dyn', 
-       #           SIGNATURE = c(rep("double",7),
-        #                       rep("integer",3),rep("double",3),
-         #                       rep("integer",4)),
-          #                      bins=bins, bint=bint,coordx,coordy,coordz,coordt,data,lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,
-           #                      moments=moments,momentst=momentst,momentt=momentt,numbins,numbint,ns,NS,
-            #                    INTENT = c("rw","rw",rep("r",5),"rw","rw","rw","rw","rw","rw", rep("r",4)), 
-             #                    NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+    
+if(!spacetime_dyn) 
+  EV = dotCall64::.C64(
+    'Binned_Variogram_st2',
+    bins    = bins,bint    = bint,coordx  = coordx,
+    coordy  = coordy,coordz  = coordz,
+    coordt  = coordt,data    = data,
+    lenbins = lenbins,lenbinst= lenbinst,
+    lenbint = lenbint,moments = moments,
+    momentst= momentst,momentt = momentt,
+    numbins = numbins,numbint = numbint,ns= ns, NS= NS,
+    SIGNATURE = c(rep("double", 7),rep("integer", 3),rep("double", 3),rep("integer", 4)),
+    INTENT = c("rw","rw",rep("r", 5), rep("rw", 3),rep("rw", 3), rep("r", 4)   ),
+    NAOK = TRUE, PACKAGE = 'GeoModels', VERBOSE = 0)
+if(spacetime_dyn) 
+  EV = dotCall64::.C64(
+    'Binned_Variogram_st2_dyn',
+    bins    = bins,bint    = bint,coordx  = coordx,
+    coordy  = coordy,coordz  = coordz,coordt  = coordt,data    = data,lenbins = lenbins,
+    lenbinst= lenbinst,lenbint = lenbint,moments = moments,momentst= momentst,
+    momentt = momentt,numbins = numbins,numbint = numbint,ns      = ns,NS      = NS,
+    SIGNATURE = c(rep("double", 7),rep("integer", 3),rep("double", 3),rep("integer", 4)),
+    INTENT = c("rw", "rw", rep("r", 5),rep("rw", 3), rep("rw", 3),rep("r", 4)),
+    NAOK = TRUE, PACKAGE = 'GeoModels', VERBOSE = 0
+  )
 
-      if(!spacetime_dyn)
-                      EV=.C('Binned_Variogram_st2', 
-                               bins=as.double(bins), bint=as.double(bint),as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
-                                lenbins=as.integer(lenbins),lenbinst=as.integer(lenbinst),lenbint=as.integer(lenbint),
-                                 moments=as.double(moments),momentst=as.double(momentst),momentt=as.double(momentt),
-                                 as.integer(numbins),as.integer(numbint),as.integer(ns),as.integer(NS),
-                            PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
-      if(spacetime_dyn)
-         EV=.C('Binned_Variogram_st2_dyn', 
-                               bins=as.double(bins), bint=as.double(bint),as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data),
-                                lenbins=as.integer(lenbins),lenbinst=as.integer(lenbinst),lenbint=as.integer(lenbint),
-                                 moments=as.double(moments),momentst=as.double(momentst),momentt=as.double(momentt),
-                                 as.integer(numbins),as.integer(numbint),as.integer(ns),as.integer(NS),
-                            PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
                      
     }
     else {
@@ -299,28 +291,19 @@ if(initparam$spacetime){
      # Computes the spatial moments
       EV=.C("Binned_Variogram2", bins=bins,  as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data), 
         lenbins=as.integer(lenbins), moments=as.double(moments), as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
-
-       # EV=dotCall64::.C64('Binned_Variogram2',
-        # SIGNATURE = c(rep("double",6),"integer","double","integer"),
-         #   bins=bins, coordx,coordy,coordz,coordt,data, lenbins=lenbins, moments=moments, numbins,
-          #      INTENT = c("w",rep("r",5),"rw","rw","r"), 
-           #     NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
        }
       else {
        fname="Binned_Variogram2new"
          idx=GeoNeighIndex(cbind(coordx,coordy,coordz),distance = distance, neighb = neighb, maxdist = maxdist,radius=radius)
-         #mm=c(min(idx$lags),max(idx$lags))
          mm=range(idx$lags)
         
-        # EV=.C("Binned_Variogram2new", bins=bins,  as.integer(length(idx$lags)),as.double(data[idx$colidx]),
-        #        as.double(data[idx$rowidx]), as.double(idx$lags),
-        #lenbins=lenbins, moments=moments, as.integer(numbins),as.double(mm),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+    
+EV=dotCall64::.C64("Binned_Variogram2",bins=bins,coordx=coordx,coordy=coordy,coordz=coordz,
+  coordt=coordt,data=data,lenbins=lenbins,moments=moments,numbins=numbins,
+  SIGNATURE=c("double","double","double","double","double","double","integer","double","integer"),
+  INTENT=c("rw","r","r","r","r","r","rw","rw","r"),NAOK=TRUE,PACKAGE="GeoModels",VERBOSE=0)
 
-   EV=dotCall64::.C64('Binned_Variogram2new', 
-                    SIGNATURE = c("double","integer","double","double","double","integer","double","integer","double"),
-                    bins=bins, length(idx$lags),data[idx$colidx],data[idx$rowidx],idx$lags,lenbins=lenbins, moments=moments, numbins,mm,
-                    INTENT = c("rw","r","r","r","r","rw","ww","r","r"),
-                    NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+
        }
        bins=EV$bins
        lenbins=EV$lenbins
@@ -359,132 +342,128 @@ if(initparam$spacetime){
 
   }
 
-#########################################################################################################
-#########################################################################################################
-#########################################################################################################
-
-plot.GeoVariogram <- function(x,...)
-  {
-
-if(!inherits(x,"GeoVariogram"))       stop("Enter an object obtained from the function GeoVariogram\n")
-
-opar=par(no.readonly = TRUE)
-on.exit(par(opar))
-
-ispatim=bivariate=FALSE 
-if(!is.null(x$bint))  ispatim=TRUE
-if(x$bivariate)       bivariate=TRUE
-  
-    # lags associated to empirical variogram estimation
-    lags = c(0,x$centers);numlags = length(lags)
-    if(ispatim) lagt =c(0,x$bint) else lagt=0
-    numlagt = length(lagt)
-#########################################################################
-    slow=0
-    lags_m = seq(slow,max(x$centers),length.out =150)
-    if (ispatim) lagt_m =seq(slow,max(x$bint),length.out =150)
-    else         lagt_m=0
-    numlags_m = length(lags_m)
-    numlagt_m = length(lagt_m)
-#########################################################################
 
 
-##########################################
-      vario.main = "Spatial semi-variogram"
-      vario.ylab = "Semi-Variogram"
-        if(ispatim){
-            vario.main = "Space-time semi-variogram"
-            vario.zlab = "Semi-Variogram"
-     }
 
-################################### 
-#### bivariate case ###############
-###################################
-      if(bivariate){
-        par(mfrow=c(2,2))
-       plot.default(x$centers,x$variograms[1,], main="First semi-variogram",ylim=c(0,max(x$variograms[1,])),
-           xlim=c(0,max(x$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
-       if(min(x$variogramst)>0) {ll1=0;ll=max(x$variogramst)}
-       if(min(x$variogramst)<0) {ll1=min(x$variogramst);ll=-min(x$variogramst)}
-       plot.default(x$centers,x$variogramst, main="Cross semi-variogram",ylim=c(ll1,ll),
-         xlim=c(0,max(x$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
-       plot.default(x$centers,x$variogramst, main="Cross semivariogram",ylim=c(ll1,ll),
-         xlim=c(0,max(x$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
-       plot.default(x$centers,x$variograms[2,], main="Second semi-variogram",ylim=c(0,max(x$variograms[2,])),
-         xlim=c(0,max(x$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
-      }
-################################### 
-#### space time case ##############
-###################################
-    if(ispatim){
-        par(mfrow=c(2,2)) 
 
-##############################     
-#####  spatio-temporal  graphic 
-############################## 
-   if(!is.null(x$centert))
-         {
-         evario = matrix(x$variogramst,nrow=length(x$centers),ncol=length(x$centert),byrow=TRUE)
-         evario = rbind(c(0,x$variogramt),cbind(x$variograms,evario))
-         evario.grid = as.matrix(expand.grid(c(0,x$centers),c(0,x$centert)))
-         }
-  else 
-        {
-          evario = matrix(x$variogramst,nrow=length(x$centers),ncol=length(x$bint),byrow=TRUE)
-         evario = rbind(c(0,x$variogramt),cbind(x$variograms,evario))
-         evario.grid = as.matrix(expand.grid(c(0,x$centers),c(0,x$bint)))
-        } 
-    scatterplot3d::scatterplot3d(evario.grid[,1],evario.grid[,2], c(evario),
-                              type="h",highlight.3d=TRUE,cex.axis=.7,cex.lab=.7,
-                              main=paste("Empirical",vario.main),xlab="Distance",
-                              ylab="Time",zlab=vario.zlab,mar=c(2,2,2,2),mgp=c(0,0,0))
-    #par(mai=c(.2,.2,.2,.2),mgp=c(1,.3, 0))
-    par(mai=c(.2,.2,.2,.2))
 
-      if(!is.null(x$centert)) {
-      persp(c(0,x$centers), c(0,x$centert), evario,
-      xlab="h", ylab="u", zlab=expression(gamma(h,u)),
-      ltheta=90, shade=0.75, ticktype="detailed", phi=30,
-      theta=30,main="Smoothed space-time semi-variogram",cex.axis=.8,
-      cex.lab=.8)}
-       
-      else {
-      persp(c(0,x$centers), c(0,x$bint), evario,
-      xlab="h", ylab="u", zlab=expression(gamma(h,u)),
-      ltheta=90, shade=0.75, ticktype="detailed", phi=30,
-      theta=30,main="Smoothed space-time semi-variogram",cex.axis=.8,
-      cex.lab=.8)}
-      
 
-##############################     
-#####  temporal  marginal  graphic 
-############################## 
-   par(mai=c(.5,.5,.5,.5),mgp=c(1.6,.6,0))
-   if(!is.null(x$centert)){
-plot.default(x$centert, x$variogramt, xlab='t', ylab=expression(gamma(t)),
-     ylim=c(0, max(x$variogramt)),xlim=c(0,max(x$bint)),
-     main="Marginal temporal semi-variogram",...)
-  
-   }
-else{
-plot.default(x$bint, x$variogramt, xlab='t', ylab=expression(gamma(t)),
-     ylim=c(0, max(x$variogramt)),xlim=c(0,max(x$bint)),
-     main="Marginal temporal semi-variogram",...)
-   par(mai=c(.5,.5,.5,.5),mgp=c(1.6,.6,0))
- }
-##############################    
-#####  spatial  marginal  graphic 
-############################## 
-plot.default(x$centers, x$variograms, xlab='h', ylab=expression(gamma(h)),
-     ylim=c(0, max(x$variograms)), xlim=c(0, max(x$centers)),
-     main="Marginal spatial semi-variogram",...)
-            }
-############################spatial case#########################################
-        if(!ispatim && !bivariate)    plot.default(x$centers, x$variograms,...)
 
-  return(invisible())
+
+
+plot.GeoVariogram <- function(x, ...) {
+  if (!inherits(x, "GeoVariogram"))
+    stop("Enter an object obtained from the function GeoVariogram\n")
+
+  # Salva impostazioni grafiche
+  opar <- par(no.readonly = TRUE)
+  on.exit(par(opar))
+
+  dots <- list(...)
+
+  xlab <- if (!is.null(dots$xlab)) dots$xlab else "Distance"
+  ylab <- if (!is.null(dots$ylab)) dots$ylab else "Semi-Variogram"
+  dots$xlab <- NULL
+  dots$ylab <- NULL
+
+  ispatim <- !is.null(x$bint)
+  bivariate <- isTRUE(x$bivariate)
+
+  lags <- c(0, x$centers)
+  lagt <- if (ispatim) c(0, x$bint) else 0
+
+  vario.main <- if (ispatim) "Space-time semi-variogram" else "Spatial semi-variogram"
+  vario.zlab <- if (ispatim) ylab else NULL
+
+  ########## bivariate
+  if (bivariate) {
+    par(mfrow = c(2, 2))
+
+    do.call(plot.default, c(list(x = x$centers, y = x$variograms[1,],
+                                 main = "First semi-variogram",
+                                 ylim = c(0, max(x$variograms[1,])),
+                                 xlim = c(0, max(x$centers)),
+                                 xlab = xlab, ylab = ylab), dots))
+
+    ll1 <- if (min(x$variogramst) < 0) min(x$variogramst) else 0
+    ll <- max(abs(x$variogramst))
+
+    do.call(plot.default, c(list(x = x$centers, y = x$variogramst,
+                                 main = "Cross semi-variogram",
+                                 ylim = c(ll1, ll),
+                                 xlim = c(0, max(x$centers)),
+                                 xlab = xlab, ylab = ylab), dots))
+
+    do.call(plot.default, c(list(x = x$centers, y = x$variogramst,
+                                 main = "Cross semi-variogram",
+                                 ylim = c(ll1, ll),
+                                 xlim = c(0, max(x$centers)),
+                                 xlab = xlab, ylab = ylab), dots))
+
+    do.call(plot.default, c(list(x = x$centers, y = x$variograms[2,],
+                                 main = "Second semi-variogram",
+                                 ylim = c(0, max(x$variograms[2,])),
+                                 xlim = c(0, max(x$centers)),
+                                 xlab = xlab, ylab = ylab), dots))
   }
+
+  ########## spacetime
+  if (ispatim) {
+    par(mfrow = c(2, 2))
+
+    if (!is.null(x$centert)) {
+      evario <- matrix(x$variogramst, nrow = length(x$centers),
+                       ncol = length(x$centert), byrow = TRUE)
+      evario <- rbind(c(0, x$variogramt), cbind(x$variograms, evario))
+      evario.grid <- expand.grid(c(0, x$centers), c(0, x$centert))
+    } else {
+      evario <- matrix(x$variogramst, nrow = length(x$centers),
+                       ncol = length(x$bint), byrow = TRUE)
+      evario <- rbind(c(0, x$variogramt), cbind(x$variograms, evario))
+      evario.grid <- expand.grid(c(0, x$centers), c(0, x$bint))
+    }
+
+    scatterplot3d::scatterplot3d(evario.grid[, 1], evario.grid[, 2], c(evario),
+                                 type = "h", highlight.3d = TRUE,
+                                 cex.axis = .7, cex.lab = .7,
+                                 main = paste("Empirical", vario.main),
+                                 xlab = "Distance", ylab = "Time", zlab = vario.zlab,
+                                 mar = c(2, 2, 2, 2), mgp = c(0, 0, 0))
+
+    par(mai = c(.2, .2, .2, .2))
+    persp(x = unique(evario.grid[, 1]), y = unique(evario.grid[, 2]), z = evario,
+          xlab = "h", ylab = "u", zlab = expression(gamma(h, u)),
+          ltheta = 90, shade = 0.75, ticktype = "detailed", phi = 30,
+          theta = 30, main = "Smoothed space-time semi-variogram",
+          cex.axis = .8, cex.lab = .8)
+
+    par(mai = c(.5, .5, .5, .5), mgp = c(1.6, .6, 0))
+    if (!is.null(x$centert)) {
+      do.call(plot.default, c(list(x = x$centert, y = x$variogramt,
+                                   xlab = "t", ylab = expression(gamma(t)),
+                                   ylim = c(0, max(x$variogramt)),
+                                   xlim = c(0, max(x$bint)),
+                                   main = "Marginal temporal semi-variogram"), dots))
+    } else {
+      do.call(plot.default, c(list(x = x$bint, y = x$variogramt,
+                                   xlab = "t", ylab = expression(gamma(t)),
+                                   ylim = c(0, max(x$variogramt)),
+                                   xlim = c(0, max(x$bint)),
+                                   main = "Marginal temporal semi-variogram"), dots))
+    }
+
+    do.call(plot.default, c(list(x = x$centers, y = x$variograms,
+                                 xlab = "h", ylab = expression(gamma(h)),
+                                 ylim = c(0, max(x$variograms)),
+                                 xlim = c(0, max(x$centers)),
+                                 main = "Marginal spatial semi-variogram"), dots))
+  }
+
+  ########## spatial
+  if (!ispatim && !bivariate) {
+    do.call(plot.default, c(list(x = x$centers, y = x$variograms,
+                                 xlab = xlab, ylab = ylab), dots))
+  }
+
+  invisible()
+}

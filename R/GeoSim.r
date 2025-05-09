@@ -282,8 +282,9 @@ if(progress){
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:nrep)
+cat("Performing", nrep, "simulations\n")}
 }
-}
+
 for( L in 1:nrep){
     k=1;  npoi=1
 

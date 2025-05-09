@@ -31,7 +31,7 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
           c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
           result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
+                        corrmodel,c1,c2,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
                         type_cop,cond_pair,
           INTENT =    c(rep("r",9),"w",rep("r",7)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
@@ -42,7 +42,7 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
          {      
          result=dotCall64::.C64(as.character(fan),
          SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::numeric_dc(1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
+                        corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
           INTENT =    c(rep("r",7),"w",rep("r",7)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
        }

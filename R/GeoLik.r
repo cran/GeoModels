@@ -20,7 +20,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
            cc=dotCall64::.C64(as.character(corrmat),
         SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer"),
-                          cr=dotCall64::numeric_dc(length(corr)), coordx, coordy, coordz,coordt, corrmodel, nuisance,paramcorr,radius, ns,NS,
+                          cr=dotCall64::vector_dc("double",length(corr)), coordx, coordy, coordz,coordt, corrmodel, nuisance,paramcorr,radius, ns,NS,
                 INTENT = c("w",rep("r",10)),
               PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$cr
         return(cc)
@@ -36,7 +36,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
         
   cc=dotCall64::.C64(as.character(corrmat),
          SIGNATURE = c(rep("double",5),"integer","double", "integer","double","double","double","integer","integer","integer"),  
-                          cr=dotCall64::numeric_dc(length(corr)), coordx, coordy, coordz,coordt, corrmodel, c(mu),
+                          cr=dotCall64::vector_dc("double",length(corr)), coordx, coordy, coordz,coordt, corrmodel, c(mu),
                           ns, nuisance,
                           paramcorr,
                           radius, ns,NS,model,
@@ -182,27 +182,22 @@ LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         return(llik)
     }    
 ######### Standard log-likelihood function for multivariate normal density:
-LogNormDenStand <- function(const, cova, ident, dimat, mdecomp, nuisance, setup, stdata) {
-    # Pre-allocazione e calcolo della matrice di varianza-covarianza
-    varcov <- nuisance['sill'] * ident
-    varcov[lower.tri(varcov)] <- cova
-    varcov <- t(varcov)
-    varcov[lower.tri(varcov)] <- cova
-
-    # Decomposizione della matrice di covarianza
-    decompvarcov <- MatDecomp(varcov, mdecomp)
-    if (is.logical(decompvarcov)) {
-        return(1.0e8)  # Restituisce llik predefinito in caso di errore nella decomposizione
+    LogNormDenStand <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+    {
+        llik <- 1.0e8
+        # Computes the covariance matrix:
+        varcov <- (nuisance['sill'])*ident
+        varcov[lower.tri(varcov)] <- cova
+        varcov <- t(varcov)
+        varcov[lower.tri(varcov)] <- cova    
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(varcov,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)  
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+        llik <- 0.5*(const+logdetvarcov+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
+        #llik <- 0.5*(const+logdetvarcov+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
+        return(llik)
     }
-    # Calcolo del determinante della matrice di covarianza
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
-    # Risoluzione lineare di forwardsolve
-    stdata_sol <- forwardsolve(decompvarcov, stdata, transpose = FALSE)
-    # Calcolo finale del log-likelihood
-    llik <- 0.5 * (const + logdetvarcov + sum(stdata_sol^2))
-    return(llik)
-}
-
     LogNormDenStand22 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
     {
         llik <- 1.0e8
@@ -254,177 +249,142 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
     }
 
  ######## Standard log-likelihood function for log gaussian random fields       
-LogNormDenStand_LG <- function(const, cova, ident, dimat, mdecomp, nuisance, det, sill, setup, stdata) {
-    llik <- 1.0e8
-
-    # Computes the covariance matrix:
-    varcov <- (sill) * ident
-    varcov[lower.tri(varcov)] <- cova
-    varcov <- t(varcov)
-    varcov[lower.tri(varcov)] <- cova      
-    # Decomposition of the covariance matrix:
-    decompvarcov <- MatDecomp(varcov, mdecomp)
-    if (is.logical(decompvarcov)) return(llik)  
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp) 
-    # Calculate the log likelihood using forwardsolve
-    llik <- 0.5 * (const + logdetvarcov + 2 * det + sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
-    return(llik)
-}
-
+  LogNormDenStand_LG <- function(const,cova,ident,dimat,mdecomp,nuisance,det,sill,setup,stdata)
+    {
+        llik <- 1.0e8
+        # Computes the covariance matrix:
+        varcov <- (sill)*ident
+        varcov[lower.tri(varcov)] <- cova
+        varcov <- t(varcov)
+        varcov[lower.tri(varcov)] <- cova      
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(varcov,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)  
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+       # invarcov <- MatInv(decompvarcov,mdecomp)
+       # llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
+         llik <- 0.5*(const+logdetvarcov+2*det+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
+          #  llik <- 0.5*(const+logdetvarcov+2*det+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
+        return(llik)
+    }
 
 ######## Standard log-likelihood function for tukeyH random fields
 
-LogNormDenStand_TukeyH <- function(const, cova, ident, dimat, mdecomp, nuisance, sill, setup, stdata) {
-    llik <- 1.0e8
-    # Computes the covariance matrix:
-    varcov <- ident
-    varcov[lower.tri(varcov)] <- cova
-    varcov <- t(varcov)
-    varcov[lower.tri(varcov)] <- cova      
-    # Decomposition of the covariance matrix:
-    decompvarcov <- MatDecomp(varcov, mdecomp)
-    if (is.logical(decompvarcov)) return(llik)  
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp) 
-    # Precompute lambertW for stdata only once
-    delta <- nuisance["tail"]
-    lambertW_values <- VGAM::lambertW(delta * stdata^2) / delta
-    vv <- sqrt(lambertW_values)
-    IL <- sign(stdata) * vv
-    IW <- 1 / (stdata * (1 + lambertW_values))
+    LogNormDenStand_TukeyH <- function(const,cova,ident,dimat,mdecomp,nuisance,sill,setup,stdata)
+    {
+        llik <- 1.0e8
+   # Computes the covariance matrix:
+        varcov <- ident
+        varcov[lower.tri(varcov)] <- cova
+        varcov <- t(varcov)
+        varcov[lower.tri(varcov)] <- cova      
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(varcov,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)  
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+################################################
+        delta=nuisance["tail"]
+        vv=sqrt(VGAM::lambertW(delta*stdata^2)/delta)
+        IL=sign(stdata)*vv
+        IW=1/(stdata*(1+VGAM::lambertW(delta*stdata^2)))
+        llik <- 0.5*( const*log(sill)/log(2*pi) + 
+                      const + logdetvarcov + sum((forwardsolve(decompvarcov, IL, transpose = FALSE))^2)
+                      - 2*sum(log(IL*IW)))
+        return(llik)
+    }
 
-    # Calculate the log-likelihood
-    llik <- 0.5 * (const * log(sill) / log(2 * pi) + 
-                   const + logdetvarcov + 
-                   sum((forwardsolve(decompvarcov, IL, transpose = FALSE))^2) -
-                   2 * sum(log(IL * IW)))
-    return(llik)
-}
 
-#####################
-
- LogNormDenStand_Tukey2H <- function(const, cova, ident, dimat, mdecomp, nuisance, sill, setup, stdata) {
-    llik <- 1.0e8
-    
-    # Computes the covariance matrix:
-    varcov <- ident
-    varcov[lower.tri(varcov)] <- cova
-    varcov <- t(varcov)
-    varcov[lower.tri(varcov)] <- cova      
-
-    # Decomposition of the covariance matrix:
-    decompvarcov <- MatDecomp(varcov, mdecomp)
-    if (is.logical(decompvarcov)) return(llik)  
-
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp) 
-    
-    # Compute g1 and jac1 for positive stdata
-    delta1 <- nuisance["tail1"]
-    g1_values <- VGAM::lambertW(delta1 * (stdata[stdata >= 0])^2) / delta1
-    g1 <- sqrt(g1_values)
-    jac1 <- g1 / (stdata[stdata >= 0] * (1 + g1_values))
-    
-    # Compute g2 and jac2 for negative stdata
-    delta2 <- nuisance["tail2"]
-    g2_values <- VGAM::lambertW(delta2 * (stdata[stdata < 0])^2) / delta2
-    g2 <- sqrt(g2_values)
-    jac2 <- -g2 / (stdata[stdata < 0] * (1 + g2_values))
-    
-    # Combine positive and negative parts
-    pp <- data.frame(a = which(stdata >= 0), g1 = g1)
-    qq <- data.frame(b = which(stdata < 0), jac1 = jac1)
-    pp <- rbind(pp, data.frame(a = which(stdata < 0), g1 = g2))  # For negative stdata
-    qq <- rbind(qq, data.frame(b = which(stdata < 0), jac1 = jac2))  # For negative stdata
-
-    # Sort based on the indices
-    pp <- pp[order(pp$a), ]
-    qq <- qq[order(qq$a), ]
-
-    # Final tau_inv
-    tau_inv <- sign(stdata) * c(pp$g1)
-
-    # Log-likelihood calculation
-    llik <- 0.5 * (const * log(sill) / log(2 * pi) + 
-                   const + logdetvarcov + 
-                   sum((forwardsolve(decompvarcov, c(tau_inv), transpose = FALSE))^2) - 
-                   2 * sum(log(qq$jac1)))
-
-    return(llik)
-}
-   
+ LogNormDenStand_Tukey2H <- function(const,cova,ident,dimat,mdecomp,nuisance,sill,setup,stdata)
+    {
+        llik <- 1.0e8
+   # Computes the covariance matrix:
+        varcov <- ident
+        varcov[lower.tri(varcov)] <- cova
+        varcov <- t(varcov)
+        varcov[lower.tri(varcov)] <- cova      
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(varcov,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)  
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+################################################
+        delta1=nuisance["tail1"]
+        delta2=nuisance["tail2"]
+a=which(stdata>=0); b=which(stdata<0)
+stmas=stdata[stdata>=0]; stmenos=stdata[stdata<0]
+g1<-(VGAM::lambertW(delta1*(stmas)^2)/(delta1))^(1/2)
+jac1<- g1/(stmas*(1+VGAM::lambertW(delta1*(stmas)^2)))
+g2<-(VGAM::lambertW(delta2*(stmenos)^2)/(delta2))^(1/2)
+jac2<- -g2/(stmenos*(1+VGAM::lambertW(delta2*(stmenos)^2)))
+pp=data.frame(rbind(cbind(a,g1),cbind(b,g2)))
+qq=data.frame(rbind(cbind(a,jac1),cbind(b,jac2)))
+g=pp[with(pp, order(pp$a)), ] 
+jac=qq[with(qq, order(qq$a)), ] 
+tau_inv=sign(stdata)*c(g$g1)
+llik <- 0.5*( const*log(sill)/log(2*pi) + 
+                      const + logdetvarcov + sum((forwardsolve(decompvarcov, c(tau_inv), transpose = FALSE))^2)- 2*sum(log(jac$jac1)))
+        return(llik)
+    }
 
 ######## Standard log-likelihood function for SH random fields
-LogNormDenStand_SH <- function(const, cova, ident, dimat, mdecomp, nuisance, sill, setup, stdata) {
-    # Inizializza il log-likelihood a un valore molto grande come default.
-    llik <- 1.0e8
-
-    # Estrae i parametri di skew e delta una sola volta
-    skew <- as.numeric(nuisance["skew"])
-    delta <- as.numeric(nuisance["tail"])
-    # Precalcola operazioni che dipendono da 'stdata'
-    asinh_stdata <- asinh(stdata)
-    sinh_part <- sinh(delta * asinh_stdata - skew)
-    C <- delta * sqrt((1 + sinh_part^2) / (stdata^2 + 1))
-    # Calcola la matrice di covarianza
-    varcov <- ident
-    varcov[lower.tri(varcov)] <- cova
-    varcov <- t(varcov)
-    varcov[lower.tri(varcov)] <- cova      
-    # Decomposizione della matrice di covarianza
-    decompvarcov <- MatDecomp(varcov, mdecomp)
-    if (is.logical(decompvarcov)) return(llik)  
-    # Calcola il determinante della matrice di covarianza
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp) 
-    # Calcolo del log-verosimiglianza
-    forwardsolved <- forwardsolve(decompvarcov, sinh_part, transpose = FALSE)
-    llik <- 0.5 * (const + const * log(sill) / log(2 * pi) + 
-                  logdetvarcov - 2 * sum(log(C)) + sum(forwardsolved^2))
-
-    return(llik)
-}
-
+    LogNormDenStand_SH <- function(const,cova,ident,dimat,mdecomp,nuisance,sill,setup,stdata)
+    {
+        llik <- 1.0e8
+   # Computes the covariance matrix:
+        varcov <- ident
+        varcov[lower.tri(varcov)] <- cova
+        varcov <- t(varcov)
+        varcov[lower.tri(varcov)] <- cova      
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(varcov,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)  
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+################################################
+        skew=as.numeric(nuisance["skew"])
+        delta=as.numeric(nuisance["tail"])
+        Z=sinh(delta * asinh(stdata)-skew)
+        C=delta*sqrt((1+Z^2)/(stdata^2+1))
+        llik <- 0.5*( const + const*log(sill)/log(2*pi)
+                      +logdetvarcov - 2*sum(log(C))
+                      +sum((forwardsolve(decompvarcov, Z, transpose = FALSE))^2))
+        return(llik)
+    }
        
        
 ######### Standard log-likelihood function for multivariate bivariate normal density:
-LogNormDenStand_biv <- function(const, cova, ident, dimat, mdecomp, nuisance, setup, stdata) {
-    llik <- 1.0e8
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    ident <- t(ident)
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    decompvarcov <- MatDecomp(ident, mdecomp)
-    if (is.logical(decompvarcov)) return(llik)
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp) 
-    # Log-verosimiglianza
-    forwardsolved <- forwardsolve(decompvarcov, stdata, transpose = FALSE)
-    llik <- 0.5 * (const + logdetvarcov + sum(forwardsolved^2))
-    return(llik)
-}
-
-    ######### Standard log-likelihood function for multivariate bivariate normal density with sparse alg matrices
-
-LogNormDenStand_biv_spam <- function(const, cova, ident, dimat, mdecomp, nuisance, setup, stdata) {
-    llik <- 1.0e8
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    ident <- t(ident)
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    mcov <- spam::as.spam(ident)
-    if (!is.finite(sum(mcov))) {
+ LogNormDenStand_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+    {
+        llik <- 1.0e8
+        # Computes the covariance matrix:
+        ident[lower.tri(ident,diag=T)] <- cova
+        ident <- t(ident)
+        ident[lower.tri(ident,diag=T)] <- cova
+        # decomposition of the covariance matrix:
+        decompvarcov <- MatDecomp(ident,mdecomp)
+        if(is.logical(decompvarcov)) return(llik)
+        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
+        #invarcov <- MatInv(decompvarcov,mdecomp)
+        #llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
+        llik <- 0.5*(const+logdetvarcov+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
         return(llik)
-    }
-    cholS <- tryCatch({
-        chol(mcov)
-    }, error = function(e) {
-        return(NULL)  
-    })
-    if (is.null(cholS)) {
-        return(llik)  
-    }
-    cholDet <- spam::determinant.spam.chol.NgPeyton(cholS)$modulus
-    cholSolve <- spam::solve.spam(cholS, stdata)
-    llik <- 0.5 * (const + 2 * cholDet + sum(stdata * cholSolve))
 
-    return(llik)
-}
-
+        
+    }
+    ######### Standard log-likelihood function for multivariate bivariate normal density with sparse alg matrices
+ LogNormDenStand_biv_spam <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+    {
+        llik <- 1.0e8
+        # Computes the covariance matrix:
+        ident[lower.tri(ident,diag=T)] <- cova
+        ident <- t(ident)
+        ident[lower.tri(ident,diag=T)] <- cova
+        # decomposition of the covariance matrix:
+        mcov=try(spam::as.spam(ident),silent=TRUE)
+        if(inherits(mcov,"try-error")){return(llik)}
+        cholS <- try(chol(mcov) ,silent=T);if(inherits(cholS,"try-error")){ return(llik)}
+        llik=0.5*( const+2*c(spam::determinant.spam.chol.NgPeyton(cholS)$modulus) 
+                                    + sum(stdata* spam::solve.spam(cholS,stdata)))
+         return(llik)
+    }
     ### END Defining the objective functions
 ##################################################################################################################
 ##################################################################################################################

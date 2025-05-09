@@ -17,7 +17,7 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
          #print(nn)
          p=dotCall64::.C64('VectCorrelation',SIGNATURE = c("double","integer","double","integer","integer","double",
                   "integer","double","double","double","integer"),  
-    corr=dotCall64::numeric_dc(nn),corrmodel,lags,numlags, numlagt,mu,model,nuisance,param,lagt,N,
+    corr=dotCall64::vector_dc("double",nn),corrmodel,lags,numlags, numlagt,mu,model,nuisance,param,lagt,N,
          INTENT =c("rw",rep("r",10)),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
              cc=p$corr
@@ -34,7 +34,7 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
 
                             p=dotCall64::.C64('VectCorrelation_biv',SIGNATURE = c("double","double","integer","double","integer","integer","double",
                   "integer","double","double","double","integer"),  
-    corr=dotCall64::numeric_dc(nn),vario=double(nn),corrmodel,lags,numlags, numlagt,mu,model,nuisance,param,lagt,N,
+    corr=dotCall64::vector_dc("double",nn),vario=double(nn),corrmodel,lags,numlags, numlagt,mu,model,nuisance,param,lagt,N,
          INTENT =c("rw",rep("r",11)),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
                  cc=c(p$corr,p$vario)   

@@ -66,37 +66,37 @@ else {MM=param$mean}
 ########
 if(matrix$model %in% c(1,35,12,34,25))  data=data-MM#Gaussian #StudentT Tukey  Logistic
 if(matrix$model %in% c(10))             #SkewGauussian
-                 { kk=param['skew'];
+                 { kk=as.numeric(param['skew']);
                    data=data-(MM+kk*sqrt(2/pi))}
 if(matrix$model %in% c(11))     data=data-(matrix$n)*pnorm(MM) #binomial
 if(matrix$model %in% c(30,36))  data=data-exp(MM) #poisson
-if(matrix$model %in% c(43,44))  {p=pnorm(param['pmu']);data=data-(1-p)*exp(MM)} #poisson inlated
+if(matrix$model %in% c(43,44))  {p=pnorm(as.numeric(param['pmu']));data=data-(1-p)*exp(MM)} #poisson inlated
 if(matrix$model %in% c(27)) #two piece t models
-     {kk=param['skew'];dd=param['df'];ss=param['sill'];
+     {kk=as.numeric(param['skew']);dd=as.numeric(param['df']);ss=as.numeric(param['sill']);
       data=data-(MM-(2*kk*sqrt(ss*dd)*gamma((dd-1)/2))/(gamma(dd/2)*sqrt(pi)))
      }
 if(matrix$model %in% c(29)) #two piece gaussian
-     {kk=param['skew'];ss=param['sill'];
+     {kk=as.numeric(param['skew']);ss=as.numeric(param['sill']);
       data=data-(MM-(2*kk*sqrt(2*ss/pi)))
      }
 if(matrix$model %in% c(38)) #two piece tukeyh
-     {kk=param['skew'];ss=param['sill'];tt=param['tail'];
+     {kk=as.numeric(param['skew']);ss=as.numeric(param['sill']);tt=as.numeric(param['tail']);
       data=data-(MM-(2*kk*sqrt(2*ss/pi)/(1-tt)))
      }
 if(matrix$model %in% c(40))      #tukeyh2
-     {ss=param['sill'];t1=param['tail1'];t2=param['tail2'];
+     {ss=as.numeric(param['sill']);t1=as.numeric(param['tail1']);t2=as.numeric(param['tail2']);
       data=data-(MM+sqrt(ss)*(t1-t2)/(sqrt(2*pi)*(1-t1)*(1-t2)))
      }
 if(matrix$model %in% c(16))     data=data-(matrix$n)*(1-pnorm(MM))/pnorm(MM) #binomialnegative
-if(matrix$model %in% c(45))     data=data-(1-pnorm(param['pmu']))*(matrix$n)*(1-pnorm(MM))/pnorm(MM) #binomialnegative inflated
+if(matrix$model %in% c(45))     data=data-(1-pnorm(as.numeric(param['pmu'])))*(matrix$n)*(1-pnorm(MM))/pnorm(MM) #binomialnegative inflated
 if(matrix$model %in% c(20))      #sas
-     {ss=param['sill'];kk=param['skew'];tt=param['tail']; 
+     {ss=as.numeric(param['sill']);kk=as.numeric(param['skew']);tt=as.numeric(param['tail']); 
       data=data-(MM+sqrt(ss)*sinh(kk/tt)*exp(0.25)*(besselK(.25,(tt+1)/(2*tt))+besselK(.25,(1-tt)/(2*tt)))/(sqrt(8*pi)))
      }
-if(matrix$model %in% c(39))      #twopiecebimodal
-     {ss=param['sill'];sk=param['skew'];nu=param['df'];delta=param['shape'];alpha=2*(delta+1)/nu;nn=2^(1-alpha/2)
-      data=data-(MM-sqrt(ss)*sk*2^(1/alpha+1)*gamma(nu/2+1/alpha)/(nn^(1/alpha)*gamma(nu*0.5)))
-     }
+#if(matrix$model %in% c(39))      #twopiecebimodal
+#     {ss=param['sill'];sk=param['skew'];nu=param['df'];delta=param['shape'];alpha=2*(delta+1)/nu;nn=2^(1-alpha/2)
+#      data=data-(MM-sqrt(ss)*sk*2^(1/alpha+1)*gamma(nu/2+1/alpha)/(nn^(1/alpha)*gamma(nu*0.5)))
+ #    }
 #######
 
 

@@ -1826,9 +1826,6 @@ if(fabs(rho)<1e-10){return(0.0);}
 /*****************************************/
 /*****************************************/
 
-
-
-
 double corr_tukeygh(double rho,double eta,double tail){
 
     if(fabs(rho)<1e-16) return 0.0;
@@ -1860,8 +1857,6 @@ double corr_tukeygh(double rho,double eta,double tail){
 
 
 
-
-
 double corr_skewt(double corr,double df,double skew)
 {
 if(fabs(corr)<1e-32){return(0.0);}
@@ -1879,8 +1874,6 @@ if(fabs(corr)<1e-32){return(0.0);}
 return(corr1);
 }
 }
-
-
 
 double biv_gamma(double corr,double zi,double zj,double mui,double muj,double shape) {
     double a = 1.0 - corr * corr;
@@ -2239,85 +2232,6 @@ double dNnorm(int N, double **M, double *dat) {
 }
 
 
-/*
-void mult_pmnorm( int *nvar , double *lower , double *upper , int *infin , double *corr , int *maxpts , double *abseps , double *releps , double *esterror , double *result , int *fail )
-{ 
-  F77_CALL(sadmvn)( nvar, lower, upper, infin, corr, maxpts, abseps, releps, esterror, result, fail ) ;
-} */
-
-/*
-double ptnorm(int which,int *cormod, double h0,double h1,double h2, double u0, double u1,double u2, 
-                 double *nuis, double *par, double thr)
-{  
-  int N=3; int maxpts=3*2000;
-  double esterror=10.0,abseps=1.0e-6, releps=0.0,res2=0.0;int fail=100;
-  double a=(nuis[0]-thr)/(sqrt(nuis[2]+nuis[1]));
-  double *lower;double *upper; int *infin;
-  lower=(double *) R_Calloc(3,double);
-  upper=(double *) R_Calloc(3,double);
-  infin=(int *) R_Calloc(3,int);
-  switch(which) //
-              {
-         case 1: /// 111
-         lower[0]=0;lower[1]=0; lower[2]=0; 
-         upper[0]=a;upper[1]=a; upper[2]=a;
-         infin[0]=0;infin[1]=0;infin[2]=0;
-            break;
-            case 2: /// 110
-         lower[0]=0;lower[1]=0; lower[2]=a; 
-         upper[0]=a;upper[1]=a; upper[2]=0 ;
-         infin[0]=0;infin[1]=0;infin[2]=1;     
-            break;
-            case 3: /// 101
-         lower[0]=0;lower[1]=a; lower[2]=0; 
-         upper[0]=a;upper[1]=0 ; upper[2]=a;
-         infin[0]=0;infin[1]=1;infin[2]=0;      
-            break;
-            case 4: /// 011
-         lower[0]=a;lower[1]=0; lower[2]=0; 
-         upper[0]=0;upper[1]=a; upper[2]=a;
-         infin[0]=1;infin[1]=0;infin[2]=0;        
-            break;
- }
-  double corr[3]={nuis[2]*CorFct(cormod,h0,u0,par,0,0),
-                  nuis[2]*CorFct(cormod,h1,u1,par,0,0),
-                  nuis[2]*CorFct(cormod,h2,u2,par,0,0)};
-
-
-  mult_pmnorm( &N, lower, upper, infin, corr, &maxpts, &abseps, &releps, &esterror, &res2, &fail );
-  //R_Free(lim_inf);R_Free(lim_sup);R_Free(infin);
-  R_Free(lower);R_Free(upper);R_Free(infin);
-  return(res2);
-}
-
-
-// trivariate CDF gaussian 
-double p3norm(int *cormod, double h0,double h1,double h2, double u0, double u1,double u2, 
-                 double *nuis, double *par)
-{  
-  int N=3; int maxpts=3*2000;
-  double esterror=10.0,abseps=1.0e-6, releps=0.0,res2=0.0;int fail=100;
-  double a=1;
-  double *lower;double *upper; int *infin;
-  lower=(double *) R_Calloc(3,double);
-  upper=(double *) R_Calloc(3,double);
-  infin=(int *) R_Calloc(3,int);
-
- lower[0]=0;lower[1]=0; lower[2]=0; 
- upper[0]=a;upper[1]=a; upper[2]=a;
- infin[0]=0;infin[1]=0;infin[2]=0;
-
- double corr[3]={nuis[2]*CorFct(cormod,h0,u0,par,0,0),
-                  nuis[2]*CorFct(cormod,h1,u1,par,0,0),
-                  nuis[2]*CorFct(cormod,h2,u2,par,0,0)};
-
-  mult_pmnorm( &N, lower, upper, infin, corr, &maxpts, &abseps, &releps, &esterror, &res2, &fail );
-  R_Free(lower);R_Free(upper);R_Free(infin);
-  return(res2);
-}
-*/
-
-
 // cdf of  a bivariate Gausssian distribution
 double cdf_norm(double lim1,double lim2,double a11,double a12)
 {
@@ -2343,46 +2257,49 @@ double inverse_lamb(double x,double tail)
    return(sign*value);
 }
 
-
 double biv_tukey_hh(double corr, double data_i, double data_j, double mui, double muj,
-    double sill, double hl, double hr) {
+                    double sill, double hl, double hr) {
 
-    double res = 0.0, A = 0.0, B = 0.0, z_i, z_j, hl_i, hr_i, hl_j, hr_j;
-    double Lhl_i, Lhr_i, Lhl_j, Lhr_j;
-    z_i = (data_i - mui) / sqrt(sill);
-    z_j = (data_j - muj) / sqrt(sill);
-    // Calcolare inverse_lamb e LambertW solo una volta per ogni valore di z
-    hl_i = inverse_lamb(z_i, hl);
-    hl_j = inverse_lamb(z_j, hl);
-    hr_i = inverse_lamb(z_i, hr);
-    hr_j = inverse_lamb(z_j, hr);
-    Lhl_i = (1 + LambertW(hl * z_i * z_i));
-    Lhl_j = (1 + LambertW(hl * z_j * z_j));
-    Lhr_i = (1 + LambertW(hr * z_i * z_i));
-    Lhr_j = (1 + LambertW(hr * z_j * z_j));
+    const double sqrt_sill = sqrt(sill);
+    const double zi = (data_i - mui) / sqrt_sill;
+    const double zj = (data_j - muj) / sqrt_sill;
+    const double zi2 = zi * zi;
+    const double zj2 = zj * zj;
+
+    // Calcoli per hl e hr
+    const double hl_zi = inverse_lamb(zi, hl);
+    const double hl_zj = inverse_lamb(zj, hl);
+    const double hr_zi = inverse_lamb(zi, hr);
+    const double hr_zj = inverse_lamb(zj, hr);
+
+    const double Lhl_zi = 1.0 + LambertW(hl * zi2);
+    const double Lhl_zj = 1.0 + LambertW(hl * zj2);
+    const double Lhr_zi = 1.0 + LambertW(hr * zi2);
+    const double Lhr_zj = 1.0 + LambertW(hr * zj2);
+
+    double res;
+
     if (fabs(corr) > 1e-30) {
-        // Ottimizzare i casi basati su z_i e z_j
-        if (z_i >= 0 && z_j >= 0) {
-            res = dbnorm(hr_i, hr_j, 0, 0, 1, corr) * hr_i * hr_j / (z_i * z_j * Lhr_i * Lhr_j);
-        } else if ((z_i >= 0 && z_j < 0) || (z_i < 0 && z_j >= 0)) {
-            res = dbnorm(hr_i, hl_j, 0, 0, 1, corr) * hr_i * hl_j / (z_i * z_j * Lhr_i * Lhl_j);
-        } else if (z_i < 0 && z_j < 0) {
-            res = dbnorm(hl_i, hl_j, 0, 0, 1, corr) * hl_i * hl_j / (z_i * z_j * Lhl_i * Lhl_j);
+        if (zi >= 0 && zj >= 0) {
+            res = dbnorm(hr_zi, hr_zj, 0, 0, 1, corr) *
+                  hr_zi * hr_zj / (zi * zj * Lhr_zi * Lhr_zj);
+        } else if ((zi >= 0 && zj < 0) || (zi < 0 && zj >= 0)) {
+            res = dbnorm(hr_zi, hl_zj, 0, 0, 1, corr) *
+                  hr_zi * hl_zj / (zi * zj * Lhr_zi * Lhl_zj);
+        } else {
+            res = dbnorm(hl_zi, hl_zj, 0, 0, 1, corr) *
+                  hl_zi * hl_zj / (zi * zj * Lhl_zi * Lhl_zj);
         }
     } else {
-        // Calcolare A e B solo una volta per z_i e z_j
-        if (z_i >= 0) {
-            A = dnorm(hr_i, 0, 1, 0) * hr_i / (z_i * Lhr_i);
-        } else {
-            A = dnorm(hl_i, 0, 1, 0) * hl_i / (z_i * Lhl_i);
-        }
-        if (z_j >= 0) {
-            B = dnorm(hr_j, 0, 1, 0) * hr_j / (z_j * Lhr_j);
-        } else {
-            B = dnorm(hl_j, 0, 1, 0) * hl_j / (z_j * Lhl_j);
-        }
+        double A = (zi >= 0) ? dnorm(hr_zi, 0, 1, 0) * hr_zi / (zi * Lhr_zi)
+                             : dnorm(hl_zi, 0, 1, 0) * hl_zi / (zi * Lhl_zi);
+
+        double B = (zj >= 0) ? dnorm(hr_zj, 0, 1, 0) * hr_zj / (zj * Lhr_zj)
+                             : dnorm(hl_zj, 0, 1, 0) * hl_zj / (zj * Lhl_zj);
+
         res = A * B;
     }
+
     return res / sill;
 }
 
@@ -3577,7 +3494,7 @@ double zjstd=(zj-muj)/sqrt(sill);
 {res=    ((p11+eta)/R_pow(etamas,2))*appellF4_mod(nu,rho,-zistd/etamas,-zjstd/etamas,nugget);}
 
 }
-    if(rho<DBL_EPSILON){// OJO!
+    if(rho<DBL_EPSILON){
     
     if(zi>=mui)
          {res=0.5*2*exp((nu/2)*log(nu)+lgammafn((nu+1)/2)-((nu+1)/2)*log(R_pow(zistd/etamos,2)+nu)-0.5*log(M_PI)-lgammafn(nu/2));}
@@ -5207,6 +5124,45 @@ return(dens);
 
 
 
+static const double GL_x[20] = {
+    -0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188,
+    -0.7463319064601508, -0.6360536807265150, -0.5108670019508271, -0.3737060887154195,
+    -0.2277858511416451, -0.0765265211334973,  0.0765265211334973,  0.2277858511416451,
+     0.3737060887154195,  0.5108670019508271,  0.6360536807265150,  0.7463319064601508,
+     0.8391169718222188,  0.9122344282513259,  0.9639719272779138,  0.9931285991850949
+};
+
+static const double GL_w[20] = {
+    0.0176140071391521, 0.0406014298003869, 0.0626720483341091, 0.0832767415767048,
+    0.1019301198172404, 0.1181945319615184, 0.1316886384491766, 0.1420961093183820,
+    0.1491729864726037, 0.1527533871307259, 0.1527533871307259, 0.1491729864726037,
+    0.1420961093183820, 0.1316886384491766, 0.1181945319615184, 0.1019301198172404,
+    0.0832767415767048, 0.0626720483341091, 0.0406014298003869, 0.0176140071391521
+};
+
+
+/*Gauss-Legendre semplice */
+double owens_t(double h, double a) {
+    if (a == 0.0) return 0.0;
+
+    double sum = 0.0;
+    double h_squared = h * h;
+    double half_a = a / 2.0;
+
+    for (int i = 0; i < 20; i++) {
+        // Transform from [-1,1] to [0,a]
+        double x = half_a * (GL_x[i] + 1.0);
+        double denom = 1.0 + x * x;
+        double fx = exp(-0.5 * h_squared * denom) / denom;
+        sum += GL_w[i] * fx;
+    }
+    return (half_a * sum) / (2.0 * M_PI);
+}
+
+
+
+
+/*
 double owens_t(double h, double a) {
     if (a == 0.0) return 0.0;
     int n = 900; 
@@ -5221,7 +5177,7 @@ double owens_t(double h, double a) {
         sum += (fx1 + fx2) * dx / 2.0;
     }
     return sum / (2 * M_PI);
-}
+}*/
 
 
 double psn(double x,  double omega, double alpha, double tau) {
@@ -5235,75 +5191,116 @@ double dsn(double x, double omega, double alpha, double tau) {
 }
 
 
-double qsn(double p,  double omega, double alpha, double tau, double tol) {
+
+double qsn(double p, double omega, double alpha, double tau, double tol) {
     if (omega <= 0) Rf_error("omega must be positive.");
     if (p <= 0.0) return -INFINITY;
     if (p >= 1.0) return INFINITY;
 
     int lower_tail = 1, log_p = 0;
+
+    // Calcolo limiti iniziali basati sulla chi-quadro
     double max_q = sqrt(qchisq(p, 1, lower_tail, log_p)) + tau;
     double min_q = -sqrt(qchisq(1 - p, 1, lower_tail, log_p)) + tau;
 
-    if (tau == 0) {
-        if (isinf(alpha)) {
-            return  omega * (alpha > 0 ? max_q : min_q);
-        }
+    // Caso speciale tau == 0 e alpha infinito
+    if (tau == 0 && isinf(alpha)) {
+        return omega * (alpha > 0 ? max_q : min_q);
     }
 
-    double q = 0;
-        double abs_alpha = fabs(alpha);
-        double p_adj = (alpha < 0) ? (1 - p) : p;
+    double abs_alpha = fabs(alpha);
+    double p_adj = (alpha < 0) ? (1 - p) : p;
 
-        double xa = qnorm(p_adj, 0.0, 1.0, 1, 0);
-        double xb = sqrt(qchisq(p_adj, 1, 1, 0)) + fabs(tau);
+    // Inizializza estremi per la ricerca (bisezione + regula falsi alternata)
+    double xa = qnorm(p_adj, 0.0, 1.0, 1, 0);
+    double xb = sqrt(qchisq(p_adj, 1, 1, 0)) + fabs(tau);
 
-        double fa = psn(xa, 1.0, abs_alpha, tau) - p_adj;
-        double fb = psn(xb, 1.0, abs_alpha, tau) - p_adj;
+    double fa = psn(xa, 1.0, abs_alpha, tau) - p_adj;
+    double fb = psn(xb, 1.0, abs_alpha, tau) - p_adj;
 
-        double xc = 0, fc = 0;
-        int use_regula = 0, iter = 0, max_iter = 100;
+    // Se i valori iniziali sono già abbastanza vicini, ritorna subito
+    if (fabs(fa) < tol) {
+        return omega * ((alpha < 0) ? -xa : xa);
+    }
+    if (fabs(fb) < tol) {
+        return omega * ((alpha < 0) ? -xb : xb);
+    }
 
-        while (fabs(fb - fa) > tol && iter++ < max_iter) {
-            xc = use_regula ? xb - fb * (xb - xa) / (fb - fa) : 0.5 * (xa + xb);
-            fc = psn(xc,  1.0, abs_alpha, tau) - p_adj;
+    double xc = 0.0, fc = 0.0;
+    int use_regula = 0;
+    int iter = 0, max_iter = 100;
 
-            if (fc * fa < 0) {
-                xb = xc; fb = fc;
-            } else {
-                xa = xc; fa = fc;
-            }
-            if (fabs(fc) < tol) break;
-            use_regula = !use_regula;
+    while (iter < max_iter) {
+        if (use_regula && (fb - fa) != 0.0) {
+            // Regula falsi step
+            xc = xb - fb * (xb - xa) / (fb - fa);
+        } else {
+            // Bisezione step
+            xc = 0.5 * (xa + xb);
         }
-        double x = (alpha < 0) ? -xc : xc;
-        q =  omega * x;
-    
-    return q;
+
+        fc = psn(xc, 1.0, abs_alpha, tau) - p_adj;
+
+        if (fabs(fc) < tol) {
+            break;  // Convergenza raggiunta
+        }
+
+        // Aggiorna gli estremi dell'intervallo
+        if (fc * fa < 0) {
+            xb = xc;
+            fb = fc;
+        } else {
+            xa = xc;
+            fa = fc;
+        }
+
+        use_regula = !use_regula;
+        iter++;
+    }
+
+    double x = (alpha < 0) ? -xc : xc;
+    return omega * x;
 }
 
 
 
 
-double one_log_SkewGauss(double z,double m, double vari, double skew)
+double one_log_SkewGauss(double z, double m, double vari, double skew)
 {
+    const double LOG_2 = 0.6931471805599453; // log(2)
+    double q = z - m;
+    double skew2 = skew * skew;
+    double omega = skew2 + vari;
+    double sqrt_omega = sqrt(omega);
+    double sqrt_var_omega = sqrt(vari * omega);
 
-  double  res=0.0;
-  double q=(z-m);
-  double omega=skew*skew+vari;
-  res=log(2)-0.5*log(omega)+dnorm(q/sqrt(omega),0,1,1)+pnorm(skew*q/sqrt(vari*omega),0,1,1,1);
-  return(res);
+    double z1 = q / sqrt_omega;
+    double z2 = skew * q / sqrt_var_omega;
+
+    double res = LOG_2 - 0.5 * log(omega)
+                 + dnorm(z1, 0.0, 1.0, 1)
+                 + pnorm(z2, 0.0, 1.0, 1, 1);
+
+    return res;
 }
 
 
 
-double one_log_tukeyh(double z,double m, double sill, double tail)
+
+double one_log_tukeyh(double z, double m, double sill, double tail)
 {
-  double q = (z - m)/sqrt(sill);
-  double x = inverse_lamb(q,tail);
-  double extra = 1/( (1 + LambertW(tail*q*q)));
-  double dens = log(dnorm(x,0,1,0)* x  * extra/(q*sqrt(sill)));
-return(dens);
+    const double sqrt_sill = sqrt(sill);
+    const double q = (z - m) / sqrt_sill;
+    const double q2 = q * q;
+    const double x = inverse_lamb(q, tail);  // assume questa è indipendente da extra
+    const double W = LambertW(tail * q2);
+    const double log_extra = -log(1.0 + W);
+    const double log_dnorm = -0.5 * M_LN_2PI - 0.5 * x * x;
+    const double log_density = log_dnorm + log(fabs(x)) + log_extra - log(fabs(q)) - log(sqrt_sill);
+
+    return log_density;
 }
+
 
 double one_log_tukeyhh(double z,double m, double sill, double h1,double h2)
 {
@@ -5371,7 +5368,6 @@ double one_log_weibull(double z,double m, double shape)
 {
   double  res=0.0;
   double scale1=exp(m)/(gammafn(1+1/shape));
-  //res=log(shape)   - shape*log(scale1) +(shape-1)*log(z)-R_pow(z/scale1,shape);
   res=log(shape) -log(scale1)  +  (shape-1)*(log(z)-log(scale1))   -    R_pow(z/scale1,shape);
   return(res);
 }

@@ -19,7 +19,7 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
     sparse=FALSE, time=NULL, type="Standard",type_mse=NULL,
     type_krig="Simple",weigthed=TRUE, 
     which=1, copula=NULL,X=NULL,Xloc=NULL,
-    Mloc=NULL,spobj=NULL,spdata=NULL,parallel=FALSE,ncores=NULL)
+    Mloc=NULL,spobj=NULL,spdata=NULL,parallel=FALSE,ncores=NULL,progress=TRUE)
 }
 \arguments{
    \item{estobj}{An object of class Geofit that includes information about data, model and estimates.}
@@ -96,6 +96,7 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
       the prediction computation is  parallelized 
       }
        \item{ncores}{Numeric; number of cores involved in parallelization.} 
+         \item{progress}{If TRUE then a progress bar is shown.}
 }
 
 \details{

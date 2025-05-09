@@ -222,8 +222,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       brie <- unname(results[, 5])
       crps <- unname(results[, 6])
 
-      #future::plan(sequential)
-      #on.exit(future::plan(sequential), add = TRUE)
     }
   }
 
