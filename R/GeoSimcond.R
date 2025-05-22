@@ -8,6 +8,7 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
 
 ################################################################################# 
 ### internal function conditional simulation  of Gaussian RF
+################################################################################# 
 Gauss_cd <- function(data,corrmodel,nrep, method, L,
                      param,
                      coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
@@ -32,11 +33,12 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
   }
   if (method == "TB" || method == "CE") {
     sim_args_approx <- list(coordx = coord_sim, coordt = time_sim, corrmodel = corrmodel,progress = FALSE,
-                            method = method, L = L, 
+                            method = method, L = L, parallel=parallel,
                             X = X_sim, nrep = nrep, distance = distance, radius = radius)
     sim_args_approx <- c(sim_args_approx, list(param = param))
     sim_nc <- do.call(GeoSimapprox, sim_args_approx)
   }
+
 
   #############################################
   # Kriging on prediction locations using observed data
@@ -129,7 +131,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
       }
     }
   } # end space
-
   return(sim_cond)
 }
 ###############################################################
@@ -181,12 +182,11 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
     stop("The method of unconditional simulation is not correct\n")
   }
   if(local&&is.null(neighb)) stop("Fro local kriking you need to specify neighb \n")
-
   corrmodel <- gsub("[[:blank:]]", "", corrmodel)
   model <- gsub("[[:blank:]]", "", model)
   distance <- gsub("[[:blank:]]", "", distance)
 
-
+#### checkin cores ######
     coremax <- parallel::detectCores()
   if (is.na(coremax) || coremax == 1) {
     parallel <- FALSE
@@ -195,7 +195,7 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
     if (is.null(ncores)) ncores <- max(1, coremax - 1)
   }
 
-  # Determine model type
+  # Determine model type ans setting (space spacetime bivariate)
   model_ck <- CkCorrModel(corrmodel)
   bivariate <- CheckBiv(model_ck)
   spacetime <- CheckST(model_ck)
@@ -237,13 +237,21 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
 
 
 ############################################################################
-  if(model=="Gaussian")  res=Gauss_cd(data,corrmodel,nrep,method,L,
+######################### not copula models ################################
+############################################################################
+if(is.null(copula)){
+
+print("gg")
+  if(model=="Gaussian") {
+                      res=Gauss_cd(data,corrmodel,nrep,method,L,
                               param,
                               coord_obs,loc,coordt_use,time,X,Xloc,Mloc,distance,radius,
                               local,neighb,maxdist,maxtime,
                               space,spacetime,bivariate,parallel,ncores)
+                      }
+print("gg2")
   ################################################################################
-  ############### monotone tranformations of Gausssian RF ########################
+  ############### monotone tranformations of one Gausssian RF ####################
   ################################################################################
   if(model=="LogGaussian")
   {    
@@ -255,14 +263,212 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
                           coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
                           local,neighb,maxdist,maxtime,
                           space,spacetime,bivariate,parallel,ncores)
-                          res <- lapply(res, function(r) mm * exp(sqrt(vv) * r - vv/2)) # backtranformation
+                      res <- lapply(res, function(r) mm * exp(sqrt(vv) * r - vv/2)) # backtranformation
 
   }
-  if(model=="Tukeyh") {}
-  if(model=="Tukeyh2") {}
-  if(model=="SinhAsinh") {}
-############################################################################
+   ################################################################################
+  if(model=="Tukeyh") {
+                      inverse_lamb=function(x,tail){
+                      value = sqrt(VGAM::lambertW(tail*x*x)/tail);
+                      return(sign(x)*value);
+                      }
+                      mm=param$mean
+                      vv=param$sill
+                      tail=param$tail
+                      datanorm=inverse_lamb((data-mm)/sqrt(vv),tail)   ##transformation in the gaussian scale
+                      param$mean=0;param$sill=1; param$tail=NULL
+                      res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+                      res <- lapply(res, function(r) mm+ sqrt(vv)*r*exp(tail*r^2/2)) # backtranformation
+  }
+  ################################################################################
+  if(model=="Tukeyh2") {
+     ################
+    inverse_lamb=function(x,tail){
+                      value = sqrt(VGAM::lambertW(tail*x*x)/tail);
+                      return(sign(x)*value);
+                      }
+                mm=param$mean
+                vv=param$sill
+                tail1=param$tail1
+                tail2=param$tail2
+    inverse_lamb2=function(x,tail1,tail2){
+                      aa=1:length(x)
+                      sel1=I(x>=0)*aa
+                      sel2=I(x<0)*aa
+                      a1=inverse_lamb(x[sel1],tail1)  
+                      b1=inverse_lamb(x[sel2],tail2)
+                      sel1[sel1>0]<-a1
+                      sel2[sel2>0]<-b1
+                      return(c(sel1+sel2))
+                      }
+       ################
+                     datanorm= inverse_lamb2((data-mm)/sqrt(vv),tail1,tail2)        
+                     param$mean=0;param$sill=1; param$tail1=NULL;param$tail2=NULL
+                     res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
 
+    ff<- function(r,mm,vv,tail1,tail2){
+                      aa=1:length(r)
+                      sel1=I(r>=0)*aa
+                      sel2=I(r<0)*aa
+                      res1=mm+ sqrt(vv)*r[sel1]*exp(tail1*r[sel1]^2/2)
+                      res2=mm+ sqrt(vv)*r[sel2]*exp(tail2*r[sel2]^2/2)
+                      sel1[sel1>0]<-res1
+                      sel2[sel2>0]<-res2                    
+                      return(c(sel1+sel2))}
+                     
+                     res <- lapply(res,ff,mm = mm, vv = vv, tail1 = tail1, tail2 = tail2) # backtranformation
+  }
+    ################################################################################
+  if(model=="SinhAsinh") {
+                      mm=exp(param$mean)  
+                      vv=param$sill
+                      skew=param$skew
+                      tail=param$tail
+                      datanorm=sinh(tail*asinh((data-mm)/sqrt(vv))-skew)      ##transformation in the gaussian scale
+                      param$mean=0;param$sill=1; param$skew=NULL;param$tail=NULL
+                      res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+                      res <- lapply(res, function(r) mm+sqrt(vv)*sinh( (1/tail)*(asinh(r)+skew))) # backtranformation
+
+  }
+ ###############################################################################
+ ############### tranformations of independent Gausssian RFs ###################
+ ###############################################################################
+
+if(model=="SkewGaussian") {
+                     # mm=exp(param$mean)  
+                     # vv=param$sill
+                     # skew=param$skew
+                    #...
+                    }
+if(model=="Gamma") {
+                    #...
+
+                    }
+if(model=="Weibull") {
+                    #...
+                    }
+if(model=="Poisson") {
+                    #...
+                    }
+
+
+ }       ### end not copula models
+ else{ 
+###########################################################################
+################## copula models ###########################################
+############################################################################
+if(copula=="Gaussian")
+    {
+         if(model=="Weibull")
+         {
+         mm=exp(param$mean)  
+         ss=param$shape
+         datanorm1=  pweibull(data,shape=ss,scale=mm/(gamma(1+1/ss)))
+         datanorm=qnorm(datanorm1)
+         param$mean=0;param$sill=1;param$shape=NULL;
+         res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+         res <- lapply(res, function(r) pnorm(r))
+         res <- lapply(res, function(r) qweibull(r,shape=ss,scale=mm/(gamma(1+1/ss )))) # backtranformation
+         }
+
+        if(model=="LogGaussian")
+        {                      
+        mm=exp(param$mean)
+        vv=param$sill
+        datanorm1=plnorm(data, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE)
+        datanorm=qnorm(datanorm1)
+        param$mean=0;param$sill=1;
+        res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+        res <- lapply(res, function(r) pnorm(r))
+        res <- lapply(res, function(r) qlnorm(r,meanlog=mm-vv/2, sdlog = sqrt(vv),log.p = FALSE)) # backtranformation
+        #res <- lapply(res, function(r) pnorm((r-mm-vv/2)/sqrt(vv)))
+        }
+
+
+
+        if(model=="Gamma")
+        {        
+        mm=exp(param$mean)  
+        ss=param$shape
+        datanorm1= pgamma(data,shape=ss/2,rate=ss/(2*mm))
+        datanorm=qnorm(datanorm1)
+        param$mean=0;param$sill=1;param$shape=NULL;
+        res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+         res <- lapply(res, function(r) pnorm(r))
+         res <- lapply(res, function(r) qgamma(r,shape=ss/2,rate=ss/(2*mm))) # backtranformation}
+        }
+         
+        if(model=="Beta2")
+        {
+        mm=1/(1+exp(-param$mean))
+        ss=param$shape
+        pmin=param$min
+        pmax=param$max
+        datanorm1=pbeta((data-pmin)/(pmax-pmin),shape1=mm*ss,shape2=(1-mm)*ss)
+        datanorm=qnorm(datanorm1)
+        param$mean=0;param$sill=1;param$shape=NULL;param$min=NULL;param$max=NULL;
+        res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+        res <- lapply(res, function(r) pnorm(r))
+        res <- lapply(res, function(r) pmin+(pmax-pmin)*qbeta(r,shape1=mm*ss,shape2=(1-mm)*ss))
+        }
+
+        if(model=="StudentT")
+        {
+        mm=param$mean
+        vv=param$sill
+        df=param$df
+        datanorm1=pt((data-mm)/sqrt(vv),df=1/df)
+        datanorm=qnorm(datanorm1)
+        param$mean=0;param$sill=1;param$df=NULL;
+        res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+        res <- lapply(res, function(r) pnorm(r))
+        res <- lapply(res, function(r) mm+sqrt(vv)*qt(r,df=1/df))
+        }
+
+        if(model=="Gaussian")
+        {
+        mm=param$mean
+        vv=param$sill
+        datanorm1=pnorm(data,mm,sqrt(vv))
+        datanorm=qnorm(datanorm1)
+        param$mean=0;param$sill=1;
+        res=Gauss_cd(datanorm,corrmodel,nrep,method,L,param,
+                          coord_obs,loc,coordt_use,time,NULL,NULL,NULL,distance,radius,
+                          local,neighb,maxdist,maxtime,
+                          space,spacetime,bivariate,parallel,ncores)
+        res <- lapply(res, function(r) pnorm(r))
+        res <- lapply(res, function(r) qnorm(r,mm,sqrt(vv)))
+        }
+    }
+}
+
+############################################################################
+############################################################################
+############################################################################
 ############################
 GeoSimcond_out = list(   
     bivariate=bivariate,

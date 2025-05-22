@@ -1883,20 +1883,22 @@ double CorFunSmoke(double lag, double scale, double smooth)
 // Whittle=matern class of correlation models:
 double CorFunWitMat(double lag, double scale, double smooth)
 {
-    double a = lag / scale;
-    if (lag < 1e-150) return 1.0;
+  
+    if (lag <= 0.0) return 1.0;
+      double a = lag / scale;
     if (smooth == 0.5)  return exp(-a);
     if (smooth == 1.5)  return exp(-a) * (1.0 + a);
     if (smooth == 2.5)  return exp(-a) * (1.0 + a + (a * a) / 3.0);
-    if (smooth == 3.5)  return exp(-a) * (1.0 + a + 0.4 * a * a + 0.0666667 * a * a * a);
+    if (smooth == 3.5)  return exp(-a) * (1.0 + a + 0.4 * a * a + (a * a * a) / 15.0);
 
-    // Generale: Matérn con nu = smooth
-    // rho = (a^nu * K_nu(a)) / (2^{nu-1} * Gamma(nu)), con normalizzazione per exp(a)
-    double log_besselk = log(bessel_k(a, smooth, 2)); // log(K_nu(a)), 2=expon.scaled
+    // Caso generico: formula logaritmica stabile
+    double log_besselk = log(bessel_k(a, smooth, 2)); // K_nu(a), con scaling esponenziale interno
     double log_num = smooth * log(a) + log_besselk - a;
     double log_den = (smooth - 1.0) * log(2.0) + lgammafn(smooth);
+
     return exp(log_num - log_den);
 }
+
 
 
 double Shkarofski(double lag, double a,double b, double k)
@@ -1915,7 +1917,7 @@ double CorFunWitMat1(double lag, double scale, double smooth)
   double rho=0.0;
   double bb=sqrt(lag/scale);
   // Computes the correlation:
-  if(lag==0) rho=1;
+  if(lag<=0) rho=1;
   else  rho=(R_pow(2,smooth+1)*R_pow(bb,-smooth)*bessel_k(bb,smooth,1))/(gammafn(-smooth));
   return rho;
 }
@@ -1933,118 +1935,155 @@ double CorFunBohman(double lag,double scale)
 /* wendland function alpha=0*/
 double CorFunW0(double lag, double scale, double smoo)
 {
-    double x = lag / scale;
-    if (x <= 1.0)
-        return R_pow(1.0 - x, smoo);
-    else
-        return 0.0;
-}
 
+    double x = lag / scale;
+     if (x <= 0.0) return 1;  
+    if (x >= 1.0) return 0.0;    
+    return R_pow(1.0 - x, smoo);
+}
 /* wendland function alpha=1*/
 double CorFunW1(double lag, double scale, double smoo)
 {
-    double x = lag / scale;
-
-    if (x <= 1.0) {
-        double s1 = smoo + 1.0;
-        return R_pow(1.0 - x, s1) * (1.0 + s1 * x);
-    } else {
-        return 0.0;
-    }
+     double x = lag / scale;
+     if (x <= 0.0) return 1;  
+     if (x >= 1.0) return 0.0; 
+     double s1 = smoo + 1.0;
+     return R_pow(1.0 - x, s1) * (1.0 + s1 * x);    
 }
 
 /* wendland function alpha=2*/
 double CorFunW2(double lag, double scale, double smoo)
 {
     double x = lag / scale;
-    if (x <= 1.0) {
+     if (x <= 0.0) return 1;  
+     if (x >= 1.0) return 0.0; 
         double s2 = smoo + 2.0;
         double x2 = x * x;
         double s = smoo;
         double poly = 3.0 + x * (3.0 * s + 6.0) + x2 * (s * s + 4.0 * s + 3.0);
         return R_pow(1.0 - x, s2) * poly / 3.0;
-    } else {
-        return 0.0;
-    }
 }
 
 
 double CorFunHyperg2(double lag, double R_power, double R_power1, double smooth, double scale)
 {
     const double d = 2.0;
+    const double epsilon = 1e-14;
+
     double x = lag / scale;
-    if (x < 1e-32) return 1.0;
-    if (x > 1.0)   return 0.0;
+    if (x <= epsilon) return 1.0;
+    if (x >= 1.0)     return 0.0;
+
     double beta = R_power;
     double gamma = R_power1;
     double a = beta - smooth;
     double b = gamma - smooth;
-    double c = beta - smooth + gamma - d/2.0;
-    double logg1 = lgammafn(beta - d/2.0);
-    double logg2 = lgammafn(gamma - d/2.0);
+    double c = beta - smooth + gamma - d / 2.0;
+
+    double logg1 = lgammafn(beta - d / 2.0);
+    double logg2 = lgammafn(gamma - d / 2.0);
     double logg3 = lgammafn(c);
-    double logg4 = lgammafn(smooth - d/2.0);
-    double one_minus_x2 = 1.0 - x*x;
-    double pow_term = R_pow(one_minus_x2, c - 1.0);
+    double logg4 = lgammafn(smooth - d / 2.0);
+
+    double one_minus_x2 = 1.0 - x * x;
+    double pow_term = R_pow(one_minus_x2, c - 1.0);  // usa R_pow se preferisci la tua funzione
+
     double hyperg = hypergeo(a, b, c, one_minus_x2);
 
     double rho = exp(logg1 + logg2 - logg3 - logg4) * pow_term * hyperg;
     return rho;
 }
 
-
-
-   
-
-
-/* optimal  hypergeometric correlation  function*/
-/* Optimal hypergeometric correlation function (ottimizzata) */
 double CorFunHyperg(double lag, double R_power, double smooth, double scale)
 {
     const double d = 2.0;
+    const double epsilon = 1e-14;
+
     double x = lag / scale;
-    if (x < 1e-32) return 1.0;
-    if (x > 1.0) return 0.0;
+    if (x <= epsilon) return 1.0;
+    if (x >= 1.0)     return 0.0;
 
-    double pow_x2 = R_pow(x, 2);
-    double one_minus_x2 = 1.0 - pow_x2;
-    double gamma1 = gamma(smooth + (R_power + 1) / 2.0);
-    double gamma2 = gamma(2 * smooth + (d + R_power + 1) / 2.0);
-    double gamma3 = gamma(R_power + (d + 1) / 2.0 + 2 * smooth);
-    double gamma4 = gamma(smooth + 0.5);
-    double term1 = R_pow(one_minus_x2, R_power + (d - 1) / 2.0 + 2 * smooth);
-    double hyperg = hypergeo(R_power / 2.0, (R_power + d) / 2.0 + smooth, R_power + (d + 1) / 2.0 + 2 * smooth, one_minus_x2);
+    double x2 = x * x;
+    double one_minus_x2 = 1.0 - x2;
 
-    return (gamma1 * gamma2 / (gamma3 * gamma4)) * term1 * hyperg;
+    double rp_half = R_power / 2.0;
+    double rp_d_half_smooth = (R_power + d) / 2.0 + smooth;
+    double rp_d1_half_2smooth = R_power + (d + 1.0) / 2.0 + 2.0 * smooth;
+
+    // log-gamma
+    double logg1 = lgammafn(smooth + (R_power + 1.0) / 2.0);
+    double logg2 = lgammafn(2.0 * smooth + (d + R_power + 1.0) / 2.0);
+    double logg3 = lgammafn(rp_d1_half_2smooth);
+    double logg4 = lgammafn(smooth + 0.5);
+
+    double exponent = R_power + (d - 1.0) / 2.0 + 2.0 * smooth;
+    double log_term1 = log(one_minus_x2) * exponent;
+
+    double hyperg = hypergeo(rp_half, rp_d_half_smooth, rp_d1_half_2smooth, one_minus_x2);
+
+    double log_rho = logg1 + logg2 - logg3 - logg4 + log_term1;
+    return exp(log_rho) * hyperg;
 }
 
 
 
-/*
-double CorFunHyperg(double lag,double R_power,double smooth,double scale)    
-{
-    double rho=0.0,x=0.0,delta=0.0,bet=0.0,gamm=0.0,l=0.0;
-    double d=2;
 
-   delta=(d+1)/2+smooth;
-   bet=delta+R_power/2;
-   l=d/2+smooth;
-   gamm=bet+l;     //d+2*delta+R_power/2--0.5;
-
-    x=lag/scale;
-    if(x<1e-32) {rho=1; return(rho);}
-
-    if(x<=1)
-         {
-                 // Rprintf("%f %f----%f %f %f\n",smooth, R_power, bet, gamm,delta);
-             rho=(exp((lgammafn(bet-d/2)+lgammafn(gamm-d/2))-(lgammafn(bet-delta+gamm-d/2)+lgammafn(delta-d/2)))
-         *R_pow(1-x*x,bet-delta+gamm-d/2-1)*hypergeo(bet-delta,gamm-delta,bet-delta+gamm-d/2, 1-x*x));
-      }
-  else {rho=0;}
-
-    return(rho);
+/* Optimized Wendland correlation function */
+/* generalized wendland function*/
+double CorFunW_gen(double lag, double R_power1, double smooth, double scale) {
+    const double x = lag / scale;
+    
+    // Controllo precoce per casi semplici
+    if (x >= 1.0) return 0.0;
+    if (x <= 1e-32) return 1.0;
+    
+    // Casi speciali per smooth intero (più efficienti)
+    const double smooth_floor = floor(smooth);
+    if (smooth == smooth_floor && smooth >= 0.0 && smooth <= 3.0) {
+        const double p = R_power1 + smooth;
+        const double omx = 1.0 - x;  // (1-x) comune a tutti i casi
+        const double omx_p = R_pow(omx, p);
+        
+        switch((int)smooth_floor) {
+            case 0:
+                return omx_p;
+                
+            case 1: {
+                const double term = 1.0 + p * x;
+                return omx_p * term;
+            }
+                
+            case 2: {
+                const double x2 = x * x;
+                const double rp = R_power1;
+                const double coeff = (rp * rp + 4.0 * rp + 3.0) / 3.0;
+                const double term = 1.0 + p * x + x2 * coeff;
+                return omx_p * term;
+            }
+                
+            case 3: {
+                const double x2 = x * x;
+                const double x3 = x2 * x;
+                const double rp = R_power1;
+                const double coeff2 = (2.0 * rp * rp + 12.0 * rp + 15.0) / 5.0;
+                const double coeff3 = (rp * rp * rp + 9.0 * rp * rp + 23.0 * rp + 15.0) / 15.0;
+                const double term = 1.0 + p * x + x2 * coeff2 + x3 * coeff3;
+                return omx_p * term;
+            }
+        }
+    }
+    
+    // Caso generale
+    const double s = smooth;
+    const double rp = R_power1;
+    const double log_coeff = lgammafn(s) + lgammafn(2.0 * s + rp + 1.0)
+                           - (lgammafn(2.0 * s) + lgammafn(s + rp + 1.0));
+    const double coeff = exp(log_coeff) * R_pow(2.0, -rp - 1.0);
+    const double pow_term = R_pow(1.0 - x * x, s + rp);
+    const double hyperg = hypergeo(rp / 2.0, (rp + 1.0) / 2.0, s + rp + 1.0, 1.0 - x * x);
+    
+    return coeff * pow_term * hyperg;
 }
-*/
 
 
 /* kummer function*/
@@ -2060,112 +2099,180 @@ double CorKummer(double lag,double R_power,double smooth,double scale)  // mu al
 
 
 
-double CorFunWitMathole(double lag, double scale, double smooth,double R_power1)
+double CorFunWitMathole(double lag, double scale, double smooth, double R_power1)
 {
- double rho=0.0;
-  double d=2.0;
-  double x=lag/scale; 
-  if(x<1e-32) {rho=1; return(rho);}
-  int k = (int) R_power1;
-  if(k==0) {rho=CorFunWitMat(lag,scale,smooth);}  
-  else{ 
-   double delta;
-   int q,r,s,t;
-    if (smooth - 0.5 == floor(smooth - 0.5)) {
-    // case nu=0.5+k
-                for (q = 0; q <= k; q++) {
-                    for (r = 0; r <= fmax(0, q - 1); r++) {
-                        delta = 0.0;
-                        for (s = 0; s <= q - r; s++) {
-                            for (t = 0; t <= (int)(smooth - 0.5); t++) {
-                                delta += sqrt(M_PI) * poch(smooth + 0.5 - t, 2 * t) * 
-                                poch(smooth + 0.5 - t - s, s) * R_pow(-1.0, q - r - s) *
-                                exp(lgammafn(q - r + 1) - lgammafn(s + 1) - lgammafn(q - r - s + 1) -
-                                (smooth - 0.5 + t) * log(2) + (smooth - 0.5 - s - t) * log(x) - 
-                                lgammafn(smooth) - lgammafn(t + 1) - (q - r) * log(scale));
-                        }}
-            rho += R_pow(-1.0, r) * poch(k - q + 1, q) * poch(q, r) * poch(q - r, r) / 
-                                R_pow(2, q + r) / gammafn(q + 1) / gammafn(r + 1) / poch(d/2, q) * 
-                                R_pow(lag, q - r) * exp(-x) * delta;
-                    }}
+    double rho = 0.0;
+    double d = 2.0;
+    double x = lag / scale;
+    
+    // Early return for zero or very small lag
+    if (x < 1e-32) {
+        return 1.0;
+    }
+    
+    int k = (int)R_power1;
+    
+    // Base case: call the simpler function if k is 0
+    if (k == 0) {
+        return CorFunWitMat(lag, scale, smooth);
+    }
+    
+    // Special case for nu = 0.5 + integer
+    if (fabs(smooth - 0.5 - floor(smooth - 0.5)) < 1e-10) {
+        int nu_int = (int)(smooth - 0.5);
+        
+        for (int q = 0; q <= k; q++) {
+            for (int r = 0; r <= fmax(0, q - 1); r++) {
+                double delta = 0.0;
+                
+                for (int s = 0; s <= q - r; s++) {
+                    for (int t = 0; t <= nu_int; t++) {
+                        // Calculate pochammer symbols carefully
+                        double poch1 = 1.0;  // poch(smooth + 0.5 - t, 2 * t)
+                        for (int i = 0; i < 2 * t; i++) {
+                            poch1 *= (smooth + 0.5 - t + i);
+                        }
+                        
+                        double poch2 = 1.0;  // poch(smooth + 0.5 - t - s, s)
+                        for (int i = 0; i < s; i++) {
+                            poch2 *= (smooth + 0.5 - t - s + i);
+                        }
+                        
+                        // Calculate combination term
+                        double comb = 1.0;
+                        for (int i = 1; i <= q - r; i++) {
+                            comb *= i;
+                        }
+                        for (int i = 1; i <= s; i++) {
+                            comb /= i;
+                        }
+                        for (int i = 1; i <= (q - r - s); i++) {
+                            comb /= i;
+                        }
+                        
+                        // Power of -1
+                        double sign = ((q - r - s) % 2 == 0) ? 1.0 : -1.0;
+                        
+                        // Calculate term
+                        double term = sqrt(M_PI) * poch1 * poch2 * sign * comb *
+                                     exp(-(smooth - 0.5 + t) * log(2) + 
+                                         (smooth - 0.5 - s - t) * log(x) - 
+                                         lgammafn(smooth) - 
+                                         lgammafn(t + 1) - 
+                                         (q - r) * log(scale));
+                                         
+                        delta += term;
+                    }
+                }
+                
+                // Calculate outer pochammer symbols
+                double poch_k_q = 1.0;  // poch(k - q + 1, q)
+                for (int i = 0; i < q; i++) {
+                    poch_k_q *= (k - q + 1 + i);
+                }
+                
+                double poch_q_r = 1.0;  // poch(q, r)
+                for (int i = 0; i < r; i++) {
+                    poch_q_r *= (q + i);
+                }
+                
+                double poch_q_r2 = 1.0;  // poch(q - r, r)
+                for (int i = 0; i < r; i++) {
+                    poch_q_r2 *= (q - r + i);
+                }
+                
+                double poch_d2_q = 1.0;  // poch(d/2, q)
+                for (int i = 0; i < q; i++) {
+                    poch_d2_q *= (d/2 + i);
+                }
+                
+                // Sign for r
+                double sign_r = (r % 2 == 0) ? 1.0 : -1.0;
+                
+                // Calculate q, r term
+                rho += sign_r * poch_k_q * poch_q_r * poch_q_r2 / 
+                      (pow(2.0, q + r) * tgamma(q + 1) * tgamma(r + 1) * poch_d2_q) * 
+                      pow(lag, q - r) * exp(-x) * delta;
+            }
+        }
     } 
-    else { // general case 
-                for ( q = 0; q <= k; q++) {
-                    for (r = 0; r <= fmax(0, q - 1); r++) {
-                        delta = 0.0;
-                        for (s = 0; s <= q - r; s++) {
-                            for (t = 0; t <= q - r - s; t++) {
-    delta += exp(lgammafn(q - r + 1) - lgammafn(s + 1) -lgammafn(t + 1) - lgammafn(q - r - s - t + 1)) *
-                    poch(smooth + 1 - s, s) * R_pow(-0.5, q - r - s) * R_pow(x,smooth-s)*bessel_k( x,smooth + 2 * t + r + s - q, 1);
-                            }}
-                    rho += R_pow(x,q-r)*R_pow(-1.0, r) * poch(k - q + 1, q) * poch(q, r) * poch(q - r, r) /
-                                (R_pow(2, q + r) * gammafn(q + 1) * gammafn(r + 1) * 
-                                poch(d / 2, q) )*  delta;
-                    }}
-                rho=rho*  R_pow(2, 1 - smooth) / gammafn(smooth);
-         }}
-return(rho);
+    else { 
+        // General case
+        for (int q = 0; q <= k; q++) {
+            for (int r = 0; r <= fmax(0, q - 1); r++) {
+                double delta = 0.0;
+                
+                for (int s = 0; s <= q - r; s++) {
+                    // Calculate pochammer for s
+                    double poch_smooth_s = 1.0;  // poch(smooth + 1 - s, s)
+                    for (int i = 0; i < s; i++) {
+                        poch_smooth_s *= (smooth + 1 - s + i);
+                    }
+                    
+                    for (int t = 0; t <= q - r - s; t++) {
+                        // Calculate combination term
+                        double comb = 1.0;
+                        for (int i = 1; i <= q - r; i++) {
+                            comb *= i;
+                        }
+                        for (int i = 1; i <= s; i++) {
+                            comb /= i;
+                        }
+                        for (int i = 1; i <= t; i++) {
+                            comb /= i;
+                        }
+                        for (int i = 1; i <= (q - r - s - t); i++) {
+                            comb /= i;
+                        }
+                        
+                        // Calculate term
+                        delta += comb * poch_smooth_s * 
+                                pow(-0.5, q - r - s) * 
+                                pow(x, smooth - s) * 
+                                bessel_k(x, smooth + 2 * t + r + s - q, 1);
+                    }
+                }
+                
+                // Calculate pochammer symbols for outer terms
+                double poch_k_q = 1.0;  // poch(k - q + 1, q)
+                for (int i = 0; i < q; i++) {
+                    poch_k_q *= (k - q + 1 + i);
+                }
+                
+                double poch_q_r = 1.0;  // poch(q, r)
+                for (int i = 0; i < r; i++) {
+                    poch_q_r *= (q + i);
+                }
+                
+                double poch_q_r2 = 1.0;  // poch(q - r, r)
+                for (int i = 0; i < r; i++) {
+                    poch_q_r2 *= (q - r + i);
+                }
+                
+                double poch_d2_q = 1.0;  // poch(d/2, q)
+                for (int i = 0; i < q; i++) {
+                    poch_d2_q *= (d/2 + i);
+                }
+                
+                // Sign for r
+                double sign_r = (r % 2 == 0) ? 1.0 : -1.0;
+                
+                // Calculate q, r term
+                rho += pow(x, q - r) * sign_r * poch_k_q * poch_q_r * poch_q_r2 /
+                      (pow(2.0, q + r) * tgamma(q + 1) * tgamma(r + 1) * poch_d2_q) * delta;
+            }
+        }
+        
+        // Apply final constant factor
+        rho = rho * pow(2.0, 1 - smooth) / tgamma(smooth);
+    }
+    
+    return rho;
 }
 
 
 
 
-/*** unstable versions  with besselI
-double CorFunWitMathole(double lag, double scale, double smooth,double R_power1)
-{
-  double rho=0.0;
-  double d=2.0;
-  double x=lag/scale; 
-  if(x<1e-32) {rho=1; return(rho);}
-  int k = (int) R_power1;
-  if(k==0) {rho=CorFunWitMat(lag,scale,smooth);return(rho);}  
-  else{   
-  double rho1=0.0,rho2=0.0;double const1,const2, nsm, nsp; int n=0;
-  double k1=gammafn(k+1)*gammafn(1-smooth);
-  double k2=gammafn(k+1)*gammafn(smooth+d/2+k)*gammafn(d/2)*gammafn(-smooth)*smooth/gammafn(k+d/2);
-   
- for(n=0;n<=k;n++){
-    nsm=n-smooth;nsp=n+smooth;
-    const1=k1/(gammafn(n+1)*gammafn(k-n+1)*poch(d/2,n));
-  rho1=rho1+ const1*R_pow(x/2,nsp)*bessel_i(x,nsm,2);//exp( log(bessel_i(x,nsm,2))+x);
-    }
- for(n=0;n<=k;n++){
-     nsp=n+smooth;
-const2= k2/(gammafn(n+1)*gammafn(k-n+1)*gammafn(smooth+d/2+n));
-rho2=rho2+const2*R_pow(x/2,nsp)*bessel_i(x,nsp,2);// exp( log(bessel_i(x,nsp,2))+x);
-   } 
-rho=exp(x)*(rho1+rho2);
-   return(rho);
- }
-}*/
-/*
-double CorFunWitMathole(double lag, double scale, double smooth,double R_power1)
-{
-  double rho=0.0;
-  double d=2.0;
-  double x=lag/scale; 
-  if(x<1e-32) {rho=1; return(rho);}
-  int k = (int) R_power1;
-  if(k==0) {rho=CorFunWitMat(lag,scale,smooth); return(rho);}  
-  else{   
-
-   double term,k0,b2,b3,nsm,nsp;int n=0;
-   double k1=gammafn(k+1)*gammafn(d/2)*gammafn(1-smooth);
-   double k2=gammafn(d/2+smooth+k)/gammafn(d/2+k);
- for(n=0;n<=k;n++){
-    nsm=n-smooth;
-    nsp=n+smooth;
-    k0=k1/(gammafn(n+1)*gammafn(k-n+1));
-    b2=exp( log(bessel_i(x,nsm,2))+x-lgammafn(d/2+n));//b2=bessel_i(x,nsm,1);
-    b3=exp( log(bessel_i(x,nsp,2))+x+log(k2)-lgammafn(d/2+nsp)); // b3=bessel_i(x,nsp,1);
-    term=k0*R_pow(0.5*x,nsp)*(b2-b3);
-    Rprintf("%f %f--%d\n",x,term,n);
-  rho=rho+ term;
-    }
-   return(rho);
- }
- 
-}*/
 /*******************************************************************************/
 /*******************************************************************************/
 /*******************************************************************************/
@@ -2178,6 +2285,7 @@ double CorFunW_genhole(double lag, double R_power1, double smooth, double scale,
     double mu = R_power1;
     int k = (int)kk;
     if (k == 0) {
+        //Rprintf("%f %f %f %f \n",lag, mu, smooth, scale);
         return CorFunW_gen(lag, mu, smooth, scale);
     } else if (x <= 1.0) {
         double alpha = smooth + (d + 1.0) / 2.0 + k;
@@ -2218,7 +2326,6 @@ double CorFunW_genhole(double lag, double R_power1, double smooth, double scale,
         return 0.0;
     }
 }
-
 /*******************************************************************************/
 double Corschoenberg(double lag,double scale)
 {
@@ -2227,67 +2334,12 @@ double d=2;
     x=lag/scale;
     if(x<1e-32) {rho=1; return(rho);}
 double d2=d*0.5;
-rho=gamma(d2)*R_pow(x*0.5,1-d2)*bessel_j(x,d2-1);
+rho=gammafn(d2)*R_pow(x*0.5,1-d2)*bessel_j(x,d2-1);
 return(rho);
 }    
 
 
 
-/* generalized wendland function*/
-double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
-{
-    double x = lag / scale;
-    if (x < 1e-32) return 1.0;
-    // Casi speciali per smooth intero
-    if (smooth == 0) {
-        if (x < 1.0)
-            return R_pow(1.0 - x, R_power1);
-        else
-            return 0.0;
-    }
-    if (smooth == 1) {
-        if (x < 1.0) {
-            double p = R_power1 + 1.0;
-            return R_pow(1.0 - x, p) * (1.0 + p * x);
-        } else
-            return 0.0;
-    }
-    if (smooth == 2) {
-        if (x < 1.0) {
-            double p = R_power1 + 2.0;
-            double x2 = x * x;
-            return R_pow(1.0 - x, p) * (1.0 + p * x + x2 * (R_power1 * R_power1 + 4.0 * R_power1 + 3.0) / 3.0);
-        } else
-            return 0.0;
-    }
-    if (smooth == 3) {
-        if (x < 1.0) {
-            double p = R_power1 + 3.0;
-            double x2 = x * x;
-            double x3 = x2 * x;
-            double rp = R_power1;
-            return R_pow(1.0 - x, p) * (
-                1.0 + p * x +
-                x2 * (2.0 * rp * rp + 12.0 * rp + 15.0) / 5.0 +
-                x3 * (rp * rp * rp + 9.0 * rp * rp + 23.0 * rp + 15.0) / 15.0
-            );
-        } else
-            return 0.0;
-    }
-    // Caso generale
-    if (x <= 1.0) {
-        double s = smooth;
-        double rp = R_power1;
-        double log_coeff = lgammafn(s) + lgammafn(2.0 * s + rp + 1.0)
-                         - (lgammafn(2.0 * s) + lgammafn(s + rp + 1.0));
-        double coeff = exp(log_coeff) * R_pow(2.0, -rp - 1.0);
-        double pow_term = R_pow(1.0 - x * x, s + rp);
-        double hyperg = hypergeo_sem(rp / 2.0, (rp + 1.0) / 2.0, s + rp + 1.0, 1.0 - x * x);
-        return coeff * pow_term * hyperg;
-    } else {
-        return 0.0;
-    }
-}
 
 
 double CorFunWend0_tap(double lag,double scale,double smoo)
@@ -2395,14 +2447,6 @@ double CorFunWendhole(double lag,double scale)
 /************************************************************************************************/
 /************************************************************************************************/
 // Computation of the upper (lower) triangular spatial correlation matrix: spatial case
-/************************************************************************************************/
-/************************************************************************************************/
-/************************************************************************************************/
-/************************************************************************************************/
-/****************** SPATIAL CORRELATION MATRIX (upper trinagular) *******************************/
-/************************************************************************************************/
-/************************************************************************************************/
-// Computation of the upper (lower) triangular spatial correlation matrix: spatial case
 void CorrelationMat2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod,
  double *nuis, double *par,double *radius,int *ns, int *NS)
 {
@@ -2412,20 +2456,17 @@ void CorrelationMat2(double *rho,double *coordx, double *coordy,double *coordz, 
         for(j=(i+1);j<ncoord[0];j++){
         dd=dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
     rho[h]=CorFct(cormod,dd,0,par,0,0);
-      //Rprintf("%d- %f %f %f %f -- %f %f %f --%f\n",type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],dd,rho[h]);
+
        h++;
     }}
   return;
 }
-
 // Computation of the upper (lower) triangular spatial discrete  models
 void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coordz, double *coordt,  int *cormod, double *mean,
         int *nn,double *nuis, double *par,double *radius, int *ns, int *NS,int *model)
 {
     int i=0,j=0,h=0;// check the paramaters range:
     double psj=0.0,dd=0.0,ai=0.0,aj=0.0,p1=0.0,p2=0.0,p=0,corr=0.0,p00=0,p11=0,mui=0.0,muj=0.0;
-
-//Rprintf("%f %f %f\n",nuis[0],nuis[1],nuis[2]);
     for(i=0;i<(ncoord[0]-1);i++){
       for(j=(i+1);j<ncoord[0];j++){
 
@@ -2445,7 +2486,6 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
       if(*model==16)       rho[h]=cov_binom_neg(nn[0],psj,p1,p2);
       if(*model==45)     //BinomialNegZINB
       {
-
            p=pnorm(nuis[2],0,1,1,0);
            p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
            p11=1-2*p+p00;

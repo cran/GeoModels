@@ -42,28 +42,60 @@ return(res);
 }
 
 
+
+double hypergeometric_1F2(double a, double b, double c, double x, double tol){
+
+    int max_terms =2000;
+    double sum = 1.0;
+    double term = 1.0;
+    double max_term = 1.0;
+    int n = 0;
+    if (b <= 0.0 && b == floor(b)) {
+        tol = INFINITY;
+        return R_NaN;
+    }
+    if (c <= 0.0 && c == floor(c)) {
+        tol = INFINITY;
+        return R_NaN;
+    }
+ 
+    if (a <= 0.0 && a == floor(a)) {
+        int max_n = (int)(-a);
+        for (n = 1; n <= max_n; n++) {
+            term *= (a + n - 1) * x / ((b + n - 1) * (c + n - 1) * n);
+            sum += term;
+            if (fabs(term) > max_term) max_term = fabs(term);
+        }
+        tol = fabs(DBL_EPSILON * max_term / sum);
+        return sum;
+    }
+    // Calcolo della serie generale
+    while (n < max_terms) {
+        n++;
+        // Metodo 1: calcolo ricorsivo dei termini
+       // term *= (a + n - 1) * x / ((b + n - 1) * (c + n - 1) * n);
+        // Metodo 2: usando i simboli di Pochhammer
+        term = poch(a, n) * R_pow(x, n) / (poch(b, n) * poch(c, n) * gammafn(n + 1));
+        if (fabs(term) > max_term) 
+            max_term = fabs(term);
+        if (!R_FINITE(term)) {
+            tol = INFINITY;
+            return sum;  
+        }
+        sum += term;
+        if (fabs(term) < DBL_EPSILON * fabs(sum))
+            break;
+    }
+    if (n >= max_terms) {
+        //fprintf(stderr, "Attenzione: Raggiunto il numero massimo di iterazioni (%d)\n", max_terms);
+    }
+    tol = fabs(DBL_EPSILON * max_term / sum);
+    return sum;
+}
+
+
+
 /*
-double piko(double Z,double k,double mu,double scale)
-{
-Z=R_pow(Z,2);
-double a,b,c,t0,t1,t2,D,CC,aa;
-a=1.5+k;
-b=a+mu/2;
-c=b+0.5;
-
-int N=141;
-t0 = 1 + fabs(a - b)/(N + b);
-t1 = 1/(N + c);
-t2=1/(1+N);
-D = t0*t1*t2*Z;
-if(D<1) CC=1/(1-D);
-else CC=Inf;
-aa=exp(N*log(Z)+log(CC)+log(poch(a,N))-(log(poch(b,N))+log(poch(c,N))+lgammafn(N+1)));
-return(aa);
-}*/
-
-
-
 
 double hypergeometric_1F2(double a, double b, double c, double x, double tol){
   double n, a0, sum, t;
@@ -98,7 +130,7 @@ double hypergeometric_1F2(double a, double b, double c, double x, double tol){
   while( t > stop );
   return(sum);
 }
-
+*/
 
 /*******************************************************************/
 double den_mat(double z,double k,double sc){  
@@ -126,16 +158,23 @@ return(res);
 }
 
 
-double ff(double lambda,double mu,double k,double zsc,double sc,double tol, int d)
-{
-double a,b,c,rat,res;
-//if(k!=0){
-rat=sqrt(M_PI)*R_pow(2,1-2*k)/gammafn(d+0.5);
-a= rat*0.25*R_pow(M_PI,-1)*gammafn(mu+2*k+1)*gammafn(2*k+d)*R_pow(sc,d);
-b=exp(lgammafn(k+d/2)+lgammafn(mu+2*k+d+1));
-c=hypergeometric_1F2(lambda, lambda + 0.5*mu, lambda + 0.5*(mu+1), -R_pow(zsc,2)/4, tol);
-res=a*c/b;
-return(res);
+double ff(double lambda, double mu, double k, double zsc, double sc, double tol, int d) {
+    double pi = M_PI;
+    double two_pow = R_pow(2.0, 1.0 - 2.0 * k);
+    double gamma_d_half = gammafn(d + 0.5);
+    double rat = sqrt(pi) * two_pow / gamma_d_half;
+    double pi_inv = 1.0 / pi;
+    double gamma_mu_2k_1 = gammafn(mu + 2.0 * k + 1.0);
+    double gamma_2k_d = gammafn(2.0 * k + d);
+    double sc_pow_d = R_pow(sc, d);
+    double numerator = rat * 0.25 * pi_inv * gamma_mu_2k_1 * gamma_2k_d * sc_pow_d;
+    double lgamma_k_d2 = lgammafn(k + d / 2.0);
+    double lgamma_mu_2k_d1 = lgammafn(mu + 2.0 * k + d + 1.0);
+    double denominator = exp(lgamma_k_d2 + lgamma_mu_2k_d1);
+    double arg = - (zsc * zsc) / 4.0;
+    double hyperg = hypergeometric_1F2(lambda, lambda + 0.5 * mu, lambda + 0.5 * (mu + 1.0), arg, tol);
+    double res = numerator * hyperg / denominator;
+    return res;
 }
 
 
@@ -227,51 +266,65 @@ return(res);
 
 
 /*******************************************************************/
-void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other){
+void spectraldensityC(double u, int model, int d, int L, double *f, double *av, double *Cv, double *nu1v, double *nu2v, double *params_other) {
     double norm_u = u;
-    int h=0;
-    for (int i=0;i<L*L;i++){if(av[i]>0){h = h+1;}}
-    h=0;
-    for (int i=0;i<L*L;i++){if (av[i]>0){h = h+1;}}
-    double *r = (double *) R_Calloc(L*L,double);
-/****************************************/
-    if(model==14){  //Matern
-            for(size_t i = 0; i < L*L; i++){
-                 r[i]=den_mat(norm_u,nu1v[i],av[i]); 
-            }}
+    size_t n = (size_t)(L * L);
 
-      if(model==25){  //Kummer_matern
-        for(size_t i = 0; i < L*L; i++){
-            r[i]=den_kum_mat(norm_u,nu1v[i],av[i],params_other[0]);
-        }} 
+    // Allocazione vettore r con controllo
+    double *r = (double *) R_Calloc(n, double);
+    if (r == NULL) {
+        // Gestione errore allocazione
+        return;
+    }
 
-     if(model==6){//GenWendland_matern
-      double tol = 1e-12;
-      for(size_t i = 0; i < L*L; i++){
-       r[i] = den_wen_gen_mat(norm_u,nu1v[i],av[i],params_other[0],tol);
-      }}
-       if(model==7){//GenWendland_matern2
-      double tol = 1e-12;
-      for(size_t i = 0; i < L*L; i++){
-       r[i] = den_wen_gen_mat2(norm_u,nu1v[i],av[i],params_other[0],tol);
-      }}
+    double tol = 1e-12;
 
-          if(model==23){//Hypergeometric_matern
-      double tol = 1e-12;
-      for(size_t i = 0; i < L*L; i++){
-       r[i] = den_hyp_gen_mat(norm_u,nu1v[i],av[i],params_other[0],tol);
-      }}
-       if(model==30){//Hypergeometric_matern2
-      double tol = 1e-12;
-      for(size_t i = 0; i < L*L; i++){
-       r[i] = den_hyp_gen_mat2(norm_u,nu1v[i],av[i],params_other[0],tol);
-      }}
-      
+    // Calcolo densità spettrale in base al modello
+    switch (model) {
+        case 14: // Matern
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_mat(norm_u, nu1v[i], av[i]);
+            }
+            break;
+        case 25: // Kummer_matern
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_kum_mat(norm_u, nu1v[i], av[i], params_other[0]);
+            }
+            break;
+        case 6: // GenWendland_matern
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_wen_gen_mat(norm_u, nu1v[i], av[i], params_other[0], tol);
+            }
+            break;
+        case 7: // GenWendland_matern2
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_wen_gen_mat2(norm_u, nu1v[i], av[i], params_other[0], tol);
+            }
+            break;
+        case 23: // Hypergeometric_matern
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_hyp_gen_mat(norm_u, nu1v[i], av[i], params_other[0], tol);
+            }
+            break;
+        case 30: // Hypergeometric_matern2
+            for (size_t i = 0; i < n; i++) {
+                r[i] = den_hyp_gen_mat2(norm_u, nu1v[i], av[i], params_other[0], tol);
+            }
+            break;
+        default:
+            // Modello non riconosciuto: azzera r
+            for (size_t i = 0; i < n; i++) {
+                r[i] = 0.0;
+            }
+            break;
+    }
+    for (size_t i = 0; i < n; i++) {
+        f[i] = r[i];
+    }
 
-/****************************************/
-    for (size_t i = 0; i < L*L; i++) {f[i] = r[i];}
     R_Free(r);
 }
+
 
 // preguntar si las coordenadas son enteras
 void extraer(double *coord,int sequen1,double *sub_coord,int fila,int col, int d){
@@ -401,103 +454,149 @@ void C_mult_mat(Rcomplex *z, Rcomplex *x, int xrows, int xcols, Rcomplex *y, int
 }
 
 
+/**
+ * Optimized implementation of spectral simulation function for R
+ * 
+ * This function performs spectral density calculations and simulations
+ * based on spatial coordinates and parameters.
+ * 
+ * @param d_v         Pointer to dimension value
+ * @param a_v         Parameters for spectral density function
+ * @param nu1_v       First smoothness parameter
+ * @param C_v         Scale parameter
+ * @param nu2_v       Second smoothness parameter
+ * @param P           Number of components
+ * @param N           Number of simulations
+ * @param L           Number of locations per simulation
+ * @param model       Model type identifier
+ * @param u           Input vectors
+ * @param a0, nu0     Additional model parameters
+ * @param A, B        Output matrices for real and imaginary components
+ * @param sequen      Sequence indices
+ * @param largo_sequen Length of sequence array
+ * @param n           Number of points
+ * @param coord       Coordinate matrix
+ * @param phi         Phase parameter
+ * @param vtype       Variant type
+ * @param m1          Output dimension
+ * @param simu1       Output simulation matrix
+ * @param L1          Additional dimension parameter
+ * @param params_other Additional model parameters
+ */
 void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v, 
            int *P, int *N, int *L, int *model, double *u,
            double *a0, double *nu0, double *A, double *B,
            int *sequen, int *largo_sequen, int *n,
-           double *coord, double *phi, int *vtype, int *m1, double *simu1, double *L1, double *params_other){
+           double *coord, double *phi, int *vtype, int *m1, double *simu1, double *L1, double *params_other) {
   
-  // Iteraciones del for
-  int prod = *P * *L * *N ;
-  int d = *d_v;int p = *P;
-  //variables utiles
+  // Calculate loop iterations
+  const int prod = *P * *L * *N;
+  const int d = *d_v;
+  const int p = *P;
   
-  //int model_1 = 14;
+  // Allocate memory for temporary variables
+  double *f = (double *) R_Calloc(p * p, double);
+  double *g = (double *) R_Calloc(1, double);
+  double *u_1 = (double *) R_Calloc(d, double);
+  double *w = (double *) R_Calloc(p, double);
   
-  double *f,*g,*u_1,*w,*trabajo_adicional;
-  Rcomplex *autovalores,*autovectores;
+  // Complex numbers for eigenvalues and eigenvectors
+  Rcomplex *autovalores = (Rcomplex *) R_Calloc(p, Rcomplex);
+  Rcomplex *autovectores = (Rcomplex *) R_Calloc(p * p, Rcomplex);
+  double *trabajo_adicional = (double *) R_Calloc(3 * p - 1, double);
   
-  f = (double *) R_Calloc(p * p, double);
-  g = (double *) R_Calloc(1, double);
-  u_1 = (double *) R_Calloc(d, double);
-  w = (double *) R_Calloc(p , double);
-  
-  autovalores = (Rcomplex *) R_Calloc(p, Rcomplex);
-  autovectores = (Rcomplex *) R_Calloc(p*p,Rcomplex);
-  trabajo_adicional = (double *) R_Calloc(3*p-1,double);
-  
-  
-  
-  int lwork = 3 * p - 1;
+  // LAPACK parameters
+  const int lwork = 3 * p - 1;
   int info;
-  char *J = "V";
-  char *U = "L";
-  size_t N1= p;
-  Rcomplex *vdm;
-  vdm= (Rcomplex * )R_Calloc(p*p,Rcomplex);
+  const char *J = "V";  // Compute eigenvectors
+  const char *U = "L";  // Use lower triangular part
+  const size_t N1 = p;
+  
+  // Allocate memory for complex intermediate matrix
+  Rcomplex *vdm = (Rcomplex *) R_Calloc(p * p, Rcomplex);
   Rcomplex raizv[2];
-  for (int l= 0;l<prod;l++){
-    int h=0;
-    for(int i=0;i<d;i++){u_1[i] = u[l+h];h = prod;}
-    
-    
-    int g1 = 1;
-    double norm_u = F77_CALL(dnrm2)(&d, u_1, &g1);
-    
-    //double other = 0.2;
-    spectraldensityC(norm_u,*model,d,p,f,a_v,C_v,nu1_v,nu2_v, params_other);
-    for (int i =0;i<p*p;i++){
-      if(g[0]!= 0){
-        f[i] = 2;//2*f[i]/g[0];
-      }else{
-        f[i] = 2;
-      }
+  
+  // First phase: Process all spatial locations
+  for (int l = 0; l < prod; l++) {
+    // Extract the current vector u_1
+    for (int i = 0; i < d; i++) {
+      u_1[i] = u[l + i * prod];
     }
-    if (p>=2){
-      F77_CALL(dsyev)(J, U, &p, f, &p, w, trabajo_adicional, &lwork, &info,N1,N1);
-      for (int i=0;i<p;i++){
-        autovalores[i].r = w[p-i-1];
+    
+    // Calculate vector norm
+    const int g1 = 1;
+    const double norm_u = F77_CALL(dnrm2)(&d, u_1, &g1);
+    
+    // Calculate spectral density matrix based on model
+    spectraldensityC(norm_u, *model, d, p, f, a_v, C_v, nu1_v, nu2_v, params_other);
+    
+    // Normalize the spectral density
+    for (int i = 0; i < p * p; i++) {
+      f[i] = (g[0] != 0) ? 2 * f[i] / g[0] : 2;
+    }
+    
+    // Handle matrices of different dimensions
+    if (p >= 2) {
+      // Calculate eigenvalues and eigenvectors using LAPACK
+      F77_CALL(dsyev)(J, U, &p, f, &p, w, trabajo_adicional, &lwork, &info, N1, N1);
+      
+      // Store eigenvalues in reverse order (largest first)
+      for (int i = 0; i < p; i++) {
+        autovalores[i].r = w[p - i - 1];
         autovalores[i].i = 0;
       }
-      // modificar esta parte si se quiere para p >2
+      
+      // Store eigenvectors (assuming p=2 case)
       autovectores[0].r = f[2];
       autovectores[1].r = f[3];
       autovectores[2].r = f[0];
       autovectores[3].r = f[1];
       
+      for (int i = 0; i < p * p; i++) {
+        autovectores[i].i = 0;
+      }
+    } else {
+      // Handle the case p=1
+      autovalores[0].r = *f;
+      autovalores[0].i = 0;
+      autovectores[0].r = 1;
       autovectores[0].i = 0;
-      autovectores[1].i = 0;
-      autovectores[2].i = 0;
-      autovectores[3].i = 0;
-    }
-    else{
-      autovalores->r = *f;
-      autovalores->i =0;
-      autovectores->r = 1;
-      autovectores->i = 0;
     }
     
-    for (int i=0;i<p;i++){
-      if (autovalores[i].r<0){
-        autovalores[i].r =0;
+    // Ensure eigenvalues are non-negative
+    for (int i = 0; i < p; i++) {
+      if (autovalores[i].r < 0) {
+        autovalores[i].r = 0;
       }
     }
     
-    //Calculos previo para lo de A y B
-    if(p==1){
+    // Calculate square roots for A and B matrices
+    if (p == 1) {
+      // Single component case
       Rcomplex raiz;
-      if (autovalores->r>=0){raiz.r =sqrt(autovalores->r);raiz.i =0;}
-      else{raiz.i= sqrt(-1*autovalores->r);raiz.r =0;}
-      
-      A[l] = raiz.r;B[l] = raiz.i;
-    }
-    else{
-      
-      for (size_t i = 0; i < p; i++){
-        if (autovalores[i].r>=0){raizv[i].r = sqrt(autovalores[i].r);raizv[i].i =0;}
-        else{
-          raizv[i].i = sqrt(-1*autovalores[i].r);raizv[i].r =0;}
+      if (autovalores[0].r >= 0) {
+        raiz.r = sqrt(autovalores[0].r);
+        raiz.i = 0;
+      } else {
+        raiz.i = sqrt(-1 * autovalores[0].r);
+        raiz.r = 0;
       }
+      
+      A[l] = raiz.r;
+      B[l] = raiz.i;
+    } else {
+      // Multiple components case
+      for (size_t i = 0; i < p; i++) {
+        if (autovalores[i].r >= 0) {
+          raizv[i].r = sqrt(autovalores[i].r);
+          raizv[i].i = 0;
+        } else {
+          raizv[i].i = sqrt(-1 * autovalores[i].r);
+          raizv[i].r = 0;
+        }
+      }
+      
+      // Construct the matrix vdm
       vdm[0].r = raizv[0].r;
       vdm[0].i = raizv[0].i;
       vdm[1].r = 0;
@@ -506,18 +605,31 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
       vdm[2].i = 0;
       vdm[3].r = raizv[1].r;
       vdm[3].i = raizv[1].i;
-      C_tcrossprod(vdm,vdm,2,2,autovectores,2,2);
-      C_mult_mat(vdm,autovectores,2,2,vdm,2,2);
-      double fo = (l+1-1)/p;
-      int j = l+1 - p*floor(fo)-1;           //(h,l)
-      double V; double imag_;
-      for (int h=0;h<p;h++){
-        if (j==0){ V = vdm[h].r;imag_ = -vdm[h].i;}
-        else{V = vdm[2+h].r;imag_ = -vdm[2+h].i;}
-        A[h+p*l] = V;B[h+p*l] = imag_;
+      
+      // Calculate matrix products
+      C_tcrossprod(vdm, vdm, 2, 2, autovectores, 2, 2);
+      C_mult_mat(vdm, autovectores, 2, 2, vdm, 2, 2);
+      
+      // Calculate indices and update A and B matrices
+      const double fo = (double)l / p;
+      const int j = l - p * (int)floor(fo);  // Column index
+      
+      for (int h = 0; h < p; h++) {
+        double V, imag_;
+        if (j == 0) {
+          V = vdm[h].r;
+          imag_ = -vdm[h].i;
+        } else {
+          V = vdm[2 + h].r;
+          imag_ = -vdm[2 + h].i;
+        }
+        A[h + p * l] = V;
+        B[h + p * l] = imag_;
       }
-    } 
+    }
   }
+  
+  // Free first phase memory allocations
   R_Free(f);
   R_Free(g);
   R_Free(u_1);
@@ -527,99 +639,120 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
   R_Free(trabajo_adicional);
   R_Free(vdm);
 
-  int lim = *(largo_sequen)-1;
-  for (int i=0;i < lim;i++){
-    int fila = sequen[i+1]-sequen[i];
-    int col = *(n);
-    double *sub_coord;
-    sub_coord = (double *) R_Calloc(fila*d,double);  
-    int sequen1 = sequen[i];
-    extraer(coord,sequen1,sub_coord,fila,col,d);
-    int m = fila;
-    double *simu;
-    simu = (double *) R_Calloc(m * *(P)* *(N),double);  
-    for (size_t k = 0; k < *(N); k++){
-      int *index;
-      int largo = (k+1)**(L)* *(P) - k* *(L)* *(P);
-      index =  (int *) R_Calloc(largo,int); 
-      rellenar_indice(index,k* *(L)* *(P), (k+1)**(L)* *(P) ,largo);
-      double *ui;
-      ui =  (double *) R_Calloc(largo*d,double); 
-      u_index_extraer(ui,u,index,largo,d,prod);
-      double *x0;
-      x0 = (double *) R_Calloc(fila*largo,double); 
-      tcrossprod(x0,sub_coord,fila,d,ui,largo,d);
-      double cte =2*M_PI;
-      mult_x_cons(x0,cte,fila*largo);
-      double *phi_cross;
-      phi_cross= (double*) R_Calloc(largo,double); 
-      u_index_extraer(phi_cross,phi,index,largo,1,prod);
-      double *cbind;
-      cbind = (double*) R_Calloc(m,double); 
-      for (int h=0;h<m;h++){
+  // Second phase: Process sequences for simulation
+  const int lim = *largo_sequen - 1;
+  const double TWO_PI = 2 * M_PI;
+  
+  for (int i = 0; i < lim; i++) {
+    // Calculate dimensions for current sequence
+    const int fila = sequen[i + 1] - sequen[i];
+    const int col = *n;
+    const int sequen1 = sequen[i];
+    const int m = fila;
+    
+    // Allocate memory for coordinates subset
+    double *sub_coord = (double *)R_Calloc(fila * d, double);
+    extraer(coord, sequen1, sub_coord, fila, col, d);
+    
+    // Allocate memory for simulation results
+    double *simu = (double *)R_Calloc(m * *P * *N, double);
+    
+    // Process each simulation
+    for (size_t k = 0; k < *N; k++) {
+      // Calculate index range for current simulation
+      const int start_idx = k * *L * *P;
+      const int end_idx = (k + 1) * *L * *P;
+      const int largo = end_idx - start_idx;
+      
+      // Allocate and fill index array
+      int *index = (int *)R_Calloc(largo, int);
+      rellenar_indice(index, start_idx, end_idx, largo);
+      
+      // Extract u values for current indices
+      double *ui = (double *)R_Calloc(largo * d, double);
+      u_index_extraer(ui, u, index, largo, d, prod);
+      
+      // Calculate coordinate products
+      double *x0 = (double *)R_Calloc(fila * largo, double);
+      tcrossprod(x0, sub_coord, fila, d, ui, largo, d);
+      
+      // Scale by 2π
+      mult_x_cons(x0, TWO_PI, fila * largo);
+      
+      // Extract phi values
+      double *phi_cross = (double *)R_Calloc(largo, double);
+      u_index_extraer(phi_cross, phi, index, largo, 1, prod);
+      
+      // Create constant vector of ones
+      double *cbind = (double *)R_Calloc(m, double);
+      for (int h = 0; h < m; h++) {
         cbind[h] = 1;
       }
-      double *x1;
-      x1 = (double *) R_Calloc(fila*largo,double); 
-      tcrossprod(x1,cbind,m,1,phi_cross,largo,1);
-      double *x;
-      x = (double *) R_Calloc(fila*largo,double);
-      sumar_matrices(x,x1,x0,fila*largo);
-      if (*vtype==0){
-        if (*P==1){
-          double *x_cos; 
-          x_cos= (double *) R_Calloc(fila*largo,double);
-          cos_vec(x_cos,x,fila*largo);
-          double *x_sen;
-          x_sen = (double *) R_Calloc(fila*largo,double);
-          sen_vec(x_sen,x,fila*largo);
-          double *A_index;
-          A_index = (double *) R_Calloc(fila*largo,double);
-          double *B_index;
-          B_index = (double *) R_Calloc(fila*largo,double);
-          u_index_extraer(A_index,A,index,largo,1,prod);
-          u_index_extraer(B_index,B,index,largo,1,prod);
+      
+      // Calculate phase matrix
+      double *x1 = (double *)R_Calloc(fila * largo, double);
+      tcrossprod(x1, cbind, m, 1, phi_cross, largo, 1);
+      
+      // Combine matrices
+      double *x = (double *)R_Calloc(fila * largo, double);
+      sumar_matrices(x, x1, x0, fila * largo);
+      
+      // Processing based on variant type
+      if (*vtype == 0) {
+        if (*P == 1) {
+          // Single component variant
+          double *x_cos = (double *)R_Calloc(fila * largo, double);
+          double *x_sen = (double *)R_Calloc(fila * largo, double);
+          cos_vec(x_cos, x, fila * largo);
+          sen_vec(x_sen, x, fila * largo);
           
-          double *result1;
-          result1 = (double *) R_Calloc(m,double); 
-          mult_mat(result1,x_cos,m,largo,A_index,largo,1);
+          // Extract A and B components
+          double *A_index = (double *)R_Calloc(largo, double);
+          double *B_index = (double *)R_Calloc(largo, double);
+          u_index_extraer(A_index, A, index, largo, 1, prod);
+          u_index_extraer(B_index, B, index, largo, 1, prod);
           
-          double *result2;
-          result2 = (double *) R_Calloc(m,double); 
-          mult_mat(result2,x_sen,m,largo,B_index,largo,1);
-          sumar_matrices(result2,result1,result2,m);
-          llenar_simu(result2,simu,k,P,m);
+          // Calculate results
+          double *result1 = (double *)R_Calloc(m, double);
+          double *result2 = (double *)R_Calloc(m, double);
+          mult_mat(result1, x_cos, m, largo, A_index, largo, 1);
+          mult_mat(result2, x_sen, m, largo, B_index, largo, 1);
+          
+          // Combine and store results
+          sumar_matrices(result2, result1, result2, m);
+          llenar_simu(result2, simu, k, P, m);
+          
+          // Free memory
           R_Free(x_cos);
           R_Free(x_sen);
           R_Free(result1);
           R_Free(result2);
           R_Free(A_index);
           R_Free(B_index);
-        }
-        else{
-          double *x_cos;
-          x_cos = (double *) R_Calloc(fila*largo,double);
-          cos_vec(x_cos,x,fila*largo);
-          double *x_sen;
-          x_sen= (double *) R_Calloc(fila*largo,double);
-          sen_vec(x_sen,x,fila*largo);
-          double *A_col;
-          A_col = (double *) R_Calloc(*(P)*(index[largo-1]+1),double);
-          double *B_col;
-          B_col = (double *) R_Calloc(*(P)*(index[largo-1]+1),double);
-          int p = *P;
-          extraer_col(index[0],index[largo-1]*p+1,A,A_col);
-          extraer_col(index[0],index[largo-1]*p+1,B,B_col);
-          double *result1;
-          result1 = (double *) R_Calloc(m * *(P),double); 
-          tcrossprod(result1,x_cos,m,largo,A_col,p,largo);
-          double *result2; 
-          result2= (double *) R_Calloc(m * *(P),double); 
-          tcrossprod(result2,x_sen,m,largo,B_col,p,largo);
+        } else {
+          // Multiple component variant
+          double *x_cos = (double *)R_Calloc(fila * largo, double);
+          double *x_sen = (double *)R_Calloc(fila * largo, double);
+          cos_vec(x_cos, x, fila * largo);
+          sen_vec(x_sen, x, fila * largo);
           
-          sumar_matrices(result2,result1,result2,m*p);
-          llenar_simu(result2,simu,k,P,m);
+          // Extract A and B columns
+          double *A_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
+          double *B_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
+          extraer_col(index[0], index[largo - 1] * p + 1, A, A_col);
+          extraer_col(index[0], index[largo - 1] * p + 1, B, B_col);
           
+          // Calculate cross products
+          double *result1 = (double *)R_Calloc(m * *P, double);
+          double *result2 = (double *)R_Calloc(m * *P, double);
+          tcrossprod(result1, x_cos, m, largo, A_col, p, largo);
+          tcrossprod(result2, x_sen, m, largo, B_col, p, largo);
+          
+          // Combine and store results
+          sumar_matrices(result2, result1, result2, m * p);
+          llenar_simu(result2, simu, k, P, m);
+          
+          // Free memory
           R_Free(result1);
           R_Free(result2);
           R_Free(A_col);
@@ -627,43 +760,44 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
           R_Free(x_cos);
           R_Free(x_sen);
         }
-      }
-      else{
-        double *cosphi;
-        cosphi = (double *) R_Calloc(fila*largo,double);
-        double *senphi;
-        senphi = (double *) R_Calloc(fila*largo,double);
-        cos_vec(cosphi,x1,fila*largo);
-        sen_vec(senphi,x1,fila*largo);
-        if (*P == 1){
-          Rprintf("d");
-        }
-        else{
-          double *x_cos;
-          x_cos = (double *) R_Calloc(fila*largo,double);
-          cos_vec(x_cos,x,fila*largo);
-          double *x_sen;
-          x_sen = (double *) R_Calloc(fila*largo,double);
-          sen_vec(x_sen,x,fila*largo);
+      } else {
+        // Alternative variant processing
+        double *cosphi = (double *)R_Calloc(fila * largo, double);
+        double *senphi = (double *)R_Calloc(fila * largo, double);
+        cos_vec(cosphi, x1, fila * largo);
+        sen_vec(senphi, x1, fila * largo);
+        
+        if (*P == 1) {
+          // Unimplemented single component case
+          Rprintf("Single component processing for vtype != 0 not implemented\n");
+        } else {
+          // Multiple component variant
+          double *x_cos = (double *)R_Calloc(fila * largo, double);
+          double *x_sen = (double *)R_Calloc(fila * largo, double);
+          cos_vec(x_cos, x, fila * largo);
+          sen_vec(x_sen, x, fila * largo);
           
-          double *A_col;
-          A_col = (double *) R_Calloc(*(P)*(index[largo-1]+1),double);
-          double *B_col; 
-          B_col= (double *) R_Calloc(*(P)*(index[largo-1]+1),double);
-          int p = *P;
-          extraer_col(index[0],index[largo-1]*p+1,A,A_col);
-          extraer_col(index[0],index[largo-1]*p+1,B,B_col);
+          // Extract A and B columns
+          double *A_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
+          double *B_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
+          extraer_col(index[0], index[largo - 1] * p + 1, A, A_col);
+          extraer_col(index[0], index[largo - 1] * p + 1, B, B_col);
           
-          restar_matrices(x_cos,x_cos,cosphi,fila*largo);
-          restar_matrices(x_sen,x_sen,senphi,fila*largo);
-          double *result1;
-          result1 = (double *) R_Calloc(m * *(P),double); 
-          tcrossprod(result1,x_cos,m,largo,A_col,p,largo);
-          double *result2; 
-          result2= (double *) R_Calloc(m * *(P),double); 
-          tcrossprod(result2,x_sen,m,largo,B_col,p,largo);
-          sumar_matrices(result2,result1,result2,m*p);
-          llenar_simu(result2,simu,k,P,m);
+          // Apply corrections
+          restar_matrices(x_cos, x_cos, cosphi, fila * largo);
+          restar_matrices(x_sen, x_sen, senphi, fila * largo);
+          
+          // Calculate cross products
+          double *result1 = (double *)R_Calloc(m * *P, double);
+          double *result2 = (double *)R_Calloc(m * *P, double);
+          tcrossprod(result1, x_cos, m, largo, A_col, p, largo);
+          tcrossprod(result2, x_sen, m, largo, B_col, p, largo);
+          
+          // Combine and store results
+          sumar_matrices(result2, result1, result2, m * p);
+          llenar_simu(result2, simu, k, P, m);
+          
+          // Free memory
           R_Free(result1);
           R_Free(result2);
           R_Free(A_col);
@@ -671,9 +805,13 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
           R_Free(x_sen);
           R_Free(x_cos);
         }
+        
+        // Free memory
         R_Free(cosphi);
         R_Free(senphi);
       }
+      
+      // Free memory for current simulation
       R_Free(phi_cross);
       R_Free(cbind);
       R_Free(x);
@@ -682,61 +820,68 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
       R_Free(ui);
       R_Free(index);
     }
-    //simu1 bla bla
-    llenar_simu1(simu1,simu,m1,P,N,lim,i,L1);
+    
+    // Fill final simulation results
+    llenar_simu1(simu1, simu, m1, P, N, lim, i, L1);
+    
+    // Free memory for current sequence
     R_Free(simu);
     R_Free(sub_coord);
   }
 }
 
-void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result){
-  double nu = nu1v[0], bbb = av[0];
-  double mu = params_other[0];
-  int mod = model[0];
+void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result) {
+    double nu = nu1v[0];
+    double bbb = av[0];
+    double mu = params_other[0];
+    int mod = model[0];
+    int n = N[0];
+    double tol = 1e-12;  // tol usato solo in alcuni modelli
 
-  if(mod==14){  //Matern
-    for(int i=0;i < N[0];i++){
-      result[i]=den_mat(norm_u[i],nu,bbb); 
+    switch(mod) {
+        case 14:  // Matern
+            for (int i = 0; i < n; i++) {
+                result[i] = den_mat(norm_u[i], nu, bbb);
+            }
+            break;
+
+        case 6:  // GenWendland_matern
+            for (int i = 0; i < n; i++) {
+                result[i] = den_wen_gen_mat(norm_u[i], nu, bbb, mu, tol);
+            }
+            break;
+
+        case 7:  // GenWendland_matern2
+            for (int i = 0; i < n; i++) {
+                result[i] = den_wen_gen_mat2(norm_u[i], nu, bbb, mu, tol);
+            }
+            break;
+
+        case 23: // Hypergeometric_matern
+            for (int i = 0; i < n; i++) {
+                result[i] = den_hyp_gen_mat(norm_u[i], nu, bbb, mu, tol);
+            }
+            break;
+
+        case 30: // Hypergeometric_matern2
+            for (int i = 0; i < n; i++) {
+                result[i] = den_hyp_gen_mat2(norm_u[i], nu, bbb, mu, tol);
+            }
+            break;
+
+        case 25: // Kummermatern
+            for (int i = 0; i < n; i++) {
+                result[i] = den_kum_mat(norm_u[i], nu, bbb, mu);
+            }
+            break;
+
+        default:
+            // Eventuale gestione di modelli non riconosciuti
+            for (int i = 0; i < n; i++) {
+                result[i] = 0.0; // oppure un valore di default o errore
+            }
+            break;
     }
-  }
-
-   if(mod==6){ //GenWendland_matern
-
-    double tol = 1e-12;
-    for(int i=0;i < N[0];i++){
-      result[i] = den_wen_gen_mat(norm_u[i],nu,bbb,mu,tol);
-    }
-  }
-
-  if(mod==7){ //GenWendland_matern2
-
-    double tol = 1e-12;
-    for(int i=0;i < N[0];i++){
-      result[i] = den_wen_gen_mat2(norm_u[i],nu,bbb,mu,tol);
-    }
-  }
-
-   if(mod==23){ //Hypergeometric_matern
-
-    double tol = 1e-12;
-    for(int i=0;i < N[0];i++){
-      result[i] = den_hyp_gen_mat(norm_u[i],nu,bbb,mu,tol);
-    }
-  }
-
-  if(mod==30){ //Hypergeometric_matern2
-
-    double tol = 1e-12;
-    for(int i=0;i < N[0];i++){
-      result[i] = den_hyp_gen_mat2(norm_u[i],nu,bbb,mu,tol);
-    }
-  }
-
-    if(mod==25){  //Kummermatern
-    for(int i=0;i < N[0];i++){          
-      result[i]=den_kum_mat(norm_u[i],nu,bbb,mu);
-        }
-     }
-
 }
+
 

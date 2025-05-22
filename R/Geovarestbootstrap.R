@@ -39,7 +39,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE, GPU = NULL, local =
   if (fit$bivariate && is.null(fit$coordx_dyn)) coords <- coords[1:(length(fit$coordx) / 2), ]
   N <- nrow(coords)
 
-  cat("Performing", K, "simulations....\n")
+  #cat("Performing", K, "simulations....\n")
 
   # Simulazione dati
   if (is.null(fit$copula)) {  # non copula models

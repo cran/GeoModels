@@ -735,7 +735,8 @@ else    {
 ################################################################
    if(!bivariate){
     if(is.null(MM)) {mu=X%*%betas; muloc=Xloc%*%betas}
-                         else            {mu=MM;         muloc=Mloc}      }          # for non constant external mean    
+                    else            {mu=MM;         muloc=Mloc}  
+                        }          # for non constant external mean                
     else{ X11=X[1:covmatrix$ns[1],]; X22=X[(covmatrix$ns[1]+1):(covmatrix$ns[1]+covmatrix$ns[2]),]
                if(!is.null(Xloc)) 
                     { X11_loc=Xloc[(1:(nrow(Xloc)/2)),]; X22_loc=Xloc[(nrow(Xloc)/2+1):nrow(Xloc),]}
@@ -747,6 +748,8 @@ else    {
           #### additive model on the real line
          if(covmatrix$model %in% c(10,18,29,27,38,39,28, 34,40,20))
                                 { muloc=muloc + M;   mu=mu + M }     
+
+
           ### multiplicative model on the positive real line
           if( (covmatrix$model %in% c(21,26,24,22)))  {emuloc=exp(muloc);emu=exp(mu) }
          }
@@ -896,7 +899,7 @@ else {pred=c(pp);varpred=cvv}
 ####################################################################################################################################
 ###################### binomial  binomial negative and poisson poissongamma (inflated) #####################################
 ####################################################################################################################################
-if(covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46,47))
+if(covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46,47,57))
 {
 
      if(type=="Standard"||type=="standard") {

@@ -1,6 +1,6 @@
 \name{GeoSimcond}
 \alias{GeoSimcond}
-\title{Conditional Simulation of Spatial-Temporal Random Fields}
+\title{Conditional (fast) simulation of Gaussian and non Gaussian Random Fields.}
 \description{
   Simulates spatial (spatio-temporal) Gaussian and non-Gaussian random fields 
   conditioned on observed data using specified correlation models.
@@ -86,8 +86,12 @@ Christian Caamaño-Carrillo \email{chcaaman@ubiobio.cl}
 \examples{
 library(GeoModels)
 
+##############################################
+## conditional simulation of a Gaussian rf ###
+##############################################
 model="Gaussian"
 set.seed(79)
+### conditioning locations
 x = runif(250, 0, 1)
 y = runif(250, 0, 1)
 coords=cbind(x,y)
@@ -99,12 +103,12 @@ scale=0.2;smooth=0;power2=4
 
 param=list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth,power2=power2)
 
-# Simulation of the spatial random field:
+# Simulation 
 data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model,
               param=param)$data
 
 ## estimation with pairwise likelihood
-fixed=list(nugget=nugget,smooth=0,power2=power2)
+fixed=list(nugget=nugget,smooth=smooth,power2=power2)
 start=list(mean=0,scale=scale,sill=1)
 I=Inf
 lower=list(mean=-I,scale=0,sill=0)
@@ -128,5 +132,50 @@ quilt.plot(coords, data)
 quilt.plot(loc_to_sim, colMeans(sim_result))
 par(mfrow=c(1,1))
 
+##############################################
+## conditional simulation of a LogGaussian rf 
+##############################################
+model="LogGaussian"
+set.seed(79)
+### conditioning locations
+x = runif(250, 0, 1)
+y = runif(250, 0, 1)
+coords=cbind(x,y)
+
+# Set the exponential cov parameters:
+corrmodel = "Matern"
+mean=0; sill=.1; nugget=0
+scale=0.2;smooth=0.5
+
+param=list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth)
+
+# Simulation 
+data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model,
+              param=param)$data
+
+## estimation with pairwise likelihood
+fixed=list(nugget=nugget,smooth=smooth)
+start=list(mean=0,scale=scale,sill=1)
+I=Inf
+lower=list(mean=-I,scale=0,sill=0)
+upper=list(mean= I,scale=I,sill=I)
+# Maximum pairwise likelihood fitting :
+fit = GeoFit(data, coordx=coords, corrmodel=corrmodel,model=model,
+             likelihood='Marginal', type='Pairwise',neighb=3,
+             optimizer="nlminb", lower=lower,upper=upper,
+             start=start,fixed=fixed)
+
+# locations to simulate 
+xx=seq(0,1,0.025)
+loc_to_sim=as.matrix(expand.grid(xx,xx))
+
+# Conditional simulation
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5)$condsim
+sim_result <- do.call(rbind, sim_result)
+
+par(mfrow=c(1,2))
+quilt.plot(coords, data)
+quilt.plot(loc_to_sim, colMeans(sim_result))
+par(mfrow=c(1,1))
 
 }

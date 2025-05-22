@@ -1,79 +1,37 @@
 #include "header.h"
+//******************************************************************************
+double polevl(double x, const double coef[], int N)
 
-//************************************* START hyperg.c*****************************************
-// FUNCTION: 1F1
-//Source: https://github.com/scipy/scipy/blob/master/scipy/special/cephes/hyperg.c
-  
-
-void  hyperg_call(double *a,double *b,double *x,double *res)
 {
-    *res = hyperg(*a,*b,*x);
+    double ans;
+    int i;
+    const double *p;
+    p = coef;
+    ans = *p++;
+    i = N;
+    do
+        ans = ans * x + *p++;
+    while (--i);   
+    return (ans);
 }
-
+double p1evl(double x, const double coef[], int N)
+{
+    double ans;
+    const double *p;
+    int i;
+    p = coef;
+    ans = x + *p++;
+    i = N - 1;
+    do
+        ans = ans * x + *p++;
+    while (--i);
+    return (ans);
+}
+/************************************************************************/
  int is_nonpos_int(double x)
 {
     return x <= 0 && x == ceil(x) && fabs(x) < 1e13;
 }
-
-
-
-
-double onef2( double a, double b,double c,double x,double *err )
-{
-double n, a0, sum, t;
-double an, bn, cn, max, z;
-double stop=1.37e-17;
-an = a;
-bn = b;
-cn = c;
-a0 = 1.0;
-sum = 1.0;
-n = 1.0;
-t = 1.0;
-max = 0.0;
-do
-        {
-        if( an == 0 )
-                goto done;
-        if( bn == 0 )
-                goto error;
-        if( cn == 0 )
-                goto error;
-        if( (a0 > 1.0e34) || (n > 200) )
-                goto error;
-        a0 *= (an * x) / (bn * cn * n);
-        sum += a0;
-        an += 1.0;
-        bn += 1.0;
-        cn += 1.0;
-        n += 1.0;
-        z = fabs( a0 );
-        if( z > max )
-                max = z;
-        if( sum != 0 )
-                t = fabs( a0 / sum );
-        else
-                t = z;
-        }
-while( t > stop );
-
-done:
-
-*err = fabs(MACHEP * max / sum);
-
-  goto xit;
-
- error:
-  *err = 1.0e38;
-
- xit:
-   return(sum);
- }
-
-
-
-
-
  
 double poch(double a, double m)
 {
@@ -86,7 +44,7 @@ double poch(double a, double m)
         }
         m -= 1.0;
         r *= (a + m);
-        if (!isfinite(r) || r == 0) {
+        if (!R_FINITE(r) || r == 0) {
             break;
         }
     }
@@ -98,7 +56,7 @@ double poch(double a, double m)
         }
         r /= (a + m);
         m += 1.0;
-        if (!isfinite(r) || r == 0) {
+        if (!R_FINITE(r) || r == 0) {
             break;
         }
     }
@@ -129,449 +87,23 @@ double poch(double a, double m)
 
     return(r * exp(lgammafn(a + m) - lgammafn(a)) * sign(gammafn(a + m)) * sign(gammafn(a)));
 }
+/************************************************************************/
 
 
-/*
-double onef2(double a,double b,double c,double z)
-{
-double term,s1=0.0;int k=0;
-while(k<1000)
-{
-term=exp(log(poch(a,k))-(log(poch(b,k))+log(poch(c,k))) + k*log(z)-lgammafn(k+1));
-s1=s1+term;
-if(fabs(term)<MACHEP)  {break;}
-k++;
-}
-return(s1);
-}*/
-
-
-
-double log_hyp1F1_reg(int n,int m,double z){
-
-double res=0.0,term1=0.0,term2=0.0,term3=0.0;int k=0;
-if(n<m){  
-
-for (k=0;k<=(n-1);k++) {
-  term1=term1+ R_pow(-z,k)*(poch(1-n,k))/(gamma(k+1)*poch(2-m,k));}
-
-for (k=0;k<=(m-n-1);k++) {
-  term2=term2+R_pow(z,k)*(poch(1-m+n,k))/(gammafn(k+1)*poch(2-m,k));
-}  
-res=log(poch(2-m,n-1))+exp(log(R_pow(z,1-m))+log((exp(z)*term1- term2))-lgammafn(n));
-return(res) ; 
-}
-else{
-for (k=0;k<=(n-m);k++) {
-  term3=term3+exp(( log(poch(m-n,k))+log(R_pow(-z,k)))-(lgammafn(k+1)+log(poch(m,k))));
-}
-return(z+log(term3)-lgammafn(m));    
-  }
-}
-
-
-/***********************************************/
-/***********************************************/
-double log_regularized1F1(int n, int m,double z) 
-{
-double res=0.0;
-
-if(n==1) {res=z+(1-m)*log(z)+log(igam(-1 + m, z));
-         return(res);}
-if(n==2) {
-    res=    exp(-lgammafn(m-1))+  exp(z)*R_pow(z,1-m)* (2 - m + z)*igam(-1 + m, z);
-         return(log(res));
-     }
-if(n==3) {
-
-   res= 0.5*((4-m+z)/gammafn(-1+m) + exp(z)*R_pow(z,1-m)*(6-5*m + m*m + 6*z-2*m*z+z*z)*igam(-1 + m, z));
-          return(log(res));
-         }
-         
-if(n==4)
-       {res=(1/6)*   (   (18 - 8*m + m*m + 10*z - 2*m*z + z*z)/(gammafn(-1 + m)) + 
-        exp(z)*R_pow(z,1-m)*(24 - 26*m + 9*m*m - m*m*m + 36*z - 21*m*z + 3*m*m*z + 
-    12*z*z - 3*m*z*z + z*z*z)*igam(-1 + m, z));
-    return(log(res));}
-
-if(n==5)
-       {res=(1/24)*   (   (96 - 58*m + 13*m*m - m*m*m + 86*z - 31*m*z + 3*m*m*z + 18*z*z - 
- 3*m*z*z + z*z*z)/(gammafn(-1 + m)) + 
-        exp(z)*R_pow(z,1-m)*(120 - 154*m + 71*m*m - 14*m*m*m + R_pow(m,4) + 240*z - 188*m*z + 48*m*m*z - 
- 4*m*m*m*z + 120*z*z - 54*m*z*z + 6*R_pow(z*m,2) + 20*z*z*z - 4*m*z*z*z + R_pow(z,4))*igam(-1 + m, z));
-  return(log(res));}
- 
- res=log(hyperg(n,m, z))-lgammafn(m);    
-return(res);
-}
-/**************************************************/
-double aprox_reg_1F1(int n, int m,double z) 
-{
-double p1,term,s1=0.0;int k=0;
-p1=exp(z+(n-m)*log(z)-lgammafn(n));
-while(k<1000)
-{
-term=poch(1-n,k)*poch(m-n,k)*R_pow(z,-k)/gammafn(k+1);
-s1=s1+term;
-if(fabs(term)<1e-10)  {break;}
-k++;
-}
-return(p1*s1);
-}
-
-double try(int m, double b,double z)
-{ 
-double res=0.0,res1=0.0;int k=0;
-//res1=log(exp(z)*R_pow(z,m-b)*gammafn(b)/(gammafn(b-m)*gammafn(m)));
-res1=z+(m-b)*log(z)+ lgammafn(b)-(lgammafn(b-m)+lgammafn(m));
-for(k=0; k<=m; k++)
-res=res+R_pow(-z,-k)*exp(lgammafn(m)+lgammafn(b+k-m)-(lgammafn(k+1)+lgammafn(m-k)))*igam(b+k-m,z);
-return(log(res)+res1);
-}
-
-void  reghyperg_call(int *a,int *b,double *x,double *res)
-{
-    *res = log_regularized1F1(*a,*b,*x);
-}
-
-
-
-
-
-double hyperg(double a, double b, double x)
-{
-    double asum, psum, acanc, pcanc, temp;
-    double alpha=(b-a-1)/x;    double aux1,aux2,aux3,res=0.0;
-if(alpha>0 &&  b>1000000 && x>1000000)  // new bad approximation
-{
-
-    if(b<x+a+1){
-        aux1=exp(lgammafn(b)+x+(a-1)*log1p(-alpha)-lgammafn(a)-lgammafn(b-a));
-        aux2=exp((alpha*x)*(log(alpha)-1)+0.5*(log(2*alpha*M_PI)-log(x)));
-        aux3=((2-a*alpha)*(1-a))/((2*R_pow(1-alpha,2)))+(1/(12*alpha));
-        res=aux1*aux2*(1+aux3/x);
-    }
-    if(b>x+a+1){
-        aux1=exp(lgammafn(b)-lgammafn(b-a))/R_pow(b-a-x-1,a);
-        aux2=a*(a+1)*(a+1-b)/(2*R_pow(b-a-x-1,2));
-        res=aux1*(1-aux2);
-    }
- return(res);   
-}
-
-else{
-
-    /* See if a Kummer transformation will help */
-    temp = b - a;
-    if (fabs(temp) < 0.001 * fabs(a))
-    return (exp(x) * hyperg(temp, b, -x));
-
-
-    /* Try power & asymptotic series, starting from the one that is likely OK */
-    if (fabs(x) < 10 + fabs(a) + fabs(b)) {
-    psum = hy1f1p(a, b, x, &pcanc);
-    if (pcanc < 1.0e-15)
-        goto done;
-    asum = hy1f1a(a, b, x, &acanc);
-    }
-    else {
-    psum = hy1f1a(a, b, x, &pcanc);
-    if (pcanc < 1.0e-15)
-        goto done;
-    asum = hy1f1p(a, b, x, &acanc);
-    }
-
-    /* Pick the result with less estimated error */
-
-    if (acanc < pcanc) {
-    pcanc = acanc;
-    psum = asum;
-    }
-
-  done:
-    if (pcanc > 1.0e-12)
-    //sf_error("hyperg", SF_ERROR_LOSS, NULL);
-        //printf("hyperg SF_ERROR_LOSS\n");
-        temp=0;
-
-    //if(isnan(psum)) psum=approx1F1(a,b,x);
-
-    return (psum);
-  }
-}
-
-
-
-
-/* Power series summation for confluent hypergeometric function                */
-
-
-double hy1f1p(double a, double b, double x, double *err)
-{
-        double n, a0, sum, t, u, temp, maxn;
-    double an, bn, maxt;
-    double y, c, sumc;
-
-
-    /* set up for power series summation */
-    an = a;
-    bn = b;
-    a0 = 1.0;
-    sum = 1.0;
-    c = 0.0;
-    n = 1.0;
-    t = 1.0;
-    maxt = 0.0;
-    *err = 1.0;
-
-    maxn = 200.0 + 2 * fabs(a) + 2 * fabs(b);
-
-    while (t > MACHEP) {
-    if (bn == 0) {      /* check bn first since if both   */
-        //sf_error("hyperg", SF_ERROR_SINGULAR, NULL);
-        return (NPY_INFINITY);  /* an and bn are zero it is     */
-    }
-    if (an == 0)        /* a singularity            */
-        return (sum);
-    if (n > maxn) {
-        /* too many terms; take the last one as error estimate */
-        c = fabs(c) + fabs(t) * 50.0;
-        goto pdone;
-    }
-    u = x * (an / (bn * n));
-
-    /* check for blowup */
-    temp = fabs(u);
-    if ((temp > 1.0) && (maxt > (DBL_MAX / temp))) {
-        *err = 1.0;     /* blowup: estimate 100% error */
-        return sum;
-    }
-
-    a0 *= u;
-
-    y = a0 - c;
-    sumc = sum + y;
-    c = (sumc - sum) - y;
-    sum = sumc;
-
-    t = fabs(a0);
-
-    an += 1.0;
-    bn += 1.0;
-    n += 1.0;
-    }
-
-  pdone:
-
-    /* estimate error due to roundoff and cancellation */
-    if (sum != 0.0) {
-    *err = fabs(c / sum);
-    }
-    else {
-    *err = fabs(c);
-    }
-
-    if (*err != *err) {
-    /* nan */
-    *err = 1.0;
-    }
-
-    return (sum);
-}
-
-double hy1f1a(double a, double b, double x, double *err)
-
-{    
-    double h1, h2, t, u, temp, acanc, asum, err1, err2;
-
-    if (x == 0) {
-    acanc = 1.0;
-    asum = NPY_INFINITY;
-    goto adone;
-    }
-    temp = log(fabs(x));
-    t = x + temp * (a - b);
-    u = -temp * a;
-
-    if (b > 0) {
-    temp = lgam(b);
-    t += temp;
-    u += temp;
-    }
-
-    h1 = hyp2f0(a, a - b + 1, -1.0 / x, 1, &err1);
-
-    temp = exp(u) / gamma(b - a);
-    h1 *= temp;
-    err1 *= temp;
-
-    h2 = hyp2f0(b - a, 1.0 - a, 1.0 / x, 2, &err2);
-
-    if (a < 0)
-    temp = exp(t) / gamma(a);
-    else
-    temp = exp(t - lgam(a));
-
-    h2 *= temp;
-    err2 *= temp;
-
-    if (x < 0.0)
-    asum = h1;
-    else
-    asum = h2;
-
-    acanc = fabs(err1) + fabs(err2);
-
-    if (b < 0) {
-    temp = gamma(b);
-    asum *= temp;
-    acanc *= fabs(temp);
-    }
-
-
-    if (asum != 0.0)
-    acanc /= fabs(asum);
-
-    if (acanc != acanc)
-    /* nan */
-    acanc = 1.0;
-
-    if (asum == NPY_INFINITY || asum == -NPY_INFINITY)
-    /* infinity */
-    acanc = 0;
-
-    acanc *= 30.0;      /* fudge factor, since error of asymptotic formula
-                 * often seems this much larger than advertised */
-
-  adone:
-
-
-    *err = acanc;
-    return (asum);
-}
-
-double hyp2f0(double a, double b, double x, int type, double *err)
-{
-    double a0, alast, t, tlast, maxt;
-    double n, an, bn, u, sum, temp;
-
-    an = a;
-    bn = b;
-    a0 = 1.0e0;
-    alast = 1.0e0;
-    sum = 0.0;
-    n = 1.0e0;
-    t = 1.0e0;
-    tlast = 1.0e9;
-    maxt = 0.0;
-
-    do {
-    if (an == 0)
-        goto pdone;
-    if (bn == 0)
-        goto pdone;
-
-    u = an * (bn * x / n);
-
-    /* check for blowup */
-    temp = fabs(u);
-    if ((temp > 1.0) && (maxt > (DBL_MAX / temp)))
-        goto error;
-
-    a0 *= u;
-    t = fabs(a0);
-
-    /* terminating condition for asymptotic series:
-     * the series is divergent (if a or b is not a negative integer),
-     * but its leading part can be used as an asymptotic expansion
-     */
-    if (t > tlast)
-        goto ndone;
-
-    tlast = t;
-    sum += alast;       /* the sum is one term behind */
-    alast = a0;
-
-    if (n > 200)
-        goto ndone;
-
-    an += 1.0e0;
-    bn += 1.0e0;
-    n += 1.0e0;
-    if (t > maxt)
-        maxt = t;
-    }
-    while (t > MACHEP);
-
-
-  pdone:            /* series converged! */
-
-    /* estimate error due to roundoff and cancellation */
-    *err = fabs(MACHEP * (n + maxt));
-
-    alast = a0;
-    goto done;
-
-  ndone:            /* series did not converge */
-
-    /* The following "Converging factors" are supposed to improve accuracy,
-     * but do not actually seem to accomplish very much. */
-
-    n -= 1.0;
-    x = 1.0 / x;
-
-    switch (type) {     /* "type" given as subroutine argument */
-    case 1:
-    alast *=
-        (0.5 + (0.125 + 0.25 * b - 0.5 * a + 0.25 * x - 0.25 * n) / x);
-    break;
-
-    case 2:
-    alast *= 2.0 / 3.0 - b + 2.0 * a + x - n;
-    break;
-
-    default:
-    ;
-    }
-
-    /* estimate error due to roundoff, cancellation, and nonconvergence */
-    *err = MACHEP * (n + maxt) + fabs(a0);
-
-  done:
-    sum += alast;
-    return (sum);
-
-    /* series blew up: */
-  error:
-    *err = NPY_INFINITY;
-    //sf_error("hyperg", SF_ERROR_NO_RESULT, NULL);
-    return (sum);
-}
-
-
-
-//************************************* END hyperg.c*****************************************
 
 
 
 
 // ===================================== START: Bivariate Normal  =====================================//
 
-
-//#define HSQRT 1.414213562373095048801688724209698078569671
-#define HSQRT 1.4142
-
-// https://www.jstatsoft.org/article/view/v052i10/v52i10.pdf
+#define HSQRT 1.414213562373095048801688724209698078569671
+//#define HSQRT 1.4142
 
 double Phi(double x)
 {
     double val =(1+     (1-erfc(x/HSQRT) )    )/2;
-    //double val =(1+     (1-0.1 )    )/2;
-    
     return ( val );
 }
-
-
 double Phi2diag( double x, double a, double px, double pxs )
 {
     double sol=NAN;
@@ -606,19 +138,6 @@ double Phi2diag( double x, double a, double px, double pxs )
     double d_odd = tmp * ( sqrt_ab - a );
     double res = 0.0, res_new = d_even + d_odd;
     int k = 2;
-    /*while( res != res_new )
-     {
-     d_even = ( a_odd + b_odd + delta * d_even ) / k;
-     a_even *= alpha / k;
-     b_even *= beta / k;
-     k++;
-     a_odd *= alpha / k;
-     b_odd *= beta / k;
-     d_odd = ( a_even + b_even + delta * d_odd ) / k;
-     k++;
-     res = res_new;
-     res_new += d_even + d_odd;
-     }*/
     double cond = fabs(res-res_new);
     while( cond>DEPSILON )
     {
@@ -763,625 +282,12 @@ double C[] = {
     -2.53252307177582951285E6,
     -2.01889141433532773231E6
 };
-double polevl(double x, const double coef[], int N)
-{
-    double ans;
-    int i;
-    const double *p;
-    
-    p = coef;
-    ans = *p++;
-    i = N;
-    
-    do
-        ans = ans * x + *p++;
-    while (--i);
-    
-    return (ans);
-}
 
-/*                                                     p1evl() */
-/*                                          N
- * Evaluate polynomial when coefficient of x  is 1.0.
- * Otherwise same as polevl.
- */
 
-double p1evl(double x, const double coef[], int N)
-{
-    double ans;
-    const double *p;
-    int i;
-    
-    p = coef;
-    ans = x + *p++;
-    i = N - 1;
-    
-    do
-        ans = ans * x + *p++;
-    while (--i);
-    
-    return (ans);
-}
 
 
-//************************************** ST igam.c*****************************************
 
-double igam2(int n,double x)
-
-{
-    double sum=0.0,res=0.0,term=0.0;int i=0;
-    for(i=0;i<n;i++){
-        term=exp( i*log(x)-lgammafn(i+1));
-        sum=sum+term;
-         if((fabs(term)<1e-20)) {break;}
-    }
-    res=(1-exp(-x)*sum);
-    return(res);
-}
-
-
-void igam_call(double *a,double *x,double *res)
-{
-    *res = igam(*a,*x);
-}
-
-double igam(double a, double x)
-{
-    double absxma_a;
-
-    if (x < 0 || a < 0) {
-       // sf_error("gammainc", SF_ERROR_DOMAIN, NULL);
-        return NPY_NAN;
-    } else if (a == 0) {
-        if (x > 0) {
-            return 1;
-        } else {
-            return NPY_NAN;
-        }
-    } else if (x == 0) {
-        /* Zero integration limit */
-        return 0;
-    } else if (!R_finite(a)) {
-        if (!R_finite(x)) {
-            return NPY_NAN;
-        }
-        return 0;
-    } else if (!R_finite(x)) {
-        return 1;
-    }
-
-    /* Asymptotic regime where a ~ x; see [2]. */
-    absxma_a = fabs(x - a) / a;
-    if ((a > SMALL) && (a < LARGE) && (absxma_a < SMALLRATIO)) {
-    return asymptotic_series(a, x, IGAM);
-    } else if ((a > LARGE) && (absxma_a < LARGERATIO / sqrt(a))) {
-    return asymptotic_series(a, x, IGAM);
-    }
-
-    if ((x > 1.0) && (x > a)) {
-    return (1.0 - igamc(a, x));
-    }
-
-    return igam_series(a, x);
-}
-
-
-
-
-double igamc(double a, double x)
-{
-    double absxma_a;
-
-    if (x < 0 || a < 0) {
-    //sf_error("gammaincc", SF_ERROR_DOMAIN, NULL);
-    return NPY_NAN;
-    } else if (a == 0) {
-        if (x > 0) {
-        return 0;
-    } else {
-        return NPY_NAN;
-    }
-    } else if (x == 0) {
-    return 1;
-    } else if (!R_finite(a)) {
-    if (!R_finite(x)) {
-        return NPY_NAN;
-    }
-    return 1;
-    } else if (!R_finite(x)) {
-    return 0;
-    }
-
-    /* Asymptotic regime where a ~ x; see [2]. */
-    absxma_a = fabs(x - a) / a;
-    if ((a > SMALL) && (a < LARGE) && (absxma_a < SMALLRATIO)) {
-    return asymptotic_series(a, x, IGAMC);
-    } else if ((a > LARGE) && (absxma_a < LARGERATIO / sqrt(a))) {
-    return asymptotic_series(a, x, IGAMC);
-    }
-
-    /* Everywhere else; see [2]. */
-    if (x > 1.1) {
-    if (x < a) {
-        return 1.0 - igam_series(a, x);
-    } else {
-        return igamc_continued_fraction(a, x);
-    }
-    } else if (x <= 0.5) {
-    if (-0.4 / log(x) < a) {
-        return 1.0 - igam_series(a, x);
-    } else {
-        return igamc_series(a, x);
-    }
-    } else {
-    if (x * 1.1 < a) {
-        return 1.0 - igam_series(a, x);
-    } else {
-        return igamc_series(a, x);
-    }
-    }
-}
-
-
-
-double igam_fac(double a, double x)
-{
-    double ax, fac, res, num;
-
-    if (fabs(a - x) > 0.4 * fabs(a)) {
-    ax = a * log(x) - x - lgam(a);
-    if (ax < -MAXLOG) {
-       // sf_error("igam", SF_ERROR_UNDERFLOW, NULL);
-        return 0.0;
-    }
-    return exp(ax);
-    }
-
-    fac = a + lanczos_g - 0.5;
-    res = sqrt(fac / exp(1)) / lanczos_sum_expg_scaled(a);
-
-    if ((a < 200) && (x < 200)) {
-    res *= exp(a - x) * R_pow(x / fac, a);
-    } else {
-    num = x - a - lanczos_g + 0.5;
-    res *= exp(a * log1pmx(num / fac) + x * (0.5 - lanczos_g) / fac);
-    }
-
-    return res;
-}
-
-/* Compute igamc using DLMF 8.9.2. */
- double igamc_continued_fraction(double a, double x)
-{
-    int i;
-    double ans, ax, c, yc, r, t, y, z;
-    double pk, pkm1, pkm2, qk, qkm1, qkm2;
-
-    ax = igam_fac(a, x);
-    if (ax == 0.0) {
-    return 0.0;
-    }
-
-    /* continued fraction */
-    y = 1.0 - a;
-    z = x + y + 1.0;
-    c = 0.0;
-    pkm2 = 1.0;
-    qkm2 = x;
-    pkm1 = x + 1.0;
-    qkm1 = z * x;
-    ans = pkm1 / qkm1;
-
-    for (i = 0; i < MAXITER; i++) {
-    c += 1.0;
-    y += 1.0;
-    z += 2.0;
-    yc = y * c;
-    pk = pkm1 * z - pkm2 * yc;
-    qk = qkm1 * z - qkm2 * yc;
-    if (qk != 0) {
-        r = pk / qk;
-        t = fabs((ans - r) / r);
-        ans = r;
-    }
-    else
-        t = 1.0;
-    pkm2 = pkm1;
-    pkm1 = pk;
-    qkm2 = qkm1;
-    qkm1 = qk;
-    if (fabs(pk) > big) {
-        pkm2 *= biginv;
-        pkm1 *= biginv;
-        qkm2 *= biginv;
-        qkm1 *= biginv;
-    }
-    if (t <= MACHEP) {
-        break;
-    }
-    }
-
-    return (ans * ax);
-}
-
-/* Compute igam using DLMF 8.11.4. */
- double igam_series(double a, double x)
-{
-    int i;
-    double ans, ax, c, r;
-
-    ax = igam_fac(a, x);
-    if (ax == 0.0) {
-    return 0.0;
-    }
-
-    /* power series */
-    r = a;
-    c = 1.0;
-    ans = 1.0;
-
-    for (i = 0; i < MAXITER; i++) {
-    r += 1.0;
-    c *= x / r;
-    ans += c;
-    if (c <= MACHEP * ans) {
-        break;
-    }
-    }
-
-    return (ans * ax / a);
-}
-
-
-
-
-
-
-/* Compute igamc using DLMF 8.7.3. This is related to the series in
- * igam_series but extra care is taken to avoid cancellation.
- */
-double igamc_series(double a, double x)
-{
-    int n;
-    double fac = 1;
-    double sum = 0;
-    double term, logx;
-
-    for (n = 1; n < MAXITER; n++) {
-    fac *= -x / n;
-    term = fac / (a + n);
-    sum += term;
-    if (fabs(term) <= MACHEP * fabs(sum)) {
-        break;
-    }
-    }
-
-    logx = log(x);
-    term = -expm1(a * logx - lgam1p(a));
-    return term - exp(a * logx - lgam(a)) * sum;
-}
-
-
-
-/* Compute igam/igamc using DLMF 8.12.3/8.12.4. */
-double asymptotic_series(double a, double x, int func)
-{
-    int k, n, sgn;
-    int maxpow = 0;
-    double lambda = x / a;
-    double sigma = (x - a) / a;
-    double eta, res, ck, ckterm, term, absterm;
-    double absoldterm = NPY_INFINITY;
-    double etapow[NIC] = {1};
-    double sum = 0;
-    double afac = 1;
-    
-    if (func == IGAM) {
-        sgn = -1;
-    } else {
-        sgn = 1;
-    }
-    
-    if (lambda > 1) {
-        eta = sqrt(-2 * log1pmx(sigma));
-    } else if (lambda < 1) {
-        eta = -sqrt(-2 * log1pmx(sigma));
-    } else {
-        eta = 0;
-    }
-    res = 0.5 * erfc(sgn * eta * sqrt(a / 2));
-    
-    for (k = 0; k < KIC; k++) {
-        ck = d[k][0];
-        for (n = 1; n < NIC; n++) {
-            if (n > maxpow) {
-                etapow[n] = eta * etapow[n-1];
-                maxpow += 1;
-            }
-            ckterm = d[k][n]*etapow[n];
-            ck += ckterm;
-            if (fabs(ckterm) < MACHEP * fabs(ck)) {
-                break;
-            }
-        }
-        term = ck * afac;
-        absterm = fabs(term);
-        if (absterm > absoldterm) {
-            break;
-        }
-        sum += term;
-        if (absterm < MACHEP * fabs(sum)) {
-            break;
-        }
-        absoldterm = absterm;
-        afac /= a;
-    }
-    res += sgn * exp(-0.5 * a * eta * eta) * sum / sqrt(2 * M_PI * a);
-    
-    return res;
-}
-
-
-
-
-
-
-
-double ratevl(double x, const double num[], int M,
-              const double denom[], int N)
-{
-    int i, dir;
-    double y, num_ans, denom_ans;
-    double absx = fabs(x);
-    const double *p;
-    
-    if (absx > 1) {
-        /* Evaluate as a polynomial in 1/x. */
-        dir = -1;
-        p = num + M;
-        y = 1 / x;
-    } else {
-        dir = 1;
-        p = num;
-        y = x;
-    }
-    
-    /* Evaluate the numerator */
-    num_ans = *p;
-    p += dir;
-    for (i = 1; i <= M; i++) {
-        num_ans = num_ans * y + *p;
-        p += dir;
-    }
-    
-    /* Evaluate the denominator */
-    if (absx > 1) {
-        p = denom + N;
-    } else {
-        p = denom;
-    }
-    
-    denom_ans = *p;
-    p += dir;
-    for (i = 1; i <= N; i++) {
-        denom_ans = denom_ans * y + *p;
-        p += dir;
-    }
-    
-    if (absx > 1) {
-        i = N - M;
-        return(R_pow(x, i) * num_ans / denom_ans);
-    } else {
-        return(num_ans / denom_ans);
-    }
-}
-
-
-
-
-double lanczos_sum_expg_scaled(double x)
-{
-    return ratevl(x, lanczos_sum_expg_scaled_num,
-                  sizeof(lanczos_sum_expg_scaled_num) / sizeof(lanczos_sum_expg_scaled_num[0]) - 1,
-                  lanczos_sum_expg_scaled_denom,
-                  sizeof(lanczos_sum_expg_scaled_denom) / sizeof(lanczos_sum_expg_scaled_denom[0]) - 1);
-}
-
-double log1p(double x)
-{
-    double z;
-    
-    z = 1.0 + x;
-    if ((z < NPY_SQRT1_2) || (z > NPY_SQRT2))
-        return (log(z));
-    z = x * x;
-    z = -0.5 * z + x * (z * polevl(x, LP, 6) / p1evl(x, LQ, 6));
-    return (x + z);
-}
-
-
-/* log(1 + x) - x */
-double log1pmx(double x)
-{
-    if (fabs(x) < 0.5) {
-        int n;
-        double xfac = x;
-        double term;
-        double res = 0;
-        
-        for(n = 2; n < MAXITER; n++) {
-            xfac *= -x;
-            term = xfac / n;
-            res += term;
-            if (fabs(term) < MACHEP * fabs(res)) {
-                break;
-            }
-        }
-        return res;
-    }
-    else {
-        return log1p(x) - x;
-    }
-}
-
-
-
-double expm1(double x)
-{
-    double r, xx;
-    
-    if (!isinf(x)) {
-        if (isnan(x)) {
-            return x;
-        }
-        else if (x > 0) {
-            return x;
-        }
-        else {
-            return -1.0;
-        }
-        
-    }
-    if ((x < -0.5) || (x > 0.5))
-        return (exp(x) - 1.0);
-    xx = x * x;
-    r = x * polevl(xx, EP, 2);
-    r = r / (polevl(xx, EQ, 3) - r);
-    return (r + r);
-}
-
-
-
-double cosm1(double x)
-{
-    double xx;
-    
-    if ((x < -NPY_PI_4) || (x > NPY_PI_4))
-        return (cos(x) - 1.0);
-    xx = x * x;
-    xx = -0.5 * xx + xx * xx * polevl(xx, coscof, 6);
-    return xx;
-}
-
-
-/* Compute lgam(x + 1) around x = 0 using its Taylor series. */
-double lgam1p_taylor(double x)
-{
-    int n;
-    double xfac, coeff, res;
-    
-    if (x == 0) {
-        return 0;
-    }
-    res = -NPY_EULER * x;
-    xfac = -x;
-    for (n = 2; n < 42; n++) {
-        xfac *= -x;
-        coeff = zeta(n, 1) * xfac / n;
-        res += coeff;
-        if (fabs(coeff) < MACHEP * fabs(res)) {
-            break;
-        }
-    }
-    
-    return res;
-}
-
-
-/* Compute lgam(x + 1). */
-double lgam1p(double x)
-{
-    if (fabs(x) <= 0.5) {
-        return lgam1p_taylor(x);
-    } else if (fabs(x - 1) < 0.5) {
-        return log(x) + lgam1p_taylor(x - 1);
-    } else {
-        return lgam(x + 1);
-    }
-}
-
-
-
-
-double zeta(double x, double q)
-{
-    int i;
-    double a, b, k, s, t, w;
-    
-    if (x == 1.0)
-        goto retinf;
-    
-    if (x < 1.0) {
-    domerr:
-        //sf_error("zeta", SF_ERROR_DOMAIN, NULL);
-        //printf("zeta  SF_ERROR_DOMAIN\n");
-        return (NAN);
-    }
-    
-    if (q <= 0.0) {
-        if (q == floor(q)) {
-            //sf_error("zeta", SF_ERROR_SINGULAR, NULL);
-            //printf("zeta  SF_ERROR_SINGULAR\n");
-        retinf:
-            return (NPY_INFINITY);
-        }
-        if (x != floor(x))
-            goto domerr;    /* because q^-x not defined */
-    }
-    
-    /* Asymptotic expansion
-     * https://dlmf.nist.gov/25.11#E43
-     */
-    if (q > 1e8) {
-        return (1/(x - 1) + 1/(2*q)) * R_pow(q, 1 - x);
-    }
-    
-    /* Euler-Maclaurin summation formula */
-    
-    /* Permit negative q but continue sum until n+q > +9 .
-     * This case should be handled by a reflection formula.
-     * If q<0 and x is an integer, there is a relation to
-     * the polyGamma function.
-     */
-    s = R_pow(q, -x);
-    a = q;
-    i = 0;
-    b = 0.0;
-    while ((i < 9) || (a <= 9.0)) {
-        i += 1;
-        a += 1.0;
-        b = R_pow(a, -x);
-        s += b;
-        if (fabs(b / s) < MACHEP)
-            goto done;
-    }
-    
-    w = a;
-    s += b * w / (x - 1.0);
-    s -= 0.5 * b;
-    a = 1.0;
-    k = 0.0;
-    for (i = 0; i < 12; i++) {
-        a *= x + k;
-        b /= w;
-        t = a * b / AA[i];
-        s = s + t;
-        t = fabs(t / s);
-        if (t < MACHEP)
-            goto done;
-        k += 1.0;
-        a *= x + k;
-        b /= w;
-        k += 1.0;
-    }
-done:
-    return (s);
-}
-//************************************* END igam.c*****************************************
-
-
-
-/* integrand  in  generalized wendland function*/
+ /****** integrand  in  generalized wendland function ************************/
 double int_onef2(double x,double a, double b1,double b2,double y)
 {
     double res=0.0,of1;
@@ -1443,7 +349,6 @@ void integr_gen(double *x, int n, void *ex){
 }
 // function computing generalized wendland
 double wendintegral(double x, double *param) {
-    
     double ex[4], lower, upper, epsabs, epsrel, result, abserr, *work;
     int neval, ier, subdiv, lenw, last, *iwork;
     subdiv = 100;
@@ -1523,7 +428,7 @@ double d22norm(double x, double y,double v11,double v22,double v12)
   return(res);
 }
 
-
+/*
 double d2lognorm(double x, double y, double sill,double nugget, double mux,double muy,double rho)
 {
   double KK=exp(sill/2);
@@ -1534,7 +439,28 @@ double d2lognorm(double x, double y, double sill,double nugget, double mux,doubl
   res=exp(-q/2)/(2*x*y*M_PI*sqrt(omr));
   return(res*R_pow(KK,2));
 }
+*/
 
+
+
+double d2lognorm(double x, double y, double sill, double nugget, double mux, double muy, double rho)
+{
+
+    
+    double sigma = sqrt(sill);
+    double sigma2 = sill;
+    double mu_i = exp(mux);double mu_j = exp(muy);
+    double v_i = x / mu_i;double v_j = y / mu_j;
+    double rho_eff = rho;  // Correlazione effettiva
+    double one_minus_rho2 = 1.0 - rho_eff * rho_eff;
+    double term_i = (log(v_i) + sigma2/2.0) / sigma;
+    double term_j = (log(v_j) + sigma2/2.0) / sigma;
+    double quad = (term_i*term_i + term_j*term_j - 2.0*rho_eff*term_i*term_j) / (2.0 * one_minus_rho2);
+    double prefactor = 1.0 / (2.0 * M_PI * sigma2 * v_i * v_j * sqrt(one_minus_rho2));
+    double density_V = prefactor * exp(-quad);
+    double result = density_V / (mu_i * mu_j);
+    return result;
+}
 
 
 double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,double tail,double vari){
@@ -1630,11 +556,11 @@ double zi_mui=zi/mui;
 double zj_muj=zj/muj;
 double a1zi=zi_mui*a1;
 double a2zj=zj_muj*a2;
-double pow1=pow(a1zi,shape1);
-double pow2=pow(a2zj,shape2);
-double pow1_sqrt=pow(a1zi,shape1/2.0);
-double pow2_sqrt=pow(a2zj,shape2/2.0);
-double a=shape1*shape2*pow(a1,shape1)*pow(a2,shape2)*pow(zi,shape1-1.0)*pow(zj,shape2-1.0)/(pow(mui,shape1)*pow(muj,shape2)*k);
+double pow1=R_pow(a1zi,shape1);
+double pow2=R_pow(a2zj,shape2);
+double pow1_sqrt=R_pow(a1zi,shape1/2.0);
+double pow2_sqrt=R_pow(a2zj,shape2/2.0);
+double a=shape1*shape2*R_pow(a1,shape1)*R_pow(a2,shape2)*R_pow(zi,shape1-1.0)*R_pow(zj,shape2-1.0)/(R_pow(mui,shape1)*R_pow(muj,shape2)*k);
 double b=exp(-(pow1+pow2)/k);
 double c=bessel_i(2.0*fabs(rho12)*pow1_sqrt*pow2_sqrt/k,0,1);
 return a*b*c;
@@ -1658,11 +584,11 @@ double k=1.0/gammafn(1.0+1.0/shape);
 double ui=zi/ci;
 double uj=zj/cj;
 double a=1.0-corr*corr;
-double uipow=pow(ui,shape);
-double ujpow=pow(uj,shape);
-double uipow_half=pow(ui,shape/2.0);
-double ujpow_half=pow(uj,shape/2.0);
-double kpow=pow(k,-shape);
+double uipow=R_pow(ui,shape);
+double ujpow=R_pow(uj,shape);
+double uipow_half=R_pow(ui,shape/2.0);
+double ujpow_half=R_pow(uj,shape/2.0);
+double kpow=R_pow(k,-shape);
 double z=2.0*fabs(corr)*uipow_half*ujpow_half*kpow/a;
 double A=2.0*log(shape)-2.0*shape*log(k)+(shape-1.0)*log(ui*uj)-log(a);
 double B=-kpow*(uipow+ujpow)/a;
@@ -1732,7 +658,7 @@ double corrPGs(double corr,double mean,double a){
 double corr2=corr*corr;
 double nu=a/mean;
 double KK=nu*(1-corr2);
-double cc=4.0/pow(2.0+KK,2);
+double cc=4.0/R_pow(2.0+KK,2);
 double dd=exp(log(nu)+0.5*(log(nu)+log1p(-corr2))+a*log(2.0+KK)-log1p(nu)-(a+0.5)*log(4.0+KK));
 double aa=hypergeo((1.0-a)/2.0,-a/2.0,1,cc);
 double bb=((a+1.0)/(2.0+KK))*hypergeo((2.0-a)/2.0,(1.0-a)/2.0,2,cc);
@@ -1778,7 +704,7 @@ double corr_pois_gen(double corr,double mean_i, double mean_j, double a){
 if(fabs(corr)<1e-200){return(0.0);}
     else{
     double res=0.0;
-    if (fabs(mean_i-mean_j)<1e-320) res=corrPGs(corr,mean_i,a);
+    if (fabs(mean_i-mean_j)<MACHEP) res=corrPGs(corr,mean_i,a);
     else                            res=CorrPGns(corr,mean_i,mean_j,a);
     return(res);
 }
@@ -1806,7 +732,7 @@ double K=rho2*(1.0-rho2)/sqrt(mi*mj);
 while(r<8000){
     double aa=r+1;
     sum+=exp(log(igam(aa,ki))+log(igam(aa,kj)));
-    if(fabs(sum-res0)<1e-100) break;
+    if(fabs(sum-res0)<MACHEP) break;
     res0=sum;
     r++;
 }
@@ -1818,7 +744,7 @@ double corr_pois(double rho,double mi,double mj){
 if(fabs(rho)<1e-10){return(0.0);}
     else{
     double res=0.0;
-    if (fabs(mi-mj)<1e-320)         res=corr_pois_s(rho,mi);
+    if (fabs(mi-mj)<MACHEP)         res=corr_pois_s(rho,mi);
     else                            res=corr_pois_ns(rho,mi,mj);
     return(res);
 }
@@ -1836,7 +762,7 @@ double corr_tukeygh(double rho,double eta,double tail){
     double a = 1.0 + rho;
     double mu, cova, vari, rho1 = 0.0;
 
-    if(fabs(eta) > 1e-8){
+    if(fabs(eta) > MACHEP){
         double A1 = exp(a * eta2 / (1.0 - tail * a));
         double A2 = 2.0 * exp(0.5 * eta2 * (1.0 - tail * (1.0 - rho2)) / (u * u - tail2 * rho2));
         double A3 = eta2 * sqrt(u * u - rho2 * tail2);
@@ -1846,7 +772,7 @@ double corr_tukeygh(double rho,double eta,double tail){
                (eta2 * sqrt(1.0 - 2.0 * tail)) - mu * mu);
         rho1 = cova / vari;
     } else {
-        double inv_tail = pow(1.0 - 2.0 * tail, -1.5);
+        double inv_tail = R_pow(1.0 - 2.0 * tail, -1.5);
         rho1 = (-rho / ((1.0 + tail * (rho - 1.0)) * (-1.0 + tail + tail * rho) * 
                         sqrt(1.0 + tail * (-2.0 + tail - tail * rho2)))) / inv_tail;
     }
@@ -1859,7 +785,7 @@ double corr_tukeygh(double rho,double eta,double tail){
 
 double corr_skewt(double corr,double df,double skew)
 {
-if(fabs(corr)<1e-32){return(0.0);}
+if(fabs(corr)<MACHEP){return(0.0);}
     else{
     double d,w,corr1,skew2,CorSkew,nu,l,y,KK;
     skew2=skew*skew; nu=df; l=df/2;  d=(df-1)/2; w=sqrt(1-skew2);
@@ -1882,7 +808,7 @@ double biv_gamma(double corr,double zi,double zj,double mui,double muj,double sh
     double gam = gammafn(shape / 2.0);
     double res = 0.0;
 
-    if (corr) {
+    if (fabs(corr) > MACHEP) {
         double z = shape * fabs(corr) * sqrt(ci * cj) / a;
         double A = (shape / 2.0 - 1.0) * log(ci * cj) - shape * (ci + cj) / (2.0 * a);
         double C = (1.0 - shape / 2.0) * log(z / 2.0);
@@ -1891,8 +817,8 @@ double biv_gamma(double corr,double zi,double zj,double mui,double muj,double sh
         res = (A + C + D) - (mui + muj + B);
         return exp(res);
     } else {
-        double B = pow(shape / (2.0 * exp(mui)), shape / 2.0) * pow(zi, shape / 2.0 - 1.0) * exp(-shape * ci / 2.0) / gam;
-        double C = pow(shape / (2.0 * exp(muj)), shape / 2.0) * pow(zj, shape / 2.0 - 1.0) * exp(-shape * cj / 2.0) / gam;
+        double B = R_pow(shape / (2.0 * exp(mui)), shape / 2.0) * R_pow(zi, shape / 2.0 - 1.0) * exp(-shape * ci / 2.0) / gam;
+        double C = R_pow(shape / (2.0 * exp(muj)), shape / 2.0) * R_pow(zj, shape / 2.0 - 1.0) * exp(-shape * cj / 2.0) / gam;
         res = B * C;
     }
     return res;
@@ -1905,7 +831,7 @@ double biv_gamma_gen(double corr,double zi,double zj,double mui, double muj, dou
     double ci=zi/exp(mui);double cj=zj/exp(muj);
     double gam = gammafn(shape/2);
     a=1-R_pow(corr,2);  
-   if(corr){
+  if (fabs(corr) > MACHEP) {
         z=n*fabs(corr)*sqrt(ci*cj)/a;
         A=(shape/2-1)*log(ci*cj) -n*(ci+cj)/(2*a); ///ok
         C=(1-shape/2)*log(z/2); //ok
@@ -1967,60 +893,7 @@ res=k1*k2*(gammafn(a/2)-k3);}
 return(res);
 }
 
-
-/*
-double biv_gamma2(double rho,double x,double y,double shape1, double shape2, double rate)
-{
-double  ss,yr,xr,xi;  
-double  ar,ai=0.0;
-double  br,bi=0.0;
-double  r1,r2,ri=0.0;
-int len=1;int lnchf=0;int ip=0;
-
-double res,beta,b,c,f,rho2,a;
-int k;
-
-rho2=R_pow(rho,2);
-
-beta=shape1+shape2;
-
-if(rho){
-c=rate/(2*(1-rho2));
-   
-ar=shape2/2;
-a=0.0;
-for(k=0;k<=20;k++)
-{
-br=beta/2+k;
-xr=c*rho2*x;
-yr=c*rho2*y;
-//r1=Hyp_conf_laplace_approx(ar,br,c*rho2*x);
-//r2=Hyp_conf_laplace_approx(ar,br,c*rho2*y);
-F77_NAME(chfm)(&xr,&xi,&ar,&ai,&br,&bi,&r1,&ri,&len,&lnchf,&ip);
-F77_NAME(chfm)(&yr,&xi,&ar,&ai,&br,&bi,&r2,&ri,&len,&lnchf,&ip);
-if(!R_FINITE(r1*r2)||ISNAN(r1*r2)){
- r1=asym_aprox_1F1(ar,br,c*rho2*x);
- r2=asym_aprox_1F1(ar,br,c*rho2*y);}
-
-ss=Poch(shape1/2,k)*r1*r2*R_pow((R_pow(c,2)*rho2*x*y),k)/(gammafn(k+1)*R_pow(Poch(beta/2,k),2));
-a=a+ss;
-}
-b=R_pow(rate/2,beta)*R_pow(x*y,beta/2-1)*exp(-c*(x+y));
-f=R_pow(gammafn(beta/2),2)*R_pow(1-rho2,shape1/2);
-
-res=b*a/f;}
-else
-{
-  b=(R_pow(rate,beta/2)*R_pow(x,beta/2-1)*exp(-(rate*x/2))) /(R_pow(2,beta/2)*gammafn(beta/2));
-  f=(R_pow(rate,beta/2)*R_pow(y,beta/2-1)*exp(-(rate*y/2)) )/(R_pow(2,beta/2)*gammafn(beta/2));
-  res=b*f;
-}
-  return(res);
-}
-*/
-                
-
-
+          
 double biv_skew(double corr, double z1, double z2, double mi, double mj, double vari, double skew, double nugget) {
     double zi = z1 - mi;
     double zj = z2 - mj;
@@ -2095,7 +968,6 @@ double biv_wrapped(double alfa, double u, double v, double mi, double mj, double
         k1++;
         k2 = -alfa;
     }
-
     return wrap_gauss;
 }
 
@@ -2639,13 +1511,13 @@ double aprox1(double a) {
 
 /**********************************************************/
 
-/* Logarithm of Gamma function */
+/* Logarithm of Gamma function 
 double lgam(double x)
 {
     int sign;
     return lgam_sgn(x, &sign);
 }
-
+*/
 double lgam_sgn(double x, int *sign)
 {
     double p, q, u, w, z;
@@ -2653,7 +1525,7 @@ double lgam_sgn(double x, int *sign)
     
     *sign = 1;
     
-    if (!isfinite(x))
+    if (!R_FINITE(x))
         return x;
     
     if (x < -34.0) {
@@ -2679,7 +1551,7 @@ double lgam_sgn(double x, int *sign)
         z = q * sin(NPY_PI * z);
         if (z == 0.0)
             goto lgsing;
-        /*     z = log(NPY_PI) - log( z ) - w; */
+
         z = LOGPI - log(z) - w;
         return (z);
     }
@@ -2737,612 +1609,10 @@ double lgam_sgn(double x, int *sign)
 
 
 
-double hyp2f1_sem(double a, double b, double c, double x) {
-    double d, s, y=0.0;
-    double err = 0.0;
-    double ax = fabs(x);
-
-    s = 1.0 - x;
-    d = c - a - b;
-
-    // Return 1.0 for special cases where x is 0 or if a or b is 0
-    if (x == 0.0 || a == 0 || b == 0) {
-        return 1.0;
-    }
-
-    // Only consider the case where d > 0
-    if (d > 0) {
-        // The appropriate calculations and algorithms contingent on d > 0
-        if (ax < 1.0) {
-            if (fabs(b - c) < EPS) {
-                y = R_pow(s, -a);
-            } else if (fabs(a - c) < EPS) {
-                y = R_pow(s, -b);
-            } else {
-                // Additional calculations can be done here
-                // Implement the necessary logic keeping d > 0 in mind
-                y = hyt2f1(a, b, c, x, &err); // Assuming hyt2f1 defined elsewhere
-            }
-        } else if (ax == 1.0) {
-            if (x > 0.0) {
-                y = gamma(c) * gamma(d) / (gamma(c - a) * gamma(c - b));
-            }
-        } else {
-            // Handle cases where d is strictly positive and |x| > 1
-            // This part can use recurrence relations if necessary
-            // and be amended as required for specific cases.
-        }
-
-        return y;
-    } else {
-        return NPY_INFINITY; // Return infinity if d <= 0
-    }
-}
-
-
-
-double hyp2f1( double a,double b,double c,double x)
-{
-    double d, d1, d2, e;
-    double p, q, r, s, y, ax;
-    double ia, ib, ic, id, err;
-    double t1;
-    int i, aid;
-    int neg_int_a = 0, neg_int_b = 0;
-    int neg_int_ca_or_cb = 0;
-    
-    err = 0.0;
-    ax = fabs(x);
-    s = 1.0 - x;
-    ia = round(a);        /* nearest integer to a */
-    ib = round(b);
-    
-    if (x == 0.0) {
-        return 1.0;
-    }
-    
-    d = c - a - b;
-    id = round(d);
-    
-    if ((a == 0 || b == 0) && c != 0) {
-        return 1.0;
-    }
-    
-    if (a <= 0 && fabs(a - ia) < EPS) {    /* a is a negative integer */
-        neg_int_a = 1;
-    }
-    
-    if (b <= 0 && fabs(b - ib) < EPS) {    /* b is a negative integer */
-        neg_int_b = 1;
-    }
-    
-    if (d <= -1 && !(fabs(d - id) > EPS && s < 0)
-        && !(neg_int_a || neg_int_b)) {
-        return R_pow(s, d) * hyp2f1(c - a, c - b, c, x);
-    }
-    if (d <= 0 && x == 1 && !(neg_int_a || neg_int_b))
-        goto hypdiv;
-    
-    if (ax < 1.0 || x == -1.0) {
-        /* 2F1(a,b;b;x) = (1-x)**(-a) */
-        if (fabs(b - c) < EPS) {    /* b = c */
-            if (neg_int_b) {
-                y = hyp2f1_neg_c_equal_bc(a, b, x);
-            } else {
-                y = R_pow(s, -a);    /* s to the -a power */
-            }
-            goto hypdon;
-        }
-        if (fabs(a - c) < EPS) {    /* a = c */
-            y = R_pow(s, -b);    /* s to the -b power */
-            goto hypdon;
-        }
-    }
-    
-    
-    
-    if (c <= 0.0) {
-        ic = round(c);        /* nearest integer to c */
-        if (fabs(c - ic) < EPS) {    /* c is a negative integer */
-            /* check if termination before explosion */
-            if (neg_int_a && (ia > ic))
-                goto hypok;
-            if (neg_int_b && (ib > ic))
-                goto hypok;
-            goto hypdiv;
-        }
-    }
-    
-    if (neg_int_a || neg_int_b)    /* function is a polynomial */
-        goto hypok;
-    
-    t1 = fabs(b - a);
-    if (x < -2.0 && fabs(t1 - round(t1)) > EPS) {
-        /* This transform has a pole for b-a integer, and
-         * may produce large cancellation errors for |1/x| close 1
-         */
-        p = hyp2f1(a, 1 - c + a, 1 - b + a, 1.0 / x);
-        q = hyp2f1(b, 1 - c + b, 1 - a + b, 1.0 / x);
-        p *= R_pow(-x, -a);
-        q *= R_pow(-x, -b);
-        t1 = gamma(c);
-        s = t1 * gamma(b - a) / (gamma(b) * gamma(c - a));
-        y = t1 * gamma(a - b) / (gamma(a) * gamma(c - b));
-        return s * p + y * q;
-    }
-    else if (x < -1.0) {
-        if (fabs(a) < fabs(b)) {
-            return R_pow(s, -a) * hyp2f1(a, c - b, c, x / (x - 1));
-        }
-        else {
-            return R_pow(s, -b) * hyp2f1(b, c - a, c, x / (x - 1));
-        }
-    }
-    
-    if (ax > 1.0)        /* series diverges  */
-        goto hypdiv;
-    
-    p = c - a;
-    ia = round(p);        /* nearest integer to c-a */
-    if ((ia <= 0.0) && (fabs(p - ia) < EPS))    /* negative int c - a */
-        {neg_int_ca_or_cb = 1;}
-        
-        r = c - b;
-        ib = round(r);        /* nearest integer to c-b */
-        if ((ib <= 0.0) && (fabs(r - ib) < EPS))    /* negative int c - b */
-            {neg_int_ca_or_cb = 1;}
-            
-            id = round(d);        /* nearest integer to d */
-            q = fabs(d - id);
-            
-        /* Thanks to Christian Burger <BURGER@DMRHRZ11.HRZ.Uni-Marburg.DE>
-         * for reporting a bug here.  */
-            if (fabs(ax - 1.0) < EPS) {    /* |x| == 1.0   */
-                if (x > 0.0) {
-                    if (neg_int_ca_or_cb) {
-                        if (d >= 0.0)
-                            goto hypf;
-                        else
-                            goto hypdiv;
-                    }
-                    if (d <= 0.0)
-                        goto hypdiv;
-                    y = gamma(c) * gamma(d) / (gamma(p) * gamma(r));
-                    goto hypdon;
-                }
-                if (d <= -1.0)
-                    goto hypdiv;
-            }
-    
-    /* Conditionally make d > 0 by recurrence on c
-     * AMS55 #15.2.27
-     */
-    if (d < 0.0) {
-        /* Try the power series first */
-        y = hyt2f1(a, b, c, x, &err);
-        if (err < ETHRESH)
-            goto hypdon;
-        /* Apply the recurrence if power series fails */
-        err = 0.0;
-        aid = 2 - id;
-        e = c + aid;
-        d2 = hyp2f1(a, b, e, x);
-        d1 = hyp2f1(a, b, e + 1.0, x);
-        q = a + b + 1.0;
-        for (i = 0; i < aid; i++) {
-            r = e - 1.0;
-            y = (e * (r - (2.0 * e - q) * x) * d2 +
-                 (e - a) * (e - b) * x * d1) / (e * r * s);
-            e = r;
-            d1 = d2;
-            d2 = y;
-        }
-        goto hypdon;
-    }
-    
-    
-    if (neg_int_ca_or_cb)
-        goto hypf;        /* negative integer c-a or c-b */
-    
-hypok:
-    y = hyt2f1(a, b, c, x, &err);
-    
-    
-hypdon:
-    if (err > ETHRESH) {
-        //mtherr("hyp2f1", PLOSS);
-            //  printf( "Estimated err = %.2e\n", err );
-    }
-    return (y);
-    
-    /* The transformation for c-a or c-b negative integer
-     * AMS55 #15.3.3
-     */
-hypf:
-    y = R_pow(s, d) * hys2f1(c - a, c - b, c, x, &err);
-    goto hypdon;
-    
-    /* The alarm exit */
-hypdiv:
-    //mtherr("hyp2f1", OVERFLOW);
-    //printf( "Estimated err = %.2e\n", err );
-    return NPY_INFINITY;
-}
 
 
 
 
-
-
-/* Apply transformations for |x| near 1
- * then call the power series
- */
-double hyt2f1( double a, double b, double c, double x, double *loss )
-{
-    double p, q, r, s, t, y, w, d, err, err1;
-    double ax, id, d1, d2, e, y1;
-    int i, aid, sign;
-    
-    int ia, ib, neg_int_a = 0, neg_int_b = 0;
-    
-    ia = round(a);
-    ib = round(b);
-    
-    if (a <= 0 && fabs(a - ia) < EPS) {    /* a is a negative integer */
-        neg_int_a = 1;
-    }
-    
-    if (b <= 0 && fabs(b - ib) < EPS) {    /* b is a negative integer */
-        neg_int_b = 1;
-    }
-    
-    err = 0.0;
-    s = 1.0 - x;
-    if (x < -0.5 && !(neg_int_a || neg_int_b)) {
-        if (b > a)
-            y = R_pow(s, -a) * hys2f1(a, c - b, c, -x / s, &err);
-        
-        else
-            y = R_pow(s, -b) * hys2f1(c - a, b, c, -x / s, &err);
-        
-        goto done;
-    }
-    
-    d = c - a - b;
-    id = round(d);        /* nearest integer to d */
-    
-    if (x > 0.9 && !(neg_int_a || neg_int_b)) {
-        if (fabs(d - id) > EPS) {
-            int sgngam;
-            
-            /* test for integer c-a-b */
-            /* Try the power series first */
-            y = hys2f1(a, b, c, x, &err);
-            if (err < ETHRESH)
-                goto done;
-            /* If power series fails, then apply AMS55 #15.3.6 */
-            q = hys2f1(a, b, 1.0 - d, s, &err);
-            sign = 1;
-            w = lgam_sgn(d, &sgngam);
-            sign *= sgngam;
-            w -= lgam_sgn(c-a, &sgngam);
-            sign *= sgngam;
-            w -= lgam_sgn(c-b, &sgngam);
-            sign *= sgngam;
-            q *= sign * exp(w);
-            r = R_pow(s, d) * hys2f1(c - a, c - b, d + 1.0, s, &err1);
-            sign = 1;
-            w = lgam_sgn(-d, &sgngam);
-            sign *= sgngam;
-            w -= lgam_sgn(a, &sgngam);
-            sign *= sgngam;
-            w -= lgam_sgn(b, &sgngam);
-            sign *= sgngam;
-            r *= sign * exp(w);
-            y = q + r;
-            
-            q = fabs(q);    /* estimate cancellation error */
-            r = fabs(r);
-            if (q > r)
-                r = q;
-            err += err1 + (MACHEP * r) / y;
-            
-            y *= gamma(c);
-            goto done;
-        }
-        else {
-            /* Psi function expansion, AMS55 #15.3.10, #15.3.11, #15.3.12
-             *
-             * Although AMS55 does not explicitly state it, this expansion fails
-             * for negative integer a or b, since the psi and Gamma functions
-             * involved have poles.
-             */
-            
-            if (id >= 0.0) {
-                e = d;
-                d1 = d;
-                d2 = 0.0;
-                aid = id;
-            }
-            else {
-                e = -d;
-                d1 = 0.0;
-                d2 = d;
-                aid = -id;
-            }
-            
-            ax = log(s);
-            
-            /* sum for t = 0 */
-            y = digamma(1.0) + digamma(1.0 + e) - digamma(a + d1) - digamma(b + d1) - ax;
-            y /= gamma(e + 1.0);
-            
-            p = (a + d1) * (b + d1) * s / gamma(e + 2.0);    /* Poch for t=1 */
-            t = 1.0;
-            do {
-                r = digamma(1.0 + t) + digamma(1.0 + t + e) - digamma(a + t + d1)
-                - digamma(b + t + d1) - ax;
-                q = p * r;
-                y += q;
-                p *= s * (a + t + d1) / (t + 1.0);
-                p *= (b + t + d1) / (t + 1.0 + e);
-                t += 1.0;
-                if (t > MAX_ITERATIONS) {    /* should never happen */
-                    //mtherr("hyp2f1", TOOMANY);
-                   // printf( "Estimated err = %.2e\n", err );
-                    *loss = 1.0;
-                    return NPY_NAN;
-                }
-            }
-            while (y == 0 || fabs(q / y) > EPS);
-            
-            if (id == 0.0) {
-                y *= gamma(c) / (gamma(a) * gamma(b));
-                goto psidon;
-            }
-            
-            y1 = 1.0;
-            
-            if (aid == 1)
-                goto nosum;
-            
-            t = 0.0;
-            p = 1.0;
-            for (i = 1; i < aid; i++) {
-                r = 1.0 - e + t;
-                p *= s * (a + t + d2) * (b + t + d2) / r;
-                t += 1.0;
-                p /= t;
-                y1 += p;
-            }
-        nosum:
-            p = gamma(c);
-            y1 *= gamma(e) * p / (gamma(a + d1) * gamma(b + d1));
-            
-            y *= p / (gamma(a + d2) * gamma(b + d2));
-            if ((aid & 1) != 0)
-                y = -y;
-            
-            q = R_pow(s, id);    /* s to the id power */
-            if (id > 0.0)
-                y *= q;
-            else
-                y1 *= q;
-            
-            y += y1;
-        psidon:
-            goto done;
-        }
-        
-    }
-    
-    /* Use defining power series if no special cases */
-    y = hys2f1(a, b, c, x, &err);
-    
-done:
-    *loss = err;
-    return (y);
-}
-
-
-
-
-
-/* Defining power series expansion of Gauss hypergeometric function */
-
-double hys2f1( double a,double b,double c,double x,double *loss )
-{
-    double f, g, h, k, m, s, u, umax;
-    int i;
-    int ib, intflag = 0;
-    
-    if (fabs(b) > fabs(a)) {
-        /* Ensure that |a| > |b| ... */
-        f = b;
-        b = a;
-        a = f;
-    }
-    
-    ib = round(b);
-    
-    if (fabs(b - ib) < EPS && ib <= 0 && fabs(b) < fabs(a)) {
-        /* .. except when `b` is a smaller negative integer */
-        f = b;
-        b = a;
-        a = f;
-        intflag = 1;
-    }
-    
-    if ((fabs(a) > fabs(c) + 1 || intflag) && fabs(c - a) > 2
-        && fabs(a) > 2) {
-        /* |a| >> |c| implies that large cancellation error is to be expected.
-         *
-         * We try to reduce it with the recurrence relations
-         */
-        return hyp2f1ra(a, b, c, x, loss);
-    }
-    
-    i = 0;
-    umax = 0.0;
-    f = a;
-    g = b;
-    h = c;
-    s = 1.0;
-    u = 1.0;
-    k = 0.0;
-    do {
-        if (fabs(h) < EPS) {
-            *loss = 1.0;
-            return NPY_INFINITY;
-        }
-        m = k + 1.0;
-        u = u * ((f + k) * (g + k) * x / ((h + k) * m));
-        s += u;
-        k = fabs(u);        /* remember largest term summed */
-        if (k > umax)
-            umax = k;
-        k = m;
-        if (++i > MAX_ITERATIONS) {    /* should never happen */
-            *loss = 1.0;
-            return (s);
-        }
-    }
-    while (s == 0 || fabs(u / s) > MACHEP);
-    
-    /* return estimated relative error */
-    *loss = (MACHEP * umax) / fabs(s) + (MACHEP * i);
-    
-    return (s);
-}
-
-
-/*
- * Evaluate hypergeometric function by two-term recurrence in `a`.
- *
- * This avoids some of the loss of precision in the strongly alternating
- * hypergeometric series, and can be used to reduce the `a` and `b` parameters
- * to smaller values.
- *
- * AMS55 #15.2.10
- */
-double hyp2f1ra(double a, double b, double c, double x,
-                       double *loss)
-{
-    double f2, f1, f0;
-    int n;
-    double t, err, da;
-    
-    /* Don't cross c or zero */
-    if ((c < 0 && a <= c) || (c >= 0 && a >= c)) {
-        da = round(a - c);
-    }
-    else {
-        da = round(a);
-    }
-    t = a - da;
-    
-    *loss = 0;
-    
-    assert(da != 0);
-    
-    if (fabs(da) > MAX_ITERATIONS) {
-        /* Too expensive to compute this value, so give up */
-        //mtherr("hyp2f1", TLOSS);
-        //printf( "TLOSS\n");
-        *loss = 1.0;
-        return NPY_NAN;
-    }
-    
-    if (da < 0) {
-        /* Recurse down */
-        f2 = 0;
-        f1 = hys2f1(t, b, c, x, &err);
-        *loss += err;
-        f0 = hys2f1(t - 1, b, c, x, &err);
-        *loss += err;
-        t -= 1;
-        for (n = 1; n < -da; ++n) {
-            f2 = f1;
-            f1 = f0;
-            f0 = -(2 * t - c - t * x + b * x) / (c - t) * f1 - t * (x -
-                                                                    1) /
-            (c - t) * f2;
-            t -= 1;
-        }
-    }
-    else {
-        /* Recurse up */
-        f2 = 0;
-        f1 = hys2f1(t, b, c, x, &err);
-        *loss += err;
-        f0 = hys2f1(t + 1, b, c, x, &err);
-        *loss += err;
-        t += 1;
-        for (n = 1; n < da; ++n) {
-            f2 = f1;
-            f1 = f0;
-            f0 = -((2 * t - c - t * x + b * x) * f1 +
-                   (c - t) * f2) / (t * (x - 1));
-            t += 1;
-        }
-    }
-    
-    return f0;
-}
-
-
-/*
- 15.4.2 Abramowitz & Stegun.
- */
-double hyp2f1_neg_c_equal_bc(double a, double b, double x)
-{
-    double k;
-    double collector = 1;
-    double sum = 1;
-    double collector_max = 1;
-    
-    if (!(fabs(b) < 1e5)) {
-        return NPY_NAN;
-    }
-    
-    for (k = 1; k <= -b; k++) {
-        collector *= (a + k - 1)*x/k;
-        collector_max = fmax(fabs(collector), collector_max);
-        sum += collector;
-    }
-    
-    if (1e-16 * (1 + collector_max/fabs(sum)) > 1e-7) {
-        return NPY_NAN;
-    }
-    
-    return sum;
-}
-
-
-/*#############################################################################*/
-/*################## hyperfeometric function 2F1 ##############################*/
-/*#############################################################################*/
-
-double hypergeo(double a,double b,double c,double x)
-{
-    double sol;
-    sol =hyp2f1( a, b, c, x );
-    return(sol);
-}
-
-
-double hypergeo_sem(double a,double b,double c,double x)
-{
-    double sol;
-    sol =hyp2f1_sem( a, b, c, x );
-    return(sol);
-}
-
-
-void hypergeo_call(double *a,double *b,double *c,double *x, double *res)
-{
-    *res = hypergeo(*a,*b,*c,*x);
-}
 
 
 /***********************************************************/
@@ -3771,47 +2041,69 @@ double biv_Logistic(double corr,double zi,double zj,double mui, double muj, doub
 
 // compute lambert w function
 double LambertW(double z) {
-  int i; 
-  const double eps=4.0e-16, em1=0.3678794411714423215955237701614608; 
-  double p,e,t,w;
-  //if (dbgW) fprintf(stderr,"LambertW: z=%g\n",z);
-  if (z<-em1 || isinf(z) || isnan(z)) { 
-    //fprintf(stderr,"LambertW: bad argument %g, exiting.\n",z); exit(1);
-      return 0.0;
+  const double eps = 4.0e-16;               // Precisione del calcolo
+  const double em1 = 0.3678794411714423;    // e^(-1)
+  double p, e, t, w;
+  
+  // Gestione dei casi speciali
+  if (z < -em1 || isinf(z) || isnan(z)) {
+    return R_NaN;  // Meglio restituire NAN piuttosto che 0.0 per input invalidi
   }
-  if (0.0==z) return 0.0;
-  if (z<-em1+1e-4) { // series near -em1 in sqrt(q)
-    double q=z+em1,r=sqrt(q),q2=q*q,q3=q2*q;
-    return 
-     -1.0
-     +2.331643981597124203363536062168*r
-     -1.812187885639363490240191647568*q
-     +1.936631114492359755363277457668*r*q
-     -2.353551201881614516821543561516*q2
-     +3.066858901050631912893148922704*r*q2
-     -4.175335600258177138854984177460*q3
-     +5.858023729874774148815053846119*r*q3
-     -8.401032217523977370984161688514*q3*q;  // error approx 1e-16
+  
+  if (z == 0.0) return 0.0;
+  
+  // Serie di approssimazione vicino a -e^(-1)
+  if (z < -em1 + 1e-4) {
+    double q = z + em1;
+    double r = sqrt(q);
+    double q2 = q * q;
+    double q3 = q2 * q;
+    return -1.0
+           + 2.331643981597124203 * r
+           - 1.812187885639363490 * q
+           + 1.936631114492359755 * r * q
+           - 2.353551201881614516 * q2
+           + 3.066858901050631912 * r * q2
+           - 4.175335600258177138 * q3
+           + 5.858023729874774148 * r * q3
+           - 8.401032217523977370 * q3 * q;
   }
-  /* initial approx for iteration... */
-  if (z<1.0) { /* series near 0 */
-    p=sqrt(2.0*(2.7182818284590452353602874713526625*z+1.0));
-    w=-1.0+p*(1.0+p*(-0.333333333333333333333+p*0.152777777777777777777777)); 
-  } else 
-    w=log(z); /* asymptotic */
-  if (z>3.0) w-=log(w); /* useful? */
-  for (i=0; i<10; i++) { /* Halley iteration */
-    e=exp(w); 
-    t=w*e-z;
-    p=w+1.0;
-    t/=e*p-0.5*(p+1.0)*t/p; 
-    w-=t;
-    if (fabs(t)<eps*(1.0+fabs(w))) return w; /* rel-abs error */
+  
+  // Calcolo del valore iniziale di w per l'iterazione
+  if (z < 1.0) {
+    // Espansione in serie vicino a 0
+    p = sqrt(2.0 * (M_E * z + 1.0)); // Uso di M_E da math.h
+    w = -1.0 + p * (1.0 + p * (-1.0/3.0 + p * (1.0/72.0)));  // Migliorata precisione
+  } else {
+    // Approssimazione asintotica
+    w = log(z);
+    // Miglioramento per z > 3.0
+    if (z > 3.0) {
+      w -= log(w);
+      // Ulteriore miglioramento per z molto grandi
+      if (z > 30.0) {
+        double l1 = log(w);
+        w -= l1 * (1.0 - l1/(2.0 * w));
+      }
+    }
   }
-  /* should never get here */
-  //fprintf(stderr,"LambertW: No convergence at z=%g, exiting.\n",z);
-    return 0.0;
-  //exit(1);
+  
+  int i;
+  for (i = 0; i < 6; i++) {  
+    e = exp(w);
+    t = w * e - z;
+    p = w + 1.0;
+    
+    double f = e * p; 
+    double f1 = (p + 1.0) * t / (2.0 * p);
+    double d = t / (f - f1);
+    
+    w -= d;
+    if (fabs(d) < eps * (1.0 + fabs(w))) {
+      return w;
+    }
+  }
+  return w;
 }
 
 // pdf bivariate gaussian distribution
@@ -4339,7 +2631,7 @@ double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
         res0 = sum;
     }
 
-    double p00 = -1.0 + pow(auxi * beta_i, a) + pow(auxj * beta_j, a) + sum;
+    double p00 = -1.0 + R_pow(auxi * beta_i, a) + R_pow(auxj * beta_j, a) + sum;
     if (p00 < 1e-320) p00 = 1e-320;
 
     return p00;
@@ -5514,36 +3806,3 @@ double one_log_logistic(double z,double m, double sill)
 }
 
 
-
-double hypU_wrap(double a, double b, double x) {
-  double out;
-  int md; /* method code --- not returned */
-  int isfer = 0;
-
-    F77_CALL(chgu)(&a, &b, &x, &out, &md, &isfer);
-  if (out == 1e300) {
-      out = -1;
-      //Rprintf("\n chgu out == 1e300 %f\n", out);
-  }
-  if (isfer == 6) {
-    out = -1;
-     // Rprintf("\n chgu isfer == 6 %f\n", out);
-  } else if (isfer != 0) {
-    out = -1;
-     // Rprintf("\n chgu isfer != 0 %f\n", out);
-  }
-  return out;
-}
-
-void hyperg_U_e_call( double *a,  double *b,  double *x, double *val)
-{
-    *val = hypU_wrap(*a, *b, *x);
-}
-
-
-double kummer(double a,double b, double c)
-{
-    double res=0.0;
-    res=hypU_wrap(a,b,c);
-    return (res);
-}

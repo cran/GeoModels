@@ -60,7 +60,7 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
             if(all(neighb<1))  stop("neighb must be an integer >=1\n")
           }
     if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements\n")}
-    if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector\n")}
+    #if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector\n")}
 
     if(!is.character(optimizer)) stop("invalid optimizer\n")
     if(!is.character(distance)) stop("invalid distance\n")
@@ -284,7 +284,7 @@ if(!is.null(anisopars)) {
                                unname(initparam$data),initparam$fixed,initparam$flagcorr,
                                initparam$flagnuis,grid,initparam$lower,method,initparam$model,initparam$namescorr,
                                initparam$namesnuis,initparam$namesparam,initparam$numcoord,initparam$numpairs,
-                               initparam$numparamcorr,initparam$numtime,optimizer,onlyvar,parallel,
+                               initparam$numparamcorr,initparam$numtime,optimizer,onlyvar,FALSE,
                                initparam$param,initparam$radius,initparam$setup,initparam$spacetime,sparse,varest,taper,initparam$type,
                                initparam$upper,initparam$ns,unname(initparam$X),initparam$neighb,MM,aniso)
 
@@ -298,35 +298,31 @@ if(!is.null(anisopars)) {
                                    initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
                                    initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
                                    initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,parallel,
+                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,FALSE,
                                    initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,varest,initparam$weighted,initparam$ns,
                                    unname(initparam$X),sensitivity,MM,aniso)
     if(memdist)
-        {
-      fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
+          fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
                                    coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
                                    initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
                                    initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
                                    initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,parallel,
+                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,FALSE,
                                    initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,varest,initparam$weighted,initparam$ns,
-                                   unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)}
+                                   unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)
+        
       }
  if(likelihood=='Marginal'&&type=="Independence")
-   {
-
-
-
-      fitted<-CompIndLik2 (initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
+           fitted<-CompIndLik2 (initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
                                    coordx_dyn,unname(initparam$data), 
                                    initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid,
                                     initparam$lower,initparam$model,initparam$n ,
                                      initparam$namescorr,initparam$namesnuis,
-                                   initparam$namesparam,initparam$numparam,optimizer,onlyvar,parallel, initparam$param,initparam$spacetime,initparam$type,#27
+                                   initparam$namesparam,initparam$numparam,optimizer,onlyvar,FALSE, initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,names(upper),varest, initparam$ns, unname(initparam$X),sensitivity,copula,MM)
-  }
+  
 
      ##misspecified models
     missp=FALSE 
@@ -483,6 +479,9 @@ if (bivariate && is.null(coordx_dyn)) {initparam$coordx <- initparam$coordx[1:di
                          X = X)
     structure(c(GeoFit, call = call), class = c("GeoFit"))
   }
+
+
+
 
 print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
   {

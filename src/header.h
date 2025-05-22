@@ -27,10 +27,6 @@
 
 
 
-
-
-
-//#include "polevl.h"
 #define LOW -1.0e15
 #define MAXERR 1e-6
 #define EPS DBL_EPSILON
@@ -38,14 +34,12 @@
 /* for bivariate t distribution */
 #define EPS1 1.0e-10
 #define EPS2 1.0e-10
-#define Inf 1.7976931348623157e+308
+#define Inf R_PosInf
 #define ETHRESH 1.0e-12
 #define MACHEP   1.11022302462515654042E-16   /* 2**-53 */
 #define MAXNUM   1.79769313486231570815E308    /* 2**1024*(1-MACHEP) */
 #define MAX_ITERATIONS 10000
-#define NPY_NAN NAN
-#define gamma gammafn
-#define NPY_INFINITY 1.7976931348623157e+308
+#define NPY_NAN R_NaN
 #define NPY_PI M_PI
 #define MAXLGM 2.556348e305
 #define LS2PI  0.91893853320467274178
@@ -67,7 +61,7 @@
 #define LARGE 200
 #define SMALLRATIO 0.3
 #define LARGERATIO 4.5
-#define NPY_INFINITY 1.7976931348623157e+308
+#define NPY_INFINITY R_PosInf
 #define NPY_PI_4 .78539816339744830962
 #define SQ2OPI .79788456080286535588
 #define MAXLGM 2.556348e305
@@ -276,16 +270,9 @@ void Maxima_Minima_time(double *res,double *coordt,int *nsize);
 double lanczos_sum_expg_scaled(double x);
 
 
-double log1p(double x);
-//double log1pmx(double x);
-double log1pmx(double x);
-double expm1(double x);
-double cosm1(double x);
-double lgam1p_taylor(double x);
-double lgam1p(double x);
 double ratevl(double x, const double num[], int M,
               const double denom[], int NN);
-double zeta(double x,double q);
+
 
 
 static const double LP[] = {
@@ -587,7 +574,7 @@ double CorFunStable(double lag, double power, double scale);
 double CorFunWave(double lag, double scale);
 double CorFunWitMat(double lag, double scale, double smooth);
 double CorFunWitMathole(double lag, double scale, double smooth,double R_power1);
-double onef2(double a, double b, double c, double x, double *err);
+//double onef2(double a, double b, double c, double x, double *err);
 double Corschoenberg(double lag,double scale);
 double CorFunWitMat1(double lag, double scale, double smooth);
 double CorFunBohman(double lag,double scale);
@@ -1304,18 +1291,15 @@ End
 
 double log_pochhammer(double a, int n);
 double hypergeometric_1F2(double a, double b, double c, double x, double tol);
-double hyp2f1_neg_c_equal_bc(double a, double b, double x);
-double hyp2f1ra(double a, double b, double c, double x,double *loss);
-double lgam(double x);
 
 double biv_unif_CopulaGauss(double dat1,double dat2,double rho);
 double biv_unif_CopulaClayton(double dat1,double dat2,double rho,double nu);
 double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho,double alpha);
 
 double lgam_sgn(double x, int *sign);
-double hyt2f1( double a, double b, double c, double x, double *loss );
-double hys2f1( double a,double b,double c,double x,double *loss );
-double hyp2f1( double a,double b,double c,double x);
+//double lgam(double x);
+
+
 double hypergeo(double a,double b,double c,double x);
 double hypergeo_sem(double a,double b,double c,double x);
 
@@ -1328,6 +1312,7 @@ double hy1f1p(double a, double b, double x, double *acanc);
 double hy1f1a(double a, double b, double x, double *acanc);
 double hyp2f0(double a, double b, double x, int type, double *err);
 double hyperg(double a, double b, double x);
+double hyper_2f1(double a, double b, double c, double z) ;
 
 
 
@@ -1391,7 +1376,7 @@ double Phi2help( double x, double y, double rho );
 
 double Phi2( double x, double y, double rho );
 
-double igam2(int n,double x);
+//double igam2(int n,double x);
 
 double igam_fac(double a, double x);
 

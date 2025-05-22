@@ -248,25 +248,48 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         return(llik)
     }
 
- ######## Standard log-likelihood function for log gaussian random fields       
-  LogNormDenStand_LG <- function(const,cova,ident,dimat,mdecomp,nuisance,det,sill,setup,stdata)
-    {
-        llik <- 1.0e8
-        # Computes the covariance matrix:
-        varcov <- (sill)*ident
-        varcov[lower.tri(varcov)] <- cova
-        varcov <- t(varcov)
-        varcov[lower.tri(varcov)] <- cova      
-        # decomposition of the covariance matrix:
-        decompvarcov <- MatDecomp(varcov,mdecomp)
-        if(is.logical(decompvarcov)) return(llik)  
-        logdetvarcov <- MatLogDet(decompvarcov,mdecomp) 
-       # invarcov <- MatInv(decompvarcov,mdecomp)
-       # llik <- 0.5*(const+logdetvarcov+crossprod(t(crossprod(stdata,invarcov)),stdata))
-         llik <- 0.5*(const+logdetvarcov+2*det+  sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2))
-          #  llik <- 0.5*(const+logdetvarcov+2*det+  sum((backsolve(decompvarcov, stdata, transpose = TRUE))^2))
-        return(llik)
-    }
+ ######## Standard log-likelihood function for log gaussian random fields   
+
+
+ #LogNormDenStand_LG <- function(const, cova, ident, dimat, mdecomp, nuisance, det, sill, setup, stdata) {
+  #  llik <- 1.0e8  
+   # varcov <- sill * ident
+   # varcov[lower.tri(varcov)] <- cova
+   # varcov <- t(varcov)
+   # varcov[lower.tri(varcov)] <- cova  
+   # decompvarcov <- MatDecomp(varcov, mdecomp)
+   # if (is.logical(decompvarcov)) return(llik)  # Fallimento
+   # logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
+  #  quad_form <-sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2)
+  #  llik <- 0.5 * (const + logdetvarcov + 2 * det + quad_form)
+  #  return(llik)
+#}
+
+
+
+LogNormDenStand_LG <- function(const, cova, ident, dimat, mdecomp, nuisance, 
+                               sill, setup, stdata, V_data, mu_s, n) {
+  llik <- 1.0e8
+  decompvarcov <- MatDecomp(cova, mdecomp)
+  if (is.logical(decompvarcov)) {
+    return(llik)
+  }
+  logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
+  # Forma quadratica: z^T Σ^(-1) z
+  y <- forwardsolve(decompvarcov, stdata, transpose = FALSE, upper.tri = FALSE)
+    quadterm <- sum(y^2)
+  # Termine Jacobiano della trasformazione Y -> Z
+  # |J| = ∏(1/(σ * V(s_i) * μ(s_i)))
+  # log|J| = -n*log(σ) - ∑log(V(s_i)) - ∑log(μ(s_i))
+  sigma <- sqrt(sill)
+  jacobian_term <- -n * log(sigma) - sum(log(V_data)) - sum(log(mu_s))
+  # Log-likelihood finale
+  # L = -0.5 * [n*log(2π) + log|Σ| + z^T Σ^(-1) z] + log|J|
+  llik <- -0.5 * (n * log(2 * pi) + logdetvarcov + quadterm) + jacobian_term
+  # Ritorna il negativo per minimizzazione
+  return(-llik)
+}
+
 
 ######## Standard log-likelihood function for tukeyH random fields
 
@@ -392,45 +415,66 @@ llik <- 0.5*( const*log(sill)/log(2*pi) +
 ##################################################################################################################
 ##################################################################################################################
         # Call to the objective functions:
-         loglik_loggauss <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
-                       grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso)
-    {
+loglik_loggauss <- function(param, const, coordx, coordy, coordz, coordt, corr, corrmat, corrmodel,
+                            data, dimat, fixed, fname, grid, ident, mdecomp, model,
+                            namescorr, namesnuis, namesparam, radius, setup, X,
+                            ns, NS, MM, aniso, namesaniso) {
+  
+  llik <- 1.0e8
+  names(param) <- namesparam
+  pram <- c(param, fixed)
+  
+  # Parametri
+  paramcorr <- pram[namescorr]
+  nuisance   <- pram[namesnuis]
+  
+  # Termini di media
+  sel <- substr(names(nuisance), 1, 4) == "mean"
+  mm <- as.numeric(nuisance[sel])
+  Mean <- as.vector(X %*% mm)
+  if (!is.null(MM)) Mean <- MM
+  
+  # Anisotropia
+  if (aniso) {
+    anisopar <- as.numeric(pram[namesaniso])
+    coords1 <- GeoAniso(cbind(coordx, coordy, coordz), anisopars = anisopar)
+    coordx <- coords1[, 1]
+    coordy <- coords1[, 2]
+    if (ncol(coords1) == 3) coordz <- coords1[, 3] else coordz <- NULL
+  }
+  # Parametri del modello log-Gaussiano
+  sill <- as.numeric(nuisance["sill"])    # σ²
+  nugget <- as.numeric(nuisance["nugget"]) # τ² (effetto nugget)
+  # Controlli di validità
+  if (sill <= 0 || is.na(nugget) || nugget < 0 || nugget >= 1) return(llik)
+  # Media del modello: μ(s) = exp(X(s)^T β)
+  mu_s <- exp(Mean)
+  V_data <- data / mu_s
+  sigma <- sqrt(sill)
+  Z_data <- (log(V_data) + sill/2) / sigma
 
-        llik <- 1.0e8
-        names(param) <- namesparam
-        # Set the parameter vector:
-        pram <- c(param, fixed)
-        paramcorr <- pram[namescorr]
-        nuisance <- pram[namesnuis]
-        sel=substr(names(nuisance),1,4)=="mean"
+  nuisance_temp <- nuisance
+  nuisance_temp["sill"] <- 1  # Standardizzazione per correlazione
+  
+  corr <- matr(corrmat, corr, coordx, coordy, coordz, coordt, corrmodel,
+               nuisance_temp, paramcorr, ns, NS, radius)
+  if (is.nan(corr[1])) return(llik)
+  
+  n <- length(Z_data)
+    # corr contiene la parte triangolare inferiore
+    corrmat_full <- diag(n)
+    corrmat_full[lower.tri(corrmat_full)] <- corr
+    corrmat_full <- t(corrmat_full)
+    corrmat_full[lower.tri(corrmat_full)] <- corr
+  cova<-(1 - nugget) * corrmat_full + nugget * diag(n)
+  loglik_gaussian <- LogNormDenStand_LG(
+    stdata = Z_data,const = const,cova = cova,dimat = dimat,ident = ident,
+    mdecomp = mdecomp,nuisance = nuisance,sill = sill,setup = setup,V_data = V_data,
+    mu_s = mu_s,n = n)
+  
+  return(loglik_gaussian)
+}
 
-        mm=as.numeric(nuisance[sel])
-        Mean=c(X%*%mm)
-        if(!is.null(MM)) Mean=MM
-    
-  if(aniso){     ### anisotropy
-            anisopar<-pram[namesaniso]
-            coords1=GeoAniso (cbind(coordx,coordy,coordz), anisopars=as.numeric(anisopar))       
-             if(ncol(coords1)==2) {coordx=coords1[,1];coordy=coords1[,2];coordz=NULL}
-             if(ncol(coords1)==3) {coordx=coords1[,1];coordy=coords1[,2];coordz=coords1[,3]}
-         }
-    
-        # Computes the vector of the correlations:
-        if(nuisance['nugget']<0||nuisance['nugget']>=1) return(llik)
-        sill=nuisance['sill']
-        if(sill<0) return(llik)
-        nuisance['sill']=1
-        corr=matr(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius)
-       ## if(corr[1]==-2||is.nan(corr[1])) return(llik)
-        # Computes the correlation matrix:
-        cova <- corr*(1-nuisance['nugget'])
-        #KK=exp(sill)/2
-        # Computes the log-likelihood
-        loglik_u <- do.call(what="LogNormDenStand_LG",
-            args=list(stdata=(log(data)-(c(Mean-sill*0.5))),const=const,cova=cova,dimat=dimat,ident=ident,
-            mdecomp=mdecomp,nuisance=nuisance,det=sum(1/(data)),sill=sill,setup=setup))
-        return(loglik_u)
-      }
 ################################################################################################
    loglik_tukey2h <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                        grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso)
@@ -713,7 +757,7 @@ loglik_sh <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrm
         names(param) <- namesparam
         # Set the parameter vector:
         pram <- c(param, fixed)
-        #print(pram)
+  
         paramcorr <- pram[namescorr]
         nuisance <- pram[namesnuis]
 
@@ -733,7 +777,7 @@ loglik_sh <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrm
 
               # Computes the vector of the correlations:
         corr=matr(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius)
-        #print(head(corr))
+       
         if(is.nan(corr[1])||nuisance['sill']<0||nuisance['nugget']<0||nuisance['nugget']>1) return(llik)
         cova <- corr*nuisance['sill']*(1-nuisance['nugget'])
         

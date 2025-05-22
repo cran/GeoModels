@@ -10,8 +10,6 @@ GeoSimapprox <- function(coordx, coordy=NULL,coordz=NULL,coordt=NULL, coordx_dyn
 ####################################################################
 ############  starting internal function ###########################
 ####################################################################
-
-###############################
 ddim<-function(coordx,coordy,coordz,coordt)
 {
 dimt=1
@@ -90,15 +88,8 @@ if(!spacetime){
         }
            simu=c(simu)
     }     
-## Vecchia
-#if(method=="Vecchia"){ 
- #  if(corrmodel=="Matern") model1="matern_isotropic"
-  # simu=GpGp::fast_Gp_sim(covparms=c(as.numeric(param['sill']),
-   #                               as.numeric(param['scale']),
-    #                              as.numeric(param['smooth']),
-     #                             as.numeric(param['nugget'])), 
-      #                            covfun_name = model1, coords, m = M)
-       #               }
+
+
  ## Circulant embeeding           for regular grid          
   if(method=="CE") simu= c(SimCE(numxgrid,numygrid,coordx,coordy,coordz,corrmodel,param,mean.val=0, max.ext)$X)        
 }
@@ -124,7 +115,7 @@ return(simu)
     numxgrid=numygrid=NULL
     spacetime_dyn=FALSE
 
-param <- lapply(param, unname) ## carlo
+param <- lapply(param, unname) 
 
 ### some check for parallel #######
  coremax=parallel::detectCores()
@@ -172,6 +163,16 @@ if(!is.null(spobj)) {
         if(!is.null(coordy)) coords=cbind(coordx,coordy,coordz)
     }         
     coords_orig=coords
+    
+####
+    numtime=1
+   if(!is.null(coordt)) numtime=length(coordt)
+   if(spacetime_dyn) numtime=1
+   numcoord=nrow(coords);
+   dime<-numcoord*numtime
+  if(bivariate) numtime=2
+  ####
+
     if(!(is.null(anisopars))) coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))    
     ##############################################################################
     ##############################################################################
@@ -299,19 +300,12 @@ else   { if(is.null(param$sill_1)) param$sill_1=1
             if(num_betas2>1) {for(i in 1:(num_betas2-1)) param[[paste("mean_2",i,sep="")]]=0}
         }}
 
-
-SIM=list()
-
 ###################################################
-### starting number of replicates
+############# start  do_one_sim ###################
 ###################################################
-if(progress&&nrep>1){
-    progressr::handlers(global = TRUE)
-    progressr::handlers("txtprogressbar")
-    pb <- progressr::progressor(along = 1:nrep)
-}
-for( LL in 1:nrep){
-    if(progress&&nrep>1){pb(sprintf("LL=%g", LL))}
+
+do_one_sim <- function(LL, pb = NULL) {
+  if (!is.null(pb)) pb(sprintf("LL=%g", LL))
     k=1;npoi=1
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
@@ -335,8 +329,6 @@ for( LL in 1:nrep){
     if(model %in% c("TwoPieceBimodal"))  k=round(param$df)+1
     if(model %in% c("SkewStudentT","TwoPieceStudentT"))  k=round(1/param$df)+2
      #if(model %in% c("Beta")) {  k=round(param$shape1)+round(param$shape2)
-       #  if(!bivariate) {  mm<-param$mean;param$mean=0
-        #     vv<-param$sill;param$sill=1 }}
   ################################################################################
   ################################################################################
    ns=NULL
@@ -356,18 +348,13 @@ for( LL in 1:nrep){
    if(bivariate)  dd=array(0,dim=c(dime,2,k))
    cumu=NULL;#s=0 # for negative binomial  case
  #########################################
-numtime=1
-if(!is.null(coordt)) numtime=length(coordt)
-if(spacetime_dyn) numtime=1
-  numcoord=nrow(coords);
-  dime<-numcoord*numtime
-if(bivariate) numtime=2
+
 #########################################################
 KK=1;sel=NULL;ssp=double(dime)
 if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
-      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -378,7 +365,7 @@ while(KK<=npoi) {
 for(i in 1:k) {
 
 ################# here the approximated simulation  ##################################################
-simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
 ######################################################################################################
 
 namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
@@ -445,7 +432,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonGammaZIP","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -488,7 +475,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim
@@ -678,7 +665,6 @@ if(model %in% c("Beta","Kumaraswamy","Kumaraswamy2"))   {
     while(i<=round(param$shape1))  {sim1=cbind(sim1,dd[,,i]^2);i=i+1}
     while(i<=(round(param$shape1)+round(param$shape2)))  {sim2=cbind(sim2,dd[,,i]^2);i=i+1}
     aa=rowSums(sim1)
-    #sim=aa/(aa+rowSums(sim2))
    sim=param$min + (param$max-param$min)*aa/(aa+rowSums(sim2))
     }
      if(model=="Kumaraswamy"||model=="Kumaraswamy2")
@@ -687,7 +673,6 @@ if(model %in% c("Beta","Kumaraswamy","Kumaraswamy2"))   {
     while(i<=4)  {sim2=cbind(sim2,dd[,,i]^2);i=i+1}
     aa=rowSums(sim1)
     sim=aa/(aa+rowSums(sim2))
-   # sim=( (1-(1-sim)^(1/param$shape1))^(1/param$shape2) )
     if(model=="Kumaraswamy")
       sim=param$min + (param$max-param$min)*( (1-(sim)^(1/param$shape1))^(1/param$shape2) )
     if(model=="Kumaraswamy2")
@@ -778,13 +763,56 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
 ##################################################################
 ##################################################################
 
-    SIM[[LL]]=sim
-} 
-######################################################################
-##########  end of replicates ########################################
-######################################################################
+    sim 
+  }
 
-if(nrep==1) SIM=SIM[[1]] 
+##################################################################################
+##################### end do_one_sim #############################################
+##################################################################################
+
+cond=dime*nrep
+if (cond > 1000000 && parallel) {
+  # Sopprimi i warning
+  old_warn <- getOption("warn")
+  options(warn = -1)
+  on.exit(options(warn = old_warn), add = TRUE)
+
+  future::plan(future::multisession, workers = n.cores)
+  on.exit(future::plan(future::sequential), add = TRUE)
+
+  SIM <- progressr::with_progress({
+    pb <- if (progress) progressr::progressor(steps = nrep) else NULL
+    results <- foreach::foreach(
+      LL = 1:nrep,
+      .options.future = list(seed = TRUE)
+    ) %dofuture% {
+      if (!is.null(pb)) pb(sprintf("Simulation %d of %d", LL, nrep))
+      do_one_sim(LL)
+    }
+    results
+  })
+
+} else {
+  SIM <- progressr::with_progress({
+    pb <- if (progress && nrep > 1) progressr::progressor(steps = nrep) else NULL
+    results <- vector("list", nrep)
+    for (LL in 1:nrep) {
+      if (!is.null(pb)) pb(sprintf("Simulation %d of %d", LL, nrep))
+      results[[LL]] <- do_one_sim(LL)
+    }
+    results
+  })
+}
+
+
+
+if (nrep == 1) SIM <- SIM[[1]]
+
+################################################
+################################################
+################################################
+
+
 
     #######################################
     if(bivariate)   numtime=1
