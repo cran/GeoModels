@@ -148,14 +148,14 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic","PoissonGam
     ## checking for upper and lower bound for method 'L-BFGS-B' and optimize method
 
 
-    if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb'))&is.null(lower)&is.null(upper))
+    if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','bobyqa'))&is.null(lower)&is.null(upper))
              stop("lower and upper bound are missing\n")
 
 
-      if(!(optimizer %in% c('L-BFGS-B','nlminb','nlm','nmkb','nmk','multiNelder-Mead','multinlminb',"BFGS","Nelder-Mead","optimize","SANN")))
+      if(!(optimizer %in% c('L-BFGS-B','nlminb','nlm','nmkb','nmk','multiNelder-Mead','multinlminb',"BFGS","Nelder-Mead","optimize","SANN",'bobyqa')))
              stop("optimizer is not correct\n")
      ####        
-    if(optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','multiNelder-Mead') || length(initparam$param)==1){
+    if(optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','multiNelder-Mead','bobyqa') || length(initparam$param)==1){
    
     if(!is.null(lower)||!is.null(upper)){
        if(!is.list(lower)||!is.list(upper))  stop("lower and upper bound must be a list\n")
@@ -317,6 +317,7 @@ if(likelihood!="Full") {if(is.null(neighb)&&is.numeric(maxdist)&&likelihood=="Ma
                                                      initparam$numpairs=2*initparam$numpairs
                                                     } 
                        }
+
 ff=as.list(initparam$fixed)
 if(!is.null(MM)) ff$mean=MM 
 if(is.null(unlist(ff))) ff=NULL
@@ -328,6 +329,7 @@ if(aniso) anisopars=as.list(c(fitted$par,ff)[namesaniso])
 if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
                                           initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
                                         }   
+ initparam$coordz=coordz
 
 conf.int=NULL
 pvalues=NULL

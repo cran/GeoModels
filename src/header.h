@@ -407,14 +407,14 @@ extern int *cdyn; // dynamic coords indicator
 extern double F77_NAME(chfm)(double *xr,double *xi,double *ar, double *ai,
   double *br, double *bi,double *r, double *ri,int *len, int *lnchf,int *ip);
 
-extern double F77_NAME(bvnmvn)(double *lower, double *upper, int *infin, double *correl);
+//extern double F77_NAME(bvnmvn)(double *lower, double *upper, int *infin, double *correl);
 
 extern void mult_pmnorm( int *nvar , double *lower , double *upper , int *infin , double *corr , int *maxpts , double *abseps ,
      double *releps , double *esterror , double *result , int *fail );
 
-extern void F77_NAME(sadmvn)( int* , double* , double*, int* , double* , int* , double* , double* , double* , double * , int*) ;
+//extern void F77_NAME(sadmvn)( int* , double* , double*, int* , double* , int* , double* , double* , double* , double * , int*) ;
 
-extern double F77_NAME(mvndst)(int *N,double *lower, double *upper, int *infin, double *correl);
+//extern double F77_NAME(mvndst)(int *N,double *lower, double *upper, int *infin, double *correl);
 
 
 extern void F77_NAME(chgu)(double *,double *,double *,double *, int *, int *);
@@ -435,6 +435,7 @@ int fmin_int(int u,int v);
 //double hypergeo(double aux, double *param);
 
 double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c);
+double cdf_norm(double lim1,double lim2,double a11,double a12);
 
 double owens_t(double h, double a);
 double psn(double x,  double omega, double alpha, double tau);
@@ -846,6 +847,8 @@ double onef2integral(double x, double *param);
 double pbnorm(int *cormod, double h, double u, double lim1, double lim2, double nugget, double var,double *par, double thr);
 double phalf_gauss (double z);
 double pbnorm22(double lim1,double lim2,double corr);
+double bvnmvn_optimized(const double *lower, const double *upper, 
+                          const int *infin, double correl);
 double pblogi22(double lim1,double lim2,double corr);
 double ptnorm(int which,int *cormod, double h0,double h1,double h2, double u0, double u1,double u2, 
                  double *nuis, double *par, double thr);
@@ -1312,6 +1315,7 @@ double hy1f1p(double a, double b, double x, double *acanc);
 double hy1f1a(double a, double b, double x, double *acanc);
 double hyp2f0(double a, double b, double x, int type, double *err);
 double hyperg(double a, double b, double x);
+double hypergeo2(double a, double b, double c, double x);
 double hyper_2f1(double a, double b, double c, double z) ;
 
 
@@ -1386,7 +1390,7 @@ double biv_chisqu2(double corr,double zi,double zj, double shape);
 
 double asy_log_besselI(double z,double nu);
 
-double corrPGs(double corr,double mean,double a);
+//double corrPGs(double corr,double mean,double a);
 
 double CorrPGns(double corr,double mean_i, double mean_j, double a);
 

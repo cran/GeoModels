@@ -386,8 +386,6 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
                        coordz[(i+NS[t])],coordz[(j+NS[v])],*REARTH);
      
                       if(dij<=thres[1]){
-                             //  Rprintf("%f %f %f %f %f %f -%f  \n",coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
-                       //coordz[(i+NS[t])],coordz[(j+NS[v])],dij); 
                           tlags[h]=dij;tlagt[h]=0;
                            colidx[h]=i+NS[t];  rowidx[h]=j+NS[v];
                           h++;
@@ -398,8 +396,7 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
            dij=dist(type[0],coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
                    coordz[(i+NS[t])],coordz[(j+NS[v])],*REARTH);
                           if(dij<=thres[1] && dtv<=thret[1]){
-                                    //Rprintf("%f %f %f %f %f %f -%f  \n",coordx[(i+NS[t])],coordx[(j+NS[v])],coordy[(i+NS[t])],coordy[(j+NS[v])],
-                       //coordz[(i+NS[t])],coordz[(j+NS[v])],dij); 
+                   
                             tlags[h]=dij;tlagt[h]=dtv;
                            colidx[h]=i+NS[t];  rowidx[h]=j+NS[v];  
                            h++; 

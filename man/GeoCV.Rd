@@ -6,7 +6,7 @@
 \usage{GeoCV(fit, K=100, estimation=TRUE, optimizer=NULL,
      lower=NULL, upper=NULL, n.fold=0.05,local=FALSE,
     neighb=NULL, maxdist=NULL,maxtime=NULL,sparse=FALSE,
-    type_krig="Simple", which=1, parallel=FALSE, ncores=NULL)}
+    type_krig="Simple", which=1, parallel=TRUE, ncores=NULL)}
 
 \arguments{
   \item{fit}{An object of class

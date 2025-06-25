@@ -784,7 +784,8 @@ if (cond > 1000000 && parallel) {
     pb <- if (progress) progressr::progressor(steps = nrep) else NULL
     results <- foreach::foreach(
       LL = 1:nrep,
-      .options.future = list(seed = TRUE)
+      .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))
     ) %dofuture% {
       if (!is.null(pb)) pb(sprintf("Simulation %d of %d", LL, nrep))
       do_one_sim(LL)

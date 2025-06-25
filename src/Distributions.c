@@ -489,13 +489,6 @@ return(A*B)/vari;
 }
 
 
-// cdf of  a bivariate Gausssian distribution
-void cdf_norm_call(double *lim1,double *lim2,double *a11,double *a12, double *res)
-{
-    *res=   cdf_norm(lim1[0],lim2[0],a11[0],a12[0]);
-    //*res=   cdf_norm(0,0,.5,1);
-}
-
 void CBessel(double *xxx, double *nuu, int *expscale,double *res, int *tipo)
 {
     switch (*tipo) {
@@ -650,57 +643,230 @@ else
 return(a);
 }
 
-/*****************************************/
-/********* poisson gamma correlation******/
-/*****************************************/
-double corrPGs(double corr,double mean,double a){
+/********************************************************************/
+/********* poisson gamma correlation*********************************/
+/********************************************************************/
+#define MIN_CORRELATION_THRESHOLD 1e-15
+#define MIN_MEAN_THRESHOLD 1e-15
+#define MIN_A_THRESHOLD 1e-15
+#define MAX_NU_THRESHOLD 1e10
+#define HYPERGEO_CONVERGENCE_TOL 1e-12
 
-double corr2=corr*corr;
-double nu=a/mean;
-double KK=nu*(1-corr2);
-double cc=4.0/R_pow(2.0+KK,2);
-double dd=exp(log(nu)+0.5*(log(nu)+log1p(-corr2))+a*log(2.0+KK)-log1p(nu)-(a+0.5)*log(4.0+KK));
-double aa=hypergeo((1.0-a)/2.0,-a/2.0,1,cc);
-double bb=((a+1.0)/(2.0+KK))*hypergeo((2.0-a)/2.0,(1.0-a)/2.0,2,cc);
-return corr2*(1.0-dd*(aa+bb));
+
+/********* stationary *********************************/
+double corrPGs(double corr, double mean, double a) {
+    // Validazione input robusta
+    if (!R_FINITE(corr) || !R_FINITE(mean) || !R_FINITE(a)) {
+        return R_NaN;
+    }
+    
+    if (fabs(corr) >= 1.0 || mean <= MIN_MEAN_THRESHOLD || a <= MIN_A_THRESHOLD) {
+        return R_NaN;
+    }
+    
+    // Gestione casi limite per correlazione quasi zero
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
+        return 0.0;  // Correlazione effettivamente zero
+    }
+    const double corr2 = corr * corr;
+    const double one_minus_corr2 = 1.0 - corr2;
+    const double nu = a / mean;
+    if (nu > MAX_NU_THRESHOLD) {
+        return corr2;  // Limite quando nu -> infinito
+    }
+    const double KK = nu * one_minus_corr2;
+    const double two_plus_KK = 2.0 + KK;
+    const double four_plus_KK = 4.0 + KK;
+
+    if (two_plus_KK <= 0.0 || four_plus_KK <= 0.0) {
+        return R_NaN;
+    }
+    
+    const double cc = 4.0 / (two_plus_KK * two_plus_KK);
+    
+    // Controllo per cc: deve essere in [0,1) per convergenza delle ipergeometriche
+    if (cc >= 1.0 || cc < 0.0) {
+        return R_NaN;
+    }
+
+    double log_dd;
+    {
+        const double log_nu = log(nu);
+        const double log_one_minus_corr2 = log1p(-corr2);
+        const double log_two_plus_KK = log(two_plus_KK);
+        const double log_four_plus_KK = log(four_plus_KK);
+        const double log1p_nu = log1p(nu);
+        
+        log_dd = log_nu + 0.5 * (log_nu + log_one_minus_corr2) + 
+                 a * log_two_plus_KK - log1p_nu - (a + 0.5) * log_four_plus_KK;
+        
+        if (!R_FINITE(log_dd)) {
+            return R_NaN;
+        }
+    }
+    
+    const double dd = exp(log_dd);
+    if (!R_FINITE(dd) || dd <= 0.0) {
+        return R_NaN;
+    }
+
+    const double aa_param1 = (1.0 - a) / 2.0;
+    const double aa_param2 = -a / 2.0;
+    const double bb_param1 = (2.0 - a) / 2.0;
+    const double bb_param2 = (1.0 - a) / 2.0;
+    
+    if (!R_FINITE(aa_param1) || !R_FINITE(aa_param2) || 
+        !R_FINITE(bb_param1) || !R_FINITE(bb_param2)) {
+        return R_NaN;
+    }
+    
+    const double aa = hypergeo(aa_param1, aa_param2, 1.0, cc);
+    const double bb_hypergeo = hypergeo(bb_param1, bb_param2, 2.0, cc);
+    if (!R_FINITE(aa) || !R_FINITE(bb_hypergeo) || aa <= 0.0 || bb_hypergeo <= 0.0) {
+        return R_NaN;
+    }
+
+    const double bb_coeff = (a + 1.0) / two_plus_KK;
+    if (!R_FINITE(bb_coeff)) {
+        return R_NaN;
+    }
+    
+    const double bb = bb_coeff * bb_hypergeo;
+
+    const double aa_plus_bb = aa + bb;
+    if (!R_FINITE(aa_plus_bb)) {
+        return R_NaN;
+    }
+    
+    const double dd_term = dd * aa_plus_bb;
+    if (!R_FINITE(dd_term)) {
+        return R_NaN;
+    }
+    const double inner_term = 1.0 - dd_term;const double result = corr2 * inner_term;
+    
+    // Controllo finale del risultato
+    if (!R_FINITE(result)) {
+        return R_NaN;
+    }
+    
+    if (result < 0.0 || result > 1.0) {
+        return fmax(0.0, fmin(1.0, result));
+    }
+    
+    return result;
 }
+
    
+#define DEFAULT_MAX_ITER 1000
+#define CONVERGENCE_TOL 1e-12
+#define LOG_EPSILON -230.0
+/********* non  stationary *********************************/
+double CorrPGns(double corr, double mean_i, double mean_j, double a) {
+    // Validazione input
+    if (fabs(corr) >= 1.0 || mean_i <= 0.0 || mean_j <= 0.0 || a <= 0.0) {
+        return R_NaN;  // Input non valido
+    }
+    
 
-double CorrPGns(double corr,double mean_i,double mean_j,double a){
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+    const double mnui = -1.0 / nu_i;
+    const double mnuj = -1.0 / nu_j;
+    const double log_corr = log(fabs(corr));
+    
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+    const double lgamma_a = lgammafn(a);
+    const double log_mean_prod = log(mean_i * mean_j);
+    
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    int convergence_count = 0;
+    const int convergence_threshold = 3;  // Richiedi 3 iterazioni stabili
+    
+    double lgamma_cache_a_plus_m[DEFAULT_MAX_ITER];
+    for (int m = 0; m < DEFAULT_MAX_ITER; m++) {
+        lgamma_cache_a_plus_m[m] = lgammafn(m + a);
+    }
 
-double rho2=corr*corr;
-double nu_i=a/mean_i;
-double nu_j=a/mean_j;
-double lnuij=log(nu_i)+log(nu_j);
-double lpnuij=log1p(nu_i)+log1p(nu_j);
-double mnui=-1.0/nu_i;
-double mnuj=-1.0/nu_j;
-double sum=0.0;
-int iter1=1000,iter2=1000;
-for(int r=0;r<iter1;r++){
-int r2=r+2;
-for(int m=0;m<iter2;m++){
-double a1m=1.0-a-m;
-double h1=hypergeo(1.0,a1m,r2,mnui);
-double h2=hypergeo(1.0,a1m,r2,mnuj);
-if(h1<=0.0||h2<=0.0)break;
-double H=log(h1)+log(h2)-2.0*lgammafn(r2);
-double aux1=2.0*m*log(corr)+m*lnuij+2.0*lgammafn(r+m+1+a);
-double aux2=(r+m)*lpnuij+lgammafn(m+a)+lgammafn(m);
-double term=H+aux1-aux2;
-if(!R_finite(term)||fabs(term)<1e-100)break;
-sum+=term;
-}
-}
-double aux3=exp(log(rho2)+(a+1.0)*log1p(-rho2)+(a-0.5)*lnuij-lgammafn(a)-(a+0.5)*lpnuij-0.5*log(mean_i*mean_j));
-double aux4=exp(log(rho2)+0.5*(lnuij-lpnuij));
-return aux4+aux3*sum;
-}
+    for (int r = 0; r < DEFAULT_MAX_ITER; r++) {
+        const int r2 = r + 2;
+        const double lgamma_r2 = lgammafn(r2);
+        const double log_r2_factorial = 2.0 * lgamma_r2;
+        
+        double row_sum = 0.0;
+        bool row_converged = false;
+        
+        for (int m = 0; m < DEFAULT_MAX_ITER; m++) {
+            // Calcolo delle funzioni ipergeometriche
+            const double a1m = 1.0 - a - m;
+            const double h1 = hypergeo(1.0, a1m, r2, mnui);
+            const double h2 = hypergeo(1.0, a1m, r2, mnuj);
 
+            if (h1 <= 0.0 || h2 <= 0.0 || !R_FINITE(h1) || !R_FINITE(h2)) {
+                break;
+            }
+            
+            const double log_h1h2 = log(h1) + log(h2);
+            const double H = log_h1h2 - log_r2_factorial;
+            const double aux1 = 2.0 * m * log_corr + m * lnuij + 
+                               2.0 * lgammafn(r + m + 1 + a);
+            const double aux2 = (r + m) * lpnuij + 
+                               lgamma_cache_a_plus_m[m] + lgammafn(m);
+            
+            const double log_term = H + aux1 - aux2;
+            if (!R_FINITE(log_term) || log_term < LOG_EPSILON) {
+                break;
+            }
+            
+            const double term = exp(log_term);
+            row_sum += term;
+            if (fabs(term) < CONVERGENCE_TOL * fabs(row_sum)) {
+                row_converged = true;
+                break;
+            }
+        } 
+        sum += row_sum;
+        if (r > 0) {
+            const double relative_change = fabs((sum - prev_sum) / sum);
+            if (relative_change < CONVERGENCE_TOL) {
+                convergence_count++;
+                if (convergence_count >= convergence_threshold) {
+                    break;  // Convergenza raggiunta
+                }
+            } else {
+                convergence_count = 0;  // Reset del contatore
+            }
+        }  
+        prev_sum = sum;
+        if (row_converged && fabs(row_sum) < CONVERGENCE_TOL * fabs(sum)) {
+            break;
+        }
+    }
+    
+    const double log_aux3_base = log_rho2 + (a + 1.0) * log1m_rho2 + 
+                                 (a - 0.5) * lnuij - lgamma_a - 
+                                 (a + 0.5) * lpnuij - 0.5 * log_mean_prod;
+    
+    if (!R_FINITE(log_aux3_base)) {
+        return R_NaN;
+    }
+    
+    const double aux3 = exp(log_aux3_base);
+    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
+    const double aux4 = exp(log_aux4);
+    
+    const double result = aux4 + aux3 * sum;
+    
+    return R_FINITE(result) ? result : R_NaN;
+}
 /******************************************/
 double corr_pois_gen(double corr,double mean_i, double mean_j, double a){ 
-
-      //if( (corr>(1-1e-56)) &&  corr<=1 &&  fabs(mean_i-mean_j)<1e-320){return(1.0);}
 if(fabs(corr)<1e-200){return(0.0);}
     else{
     double res=0.0;
@@ -712,7 +878,7 @@ if(fabs(corr)<1e-200){return(0.0);}
 
 /******************************************/
 /******** Poisson correlation *************/
-/******************************************/
+/******************************************
 double corr_pois_s(double rho,double mi)
 {
 double res=0.0;
@@ -721,6 +887,26 @@ double gg=2*mi/(1-rho2);
 res=rho2*(1-exp(-gg)*(bessel_i(gg,0,1)+bessel_i(gg,1,1)));
 return(res);
 }   
+*/
+
+double corr_pois_s(double rho, double mi) {
+    // Gestione casi limite
+    if (fabs(rho) < 1e-15) return 0.0;  
+    const double rho2 = rho * rho;      
+    const double gg = 2.0 * mi / (1.0 - rho2);
+
+    if (gg < 1e-8) return rho2 * gg * (0.25 * gg + 0.5);
+    // Per valori molto grandi di gg, usa approssimazione asintotica
+    if (gg > 700.0) { 
+        const double sqrt_2pi_gg = sqrt(2.0 * M_PI * gg);
+        return rho2 * (1.0 - 2.0 / sqrt_2pi_gg);
+    }
+    const double exp_neg_gg = exp(-gg);
+    const double i0 = bessel_i(gg, 0, 1);
+    const double i1 = bessel_i(gg, 1, 1);
+    
+    return rho2 * (1.0 - exp_neg_gg * (i0 + i1));
+}
 /******************************************/
 double corr_pois_ns(double rho,double mi,double mj){
 int r=0;
@@ -1104,18 +1290,7 @@ double dNnorm(int N, double **M, double *dat) {
 }
 
 
-// cdf of  a bivariate Gausssian distribution
-double cdf_norm(double lim1,double lim2,double a11,double a12)
-{
-    double res=0.0;
-    double  lowe[2]={0,0}, uppe[2]={lim1/sqrt(a11),lim2/sqrt(a11)}, corre[1] ={a12/a11};
-    int infin[2]={0,0};
-    double auxil=1-R_pow(corre[0],2);
-    double det=R_pow(a11,2)-R_pow(a12,2) ;
-    res= a11* sqrt(auxil/det) *  F77_CALL(bvnmvn)(lowe,uppe,infin,corre);
-    return(res);
-    //return(0.5);
-}
+
 
 
 // compute the inverse lambert w transformation
@@ -1130,28 +1305,64 @@ double inverse_lamb(double x,double tail)
 }
 
 double biv_tukey_hh(double corr, double data_i, double data_j, double mui, double muj,
-                    double sill, double hl, double hr) {
-
+                         double sill, double hl, double hr) {
+    
+    // Controlli di validità input
+    if (!isfinite(corr) || !isfinite(data_i) || !isfinite(data_j) || 
+        !isfinite(mui) || !isfinite(muj) || !isfinite(sill) || 
+        !isfinite(hl) || !isfinite(hr)) {
+        return NAN;
+    }
+    
+    if (sill <= 0 || hl <= 0 || hr <= 0) {
+        return NAN;
+    }
+    
     const double sqrt_sill = sqrt(sill);
     const double zi = (data_i - mui) / sqrt_sill;
     const double zj = (data_j - muj) / sqrt_sill;
+    
+    // Controllo per valori molto piccoli
+    const double MIN_Z = 1e-12;
+    if (fabs(zi) < MIN_Z || fabs(zj) < MIN_Z) {
+        return 0.0;  // o un valore appropriato per il tuo modello
+    }
+    
     const double zi2 = zi * zi;
     const double zj2 = zj * zj;
-
-    // Calcoli per hl e hr
+    
+    // Controlli per LambertW
+    const double lambert_arg_i_l = hl * zi2;
+    const double lambert_arg_j_l = hl * zj2;
+    const double lambert_arg_i_r = hr * zi2;
+    const double lambert_arg_j_r = hr * zj2;
+    
+    // LambertW ha dominio >= -1/e ≈ -0.368
+    if (lambert_arg_i_l < -0.36 || lambert_arg_j_l < -0.36 ||
+        lambert_arg_i_r < -0.36 || lambert_arg_j_r < -0.36) {
+        return NAN;
+    }
+    
     const double hl_zi = inverse_lamb(zi, hl);
     const double hl_zj = inverse_lamb(zj, hl);
     const double hr_zi = inverse_lamb(zi, hr);
     const double hr_zj = inverse_lamb(zj, hr);
-
-    const double Lhl_zi = 1.0 + LambertW(hl * zi2);
-    const double Lhl_zj = 1.0 + LambertW(hl * zj2);
-    const double Lhr_zi = 1.0 + LambertW(hr * zi2);
-    const double Lhr_zj = 1.0 + LambertW(hr * zj2);
-
+    
+    const double Lhl_zi = 1.0 + LambertW(lambert_arg_i_l);
+    const double Lhl_zj = 1.0 + LambertW(lambert_arg_j_l);
+    const double Lhr_zi = 1.0 + LambertW(lambert_arg_i_r);
+    const double Lhr_zj = 1.0 + LambertW(lambert_arg_j_r);
+    
+    // Controllo che i denominatori non siano zero
+    if (fabs(Lhl_zi) < 1e-15 || fabs(Lhl_zj) < 1e-15 ||
+        fabs(Lhr_zi) < 1e-15 || fabs(Lhr_zj) < 1e-15) {
+        return NAN;
+    }
+    
     double res;
-
-    if (fabs(corr) > 1e-30) {
+    const double CORR_THRESHOLD = 1e-10;  // Soglia più ragionevole
+    
+    if (fabs(corr) > CORR_THRESHOLD) {
         if (zi >= 0 && zj >= 0) {
             res = dbnorm(hr_zi, hr_zj, 0, 0, 1, corr) *
                   hr_zi * hr_zj / (zi * zj * Lhr_zi * Lhr_zj);
@@ -1165,126 +1376,200 @@ double biv_tukey_hh(double corr, double data_i, double data_j, double mui, doubl
     } else {
         double A = (zi >= 0) ? dnorm(hr_zi, 0, 1, 0) * hr_zi / (zi * Lhr_zi)
                              : dnorm(hl_zi, 0, 1, 0) * hl_zi / (zi * Lhl_zi);
-
         double B = (zj >= 0) ? dnorm(hr_zj, 0, 1, 0) * hr_zj / (zj * Lhr_zj)
                              : dnorm(hl_zj, 0, 1, 0) * hl_zj / (zj * Lhl_zj);
-
         res = A * B;
     }
-
+    
+    // Controllo finale
+    if (!isfinite(res)) {
+        return NAN;
+    }
+    
     return res / sill;
 }
 
 
 
-// cdf of  a bivariate Gausssian distribution
-double cdf_norm2(double lim1,double lim2,double a11,double a12, double a22)
-{
-  double res=0.0;
-
-  double  lowe[2]={0,0}, uppe[2]={lim1/sqrt(a11),lim2/sqrt(a22)}, corre[1] ={a12/sqrt(a11*a22)};
-  int infin[2]={0,0};
-  double auxil=1-R_pow(corre[0],2);
-  double det=a11*a22-R_pow(a12,2) ;
-  res= sqrt(a11*a22)* sqrt(auxil/det) *  F77_CALL(bvnmvn)(lowe,uppe,infin,corre);
-  return(res);
-}
 
 
 
-// compute the bivariate normal cdf for the bernoulli RF:
-double pbnorm(int *cormod, double h, double u, double mean1, double mean2, 
-  double nugget, double var,double *par, double thr)
-{
-  double res=0;
-  double lim_inf[2]={0,0};//lower bound for the integration
-  double lim_sup[2]={mean1,mean2};
-  int infin[2]={0,0};//set the bounds for the integration
-  double corr[1]={(1-nugget)*CorFct(cormod,h,u,par,0,0)};
-    res=F77_CALL(bvnmvn)(lim_inf,lim_sup,infin,corr);
-    //res = Phi2(lim_sup[0],lim_sup[1],corr[0]);
-  return(res);
-}
 
 
 
-// compute a sequence (depending on space and time) of bivariate normal cdf:
-void vpbnorm(int *cormod, double *h, double *u, int *nlags, int *nlagt,
-         double *nuis, double *par, double *rho, double *thr)
-{
-  int i,j,t=0;
-  for(j=0;j<*nlagt;j++)
-    for(i=0;i<*nlags;i++){
-      rho[t]=pbnorm(cormod,h[i],u[j],nuis[0],nuis[0],nuis[1],nuis[2],par,thr[0]);
-      t++;}
-  return;
-}
+
+
 
 /**********************************************************************/
 double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11) {
     int i = 0;
-    double kk1 = 0.0, dens = 0.0;
+    double dens = 0.0;
+    
+    // Pre-calcolo termini fissi
     double lgamma_NN_u_1 = lgammafn(NN - 1 + u + 1);
-    double lgamma_u_NN_2 = lgammafn(u - NN + 2);
-    for (i = fmax_int(0, NN - u - 1); i <= NN - 1; i++) {
-        double lgamma_i1 = lgammafn(i + 1);
-        double lgamma_NN_i = lgammafn(NN - i);
-        kk1 = exp(lgamma_NN_u_1 - (lgamma_i1 + lgamma_NN_i + lgamma_NN_i + lgamma_u_NN_2 + i));
-        double term1 = R_pow(p11, i + 1);
-        double term2 = R_pow(1 + p11 - (p01 + p10), u - NN + 1 + i);
-        double term3 = R_pow(p01 - p11, NN - 1 - i);
-        double term4 = R_pow(p10 - p11, NN - 1 - i);
-        dens += kk1 * term1 * term2 * term3 * term4;
+    double base_prob = 1 + p11 - (p01 + p10);
+    double diff_p01 = p01 - p11;
+    double diff_p10 = p10 - p11;
+    
+    // Pre-calcolo array di lgamma per evitare ricalcoli
+    int max_i = NN - 1;
+    double *lgamma_cache = (double*)malloc((max_i + 2) * sizeof(double));
+    for (int k = 0; k <= max_i + 1; k++) {
+        lgamma_cache[k] = lgammafn(k + 1);
     }
+    
+    for (i = fmax_int(0, NN - u - 1); i <= NN - 1; i++) {
+        double lgamma_i1 = lgamma_cache[i];
+        double lgamma_NN_i = lgamma_cache[NN - i - 1];
+        double lgamma_u_NN_i = lgammafn(u - NN + 1 + i + 1);
+        
+        // Coefficiente binomiale corretto
+        double log_coeff = lgamma_NN_u_1 - lgamma_i1 - lgamma_NN_i - lgamma_NN_i - lgamma_u_NN_i;
+        double coeff = exp(log_coeff);
+        
+        double term1 = R_pow(p11, i + 1);
+        // Stabilità numerica: usa log1p se base_prob è vicino a 0
+        double term2;
+        if (fabs(base_prob) < 1e-10) {
+            term2 = exp((u - NN + 1 + i) * log1p(p11 - (p01 + p10)));
+        } else {
+            term2 = R_pow(base_prob, u - NN + 1 + i);
+        }
+        double term3 = R_pow(diff_p01, NN - 1 - i);
+        double term4 = R_pow(diff_p10, NN - 1 - i);
+        
+        dens += coeff * term1 * term2 * term3 * term4;
+    }
+    
+    free(lgamma_cache);
     return dens;
 }
 
 double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11) {
     int a = 0, i = 0;
-    double kk1 = 0.0, kk2 = 0.0, dens1 = 0.0, dens2 = 0.0;
+    double dens1 = 0.0, dens2 = 0.0;
     
-    // Pre-calcoliamo i termini di lgammafn per evitare chiamate ripetute
+    // Pre-calcolo termini fissi che non dipendono dai loop
     double lgamma_NN_u = lgammafn(NN + u);
     double lgamma_v_u = lgammafn(v - u);
+    double base_prob = 1 + p11 - (x + y);
+    double diff_x = x - p11;
+    double diff_y = y - p11;
+    double one_minus_y = 1 - y;
+    
+    // Pre-calcolo array di lgamma per evitare ricalcoli
+    int max_val = fmax_int(NN + u, v - u) + 5; // margine di sicurezza
+    double *lgamma_cache = (double*)malloc(max_val * sizeof(double));
+    for (int k = 0; k < max_val; k++) {
+        lgamma_cache[k] = lgammafn(k + 1);
+    }
+    
+    // Prima sommatoria (a da max{0, u-v+NN-1} a NN-2)
     for (a = fmax_int(0, u - v + NN - 1); a <= NN - 2; a++) {
-        double lgamma_i1 = lgammafn(1); // lgammafn(i+1) quando i=0
-        double lgamma_NN_i = lgammafn(NN);
+        // Pre-calcolo termini che dipendono solo da 'a'
+        double lgamma_NN_a_1 = (NN - a - 2 >= 0) ? lgamma_cache[NN - a - 2] : lgammafn(NN - a - 1);
+        double pow_y_NN_a_1 = R_pow(y, NN - a - 1);
+        double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a + 1);
+        
         for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
-            lgamma_i1 = lgammafn(i + 1);  // lgammafn(i+1)
-            lgamma_NN_i = lgammafn(NN - i); // lgammafn(NN-i)
-            double lgamma_a_i_1 = lgammafn(a - i + 1); // lgammafn(a-i+1)
-            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1); // lgammafn(u-a+i+1)
-            kk1 = exp(lgamma_NN_u - (lgamma_i1 + lgamma_NN_i + lgamma_a_i_1 + lgamma_u_a_i_1));
+            // Coefficienti binomiali usando cache quando possibile
+            double lgamma_i1 = (i < max_val - 1) ? lgamma_cache[i] : lgammafn(i + 1);
+            double lgamma_NN_i = (NN - i - 1 < max_val - 1) ? lgamma_cache[NN - i - 1] : lgammafn(NN - i);
+            double lgamma_a_i_1 = (a - i < max_val - 1) ? lgamma_cache[a - i] : lgammafn(a - i + 1);
+            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
+            
+            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i - lgamma_a_i_1 - lgamma_u_a_i_1;
+            double coeff1 = exp(log_coeff1);
+            
             double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 2);
-            double lgamma_NN_a_1 = lgammafn(NN - a - 1);
-            kk2 = exp(lgamma_v_u - (lgamma_v_a_NN_u + lgamma_NN_a_1));
+            double log_coeff2 = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a_1;
+            double coeff2 = exp(log_coeff2);
             
-            dens1 += kk1 * kk2 * R_pow(p11, i + 1) * R_pow(1 + p11 - (x + y), u - a + i) *
-                     R_pow(x - p11, NN - i - 1) * R_pow(y - p11, a - i) * R_pow(1 - y, v - u - NN + a + 1) * R_pow(y, NN - a - 1);
+            // Calcolo delle potenze con stabilità numerica
+            double pow_p11 = R_pow(p11, i + 1);
+            double pow_base_prob;
+            if (fabs(base_prob) < 1e-10) {
+                pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
+            } else {
+                pow_base_prob = R_pow(base_prob, u - a + i);
+            }
+            double pow_diff_x = R_pow(diff_x, NN - i - 1);
+            double pow_diff_y = R_pow(diff_y, a - i);
+            
+            double term = coeff1 * coeff2 * pow_p11 * pow_base_prob * 
+                         pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a_1;
+            
+            dens1 += term;
         }
     }
-
+    
+    // Seconda sommatoria (a da max{0, u-v+NN} a NN-1)
     for (a = fmax_int(0, u - v + NN); a <= NN - 1; a++) {
-        double lgamma_i1 = lgammafn(1); // lgammafn(i+1) quando i=0
-        double lgamma_NN_1_i = lgammafn(NN - 1); // lgammafn(NN-1-i) quando i=0
+        // Pre-calcolo termini che dipendono solo da 'a'
+        double lgamma_NN_a = (NN - a - 1 >= 0) ? lgamma_cache[NN - a - 1] : lgammafn(NN - a);
+        double pow_y_NN_a = R_pow(y, NN - a);
+        double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a);
+        
         for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
-            // Pre-calcoliamo i valori di lgammafn all'interno dei cicli
-            lgamma_i1 = lgammafn(i + 1);  // lgammafn(i+1)
-            lgamma_NN_1_i = lgammafn(NN - 1 - i + 1); // lgammafn(NN-1-i)
-            double lgamma_a_i_1 = lgammafn(a - i + 1); // lgammafn(a-i+1)
-            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1); // lgammafn(u-a+i+1)
-            kk1 = exp(lgamma_NN_u - (lgamma_i1 + lgamma_NN_1_i + lgamma_a_i_1 + lgamma_u_a_i_1));
-            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 1);
-            double lgamma_NN_a = lgammafn(NN - a);
-            kk2 = exp(lgamma_v_u - (lgamma_v_a_NN_u + lgamma_NN_a));
+            // Coefficienti binomiali usando cache quando possibile
+            double lgamma_i1 = (i < max_val - 1) ? lgamma_cache[i] : lgammafn(i + 1);
+            double lgamma_NN_i = (NN - i - 1 < max_val - 1) ? lgamma_cache[NN - i - 1] : lgammafn(NN - i);
+            double lgamma_a_i_1 = (a - i < max_val - 1) ? lgamma_cache[a - i] : lgammafn(a - i + 1);
+            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
             
-            dens2 += kk1 * kk2 * R_pow(p11, i) * R_pow(1 + p11 - (x + y), u - a + i) *
-                     R_pow(x - p11, NN - i) * R_pow(y - p11, a - i) * R_pow(1 - y, v - u - NN + a) * R_pow(y, NN - a);
+            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i - lgamma_a_i_1 - lgamma_u_a_i_1;
+            double coeff1 = exp(log_coeff1);
+            
+            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 1);
+            double log_coeff2 = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a;
+            double coeff2 = exp(log_coeff2);
+            
+            // Calcolo delle potenze con stabilità numerica
+            double pow_p11 = R_pow(p11, i);
+            double pow_base_prob;
+            if (fabs(base_prob) < 1e-10) {
+                pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
+            } else {
+                pow_base_prob = R_pow(base_prob, u - a + i);
+            }
+            double pow_diff_x = R_pow(diff_x, NN - i);
+            double pow_diff_y = R_pow(diff_y, a - i);
+            
+            double term = coeff1 * coeff2 * pow_p11 * pow_base_prob * 
+                         pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a;
+            
+            dens2 += term;
         }
     }
+    
+    free(lgamma_cache);
     return dens1 + dens2;
 }
 
+double biv_binomneg(int NN, int u, int v, double p01, double p10, double p11) {
+    double dens = 0.0;
+    
+    
+    // Controllo probabilità
+    if (p01 < 0 || p01 > 1 || p10 < 0 || p10 > 1 || p11 < 0 || p11 > 1) {
+        return 0.0; // Probabilità non valide
+    }
+    
+    // Controllo coerenza: p11 non può essere maggiore di p01 o p10
+    if (p11 > fmin(p01, p10)) {
+        return 0.0; // Correlazione impossibile
+    }
+    
+    if (u < v) {
+        dens = aux_biv_binomneg(NN, u, v, p01, p10, p11);
+    } else if (u == v) {
+        dens = aux_biv_binomneg_simple(NN, u, p01, p10, p11);
+    } else { // u > v
+        dens = aux_biv_binomneg(NN, v, u, p10, p01, p11);
+    }
+    
+    return dens;
+}
 
 void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res)
 {
@@ -1294,24 +1579,7 @@ void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *
 
 
 
-double biv_binomneg (int NN, int u, int v, double p01,double p10,double p11)
-{
-double dens=0.0;
-if(u<v)    dens=aux_biv_binomneg(NN,u,v,p01,p10,p11);
-
-if(u==v)      dens=aux_biv_binomneg_simple(NN,v,p10,p01,p11);
-
-if(u>v)    dens=aux_biv_binomneg(NN,v,u,p10,p01,p11);
-return(dens);
-}
 /**********************************************************************/
-double bin_aux(int a,int NN,int u,int v,double p1, double p2,double p11)
-{
-  double kk,dens;
-kk=exp(lgammafn(NN+1)-(lgammafn(a+1)+lgammafn(u-a+1)+lgammafn(v-a+1)+lgammafn(NN-u-v+a+1)));
-dens=kk*(R_pow(p11,a)*R_pow(p1-p11,u-a)*R_pow(p2-p11,v-a)*R_pow(1+p11-(p1+p2),NN-u-v+a));
-return(dens);
-}
 
 
 void biv_binom_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res)
@@ -1320,48 +1588,136 @@ void biv_binom_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11
 }
 
 
-double biv_binom(int NN, int u, int v, double p01, double p10, double p11) {   
+int check_biv_binom_params(int NN, int u, int v, double p1, double p2, double p11) {
+    // Check basic bounds
+    if (u < 0 || v < 0 || u > NN || v > NN) return 0;
+    if (NN < 0) return 0;
+    
+    // Check probability bounds
+    if (p1 < 0.0 || p1 > 1.0) return 0;
+    if (p2 < 0.0 || p2 > 1.0) return 0;
+    if (p11 < 0.0 || p11 > 1.0) return 0;
+    
+    // Check coherence constraints
+    if (p1 < p11 || p2 < p11) return 0;  // p11 cannot exceed marginals
+    if (1.0 + p11 - (p1 + p2) < 0.0) return 0;  // Double failure probability must be non-negative
+    
+    return 1;  // All checks passed
+}
+
+// Core bivariate binomial function for equal sample sizes
+double biv_binom(int NN, int u, int v, double p1, double p2, double p11) {   
     int a;
     double kk = 0.0, dens = 0.0;
+    
+    // Parameter validation
+    if (!check_biv_binom_params(NN, u, v, p1, p2, p11)) {
+        return 0.0;
+    }
+    
+    // Edge case: if NN = 0
+    if (NN == 0) {
+        return (u == 0 && v == 0) ? 1.0 : 0.0;
+    }
+    
     double lgamma_NN_1 = lgammafn(NN + 1);
+    
     for (a = fmax_int(0, u + v - NN); a <= fmin_int(u, v); a++) {
+        if (u - a < 0 || v - a < 0 || NN - u - v + a < 0) continue;
         double lgamma_a1 = lgammafn(a + 1);
         double lgamma_u_a1 = lgammafn(u - a + 1);
         double lgamma_v_a1 = lgammafn(v - a + 1);
         double lgamma_NN_uv_a1 = lgammafn(NN - u - v + a + 1);
+
         kk = exp(lgamma_NN_1 - (lgamma_a1 + lgamma_u_a1 + lgamma_v_a1 + lgamma_NN_uv_a1));
-        double term1 = R_pow(p11, a);
-        double term2 = R_pow(p01 - p11, u - a);
-        double term3 = R_pow(p10 - p11, v - a);
-        double term4 = R_pow(1 + p11 - (p01 + p10), NN - u - v + a);
+        
+        // Calculate probability terms (with numerical stability checks)
+        double term1 = (a == 0) ? 1.0 : R_pow(p11, a);
+        double term2 = (u - a == 0) ? 1.0 : R_pow(p1 - p11, u - a);
+        double term3 = (v - a == 0) ? 1.0 : R_pow(p2 - p11, v - a);
+        double term4 = (NN - u - v + a == 0) ? 1.0 : R_pow(1.0 + p11 - (p1 + p2), NN - u - v + a);
+
+        if (!R_FINITE(term1) || !R_FINITE(term2) || !R_FINITE(term3) || !R_FINITE(term4)) {
+            continue;
+        }
         dens += kk * term1 * term2 * term3 * term4;
     }
-
     return dens;
 }
 
-
-
-double aux_biv_binom(int n1,int n2, int u, int v,double p01,double p10,double p11)
-{
-
-int k;
-double dens=0.0;
-int N=n1-n2;
-for(k=0;k<=N;k++)
-dens+= exp( lgammafn(N+1)-lgammafn(k+1)-lgammafn(N-k+1)+k*log(p01)+(N-k)*log1p(-p01)+log(biv_binom(n2, u-k,  v, p01,p10,p11)));
- return(dens);   
+// Auxiliary function for different sample sizes
+double aux_biv_binom(int n1, int n2, int u, int v, double p1, double p2, double p11) {
+    int k;
+    double dens = 0.0;
+    int N = n1 - n2;
+    
+    // Basic parameter checks
+    if (n1 <= 0 || n2 <= 0 || n1 <= n2) return 0.0;
+    if (u < 0 || v < 0) return 0.0;
+    if (p1 < 0.0 || p1 > 1.0) return 0.0;
+    
+    for (k = 0; k <= N; k++) {
+        // Skip if u-k would be negative (invalid case)
+        if (u - k < 0) continue;
+        
+        // Skip if u-k > n2 (impossible case)
+        if (u - k > n2) continue;
+        
+        // Calculate binomial coefficient and probability for additional trials
+        double log_binom_coeff = lgammafn(N + 1) - lgammafn(k + 1) - lgammafn(N - k + 1);
+        double log_prob_k = k * log(p1) + (N - k) * log1p(-p1);
+        
+        // Calculate bivariate binomial for remaining trials
+        double biv_prob = biv_binom(n2, u - k, v, p1, p2, p11);
+        
+        // Check for numerical issues
+        if (!R_FINITE(biv_prob) || biv_prob <= 0.0) continue;
+        
+        double log_biv_prob = log(biv_prob);
+        double log_term = log_binom_coeff + log_prob_k + log_biv_prob;
+        
+        // Check for numerical overflow/underflow
+        if (R_FINITE(log_term)) {
+            dens += exp(log_term);
+        }
+    }
+    
+    return dens;   
 }
 
-double biv_binom222(int n1,int n2, int u, int v, double p01,double p10,double p11)
-{
-  
- double res=0.0;
- if(n1> n2)  res=aux_biv_binom(n1,n2,u,v,p01,p10,p11);
- if(n2> n1)  res=aux_biv_binom(n2,n1,v,u,p10,p01,p11);  
- if(n1==n2)  res=biv_binom (n1,u,v,p01,p10,p11);
-return(res);
+// Main bivariate binomial function handling all cases
+double biv_binom222(int n1, int n2, int u, int v, double p1, double p2, double p11) {
+    double res = 0.0;
+    
+    // Basic input validation
+    if (n1 <= 0 || n2 <= 0) return 0.0;
+    if (u < 0 || v < 0) return 0.0;
+    if (u > n1 || v > n2) return 0.0;  // Impossible outcomes
+    
+    // Parameter validation for probabilities
+    if (!check_biv_binom_params(fmax_int(n1, n2), u, v, p1, p2, p11)) {
+        return 0.0;
+    }
+    
+    if (n1 > n2) {
+        res = aux_biv_binom(n1, n2, u, v, p1, p2, p11);
+    } else if (n2 > n1) {
+        res = aux_biv_binom(n2, n1, v, u, p2, p1, p11);
+    } else {  // n1 == n2
+        res = biv_binom(n1, u, v, p1, p2, p11);
+    }
+    
+    // Final sanity check
+    if (!R_FINITE(res) || res < 0.0) {
+        return 0.0;
+    }
+    
+    return res;
 }
+
+
+
+
 
 /// biv binomial type II
 
@@ -1681,25 +2037,97 @@ void appellF4_call(double *a,double *b,double *c,double *d,double *x,double *y, 
 }
 
 
-
-double appellF4(double a,double b,double c,double d,double x,double y)
+double appellF4(double a, double b, double c, double d, double x, double y)
 {
-double RR=0.0,bb=0.0;int k=0;
-  while( k<=900 )
-    {
-    bb=exp(k*log(y)+(lgammafn(a+k)+lgammafn(b+k)+lgammafn(d))
-               -(lgammafn(a)+lgammafn(b)+lgammafn(d+k)+lgammafn(k+1))
-               +(c-(a+k)-(b+k))*log1p(-x)+log(hypergeo(c-a-k,c-b-k,c,x))); //euler
-              // +log(hypergeo(a+k,b+k,c,x));
-    if((fabs(bb)<1e-7||!R_FINITE(bb))  ) {break;}
-        RR=RR+bb;
-        k++;
+    // Controlli di input
+    if (!R_FINITE(a) || !R_FINITE(b) || !R_FINITE(c) || !R_FINITE(d) || 
+        !R_FINITE(x) || !R_FINITE(y)) {
+        return R_NaN;
     }
-    if(!R_finite(RR)) RR=1e-320;
-return(RR);
+    
+    // Controlli per casi speciali
+    if (fabs(y) < DBL_EPSILON) return hypergeo(a, b, c, x);
+    if (fabs(x) >= 1.0 || fabs(y) >= 1.0) {
+        // Fuori dal raggio di convergenza
+        return R_NaN;
+    }
+    
+    double sum = 0.0;
+    double term = 0.0;
+    double log_y = log(fabs(y));
+    double log1p_neg_x = log1p(-x);
+    
+    // Pre-calcolo delle funzioni gamma invarianti
+    double lgamma_a = lgammafn(a);
+    double lgamma_b = lgammafn(b);
+    double lgamma_d = lgammafn(d);
+    
+    // Parametri per il controllo della convergenza
+    const int MAX_ITER = 1000;
+    const double TOLERANCE = 1e-12;
+    const double MIN_TERM = 1e-15;
+    
+    // Variabili per il controllo adattivo
+    double prev_sum = 0.0;
+    int stable_count = 0;
+    const int STABLE_THRESHOLD = 3;
+    
+    for (int k = 0; k < MAX_ITER; k++) {
+        // Calcolo logaritmico del termine per stabilità numerica
+        double log_term = k * log_y + 
+                         lgammafn(a + k) + lgammafn(b + k) + lgamma_d -
+                         lgamma_a - lgamma_b - lgammafn(d + k) - lgammafn(k + 1) +
+                         (c - a - k - b - k) * log1p_neg_x;
+        
+        // Controllo overflow/underflow
+        if (log_term < -700.0) {  // exp(-700) ≈ 1e-304
+            break;  // I termini successivi saranno trascurabili
+        }
+        if (log_term > 700.0) {   // exp(700) ≈ 1e+304
+            return R_PosInf;  // Serie divergente
+        }
+        
+        term = exp(log_term);
+        
+        // Calcolo della funzione ipergeometrica
+        double hyp_val = hypergeo(c - a - k, c - b - k, c, x);
+        if (!R_FINITE(hyp_val)) {
+            if (k == 0) return R_NaN;
+            break;  // Usa la somma parziale calcolata finora
+        }
+        
+        term *= hyp_val;
+        
+        // Controllo convergenza
+        if (fabs(term) < MIN_TERM) break;
+        
+        prev_sum = sum;
+        sum += term;
+        
+        // Controllo stabilità della somma
+        if (fabs(sum - prev_sum) < TOLERANCE * fabs(sum)) {
+            stable_count++;
+            if (stable_count >= STABLE_THRESHOLD) break;
+        } else {
+            stable_count = 0;
+        }
+        
+        // Controllo per termine relativo
+        if (k > 10 && fabs(term) < TOLERANCE * fabs(sum)) {
+            break;
+        }
+    }
+    
+    if (!R_FINITE(sum)) {
+        if (sum > 0) return R_PosInf;
+        if (sum < 0) return R_NegInf;
+        return R_NaN;
+    }
+    if (fabs(sum) < DBL_MIN) {
+        return (sum >= 0) ? DBL_MIN : -DBL_MIN;
+    }  
+    return sum;
 }
-
-
 
 
 double appellF42211(double x,double y)
@@ -1720,25 +2148,104 @@ return(RR);
 
 
 
-
-double appellF4_mod(double nu,double rho,double x,double y,double nugget)
+double appellF4_mod(double nu, double rho, double x, double y, double nugget)
 {
-  double x2,y2,arg,arg1,pp1,pp2,app;
-  double rho1=rho*(1-nugget);
-  double rho22=R_pow(1-rho*rho,-nu/2-1);
-  double rho12=R_pow(1-rho1*rho1,-nu-0.5);
-
-x2=(x*x*(1-rho*rho)+nu*(1-rho1*rho1));
-y2=(y*y*(1-rho*rho)+nu*(1-rho1*rho1));
-
-arg=(nu+1)/2;  arg1=nu/2;
-pp1=exp(nu*log(nu)-arg*log(x2*y2)+2*lgammafn(arg));
-pp2=exp(log(M_PI)+2*lgammafn(arg1)+log(rho12)+log(rho22));
-app=appellF4(arg,arg,0.5,arg1,R_pow(rho1*x*y*(1-rho*rho),2)/(x2*y2), R_pow(rho*nu*(1-rho1*rho1),2)/(x2*y2));
-return(4*pp1*app/pp2);
-    //return(50);
-
-
+    // Controlli di input
+    if (!R_FINITE(nu) || !R_FINITE(rho) || !R_FINITE(x) || !R_FINITE(y) || !R_FINITE(nugget)) {
+        return R_NaN;
+    }
+    
+    if (nu <= 0) return R_NaN;
+    if (fabs(rho) >= 1.0) return R_NaN;
+    if (nugget < 0 || nugget >= 1.0) return R_NaN;
+    
+    // Casi speciali
+    if (fabs(x) < DBL_EPSILON && fabs(y) < DBL_EPSILON) {
+        // Limite per x,y -> 0
+        double log_result = nu * log(nu) + 2 * lgammafn((nu + 1) / 2) -
+                           log(M_PI) - 2 * lgammafn(nu / 2) - 
+                           (nu + 1) * log(nu) - log(1 - rho * rho);
+        return 4 * exp(log_result);
+    }
+    
+    // Pre-calcolo di quantità riutilizzate
+    const double rho_sq = rho * rho;
+    const double one_minus_rho_sq = 1 - rho_sq;
+    const double rho1 = rho * (1 - nugget);
+    const double rho1_sq = rho1 * rho1;
+    const double one_minus_rho1_sq = 1 - rho1_sq;
+    
+    // Controllo per evitare divisione per zero
+    if (fabs(one_minus_rho_sq) < DBL_EPSILON || fabs(one_minus_rho1_sq) < DBL_EPSILON) {
+        return R_NaN;
+    }
+    
+    const double x_sq = x * x;
+    const double y_sq = y * y;
+    const double arg = (nu + 1) / 2;
+    const double arg1 = nu / 2;
+    
+    // Calcolo di x2 e y2 con controllo underflow
+    const double x2 = x_sq * one_minus_rho_sq + nu * one_minus_rho1_sq;
+    const double y2 = y_sq * one_minus_rho_sq + nu * one_minus_rho1_sq;
+    
+    if (x2 <= 0 || y2 <= 0) return R_NaN;
+    
+    // Calcolo logaritmico per stabilità numerica
+    double log_pp1, log_pp2;
+    
+    // log(pp1) = nu*log(nu) - arg*log(x2*y2) + 2*lgammafn(arg)
+    log_pp1 = nu * log(nu) - arg * (log(x2) + log(y2)) + 2 * lgammafn(arg);
+    
+    // log(pp2) = log(π) + 2*lgammafn(arg1) + log(rho12) + log(rho22)
+    // dove rho12 = (1-rho1²)^(-nu-0.5) e rho22 = (1-rho²)^(-nu/2-1)
+    log_pp2 = log(M_PI) + 2 * lgammafn(arg1) - 
+              (nu + 0.5) * log(one_minus_rho1_sq) - 
+              (nu / 2 + 1) * log(one_minus_rho_sq);
+    
+    // Controllo overflow nei logaritmi
+    if (!R_FINITE(log_pp1) || !R_FINITE(log_pp2)) {
+        return R_NaN;
+    }
+    
+    // Calcolo degli argomenti per appellF4
+    const double x2_y2 = x2 * y2;
+    const double denom_inv = 1.0 / x2_y2;
+    
+    // Primo argomento: (rho1 * x * y * (1-rho²))² / (x2 * y2)
+    const double term1 = rho1 * x * y * one_minus_rho_sq;
+    const double appell_arg1 = (term1 * term1) * denom_inv;
+    
+    // Secondo argomento: (rho * nu * (1-rho1²))² / (x2 * y2)
+    const double term2 = rho * nu * one_minus_rho1_sq;
+    const double appell_arg2 = (term2 * term2) * denom_inv;
+    
+    // Controllo che gli argomenti siano nel dominio di convergenza
+    if (appell_arg1 >= 1.0 || appell_arg2 >= 1.0) {
+        // Fuori dal raggio di convergenza
+        return R_NaN;
+    }
+    
+    // Chiamata alla funzione Appell F4 ottimizzata
+    double app = appellF4(arg, arg, 0.5, arg1, appell_arg1, appell_arg2);
+    
+    if (!R_FINITE(app)) {
+        return R_NaN;
+    }
+    
+    // Calcolo finale usando aritmetica logaritmica quando possibile
+    double log_result = log(4.0) + log_pp1 + log(fabs(app)) - log_pp2;
+    
+    // Controllo overflow nel risultato finale
+    if (log_result > 700.0) return R_PosInf;
+    if (log_result < -700.0) return 0.0;
+    
+    double result = exp(log_result);
+    
+    // Gestione del segno
+    if (app < 0) result = -result;
+    
+    return result;
 }
 
 /*********** bivariate two piece-T distribution********************/ 
@@ -1903,15 +2410,6 @@ return(res/R_pow(dd,2));
 /***********************************************************************************/
 /************ functions for binomial or negative binomial  two piece *********/
 /***********************************************************************************/
-
-double pbnorm22(double lim1,double lim2,double corr)
-{
-    double  lowe[2]  = {0,0}, uppe[2] = {lim1,lim2}, corre[1] = {corr};
-    double  value;
-    int     infin[2] = {0,0};
-    value            = F77_CALL(bvnmvn)(lowe,uppe,infin,corre); 
-    return(value);
-}
 
 /**********************************************************************/
 double pblogi22(double lim1,double lim2,double corr)
@@ -2590,141 +3088,232 @@ return(res);
 
 /************* POIsson gammma ************/
 double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    double rho2 = corr * corr;
-    double beta_i = a / mean_i;
-    double beta_j = a / mean_j;
-    double beta_ij = beta_i * beta_j;
-
-    double auxi = 1.0 / (1.0 + beta_i);
-    double auxj = 1.0 / (1.0 + beta_j);
-    double auxij = auxi * auxj;
-
-    double log_beta_ij = log(beta_ij);
-    double log_rho2 = log(rho2);
-    double log_auxij = log(auxij);
-    double log_p1mrho2 = log1p(-rho2);  // log(1 - rho2)
-
-    double sum = 0.0, res0 = 0.0;
+    // Pre-calcolo di tutte le costanti
+    const double rho2 = corr * corr;
+    const double beta_i = a / mean_i;
+    const double beta_j = a / mean_j;
+    const double beta_ij = beta_i * beta_j;
+    const double auxi = 1.0 / (1.0 + beta_i);
+    const double auxj = 1.0 / (1.0 + beta_j);
+    const double auxij = auxi * auxj;
+    
+    // Logaritmi pre-calcolati
+    const double log_beta_ij = log(beta_ij);
+    const double log_rho2 = log(rho2);
+    const double log_auxij = log(auxij);
+    const double log_p1mrho2 = log1p(-rho2);
+    
+    // Costanti per i calcoli logaritmici
+    const double neg_inv_beta_i = -1.0 / beta_i;
+    const double neg_inv_beta_j = -1.0 / beta_j;
+    const double log_gamma_a = lgammafn(a);
+    const double a_plus_1 = a + 1.0;
+    
+    // Termini costanti nel calcolo finale
+    const double auxi_beta_i_pow_a = R_pow(auxi * beta_i, a);
+    const double auxj_beta_j_pow_a = R_pow(auxj * beta_j, a);
+    
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    
     const int iter1 = 600, iter2 = 600;
-
+    const double convergence_threshold = 1e-30;
+    const double term_threshold = 1e-30;
+    
     for (int k = 0; k < iter1; ++k) {
+        const int k_plus_2 = k + 2;
+        const double log_gamma_k_plus_2 = lgammafn(k_plus_2);
+        
+        double local_sum = 0.0;
+        
         for (int l = 0; l < iter2; ++l) {
-            double log_aa = (l + a - 1) * log_beta_ij + (k + l) * log_rho2 +
-                            (k + l + a) * log_auxij + (a + 1) * log_p1mrho2;
-
-            double bb = 2 * lgammafn(k + l + a + 1) - 2 * lgammafn(k + 2)
-                        - lgammafn(l + 1) - lgammafn(a) - lgammafn(l + a);
-
-            double hg1 = hypergeo(1, 1 - l - a, k + 2, -1.0 / beta_i);
-            double hg2 = hypergeo(1, 1 - l - a, k + 2, -1.0 / beta_j);
-
+            const int l_plus_1 = l + 1;
+            const int k_plus_l = k + l;
+            const int k_plus_l_plus_a = k_plus_l + a;
+            const int k_plus_l_plus_a_plus_1 = k_plus_l_plus_a + 1;
+            const double l_plus_a = l + a;
+            const double l_plus_a_minus_1 = l_plus_a - 1.0;
+            const double one_minus_l_plus_a = 1.0 - l_plus_a;
+            
+            // Calcolo ottimizzato del termine logaritmico
+            const double log_aa = l_plus_a_minus_1 * log_beta_ij + 
+                                k_plus_l * log_rho2 +
+                                k_plus_l_plus_a * log_auxij + 
+                                a_plus_1 * log_p1mrho2;
+            
+            // Calcolo ottimizzato di bb
+            const double bb = 2.0 * lgammafn(k_plus_l_plus_a_plus_1) - 
+                            2.0 * log_gamma_k_plus_2 -
+                            lgammafn(l_plus_1) - 
+                            log_gamma_a - 
+                            lgammafn(l_plus_a);
+            
+            // Calcolo delle funzioni ipergeometriche
+            const double hg1 = hypergeo(1, one_minus_l_plus_a, k_plus_2, neg_inv_beta_i);
+            const double hg2 = hypergeo(1, one_minus_l_plus_a, k_plus_2, neg_inv_beta_j);
+            
+            // Controllo di validità più efficiente
             if (!R_finite(hg1) || !R_finite(hg2)) continue;
-
-            double term = exp(log_aa + bb) * hg1 * hg2;
-
-            if (!R_finite(term) || fabs(term) < 1e-30) break;
-
-            sum += term;
+            
+            const double term = exp(log_aa + bb) * hg1 * hg2;
+            
+            // Controllo convergenza anticipata
+            if (!R_finite(term) || fabs(term) < term_threshold) {
+                break;
+            }
+            
+            local_sum += term;
         }
-
-        if (fabs(sum - res0) < 1e-30) break;
-        res0 = sum;
+        
+        sum += local_sum;
+        
+        // Controllo convergenza del loop esterno
+        if (fabs(sum - prev_sum) < convergence_threshold) break;
+        prev_sum = sum;
     }
-
-    double p00 = -1.0 + R_pow(auxi * beta_i, a) + R_pow(auxj * beta_j, a) + sum;
-    if (p00 < 1e-320) p00 = 1e-320;
-
-    return p00;
+    
+    // Calcolo finale ottimizzato
+    const double p00 = -1.0 + auxi_beta_i_pow_a + auxj_beta_j_pow_a + sum;
+    
+    // Clamp del risultato
+    return (p00 < 1e-320) ? 1e-320 : p00;
 }
 
-
 double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    // Pre-calcolo di tutte le costanti
     const double rho2 = corr * corr;
     const double beta_i = a / mean_i;
     const double beta_j = a / mean_j;
     const double beta_ij = beta_i * beta_j;
     const double bmi = -1.0 / beta_i;
     const double bmj = -1.0 / beta_j;
-
     const double auxi = 1.0 / (1.0 + beta_i);
     const double auxj = 1.0 / (1.0 + beta_j);
     const double auxij = auxi * auxj;
-
     const double bri = 1.0 + beta_i - rho2;
     const double brj = 1.0 + beta_j - rho2;
     const double fji = brj * beta_i * auxij;
     const double fij = bri * beta_j * auxij;
-
     const double ra = r + a;
+    
+    // Logaritmi pre-calcolati
     const double log_rho2 = log(rho2);
     const double log_beta_ij = log(beta_ij);
     const double log_auxij = log(auxij);
     const double log1mrho2 = log1p(-rho2);
     const double r2br = -rho2 / bri;
-
+    const double r2brj = -rho2 / brj;
+    
+    // Costanti per i calcoli logaritmici
+    const double log_gamma_r = lgammafn(r);
+    const double log_gamma_a = lgammafn(a);
+    const double ra_plus_1 = ra + 1.0;
+    const double beta_ij_auxij = beta_ij * auxij;
+    const double inv_beta_ij_auxij = 1.0 / beta_ij_auxij;
+    const double inv_fij = 1.0 / fij;
+    const double inv_fji = 1.0 / fji;
+    
     const int iter1 = 600, iter2 = 500, iter3 = 400;
-
+    const double convergence_threshold = 1e-30;
+    const double term_threshold = 1e-30;
+    
     double sum = 0.0, sum1 = 0.0, sum2 = 0.0;
-    double res00 = 0.0, res11 = 0.0;
-
+    double prev_sum1 = 0.0, prev_sum2 = 0.0;
+    
     for (int k = 0; k < iter1; ++k) {
-        int mm = r + k + 1;
-
+        const int mm = r + k + 1;
+        const int r_plus_k = r + k;
+        const double log_gamma_r_plus_k = lgammafn(r_plus_k);
+        const double log_gamma_mm = lgammafn(mm);
+        
+        double local_sum = 0.0, local_sum1 = 0.0, local_sum2 = 0.0;
+        
         for (int l1 = 0; l1 < iter2; ++l1) {
-            double ff = 1.0 - l1 - a;
-
+            const double ff = 1.0 - l1 - a;
+            const int kl1 = k + l1;
+            const int l1_plus_1 = l1 + 1;
+            const double l1_plus_a = l1 + a;
+            const double l1_plus_a_minus_1 = l1_plus_a - 1.0;
+            const double one_minus_l1_plus_a = 1.0 - l1_plus_a;
+            
+            // Pre-calcolo per il loop interno
+            const double log_gamma_l1_plus_1 = lgammafn(l1_plus_1);
+            const double log_gamma_l1_plus_a = lgammafn(l1_plus_a);
+            
+            // Calcolo del loop più interno (sum)
+            double inner_sum = 0.0;
             for (int l = 0; l < iter3; ++l) {
-                int mml1 = mm + l + 1;
-                int kll1 = k + l + l1;
-                double log_aa = (l1 + a - 1) * log_beta_ij + kll1 * log_rho2 + (ra + kll1) * log_auxij + (ra + 1) * log1mrho2;
-                double bb = lgammafn(r + l) + 2 * lgammafn(mm + l + l1 + a) - 2 * lgammafn(mml1) -
-                            lgammafn(l + 1) - lgammafn(l1 + 1) - lgammafn(r) - lgammafn(a) - lgammafn(l1 + a);
-
-                double hg1 = hypergeo(1, 1 - l1 - a, mml1, bmi);
-                double hg2 = hypergeo(1, ff, mml1, bmj);
+                const int mml1 = mm + l + 1;
+                const int kll1 = k + l + l1;
+                const int r_plus_l = r + l;
+                
+                const double log_aa = l1_plus_a_minus_1 * log_beta_ij + 
+                                    kll1 * log_rho2 + 
+                                    (ra + kll1) * log_auxij + 
+                                    ra_plus_1 * log1mrho2;
+                
+                const double bb = lgammafn(r_plus_l) + 2.0 * lgammafn(mm + l + l1 + a) - 
+                                2.0 * lgammafn(mml1) - lgammafn(l + 1) - log_gamma_l1_plus_1 - 
+                                log_gamma_r - log_gamma_a - log_gamma_l1_plus_a;
+                
+                const double hg1 = hypergeo(1, one_minus_l1_plus_a, mml1, bmi);
+                const double hg2 = hypergeo(1, ff, mml1, bmj);
+                
                 if (!R_finite(hg1) || !R_finite(hg2)) break;
-
-                double term = exp(log_aa + bb) * hg1 * hg2;
-                if (fabs(term) < 1e-30 || !R_finite(term)) break;
-
-                sum += term;
+                
+                const double term = exp(log_aa + bb) * hg1 * hg2;
+                
+                if (fabs(term) < term_threshold || !R_finite(term)) break;
+                inner_sum += term;
             }
-
-            // Term1, Term2, Term3
-            int kl1 = k + l1;
-            double log_aa1 = (l1 + a) * log_beta_ij + kl1 * log_rho2 + (ra + kl1) * log_auxij + ra * log1mrho2;
-            double bb1 = exp(lgammafn(r + k) + 2 * lgammafn(ra + kl1) - 2 * lgammafn(mm) -
-                             lgammafn(k + 1) - lgammafn(l1 + 1) - lgammafn(r) - lgammafn(a) - lgammafn(l1 + a));
-
-            double h1 = hypergeo(1, ff, mm, bmi);
-            double h2 = hypergeo(1, ff, mm, bmj);
-            double h3 = hypergeo(1, ff, mm, r2br);
-            double h4 = hypergeo(1, ff, mm, -rho2 / brj);
-
+            local_sum += inner_sum;
+            
+            // Calcolo dei termini per sum1 e sum2
+            const double log_aa1 = l1_plus_a * log_beta_ij + 
+                                  kl1 * log_rho2 + 
+                                  (ra + kl1) * log_auxij + 
+                                  ra * log1mrho2;
+            
+            const double bb1_log = log_gamma_r_plus_k + 2.0 * lgammafn(ra + kl1) - 
+                                  2.0 * log_gamma_mm - lgammafn(k + 1) - 
+                                  log_gamma_l1_plus_1 - log_gamma_r - 
+                                  log_gamma_a - log_gamma_l1_plus_a;
+            
+            const double h1 = hypergeo(1, ff, mm, bmi);
+            const double h2 = hypergeo(1, ff, mm, bmj);
+            const double h3 = hypergeo(1, ff, mm, r2br);
+            const double h4 = hypergeo(1, ff, mm, r2brj);
+            
             if (!R_finite(h1) || !R_finite(h2) || !R_finite(h3) || !R_finite(h4)) break;
-
-            double aa1 = exp(log_aa1);
-            double term1 = aa1 * h1 * h2 * bb1 / (beta_ij * auxij);
-            double term2 = aa1 * h3 * h2 * bb1 / fij;
-            double term3 = aa1 * h1 * h4 * bb1 / fji;
-
-            if (fabs(term1) < 1e-30 || fabs(term2) < 1e-30 || fabs(term3) < 1e-30) break;
-
-            sum1 += term1;
-            sum2 += term2 + term3;
+            
+            const double aa1_bb1 = exp(log_aa1 + bb1_log);
+            
+            const double term1 = aa1_bb1 * h1 * h2 * inv_beta_ij_auxij;
+            const double term2 = aa1_bb1 * h3 * h2 * inv_fij;
+            const double term3 = aa1_bb1 * h1 * h4 * inv_fji;
+            
+            if (fabs(term1) < term_threshold || fabs(term2) < term_threshold || 
+                fabs(term3) < term_threshold) break;
+            
+            local_sum1 += term1;
+            local_sum2 += term2 + term3;
         }
-
-        if (fabs(sum1 - res00) < 1e-30 && fabs(sum2 - res11) < 1e-30) break;
-
-        res00 = sum1;
-        res11 = sum2;
+        
+        sum += local_sum;
+        sum1 += local_sum1;
+        sum2 += local_sum2;
+        
+        // Controllo convergenza ottimizzato
+        if (fabs(sum1 - prev_sum1) < convergence_threshold && 
+            fabs(sum2 - prev_sum2) < convergence_threshold) break;
+        
+        prev_sum1 = sum1;
+        prev_sum2 = sum2;
     }
-
-    double prr = -sum1 + sum2 + sum;
-    if (prr < 1e-320) prr = 1e-320;
-    return prr;
+    
+    const double prr = -sum1 + sum2 + sum;
+    return (prr < 1e-320) ? 1e-320 : prr;
 }
-
 double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double beta_i = a / mean_i;
@@ -2786,115 +3375,220 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
 }
 
 double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    double rho2 = R_pow(corr, 2);
-    double beta_i = a / mean_i;
-    double beta_j = a / mean_j;
-    double brho = beta_i - rho2;
-
-    double auxi = 1 / (beta_i + 1);
-    double auxj = 1 / (beta_j + 1);
-    double auxij = auxi * auxj;
-    double rtrho = -rho2 / (1 + brho);
-    double mbj = -1 / beta_j;
-
-    double sum1 = 0.0, sum2 = 0.0;
-    double res11 = 0.0;
-    double prt = 0.0;
-
-    int n = r - t;
-    int s = n + 1;
-    int tna = t + n + a;
-
-    int iter1 = 700, iter2 = 500, iter3 = 400;
-
-    for (int l = 0; l < iter1; l++) {
-        int tl = t + l;
-        int u = t + l;
-        int u1 = u + 1;
-        int us = u + s;
-        int f = l + 1;
-
-        for (int l1 = 0; l1 < iter2; l1++) {
-            double jj = l1 + a;
-            double jj1 = 1 - jj;
-            int mm = u + jj;
-            int ll1 = l + l1;
-            int d = l1 + 1;
-
-            for (int k = 0; k < iter3; k++) {
-                int cc = u + k;
-                int ii = cc + n;
-
-                double aa = R_pow(beta_i, jj) * R_pow(beta_j, jj - 1) *
-                            R_pow(rho2, k + ll1) * pow1p(-rho2, tna) *
-                            R_pow(auxij, cc + jj) * pow1p(brho, -n);
-
-                double bb = lgammafn(tl) + lgammafn(ii + jj) + lgammafn(cc + jj + 1) -
-                            lgammafn(ii + 1) - lgammafn(cc + 2) - lgammafn(d) -
-                            lgammafn(f) - lgammafn(t) - lgammafn(a) - lgammafn(jj);
-
-                double term1 = aa * hypergeo(n, jj1, ii + 1, rtrho) *
-                               hypergeo(1, jj1, cc + 2, mbj) * exp(bb);
-
-                if (fabs(term1) < 1e-30 || !R_finite(term1)) break;
-                sum1 += term1;
-            }
-
-            double aa1 = R_pow(beta_i, jj) * R_pow(beta_j, -jj1) *
-                         R_pow(rho2, ll1) * pow1p(-rho2, tna) *
-                         R_pow(auxij, mm - 1) * pow1p(brho, -s);
-
-            double bb1 = lgammafn(tl) + lgammafn(n + mm) + lgammafn(mm) -
-                         lgammafn(us) - lgammafn(u1) - lgammafn(d) -
-                         lgammafn(f) - lgammafn(t) - lgammafn(a) - lgammafn(jj);
-
-            double term2 = aa1 * hypergeo(s, jj1, us, rtrho) *
-                           hypergeo(1, jj1, u1, mbj) * exp(bb1);
-
-            if (fabs(term2) < 1e-30 || !R_finite(term2)) break;
-            sum2 += term2;
-        }
-
-        if (fabs(sum2 - res11) < 1e-30) break;
-        res11 = sum2;
+    // Pre-calcolo delle costanti (invarianti)
+    const double rho2 = corr * corr;  // Sostituito R_pow(corr, 2)
+    const double beta_i = a / mean_i;
+    const double beta_j = a / mean_j;
+    const double brho = beta_i - rho2;
+    const double auxi = 1.0 / (beta_i + 1.0);
+    const double auxj = 1.0 / (beta_j + 1.0);
+    const double auxij = auxi * auxj;
+    const double rtrho = -rho2 / (1.0 + brho);
+    const double mbj = -1.0 / beta_j;
+    
+    // Costanti derivate
+    const int n = r - t;
+    const int s = n + 1;
+    const int tna = t + n + a;
+    const double neg_rho2 = -rho2;
+    
+    // Pre-calcolo delle potenze costanti
+    const double pow_neg_rho2_tna = pow(1.0 + neg_rho2, tna);
+    const double pow_brho_neg_n = pow(1.0 + brho, -n);
+    const double pow_brho_neg_s = pow(1.0 + brho, -s);
+    
+    // Pre-calcolo logaritmi delle costanti
+    const double log_gamma_t = lgamma(t);
+    const double log_gamma_a = lgamma(a);
+    
+    // Tabelle di lookup per potenze frequenti
+    double *pow_rho2_table = (double*)malloc(1500 * sizeof(double));
+    double *pow_beta_i_table = (double*)malloc(1000 * sizeof(double));
+    double *pow_auxij_table = (double*)malloc(2000 * sizeof(double));
+    
+    // Inizializzazione tabelle
+    pow_rho2_table[0] = 1.0;
+    for (int i = 1; i < 1500; i++) {
+        pow_rho2_table[i] = pow_rho2_table[i-1] * rho2;
     }
-
-    prt = sum2 - sum1;
-    if (prt < 1e-320) prt = 1e-320;
-    return prt;
+    
+    pow_beta_i_table[0] = 1.0;
+    for (int i = 1; i < 1000; i++) {
+        pow_beta_i_table[i] = pow_beta_i_table[i-1] * beta_i;
+    }
+    
+    pow_auxij_table[0] = 1.0;
+    for (int i = 1; i < 2000; i++) {
+        pow_auxij_table[i] = pow_auxij_table[i-1] * auxij;
+    }
+    
+    double sum1 = 0.0, sum2 = 0.0;
+    
+    // Convergenza adattiva più aggressiva
+    const double term_threshold = 1e-28;
+    const double relative_threshold = 1e-12;
+    
+    // Iterazioni dinamiche basate sui parametri
+    int max_iter1 = (int)(200 + 50 * log(1.0 + fabs(corr)));
+    int max_iter2 = (int)(150 + 30 * log(1.0 + a));
+    int max_iter3 = (int)(100 + 20 * log(1.0 + mean_i + mean_j));
+    
+    for (int l = 0; l < max_iter1; l++) {
+        const int tl = t + l;
+        const int u = tl;
+        const int u1 = u + 1;
+        const int us = u + s;
+        const int f = l + 1;
+        
+        // Cache per logaritmi
+        const double log_gamma_tl = lgamma(tl);
+        const double log_gamma_f = lgamma(f);
+        
+        double local_sum1 = 0.0, local_sum2 = 0.0;
+        double prev_local_sum1 = 0.0, prev_local_sum2 = 0.0;
+        
+        for (int l1 = 0; l1 < max_iter2; l1++) {
+            const double jj = l1 + a;
+            const double jj1 = 1.0 - jj;
+            const int mm = u + jj;
+            const int ll1 = l + l1;
+            const int d = l1 + 1;
+            
+            // Uso delle tabelle pre-calcolate
+            const int jj_int = (int)jj;
+            const double pow_beta_i_jj = (jj_int < 1000) ? pow_beta_i_table[jj_int] : pow(beta_i, jj);
+            const double pow_beta_j_jj_minus_1 = pow(beta_j, jj - 1.0);
+            const double pow_beta_j_neg_jj1 = pow(beta_j, -jj1);
+            const double pow_rho2_ll1 = (ll1 < 1500) ? pow_rho2_table[ll1] : pow(rho2, ll1);
+            
+            const double log_gamma_d = lgamma(d);
+            const double log_gamma_jj = lgamma(jj);
+            
+            // Calcolo sum1 con early termination
+            double inner_sum1 = 0.0;
+            for (int k = 0; k < max_iter3; k++) {
+                const int cc = u + k;
+                const int ii = cc + n;
+                const int cc_jj = cc + jj;
+                
+                const double pow_rho2_k = (k < 1500) ? pow_rho2_table[k] : pow(rho2, k);
+                const double pow_rho2_k_ll1 = pow_rho2_ll1 * pow_rho2_k;
+                const int auxij_index = cc_jj;
+                const double pow_auxij_cc_jj = (auxij_index < 2000) ? pow_auxij_table[auxij_index] : pow(auxij, auxij_index);
+                
+                const double aa = pow_beta_i_jj * pow_beta_j_jj_minus_1 *
+                                pow_rho2_k_ll1 * pow_neg_rho2_tna *
+                                pow_auxij_cc_jj * pow_brho_neg_n;
+                
+                const double bb = log_gamma_tl + lgamma(ii + jj) + lgamma(cc + jj + 1) -
+                                lgamma(ii + 1) - lgamma(cc + 2) - log_gamma_d -
+                                log_gamma_f - log_gamma_t - log_gamma_a - log_gamma_jj;
+                
+                // Controllo overflow prima del calcolo
+                if (bb > 700.0) break;
+                
+                const double hyp1 = hypergeo(n, jj1, ii + 1, rtrho);
+                const double hyp2 = hypergeo(1, jj1, cc + 2, mbj);
+                
+                const double term1 = aa * hyp1 * hyp2 * exp(bb);
+                
+                // Early termination più aggressiva
+                if (fabs(term1) < term_threshold || !isfinite(term1)) break;
+                if (k > 20 && fabs(term1) < fabs(inner_sum1) * relative_threshold) break;
+                
+                inner_sum1 += term1;
+            }
+            local_sum1 += inner_sum1;
+            
+            // Calcolo sum2
+            const int mm_minus_1 = mm - 1;
+            const double pow_auxij_mm_minus_1 = (mm_minus_1 < 2000) ? pow_auxij_table[mm_minus_1] : pow(auxij, mm_minus_1);
+            
+            const double aa1 = pow_beta_i_jj * pow_beta_j_neg_jj1 *
+                             pow_rho2_ll1 * pow_neg_rho2_tna *
+                             pow_auxij_mm_minus_1 * pow_brho_neg_s;
+            
+            const double bb1 = log_gamma_tl + lgamma(n + mm) + lgamma(mm) -
+                             lgamma(us) - lgamma(u1) - log_gamma_d -
+                             log_gamma_f - log_gamma_t - log_gamma_a - log_gamma_jj;
+            
+            if (bb1 <= 700.0) {  // Controllo overflow
+                const double hyp3 = hypergeo(s, jj1, us, rtrho);
+                const double hyp4 = hypergeo(1, jj1, u1, mbj);
+                
+                const double term2 = aa1 * hyp3 * hyp4 * exp(bb1);
+                
+                if (isfinite(term2) && fabs(term2) >= term_threshold) {
+                    local_sum2 += term2;
+                }
+            }
+            
+            // Controllo convergenza del loop interno
+            if (l1 > 50 && 
+                fabs(local_sum1 - prev_local_sum1) < fabs(local_sum1) * relative_threshold &&
+                fabs(local_sum2 - prev_local_sum2) < fabs(local_sum2) * relative_threshold) {
+                break;
+            }
+            prev_local_sum1 = local_sum1;
+            prev_local_sum2 = local_sum2;
+        }
+        
+        sum1 += local_sum1;
+        sum2 += local_sum2;
+        
+        // Controllo convergenza del loop esterno
+        if (l > 20 && 
+            fabs(local_sum1) < fabs(sum1) * relative_threshold &&
+            fabs(local_sum2) < fabs(sum2) * relative_threshold) {
+            break;
+        }
+    }
+    
+    // Cleanup
+    free(pow_rho2_table);
+    free(pow_beta_i_table);
+    free(pow_auxij_table);
+    
+    double prt = sum2 - sum1;
+    return (prt < 1e-320) ? 1e-320 : prt;
 }
 
-
-double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a)
-{
-double dens=0.0;
-if(fabs(corr)>1e-120){
-  if(r==t)
-  {    if(r==0) dens=PG00(corr,r,r,mean_i,mean_j,a);
-       if(r>0)  dens=PGrr(corr,r,r,mean_i,mean_j,a);
-  }
-
-else{
-  if(r==0&&t>0) dens=PGr0(corr,t,r,mean_j,mean_i,a);
-  if(r>0&&t==0) dens=PGr0(corr,r,t,mean_i,mean_j,a);
-
-  if(r>0&&t>0)
-   {
-   if(r>t) dens=PGrt(corr,r,t,mean_i,mean_j,a);
-   if(t>r) dens=PGrt(corr,t,r,mean_j,mean_i,a);
-   }
-  }
-}
-else{
-    double beta_i= a/mean_i;
-    double beta_j= a/mean_j;
-    double dens1= r*log(1/(1+beta_i))+a*log(beta_i/(1+beta_i))+lgammafn(a+r)-lgammafn(r+1)-lgammafn(a);
-    double dens2= t*log(1/(1+beta_j))+a*log(beta_j/(1+beta_j))+lgammafn(a+t)-lgammafn(t+1)-lgammafn(a);
-    dens=exp(dens1+dens2);
-}
-//Rprintf("%f \n",dens);
-return(dens);
-
+double biv_PoissonGamma(double corr, int r, int t, double mean_i, double mean_j, double a) {
+    // Controllo per correlazione quasi nulla - caso indipendente
+    if (fabs(corr) <= 1e-120) {
+        const double beta_i = a / mean_i;
+        const double beta_j = a / mean_j;
+        const double beta_i_plus_1 = beta_i + 1.0;
+        const double beta_j_plus_1 = beta_j + 1.0;
+        const double log_gamma_a = lgammafn(a);
+        const double log_1_over_beta_i_plus_1 = log(1.0 / beta_i_plus_1);
+        const double log_1_over_beta_j_plus_1 = log(1.0 / beta_j_plus_1);
+        const double log_beta_i_over_beta_i_plus_1 = log(beta_i / beta_i_plus_1);
+        const double log_beta_j_over_beta_j_plus_1 = log(beta_j / beta_j_plus_1);
+        const double dens1 = r * log_1_over_beta_i_plus_1 + 
+                            a * log_beta_i_over_beta_i_plus_1 + 
+                            lgammafn(a + r) - lgammafn(r + 1) - log_gamma_a;
+        
+        const double dens2 = t * log_1_over_beta_j_plus_1 + 
+                            a * log_beta_j_over_beta_j_plus_1 + 
+                            lgammafn(a + t) - lgammafn(t + 1) - log_gamma_a;
+        
+        return exp(dens1 + dens2);
+    }
+    
+    
+    if (r == t) {
+        return (r == 0) ? PG00(corr, r, r, mean_i, mean_j, a) 
+                        : PGrr(corr, r, r, mean_i, mean_j, a);
+    }
+    if (r == 0) {
+        return PGr0(corr, t, r, mean_j, mean_i, a);
+    }
+    if (t == 0) {
+        return PGr0(corr, r, t, mean_i, mean_j, a);
+    }
+    return (r > t) ? PGrt(corr, r, t, mean_i, mean_j, a) 
+                   : PGrt(corr, t, r, mean_j, mean_i, a);
 }
 
 
@@ -3158,7 +3852,7 @@ void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, do
 // bivariate density clayton copula
 double biv_unif_CopulaClayton(double dat1, double dat2, double rho, double nu)
 {
-    // Precalcola variabili
+
     double nu2 = nu / 2;
     double rho2 = rho * rho;
     double a = nu2 + 1;
@@ -3413,9 +4107,6 @@ return(dens);
 /***********************/
 /***********************/
 
-
-
-
 static const double GL_x[20] = {
     -0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188,
     -0.7463319064601508, -0.6360536807265150, -0.5108670019508271, -0.3737060887154195,
@@ -3432,50 +4123,89 @@ static const double GL_w[20] = {
     0.0832767415767048, 0.0626720483341091, 0.0406014298003869, 0.0176140071391521
 };
 
+// Costante precomputata
+static const double INV_2PI = 1.0 / (2.0 * M_PI);
 
-/*Gauss-Legendre semplice */
-double owens_t(double h, double a) {
+/* Owen's T function ottimizzata */
+double owens_t_optimized(double h, double a) {
+    // Casi limite
     if (a == 0.0) return 0.0;
-
+    if (fabs(a) < 1e-15) return 0.0;
+    
+    // Per |h| molto grande, Owen's T ≈ 0
+    if (fabs(h) > 37.0) return 0.0;
+    
+    // Precomputa valori comuni
+    const double h_squared = h * h;
+    const double half_a = a * 0.5;
+    const double neg_half_h2 = -0.5 * h_squared;
+    
     double sum = 0.0;
-    double h_squared = h * h;
-    double half_a = a / 2.0;
-
-    for (int i = 0; i < 20; i++) {
-        // Transform from [-1,1] to [0,a]
-        double x = half_a * (GL_x[i] + 1.0);
-        double denom = 1.0 + x * x;
-        double fx = exp(-0.5 * h_squared * denom) / denom;
-        sum += GL_w[i] * fx;
+    
+    // Loop unrolling parziale per migliorare le performance
+    for (int i = 0; i < 20; i += 2) {
+        // Primo elemento
+        double x1 = half_a * (GL_x[i] + 1.0);
+        double x1_squared = x1 * x1;
+        double denom1 = 1.0 + x1_squared;
+        double fx1 = exp(neg_half_h2 * denom1) / denom1;
+        sum += GL_w[i] * fx1;
+        
+        // Secondo elemento (se esiste)
+        if (i + 1 < 20) {
+            double x2 = half_a * (GL_x[i + 1] + 1.0);
+            double x2_squared = x2 * x2;
+            double denom2 = 1.0 + x2_squared;
+            double fx2 = exp(neg_half_h2 * denom2) / denom2;
+            sum += GL_w[i + 1] * fx2;
+        }
     }
-    return (half_a * sum) / (2.0 * M_PI);
+    
+    return half_a * sum * INV_2PI;
+}
+
+/* PSN ottimizzata */
+double psn_optimized(double x, double omega, double alpha, double tau) {
+    // Controllo parametri
+    if (omega <= 0.0) return NAN; // omega deve essere positivo
+    
+    const double z = x / omega;
+    
+    // Casi limite per migliorare performance
+    if (alpha == 0.0) {
+        return pnorm(z, 0.0, 1.0, 1, 0); // Distribuzione normale standard
+    }
+    
+    // Per |z| molto grande, Owen's T diventa trascurabile
+    if (fabs(z) > 8.0) {
+        if (z > 0) return 1.0;
+        else return 0.0;
+    }
+    
+    const double phi_z = pnorm(z, 0.0, 1.0, 1, 0);
+    const double owens = owens_t_optimized(z, alpha);
+    
+    return phi_z - 2.0 * owens;
+}
+
+/* Versione corretta senza simmetrie problematiche */
+double psn(double x, double omega, double alpha, double tau) {
+    if (omega <= 0.0) return NAN;
+    
+    const double z = x / omega;
+    
+    // Casi limite
+    if (alpha == 0.0) return pnorm(z, 0.0, 1.0, 1, 0);
+    if (fabs(z) > 8.0) return (z > 0) ? 1.0 : 0.0;
+    
+    // Calcola direttamente senza manipolare le simmetrie
+    const double phi_z = pnorm(z, 0.0, 1.0, 1, 0);
+    const double owens = owens_t_optimized(z, alpha);  // Usa z e alpha originali
+    
+    return phi_z - 2.0 * owens;
 }
 
 
-
-
-/*
-double owens_t(double h, double a) {
-    if (a == 0.0) return 0.0;
-    int n = 900; 
-    double sum = 0.0;
-    double dx = a / n;
-    double h_squared = h * h;
-    for (int i = 0; i < n; i++) {
-        double x1 = i * dx;
-        double x2 = (i + 1) * dx;
-        double fx1 = exp(-0.5 * h_squared * (1 + x1 * x1)) / (1 + x1 * x1);
-        double fx2 = exp(-0.5 * h_squared * (1 + x2 * x2)) / (1 + x2 * x2);
-        sum += (fx1 + fx2) * dx / 2.0;
-    }
-    return sum / (2 * M_PI);
-}*/
-
-
-double psn(double x,  double omega, double alpha, double tau) {
-    double z = x / omega;
-    return pnorm(z, 0.0, 1.0, 1, 0) - 2 * owens_t(z, alpha);
-}
 double dsn(double x, double omega, double alpha, double tau) {
     double z = x/ omega;
     double t = alpha * z + tau;
@@ -3805,4 +4535,330 @@ double one_log_logistic(double z,double m, double sill)
   return(res);
 }
 
+
+
+
+
+
+/*#########################################################################################*/
+/*#####################   bivariate gaussian probabilities      ###########################*/
+/*#########################################################################################*/
+
+
+// Costanti per controllo numerico - IDENTICHE al tuo codice
+#define MIN_LOG_VALUE -700.0  
+#define MAX_LOG_VALUE 700.0   
+#define TOLERANCE 1e-140      
+#define MIN_PROB 1e-15        
+
+#define ZERO 0.0
+#define ONE 1.0
+#define HALF 0.5
+#define TWOPI 6.283185307179586
+#define SQRT_TWOPI 2.506628274631001
+#define MIN_CORR_THRESHOLD 0.925
+#define MAX_HK_THRESHOLD -160.0
+#define PRECISION_THRESHOLD 1e-15
+#define OVERFLOW_THRESHOLD -700.0
+
+// Soglia per l'algoritmo ibrido - abbassata ulteriormente per usare meno spesso D-W
+#define HYBRID_THRESHOLD 0.1
+
+// Implementazione precisa di Drezner-Wesolowsky 
+double bvn_drezner_wesolowsky(double h, double k, double r) {
+    // Tabelle come sopra...
+    static const double x[] = {
+        -0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188,
+        -0.7463319064601508, -0.6360536807265150, -0.5108670019508271, -0.3737060887154196,
+        -0.2277858511416451, -0.07652652113349733, 0.07652652113349733, 0.2277858511416451,
+        0.3737060887154196, 0.5108670019508271, 0.6360536807265150, 0.7463319064601508,
+        0.8391169718222188, 0.9122344282513259, 0.9639719272779138, 0.9931285991850949
+    };
+    static const double w[] = {
+        0.01761400713915212, 0.04060142980038694, 0.06267204833410906, 0.08327674157670475,
+        0.1019301198172404, 0.1181945319615184, 0.1316886384491766, 0.1420961093183821,
+        0.1491729864726037, 0.1527533871307259, 0.1527533871307259, 0.1491729864726037,
+        0.1420961093183821, 0.1316886384491766, 0.1181945319615184, 0.1019301198172404,
+        0.08327674157670475, 0.06267204833410906, 0.04060142980038694, 0.01761400713915212
+    };
+    
+    const double hk = h * k;
+    const double hs = (h * h + k * k) * 0.5;
+    const double asr = asin(r);
+    const double asr_half = asr * 0.5;
+    
+    static const double inv_2pi = 1.0 / (2.0 * TWOPI);
+    const double abs_r = fabs(r);
+    
+    // Selezione adattiva del numero di punti di quadratura
+    int start_idx, end_idx;
+    
+    if (abs_r < 0.05) {
+        // Correlazione molto bassa: 8 punti centrali sufficienti
+        start_idx = 6;
+        end_idx = 14;
+    } else if (abs_r < 0.2) {
+        // Correlazione bassa: 12 punti
+        start_idx = 4;
+        end_idx = 16;
+    } else {
+        // Correlazione più alta: tutti i 20 punti
+        start_idx = 0;
+        end_idx = 20;
+    }
+    
+    double bvn = 0.0;
+    for (int i = start_idx; i < end_idx; i++) {
+        double theta = asr_half * (x[i] + 1.0);
+        double sn = sin(theta);
+        double sn2 = sn * sn;
+        
+        if (sn2 < 0.9999999) {
+            double exponent = (sn * hk - hs) / (1.0 - sn2);
+            if (exponent > -700.0) {
+                bvn += w[i] * exp(exponent);
+            }
+        }
+    }
+    
+    bvn = bvn * asr * inv_2pi + pnorm(-h, 0.0, 1.0, 1, 0) * pnorm(-k, 0.0, 1.0, 1, 0);
+    
+    return bvn;
+}
+// gentz
+double bvu(double sh, double sk, double r) {
+    double bvn = 0.0;
+    double h = sh, k = sk;
+    double hk = h * k;
+    double hs, asr, sn, as, a, b, c, d, bs, rs, xs;
+    int i, lg, ng;
+
+    // Tabelle COMPLETAMENTE IDENTICHE - zero modifiche
+    static const double W[10][3] = {
+        {0.1713244923791705, 0.04717533638651177, 0.01761400713915212},
+        {0.3607615730481384, 0.1069393259953183, 0.04060142980038694},
+        {0.4679139345726904, 0.1600783285433464, 0.06267204833410906},
+        {0.0,                0.2031674267230659, 0.08327674157670475},
+        {0.0,                0.2334925365383547, 0.1019301198172404},
+        {0.0,                0.2491470458134029, 0.1181945319615184},
+        {0.0,                0.0,                0.1316886384491766},
+        {0.0,                0.0,                0.1420961093183821},
+        {0.0,                0.0,                0.1491729864726037},
+        {0.0,                0.0,                0.1527533871307259}
+    };
+    static const double X[10][3] = {
+        {-0.9324695142031522, -0.9815606342467191, -0.9931285991850949},
+        {-0.6612093864662647, -0.9041172563704750, -0.9639719272779138},
+        {-0.2386191860831970, -0.7699026741943050, -0.9122344282513259},
+        {0.0,                 -0.5873179542866171, -0.8391169718222188},
+        {0.0,                 -0.3678314989981802, -0.7463319064601508},
+        {0.0,                 -0.1252334085114692, -0.6360536807265150},
+        {0.0,                  0.0,                -0.5108670019508271},
+        {0.0,                  0.0,                -0.3737060887154196},
+        {0.0,                  0.0,                -0.2277858511416451},
+        {0.0,                  0.0,                -0.07652652113349733}
+    };
+
+    // LOGICA IDENTICA - solo variabile ausiliaria per fabs(r)
+    double abs_r = fabs(r);
+    
+    if (abs_r < 0.3) {
+        ng = 0; lg = 3;
+    } else if (abs_r < 0.75) {
+        ng = 1; lg = 6;
+    } else {
+        ng = 2; lg = 10;
+    }
+
+    if (abs_r < 0.925) {
+        hs = (h * h + k * k) / 2.0;
+        asr = asin(r);
+        
+        // Loop IDENTICO - solo pre-computazione di 2.0 * TWOPI
+        double inv_4pi = 1.0 / (2.0 * TWOPI);
+        
+        for (i = 0; i < lg; ++i) {
+            sn = sin(asr * (X[i][ng] + 1.0) / 2.0);
+            bvn += W[i][ng] * exp((sn * hk - hs) / (1.0 - sn * sn));
+            
+            sn = sin(asr * (-X[i][ng] + 1.0) / 2.0);
+            bvn += W[i][ng] * exp((sn * hk - hs) / (1.0 - sn * sn));
+        }
+        
+        // Formula IDENTICA - solo ottimizzazione della divisione finale
+        bvn = bvn * asr * inv_4pi + pnorm(-h, 0.0, 1.0, 1, 0) * pnorm(-k, 0.0, 1.0, 1, 0);
+        
+    } else {
+        if (r < 0.0) {
+            k = -k;
+            hk = -hk;
+        }
+
+        if (abs_r < 1.0) {
+            as = (1.0 - r) * (1.0 + r);
+            a = sqrt(as);
+            bs = (h - k) * (h - k);
+            c = (4.0 - hk) / 8.0;
+            d = (12.0 - hk) / 16.0;
+            
+            // Pre-calcolo per evitare divisioni ripetute
+            double bs_over_5 = bs / 5.0;
+            double as_squared = as * as;
+            
+            bvn = a * exp(-(bs / as + hk) / 2.0) * 
+                  (1.0 - c * (bs - as) * (1.0 - d * bs_over_5) / 3.0 + c * d * as_squared / 5.0);
+
+            if (hk > -160.0) {
+                b = sqrt(bs);
+                bvn -= exp(-hk / 2.0) * sqrt(TWOPI) * pnorm(-b / a, 0.0, 1.0, 1, 0) * b * 
+                       (1.0 - c * bs * (1.0 - d * bs_over_5) / 3.0);
+            }
+
+            a = a / 2.0;
+            for (i = 0; i < lg; ++i) {
+                xs = (a * (X[i][ng] + 1.0));
+                xs *= xs;
+                rs = sqrt(1.0 - xs);
+                bvn += a * W[i][ng] * (
+                    exp(-bs / (2.0 * xs) - hk / (1.0 + rs)) / rs -
+                    exp(-(bs / xs + hk) / 2.0) * (1.0 + c * xs * (1.0 + d * xs))
+                );
+
+                xs = as * (1.0 - X[i][ng]) * (1.0 - X[i][ng]) / 4.0;
+                rs = sqrt(1.0 - xs);
+                bvn += a * W[i][ng] * exp(-(bs / xs + hk) / 2.0) *
+                    (exp(-hk * (1.0 - rs) / (2.0 * (1.0 + rs))) / rs -
+                     (1.0 + c * xs * (1.0 + d * xs)));
+            }
+            bvn = -bvn / TWOPI;
+        }
+
+        if (r > 0.0)
+            bvn += pnorm(-fmax(h, k), 0.0, 1.0, 1, 0);
+        if (r < 0.0)
+            bvn = -bvn + fmax(0.0, pnorm(-h, 0.0, 1.0, 1, 0) - pnorm(-k, 0.0, 1.0, 1, 0));
+    }
+
+    return bvn;
+}
+
+
+double bvn_hybrid(double h, double k, double rho) {
+    double abs_rho = fabs(rho);
+    // Gestione casi limite
+    if (abs_rho >= 1.0) {
+        if (rho >= 1.0) {
+            return pnorm(fmin(h, k), 0.0, 1.0, 1, 0);
+        } else {
+            return fmax(0.0, pnorm(h, 0.0, 1.0, 1, 0) - pnorm(-k, 0.0, 1.0, 1, 0));
+        }
+    }
+    // Usa Drezner-Wesolowsky solo per correlazioni molto basse
+   // if (abs_rho < HYBRID_THRESHOLD) {
+   //     return bvn_drezner_wesolowsky(h, k, rho);
+   // } else {
+        // versionec di gentz
+        return bvu(h, k, rho);
+    //}
+}
+
+// Wrapper IDENTICO al tuo bvnmvn
+double bvnmvn(const double lower[2], const double upper[2], const int infin[2], double corr) {
+    double result = 0.0;
+
+    if (infin[0] == 2 && infin[1] == 2) {
+        result = bvn_hybrid(lower[0], lower[1], corr)
+               - bvn_hybrid(upper[0], lower[1], corr)
+               - bvn_hybrid(lower[0], upper[1], corr)
+               + bvn_hybrid(upper[0], upper[1], corr);
+    } else if (infin[0] == 2 && infin[1] == 1) {
+        result = bvn_hybrid(lower[0], lower[1], corr)
+               - bvn_hybrid(upper[0], lower[1], corr);
+    } else if (infin[0] == 1 && infin[1] == 2) {
+        result = bvn_hybrid(lower[0], lower[1], corr)
+               - bvn_hybrid(lower[0], upper[1], corr);
+    } else if (infin[0] == 2 && infin[1] == 0) {
+        result = bvn_hybrid(-upper[0], -upper[1], corr)
+               - bvn_hybrid(-lower[0], -upper[1], corr);
+    } else if (infin[0] == 0 && infin[1] == 2) {
+        result = bvn_hybrid(-upper[0], -upper[1], corr)
+               - bvn_hybrid(-upper[0], -lower[1], corr);
+    } else if (infin[0] == 1 && infin[1] == 0) {
+        result = bvn_hybrid(lower[0], -upper[1], -corr);
+    } else if (infin[0] == 0 && infin[1] == 1) {
+        result = bvn_hybrid(-upper[0], lower[1], -corr);
+    } else if (infin[0] == 1 && infin[1] == 1) {
+        result = bvn_hybrid(lower[0], lower[1], corr);
+    } else if (infin[0] == 0 && infin[1] == 0) {
+        result = bvn_hybrid(-upper[0], -upper[1], corr);
+    }
+
+    return result;
+}
+
+
+
+
+double pbnorm22(double lim1,double lim2,double corr){
+    double lower[2] = {-INFINITY, -INFINITY};
+    double upper[2] = {lim1, lim2};
+    int infin[2] = {0, 0};  // Entrambi (-inf, upper]
+    double res=bvnmvn(lower, upper, infin, corr);
+    //Rprintf("%f = %f %f %f  \n",res,lim1,lim2,corr);
+    return res;
+}
+
+
+/*
+double pbnorm22(double lim1,double lim2,double corr)
+{
+    double  lowe[2]  = {0,0}, uppe[2] = {lim1,lim2}, corre[1] = {corr};
+    double  value;
+    int     infin[2] = {0,0};
+    value            = F77_CALL(bvnmvn)(lowe,uppe,infin,corre); 
+    return(value);
+}
+*/
+
+// compute the bivariate normal cdf for the bernoulli RF:
+double pbnorm(int *cormod, double h, double u, double mean1, double mean2, 
+  double nugget, double var,double *par, double thr)
+{
+  double res=0;
+  double lim_inf[2]={0,0};//lower bound for the integration
+  double lim_sup[2]={mean1,mean2};
+  int infin[2]={0,0};//set the bounds for the integration
+  double corr={(1-nugget)*CorFct(cormod,h,u,par,0,0)};
+    res=bvnmvn(lim_inf,lim_sup,infin,corr);
+  return(res);
+}
+
+
+// CDF of a bivariate Gaussian distribution using bvnmvn
+double cdf_norm(double lim1, double lim2, double a11, double a12) {
+    double res = 0.0;
+    double lower[2] = {0.0, 0.0};
+    double upper[2] = {lim1 / sqrt(a11), lim2 / sqrt(a11)};
+    int infin[2] = {0, 0};
+    double corr = a12 / a11;
+    double auxil = 1.0 - pow(corr, 2);
+    double det = pow(a11, 2) - pow(a12, 2);
+    res = a11 * sqrt(auxil / det) * bvnmvn(lower, upper, infin, corr);
+    return res;
+}
+
+
+// CDF of a bivariate Gaussian distribution using general covariance
+double cdf_norm2(double lim1, double lim2, double a11, double a12, double a22) {
+    double res = 0.0;
+    double lower[2] = {0.0, 0.0};
+    double upper[2] = {lim1 / sqrt(a11), lim2 / sqrt(a22)};
+    int infin[2] = {0, 0};
+    double corr = a12 / sqrt(a11 * a22);
+    double auxil = 1.0 - pow(corr, 2);
+    double det = a11 * a22 - pow(a12, 2);
+    res = sqrt(a11 * a22) * sqrt(auxil / det) * bvnmvn(lower, upper, infin, corr);
+
+    return res;
+}
 

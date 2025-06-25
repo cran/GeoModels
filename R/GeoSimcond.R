@@ -108,7 +108,8 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
       progressr::handlers(global = TRUE)
       progressr::handlers("txtprogressbar")
       pb <- progressr::progressor(along = 1:nrep)
-      sim_cond <- foreach::foreach(i = seq_len(nrep), .options.future = list(seed = TRUE)) %dofuture% {
+      sim_cond <- foreach::foreach(i = seq_len(nrep), .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))) %dofuture% {
          pb(sprintf("i=%d", i))
         sim_nc_obs_data <- sim_nc$data[[i]][1:n_obs]
         sim_nc_loc_data <- sim_nc$data[[i]][(n_obs + 1):(n_obs + n_loc)]
@@ -241,7 +242,7 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
 ############################################################################
 if(is.null(copula)){
 
-print("gg")
+
   if(model=="Gaussian") {
                       res=Gauss_cd(data,corrmodel,nrep,method,L,
                               param,
@@ -249,7 +250,7 @@ print("gg")
                               local,neighb,maxdist,maxtime,
                               space,spacetime,bivariate,parallel,ncores)
                       }
-print("gg2")
+
   ################################################################################
   ############### monotone tranformations of one Gausssian RF ####################
   ################################################################################

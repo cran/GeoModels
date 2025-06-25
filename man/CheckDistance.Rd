@@ -1,33 +1,36 @@
 \name{CheckDistance}
 \alias{CheckDistance}
 \encoding{UTF-8}
-\title{Checking Distance}
+\title{Checking Distance Type}
 \description{
-  The procedure controls the type of distance.
+Checks the validity and type of the specified distance.
 }
 \usage{
 CheckDistance(distance)
 }
 \arguments{
-  \item{distance}{String; the type of distance, for the
-    description see \code{\link{GeoCovmatrix}}.
-    Default is \code{Eucl}. Other possible values are \code{Geod} 
-    and \code{Chor} that is euclidean, geodesic and chordal distance.}
+  \item{distance}{A character string indicating the type of distance. 
+  Available options are: \code{"Eucl"} (Euclidean), \code{"Geod"} (Geodesic), and \code{"Chor"} (Chordal).
+  See also \code{\link{GeoCovmatrix}}.}
 }
-
-\details{ The function check if  the type of distance is valid.} 
-
-
-\value{Returns 0,1,2 for  euclidean,geodesic, chordal distances 
-respectively. Otherwise returns NULL.} 
-
-
-
-
-
-\author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
-Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+\details{
+This function checks whether the specified distance type is valid.
 }
-
-\keyword{Composite}
+\value{
+An integer:
+\itemize{
+  \item \code{0} for Euclidean distance
+  \item \code{1} for Geodesic distance
+  \item \code{2} for Chordal distance
+}
+If the input is not recognized, the function returns \code{NULL}.
+}
+\author{
+Moreno Bevilacqua \email{moreno.bevilacqua89@gmail.com} \cr
+\url{https://sites.google.com/view/moreno-bevilacqua/home} \cr
+Víctor Morales Oñate \email{victor.morales@uv.cl} \cr
+\url{https://sites.google.com/site/moralesonatevictor/} \cr
+Christian Caamaño-Carrillo \email{chcaaman@ubiobio.cl} \cr
+\url{https://www.researchgate.net/profile/Christian-Caamano}
+}
+\keyword{composite}

@@ -12,3 +12,10 @@
                               "--------------------------------------------------------------\n"))
 
 }
+
+.GeoModels_env <- new.env(parent = emptyenv())
+
+.onLoad <- function(libname, pkgname) {
+  .GeoModels_env$II_global_cache <- new.env(hash = TRUE)
+  .GeoModels_env$ak_cache <- list()
+}

@@ -2,7 +2,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                   optimizer = NULL, lower = NULL, upper = NULL,
                   n.fold = 0.05, local = FALSE, neighb = NULL, maxdist = NULL, 
                   maxtime = NULL, sparse = FALSE, type_krig = "Simple", 
-                  which = 1, parallel = FALSE, ncores = NULL) {
+                  which = 1, parallel = TRUE, ncores = NULL) {
 
   if (!inherits(fit, "GeoFit")) stop("fit must be an object of class 'GeoFit'")
   if (n.fold > 0.99 || n.fold < 0.01) stop("n.fold must be between 0.01 and 0.99")
@@ -156,7 +156,8 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
 ############ starting foreach ##################################
 ################################################################
       results <- foreach::foreach(i = 1:K, .combine = 'rbind',
-                                   .options.future = list(seed = TRUE)) %dofuture% {
+                                   .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))) %dofuture% {
      X <- Xloc <-Mloc<- NULL
         sel_data <- sel_list[[i]]  # random sample
 
@@ -178,7 +179,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         param <- c(fit$param, fit$fixed)
 
         if (estimation) {
-          fit_s <- GeoFit(
+          fit_s <- suppressWarnings(GeoFit(
             data = data_to_est, coordx = coords_est, corrmodel = fit$corrmodel,
             X = X, likelihood = fit$likelihood, type = fit$type,
             grid = fit$grid, copula = fit$copula, anisopars = fit$anisopars,
@@ -187,7 +188,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
             maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
             optimizer = optimizer, lower = lower, upper = upper,
             start = fit$param, fixed = fit$fixed
-          )
+          ))
 
           if (!is.null(fit$anisopars)) {
             fit_s$param$angle <- NULL; fit_s$param$ratio <- NULL
@@ -204,7 +205,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         } else {
           pr <- GeoKrigloc(fit_s, loc = coords_to_pred, mse = TRUE,
                            param = param, Xloc = Xloc, Mloc = Mloc,
-                           neighb = neighb, maxdist = maxdist)
+                           neighb = neighb, maxdist = maxdist,progress=FALSE)
         }
 
         pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
@@ -225,21 +226,12 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     }
   }
 
-
-
-
-
-
-
-
-
-############################################################
 ############################################################
 ############################################################
 ########### spatio temporal case ###########################
 ############################################################
 ############################################################
-############################################################
+
 
 if (spacetime) {
 
@@ -289,9 +281,7 @@ if (MM) {
   sel_data = sample(1:NT, round(NT * (1 - n.fold))) 
   folds = split(sample(1:NT), rep(1:K, length.out = NT))
 
-
 ###################### not parallel case ############################
-
 if (!parallel) {
 
   progressr::handlers(global = TRUE)
@@ -342,8 +332,6 @@ if (!parallel) {
       } 
     }
 
-
- 
      Xnew = NULL
     for (k in 1:length(utt)) {
       ss = data_sel_ord[data_sel_ord[, 1] == utt[k], , drop = FALSE]
@@ -361,7 +349,7 @@ if (!parallel) {
     param = c(fit$param, fit$fixed)
 
     if (estimation) {
-      fit_s = GeoFit(data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
+      fit_s = suppressWarnings(GeoFit(data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
                      corrmodel = fit$corrmodel, X = Xnew, likelihood = fit$likelihood, 
                      type = fit$type, grid = fit$grid, copula = fit$copula, 
                      anisopars = fit$anisopars, est.aniso = fit$est.aniso,
@@ -369,7 +357,7 @@ if (!parallel) {
                      maxdist = fit$maxdist, neighb = fit$neighb, maxtime = fit$maxtime, 
                      distance = fit$distance, optimizer = optimizer, 
                      lower = lower, upper = upper,
-                     start = fit$param, fixed = fit$fixed)
+                     start = fit$param, fixed = fit$fixed))
 
       if (!is.null(fit$anisopars)) {
         fit_s$param$angle = NULL
@@ -440,7 +428,8 @@ if (parallel) {
   
       results <- foreach(i = 1:K,
                    .combine = 'rbind',  
-                   .options.future = list(seed = TRUE)) %dofuture% {
+                   .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))) %dofuture% {
 
     test_idx = folds[[i]]
     train_idx = setdiff(1:NT, test_idx)
@@ -497,7 +486,7 @@ if (parallel) {
     param = c(fit$param, fit$fixed)
 
     if (estimation) {
-      fit_s = GeoFit(data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
+      fit_s = suppressWarnings(GeoFit(data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
                      corrmodel = fit$corrmodel, X = Xnew, likelihood = fit$likelihood, 
                      type = fit$type, grid = fit$grid, copula = fit$copula, 
                      anisopars = fit$anisopars, est.aniso = fit$est.aniso,
@@ -505,7 +494,7 @@ if (parallel) {
                      maxdist = fit$maxdist, neighb = fit$neighb, maxtime = fit$maxtime, 
                      distance = fit$distance, optimizer = optimizer, 
                      lower = lower, upper = upper,
-                     start = fit$param, fixed = fit$fixed)
+                     start = fit$param, fixed = fit$fixed))
 
       if (!is.null(fit$anisopars)) {
         fit_s$param$angle = NULL
@@ -529,7 +518,7 @@ if (parallel) {
       } else {
         pr = GeoKrigloc(fit_s, loc = coordx_dynnew_loc[[j]], 
                         param = param, time = utt_1[j], mse = TRUE,  Mloc=Mnew_loc[[j]],
-                        neighb = neighb, maxdist = maxdist, maxtime = maxtime, 
+                        neighb = neighb, maxdist = maxdist, maxtime = maxtime, progress=FALSE,
                         Xloc = Xnew_loc[[j]])
       }
 
@@ -561,20 +550,12 @@ if (parallel) {
 } ## end spacetime
 
 
-
-
-
-
-
-
-
-############################################################
 ############################################################
 ############################################################
 ########### spatial bivariate case #########################
 ############################################################
 ############################################################
-############################################################
+
 if (bivariate) {
 
   fixmeans <- length(fit$fixed$mean_1) > 1 && length(fit$fixed$mean_2) > 1
@@ -655,7 +636,7 @@ if (bivariate) {
 
       # Stima parametri
       param <- if (estimation) {
-        fit_s <- GeoFit(
+        fit_s <- suppressWarnings(GeoFit(
           data = data_to_est, coordx = NULL, coordx_dyn = coords_est,
           corrmodel = fit$corrmodel, X = X_use,
           likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
@@ -664,7 +645,7 @@ if (bivariate) {
           maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
           optimizer = optimizer, lower = lower, upper = upper,
           start = fit$param, fixed = current_fixed
-        )
+        ))
         if (!is.null(fit$anisopars)) {
           fit_s$param$angle <- fit_s$param$ratio <- NULL
           fit_s$fixed$angle <- fit_s$fixed$ratio <- NULL
@@ -674,6 +655,7 @@ if (bivariate) {
         append(fit$param, current_fixed)
       }
 
+print(fit_s$copula)
       pr <- if (!local) {
         GeoKrig(fit_s,
            coordx = NULL, 
@@ -731,7 +713,8 @@ if (bivariate) {
     ############################################ 
     ########### starting foreach ############### 
     ############################################
-    results <- foreach::foreach(i = 1:K,.combine = rbind,.options.future = list(seed =TRUE)  ) %dofuture% {
+    results <- foreach::foreach(i = 1:K,.combine = rbind,.options.future = list(seed =TRUE,stdout = NA,  
+                        conditions = character(0))  ) %dofuture% {
 
       sel_data <- samples[[i]] ##### sample!
       
@@ -771,7 +754,7 @@ if (bivariate) {
       }
 
       param <- if (estimation) {
-        fit_s <- GeoFit(
+        fit_s <- suppressWarnings(GeoFit(
           data = data_to_est, coordx = NULL, coordx_dyn = coords_est,
           corrmodel = fit$corrmodel, X = X_use,
           likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
@@ -780,7 +763,7 @@ if (bivariate) {
           maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
           optimizer = optimizer, lower = lower, upper = upper,
           start = fit$param, fixed = current_fixed
-        )
+        ))
         if (!is.null(fit$anisopars)) {
           fit_s$param$angle <- fit_s$param$ratio <- NULL
           fit_s$fixed$angle <- fit_s$fixed$ratio <- NULL
@@ -798,7 +781,7 @@ if (bivariate) {
         GeoKrigloc(fit_s,
           loc = coords_pred,mse = TRUE,
            neighb = neighb, maxdist = maxdist,
-          param = param, Xloc = Xloc_use, Mloc = Mloc, which = which)
+          param = param, Xloc = Xloc_use, Mloc = Mloc, which = which,progress=FALSE)
       }
       
       scores <- GeoScores(

@@ -72,7 +72,8 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
       progressr::handlers(global = TRUE)
       progressr::handlers("txtprogressbar")
       pb <- progressr::progressor(along = 1:K)
-      results <- foreach::foreach(M = 1:K, .combine = rbind, .options.future = list(seed = TRUE)) %dofuture% {
+      results <- foreach::foreach(M = 1:K, .combine = rbind, .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))) %dofuture% {
         aa <- GeoFit(data = data, coordx = coordx, coordy = coordy, coordz=coordz, coordt = coordt, coordx_dyn = coordx_dyn,
                      copula = copula, corrmodel = corrmodel, distance = distance, fixed = fixed, anisopars = anisopars,
                      est.aniso = est.aniso, grid = grid, likelihood = likelihood, lower = lower, neighb = neighb[M],
@@ -136,7 +137,8 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
       progressr::handlers("txtprogressbar")
       pb <- progressr::progressor(along = 1:(K*P))
       results <- foreach::foreach(L = 1:P, .combine = rbind) %:%
-        foreach::foreach(M = 1:K, .combine = rbind, .options.future = list(seed = TRUE)) %dofuture% {
+        foreach::foreach(M = 1:K, .combine = rbind, .options.future = list(seed = TRUE,stdout = NA,  
+                        conditions = character(0))) %dofuture% {
           F = (L - 1) * K + M
           pb(sprintf("k=%g", F))
           aa = GeoFit(data = data, coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt, coordx_dyn = coordx_dyn, copula = copula, corrmodel = corrmodel, distance = distance,
@@ -171,6 +173,59 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     best_T = as.numeric(bestKT[2])
   }
 
-  a = list(best_neighb = bestK, best_maxtime = best_T, res = res, estimates = estimates, best_est = estimates[indexmin, ])
+
+# Aggiungere questo codice prima del return finale
+
+sugg_neighb <- NULL
+sugg_time <- NULL
+
+if(space || bivariate) {
+  # Criterio per i vicini spaziali
+  if(bestK <= 20) {
+    sugg_neighb <- bestK
+  } else {
+
+    sorted_neighb <- sort(neighb)
+    median_neighb <- round(quantile(sorted_neighb,0.5))
+    
+    if(median_neighb < bestK) {
+      sugg_neighb <- median_neighb
+    } else {
+      sugg_neighb <- bestK
+    }
+  }
+}
+
+if(spacetime) {
+  # Criterio per i vicini spaziali nel caso spazio-temporale
+  if(bestK <= 20) {
+    sugg_neighb <- bestK
+  } else {
+    sorted_neighb <- sort(neighb)
+    median_neighb <- round(median(quantile(sorted_neighb,0.5)))
+    
+    if(median_neighb < bestK) {
+      sugg_neighb <- median_neighb
+    } else {
+      sugg_neighb <- bestK
+    }
+  }
+  
+  # Criterio per i tempi
+  if(best_T <= 3) {
+    sugg_time <- best_T
+  } else {
+    sorted_maxtime <- sort(maxtime)
+    median_time <- round(quantile(sorted_maxtime,0.5))
+    
+    if(median_time < best_T) {
+      sugg_time <- median_time
+    } else {
+      sugg_time <- best_T
+    }
+  }
+}
+
+  a = list(best_neighb = as.numeric(bestK), best_maxtime = best_T, res = unname(res), estimates = estimates, sugg_neighb = as.numeric(sugg_neighb), sugg_time = sugg_time)
   return(a)
 }

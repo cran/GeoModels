@@ -149,7 +149,7 @@ if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
                     "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))  
         {
           vv<-param$sill;
-          param$sill=1#-param$nugget
+          param$sill=1
         }
         if(model%in% c("SkewGaussian","SkewStudentT","TwoPieceTukeyh","TwoPieceBimodal",
                "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss"))

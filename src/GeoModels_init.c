@@ -91,8 +91,7 @@ extern void Binned_Variogram_22(double *bins, double *coordx, double *coordy,dou
 extern void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, double *res);
 extern void biv_unif_CopulaGauss_call(double *x,double *y,double *rho, double *res);
 extern void corr_kuma_vec(double *rho,double *eta,double *gam,double *res, int *n);
-extern void vpbnorm(int *cormod, double *h, double *u, int *nlags, int *nlagt,
-                    double *nuis, double *par, double *rho, double *thr);
+
 
 /*********************** for correlation computations ***************************************************/
 
@@ -102,7 +101,7 @@ extern void Corr_c(double *cc,double *coordx, double *coordy,double *coordz, dou
 extern void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,double *locy,double *locz,
             int *ncoord, int *nloc,int *model,int *tloc,int *nn,int *n, int *ns,int *NS,int *ntime, double *mean,
             double *nuis, double *par, int *spt, int *biv, 
-                      double *time,int *type, int *which,double *radius);
+                      double *time,int *type, int *which,double *radius,int *cop);
 
 
 extern void Corr_c_tap(double *cc,double *cc_tap,double *coordx, double *coordy, double *coordz, double *coordt, int *cormod, int *cormodtap, int *grid,
@@ -961,7 +960,7 @@ static const R_CMethodDef CEntries[] = {
     {"biv_unif_CopulaClayton_call", (DL_FUNC) &biv_unif_CopulaClayton_call,  5},
     {"biv_unif_CopulaGauss_call",   (DL_FUNC) &biv_unif_CopulaGauss_call,    4},
     {"Corr_c",                      (DL_FUNC) &Corr_c,                      23},
-    {"Corr_c_bin",                  (DL_FUNC) &Corr_c_bin,                  28},
+    {"Corr_c_bin",                  (DL_FUNC) &Corr_c_bin,                  29},
     {"Corr_c_tap",                  (DL_FUNC) &Corr_c_tap,                  27},
     {"corr_kuma_vec",               (DL_FUNC) &corr_kuma_vec,                5},
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
@@ -995,7 +994,6 @@ static const R_CMethodDef CEntries[] = {
     {"for_c",                       (DL_FUNC) &for_c,                     24},
     {"VectCorrelation",             (DL_FUNC) &VectCorrelation,             11},
     {"VectCorrelation_biv",         (DL_FUNC) &VectCorrelation_biv,         12},
-    {"vpbnorm",                     (DL_FUNC) &vpbnorm,                      9},
 
   /*********************** for pairwise composite likelihood ***************************************************/
     {"Comp_Pair_Gauss2mem",         (DL_FUNC) &Comp_Pair_Gauss2mem,         15},

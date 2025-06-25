@@ -1070,8 +1070,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                 zi=data1[i];zj=data2[i];
                 lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
                     corr=CorFct(cormod,lag,0,par,0,0);
-                      //p11=pbnorm(cormod,lag,0,qq,qq,nugget,1,par,0);
-
                       p11=pbnorm22(qq,qq,corr);
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                     bl=biv_two_pieceGaussian((1-nugget)*corr,zi,zj,sill,eta,p11,mean1[i],mean2[i]);

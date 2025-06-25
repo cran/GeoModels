@@ -320,10 +320,6 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
             return(list(error=error))}
         if(!is.null(fixed)){ 
             namfixed <- names(fixed)
-           # print(namfixed)
-           # print(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula))
-           # print(CorrelationPar(CkCorrModel(corrmodel)))
-
      
         if(!all(namfixed %in% c(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula),CorrelationPar(CkCorrModel(corrmodel))))){
                 error <- 'some names of the fixed parameters is/are not correct\n'
@@ -1153,6 +1149,7 @@ if(method1=="greatcircle"){
       if(distance==2) gb@entries=radius*gb@entries             ##GC
       if(distance==1) gb@entries=2*radius*sin(0.5*gb@entries)  ##CH
       }
+
 if(method1=="euclidean")
       gb=spam::nearest.dist(x=coords,method = method1,
                          delta = maxdist, upper =NULL,miles=FALSE, R=1)
@@ -1177,8 +1174,6 @@ if(method1=="euclidean")
 ####################################
 ### END Includes internal functions
 ####################################
-
-
 
     # Set the correlation and  if the correlation is space-time(spacetime=T and bivariate=F) or bivariate (F o T)  or univariate (case spacetime=F and bivariate=F)p
     corrmodel<-CkCorrModel(corrmodel)
@@ -1286,13 +1281,14 @@ if(method1=="euclidean")
     distance<-CheckDistance(distance)
     ### END settings the data structure
     # START code for the simulation procedure
+
+
+##################################################################################################################
     if(fcall=="Fitting"){
         ### Parameters' settings:
         nuisance=nuisance1=nuisance2=NULL
         likelihood <- CkLikelihood(likelihood)
         type <- CkType(type)
- 
-     #if((!bivariate&&num_betas==1)||(bivariate&&num_betas==c(1,1)))
      if((!bivariate&&num_betas==1)||(bivariate&all(num_betas==c(1,1))))
      {
           if(model %in% c(1,10,12,18,9,20,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50))   ### continous model 
@@ -1350,10 +1346,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 }
 
 
-
-
-
-#######################    
  if((!bivariate&&num_betas>1)||(bivariate&&num_betas[1]>1&&num_betas[2]>1) )
  {
 
@@ -1543,11 +1535,12 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 
                                              
     }
-    # END code for the fitting procedure
+# END code for the fitting procedure
     
 ##################################################################################################################
 # START code for the simulation procedure
     if(fcall=="Simulation"){
+
         neighb=NULL;likelihood=2
         namesnuis <- sort(unique(c(namesnuis,NuisParam2("Gaussian",bivariate,num_betas,copula))))
         param <- unlist(param)
@@ -1555,8 +1548,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         namesparam <- names(param)
 
         if(!bivariate) if(any(model!=c(43,45,53,56,57,58)))  namessim <- c("mean","sill","nugget","scale",namescorr[!namescorr=="scale"])
-       
-       # if(any(model==c(43,45)))  namessim <- c("mean","sill","nugget1","nugget2","scale",namescorr[!namescorr=="scale"])
        if(bivariate)  namessim <- c("mean_1","mean_2","scale",namescorr[!namescorr=="scale"])  
 
         if(spacetime) numtime <- ltimes
@@ -1564,7 +1555,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         if(bivariate) numtime <- 2
 
         if((typereal=="Tapering"&&type=="Tapering")||(typereal=="Tapering1"&&type=="Tapering1")||(typereal=="Tapering2"&&type=="Tapering2")){
-                tapering<-1
+                 tapering<-1
                  nt=numcoord*numtime
                if(!space){  
                 idx<-integer(nt^2)
@@ -1582,10 +1573,10 @@ numpairs <- integer(1); srange <- double(1); trange <- double(1)
 
 if(typereal=="Independence"){ maxdist=NULL;maxtime=NULL;K=neighb}
     
+  
 #################
 distC=FALSE
-if(!tapering)
- { if(is.null(neighb)&is.numeric(maxdist)) distC=TRUE  }### just for maxdist parameter
+if(!tapering) { if(is.null(neighb)&is.numeric(maxdist)) distC=TRUE  }### just for maxdist parameter
 ################
   
     if(is.null(maxdist)) srange<-c(srange,double(1)) else {srange<-c(srange,as.double(maxdist))}                # cutoff<-TRUE
@@ -1607,8 +1598,6 @@ if(!tapering)
                     else         colidx=rowidx=integer(nn*(nn-1)/2)}
            
     }
-    
-    
     if(bivariate) {
     if(!srange[1]&&!srange[2])  srange=c(srange,0,0)
     if(is.na(srange[3])) srange[3]=srange[2];
@@ -1690,8 +1679,7 @@ if(fcall=="Fitting"&mem==TRUE&(!space)&!tapering)   {vv=length(NS); numcoord=NS[
 #             "r", "r", "r"),
 #             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
   
-
-  if(is.null(coordz)) coordz=double(numcoordx*numtime) ## is it necessary?
+if(is.null(coordz)) coordz=double(numcoordx*numtime) ## is it necessary?
 
  
 

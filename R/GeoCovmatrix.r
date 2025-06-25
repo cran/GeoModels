@@ -3,52 +3,6 @@
 ### File name: GeoCovmatrix.r
 ####################################################
 
-
-### decomposition of a square  matrix
-MatDecomp<-function(mtx,method)    {
-        if(method=="cholesky")  {
-           # mat.decomp <- try(chol(mtx), silent=TRUE)
-            mat.decomp <- try(FastGP::rcppeigen_get_chol(mtx))
-            if (inherits(mat.decomp , "try-error")) return (FALSE)
-        }
-        if(method=="svd")      {
-            mat.decomp <- svd(mtx)
-            cov.logdeth <- try(sum(log(sqrt(mat.decomp$d))), silent=TRUE)
-            if (inherits(cov.logdeth, "try-error"))  return (FALSE)
-        }
-        return(mat.decomp)
-    }
-### square root of a square matrix
-MatSqrt<-function(mat.decomp,method)    {
-        if(method=="cholesky")  varcov.sqrt <- mat.decomp
-        if(method=="svd")       varcov.sqrt <- t(mat.decomp$v %*% sqrt(diag(mat.decomp$d)))  #sqrt(diag(mat.decomp$d))%*%t(mat.decomp$u)
-        return(varcov.sqrt)
-    }
-### inverse a square matrix given a decomposition
-#MatInv<-function(mat.decomp,method)    {
-#        if(method=="cholesky")  varcov.inv <- chol2inv(mat.decomp)
-#        if(method=="svd")
-#        {
-#              tol = sqrt(.Machine$double.eps)
-#              e <- mat.decomp$d;e[e > tol] <- 1/e[e > tol]
-#              varcov.inv<-mat.decomp$v %*% diag(e,nrow=length(e)) %*% t(mat.decomp$u)
-#        }
-#        return(varcov.inv)
-#    }
-### inverse a square matrix given a decomposition
-MatInv<-function(mtx)    {
-     varcov.inv <- try(FastGP::rcppeigen_invert_matrix(mtx))
-            if (inherits(varcov.inv , "try-error")) return (FALSE)
-        return(varcov.inv)
-    }
-### determinant a square matrix given a decomposition
-MatLogDet<-function(mat.decomp,method)    {
-        if(method=="cholesky")  det.mat <- 2*sum(log(diag(mat.decomp)))
-        if(method=="svd")       det.mat <- sum(log(mat.decomp$d))
-        return(det.mat)
-    }
-
-
 ######################################################################################################
 ######################################################################################################
 ######################################################################################################
@@ -66,7 +20,6 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NU
 
 
 
-
     Cmatrix <- function(bivariate, coordx, coordy,coordz, coordt,corrmodel, dime, n, ns, NS, nuisance, numpairs,
                            numpairstot, model, paramcorr, setup, radius, spacetime, spacetime_dyn,type,copula,ML,other_nuis)
     {
@@ -77,23 +30,7 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NU
 if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
 {
 
-
-
-
-#print(coordx)
-#print(coordy)
-#print(coordz)
-#print(numpairstot)
-#print(corrmodel)
-#print(nuisance)
-#print(paramcorr)
-#print(radius)
-#print(ns)
-#print(NS)
   if(type=="Standard") {
-      #fname <-'CorrelationMat2'
-      #if(spacetime) fname <- 'CorrelationMat_st_dyn2'
-      #  if(bivariate) {if(model==1) fname <- 'CorrelationMat_biv_dyn2'}
     if(spacetime) 
        cr=dotCall64::.C64('CorrelationMat_st_dyn2',SIGNATURE = c(rep("double",5),"integer","double","double","double","integer","integer"),
             corr=dotCall64::vector_dc("double",numpairstot),coordx,coordy,coordz,coordt,
@@ -120,10 +57,6 @@ if(type=="Tapering")  {
 
         if(spacetime) fname <- 'CorrelationMat_st_tap'
        if(bivariate) fname <- 'CorrelationMat_biv_tap'
-       #corr=double(numpairs)
-        #cr=.C(fname,  corr=corr, as.double(coordx),as.double(coordy),as.double(coordt),
-        #  as.integer(corrmodel), as.double(nuisance), as.double(paramcorr),as.double(radius),as.integer(ns),
-        #   as.integer(NS),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
 #############
 cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","double","integer","double","double","double","integer","integer"),
      corr=dotCall64::vector_dc("double",numpairs), coordx,coordy,coordz,coordt,corrmodel,nuisance, paramcorr,radius,ns,NS,
@@ -135,6 +68,7 @@ cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","doub
       }
     }  
     
+
 ###################################################################################
 ###################################################################################
 
@@ -260,85 +194,21 @@ if(bivariate){}
 }
 ###############################################################
 
-
-
-
-###############################################################
-###############################################################
 if (model == 20) {  ## SAS
-  if (!bivariate) {
-    # Estrazione parametri una volta sola
-    nugget <- as.numeric(nuisance['nugget'])
-    d <- as.numeric(nuisance['tail'])
-    e <- as.numeric(nuisance['skew'])
-    sill <- as.numeric(nuisance['sill'])
-    corr <- cr$corr * (1 - nugget)
-    # Calcolo mm e vv con costanti precalcolate
-    sqrt_8pi <- sqrt(8 * pi)
-    sqrt_32pi <- sqrt(32 * pi)
-    besselK_1 <- besselK(0.25, (d + 1)/(2*d))
-    besselK_2 <- besselK(0.25, (1 - d)/(2*d))
-    besselK_3 <- besselK(0.25, (d + 2)/(2*d))
-    besselK_4 <- besselK(0.25, (2 - d)/(2*d))
-    sinh_e_d <- sinh(e/d);cosh_2e_d <- cosh(2*e/d);exp_0.25 <- exp(0.25)
-    mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
-    vv <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
-    # Funzione integranda ottimizzata
-    integrand <- function(z, alpha, kappa, j, r) {
-      z_sq <- z^2
-      z_pow <- if(j - 2*r == 0) 1 else z^(j - 2*r)
-      aa <- z + sqrt(z_sq + 1)
-      aa_pow1 <- aa^(1/kappa)
-      aa_pow2 <- aa^(-1/kappa)
-      exp(-z_sq/2) * z_pow * (exp(alpha/kappa) * aa_pow1 - exp(-alpha/kappa) * aa_pow2)
-    }
-    # II funzione con memorization per evitare ricalcoli
-    II_cache <- new.env(hash = TRUE)
-    II <- function(alpha, kappa, j, r) {
-      key <- paste(alpha, kappa, j, r, sep = "_")
-      if (exists(key, envir = II_cache)) {
-        return(get(key, envir = II_cache))
-      }
-      val <- integrate(integrand, lower = -Inf, upper = Inf, 
-                       alpha = alpha, kappa = kappa, j = j, r = r)$value
-      assign(key, val, envir = II_cache)
-      val
-    }
-    # coeff_j ottimizzata con preallocazione e calcolo gamma efficiente
-    coeff_j <- function(alpha, kappa, j) {
-      max_r <- floor(j/2)
-      if (max_r < 0) return(0)
-      rr <- 0:max_r
-      II_vals <- numeric(length(rr))
-      terms <- numeric(length(rr))
-      for (i in seq_along(rr)) {
-        II_vals[i] <- II(alpha, kappa, j, rr[i])
-        terms[i] <- II_vals[i] * (-1)^rr[i] / 
-          (2^(rr[i] + 1) * gamma(rr[i] + 1) * gamma(j - 2*rr[i] + 1))
-      }
-      gamma(j + 1) * sum(terms) / sqrt(2 * pi)
-    }
-    # Pre-calcolo dei coefficienti per j=1:5
-    j_vec <- 1:5
-    coeffs <- sapply(j_vec, function(j) coeff_j(e, d, j))
-    # Funzione principale corr_sas vettorizzata
-    corrsas <- function(rho) {
-      sum(coeffs^2 * rho^j_vec / gamma(j_vec + 1)) / vv
-    }
-    # Applicazione vettorizzata
-    corr <- if (length(corr) > 1) {
-      sapply(corr, corrsas)
-    } else {
-      corrsas(corr)
-    }
-    
-    vv <- sill * vv
-  }
-  
-  if (bivariate) {
-    # TODO: implementare la parte bivariata se necessario
-  }
+  # Estrazione parametri
+  nugget <- as.numeric(nuisance['nugget'])
+  d <- as.numeric(nuisance['tail'])     # deve essere > 0
+  e <- as.numeric(nuisance['skew'])     # può essere qualsiasi valore
+  sill <- as.numeric(nuisance['sill'])
+  mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
+  vs=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
+
+  corr_base <- cr$corr * (1 - nugget)
+  corr=corrsas(corr_base, e, d)        #external function for sas
+  vv <- sill * vs
 }
+
+
 
 ###############################################################
  if(model==39)   ##  two piece bimodal case
@@ -616,7 +486,6 @@ if(model==26)   ##  weibull case
          corr=cr$corr*(1-as.numeric(nuisance['nugget']))
          sh=as.numeric(nuisance['shape'])
          vv=exp(mu)^2 * (gamma(1+2/sh)/gamma(1+1/sh)^2-1)
-         # weibull correlations
          bcorr=    gamma(1+1/sh)^2/(gamma(1+2/sh)-gamma(1+1/sh)^2)
          corr=bcorr*((1-corr^2)^(1+2/sh)*Re(hypergeo::hypergeo(1+1/sh,1+1/sh ,1 ,corr^2))-1)
         }
@@ -640,7 +509,7 @@ if(model==22)  {  ## Log Gaussian
       corr=cr$corr*(1-as.numeric(nuisance['nugget']))
       vvar=as.numeric(nuisance['sill'])
       corr=(exp(vvar*corr)-1)/(exp(vvar)-1)
-            vv=(exp(mu))^2*(exp(vvar)-1) #/(exp(vvar*0.5))^2
+            vv=(exp(mu))^2*(exp(vvar)-1) 
              }
     if(bivariate){}
   }
@@ -750,7 +619,7 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
                             vv=n*(1-MM)*(1-p)*(1+n*p*(1-MM)) /MM^2
                             diag(varcov)=vv }
 }
-#if(bivariate) {  fname <- "CorrelationMat_biv_dyn_dis2"}
+
 }
 ###############################################################
 ################################ end discrete #models #########
@@ -758,11 +627,9 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
 return(varcov)
 }
 
-
-  #############################################################################################
-  #################### end internal function ##################################################
-  #############################################################################################
-
+#############################################################################################
+#################### end internal function ##################################################
+#############################################################################################
 
 
 ##############################################################################
@@ -873,8 +740,20 @@ if(sparse) {
     }
       if(space){  ### spatial Gen Wend (reparametrized)
         maxdist=param$scale
-        if(covmod==6)  maxdist=as.numeric(param$scale*exp((lgamma(2*param$smooth+1/param$power2+1)-lgamma(1/param$power2))/ (1+2*param$smooth) ))
-        if(covmod==7)  maxdist=as.numeric(param$scale*exp((lgamma(2*param$smooth+param$power2+1)-lgamma(param$power2))/ (1+2*param$smooth) ))
+        if(covmod==6)   maxdist=as.numeric(param$scale*exp((lgamma(2*param$smooth+1/param$power2+1)-lgamma(1/param$power2))/ (1+2*param$smooth) ))
+        if(covmod==7)   maxdist=as.numeric(param$scale*exp((lgamma(2*param$smooth+param$power2+1)-lgamma(param$power2))/ (1+2*param$smooth) ))
+        if(covmod==23)
+              {
+              log_num <- log(2) * (2 * param$smooth + 1) + lgamma((1/param$power2 + 1) / 2 + param$smooth) + lgamma((1/param$power2 + 2 + 1) / 2 + 2 * param$smooth)
+              log_den <- lgamma(1/param$power2 / 2) +lgamma((1/param$power2 + 2) / 2 + param$smooth)
+              maxdist <- param$scale*exp(log_num - log_den)^(1/(1+2*param$smooth))
+              }
+        
+        if(covmod==30)    {
+              log_num <- log(2) * (2 * param$smooth + 1) + lgamma((param$power2 + 1) / 2 + param$smooth) + lgamma((param$power2 + 2 + 1) / 2 + 2 * param$smooth)
+              log_den <- lgamma(param$power2 / 2) +lgamma((param$power2 + 2) / 2 + param$smooth)
+              maxdist <- param$scale*exp(log_num - log_den)^(1/(1+2*param$smooth))
+              }
       }
   }
   taper=corrmodel
@@ -944,7 +823,6 @@ if(is.null(coordx_dyn)){
     setup<-initparam$setup
     if(initparam$type=="Tapering")
     {
-    
        corr <- double(initparam$numpairs)
        if(ncol(cc)==2)  ccz=corr
        if(ncol(cc)==3)  ccz=cc[,3]
@@ -1017,13 +895,20 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
 }
 
 
-
-
 ######  calling main correlation functions
+if(is.null(copula)) {
     covmatrix<- Cmatrix(initparam$bivariate,cc[,1],cc[,2],cc[,3],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
                         initparam$NS, initparam$param[initparam$namesnuis],
                         initparam$numpairs,numpairstot,initparam$model,
                         initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
+                    }
+else {
+ if(copula=="Gaussian") 
+    covmatrix<- Cmatrix_copula(initparam$bivariate,cc[,1],cc[,2],cc[,3],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
+                        initparam$NS, initparam$param[initparam$namesnuis],
+                        initparam$numpairs,numpairstot,initparam$model,
+                        initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
+                    }
 
 
     if(type=="Tapering") sparse=TRUE

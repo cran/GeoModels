@@ -539,8 +539,8 @@ colnames(CompLikelihood$hessian)=namesparam
 
 
 ####################################
-if( (CompLikelihood$convergence!='Successful')||CompLikelihood$value==-1e+15)  print("Optimization failed: try with other starting values ")
-       if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
+#if( (CompLikelihood$convergence!='Successful')||CompLikelihood$value==-1e+15)  print("Optimization failed: try with other starting values ")
+if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
 if(!is.null(GPU)) gc()
 return(CompLikelihood)
   }

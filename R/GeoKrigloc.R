@@ -129,8 +129,8 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
       xx <- foreach::foreach(
         i = seq_len(Nloc),
         .combine = rbind,
-        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"))
-      ) %dofuture% {
+        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"),stdout = NA,  
+                        conditions = character(0))) %dofuture% {
         pb(sprintf("i=%d", i))
         if (!is.null(M)) param$mean <- neigh$M[[i]]
         pr <- GeoKrig(
@@ -194,8 +194,8 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
       xx <- foreach::foreach(
         k = seq_len(Nloc*Tloc),
         .combine = rbind,
-        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"))
-      ) %dofuture% {
+        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"),stdout = NA,  
+                        conditions = character(0))) %dofuture% {
         pb(sprintf("k=%d", k))
         if(!is.null(M)) param$mean=neigh$M[[k]]
         pr = GeoKrig(data=neigh$data[[k]], coordx=neigh$coordx[[k]], coordt=neigh$coordt[[k]], loc=loc[ ((k-1) %% Nloc) + 1,], time=time[ ((k-1) %/% Nloc) + 1],
@@ -255,7 +255,8 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
       xx <- foreach::foreach(
         k = seq_len(Nloc*Tloc),
         .combine = rbind,
-        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"))
+        .options.future = list(seed = TRUE, globals = structure(TRUE, add = "param"),stdout = NA,  
+                        conditions = character(0))
       ) %dofuture% {
         pb(sprintf("k=%d", k))
         if(!is.null(M)) param$mean=neigh$M[[k]]

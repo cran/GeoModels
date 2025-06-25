@@ -12,13 +12,38 @@ GeoKrig= function(estobj=NULL,data, coordx, coordy=NULL,coordz=NULL, coordt=NULL
 ##################################################################################################################
 ##################################################################################################################
 ##################################################################################################################
-getInv <- function(covmatrix, b, mse = TRUE) {
+#getInv <- function(covmatrix, b, mse = TRUE) {
+#  if (!covmatrix$sparse) {
+#    U <- MatDecomp(covmatrix$covmatrix, "cholesky")
+#    if (is.logical(U)) stop("Covariance matrix is not positive definite")
+#    vec <- forwardsolve(U, b)
+#    Invc <- forwardsolve(U, vec, transpose = TRUE)
+#    mse_val <- if (mse) crossprod(vec) else NULL
+#  } else {
+#    cc <- if (spam::is.spam(covmatrix$covmatrix)) covmatrix$covmatrix else spam::as.spam(covmatrix$covmatrix)
+#    U <- try(spam::chol.spam(cc), silent = TRUE)
+#    if (inherits(U, "try-error")) stop("Covariance matrix is not positive definite")
+#    vec <- spam::forwardsolve(U, b)
+#    Invc <- spam::backsolve(U, vec)
+#    mse_val <- if (mse) spam::crossprod.spam(vec) else NULL
+#  }
+#  list(a = Invc, b = mse_val)
+#}
+
+
+getInv<- function(covmatrix, b, mse = TRUE) {
   if (!covmatrix$sparse) {
     U <- MatDecomp(covmatrix$covmatrix, "cholesky")
     if (is.logical(U)) stop("Covariance matrix is not positive definite")
     vec <- forwardsolve(U, b)
     Invc <- forwardsolve(U, vec, transpose = TRUE)
-    mse_val <- if (mse) crossprod(vec) else NULL
+    mse_val <- if (mse) {
+      if (is.vector(vec) || (is.matrix(vec) && ncol(vec) == 1)) {
+        sum(vec^2)  
+      } else {
+        crossprod(vec) 
+      }
+    } else NULL
   } else {
     cc <- if (spam::is.spam(covmatrix$covmatrix)) covmatrix$covmatrix else spam::as.spam(covmatrix$covmatrix)
     U <- try(spam::chol.spam(cc), silent = TRUE)
@@ -29,6 +54,8 @@ getInv <- function(covmatrix, b, mse = TRUE) {
   }
   list(a = Invc, b = mse_val)
 }
+
+
 
 ######################################
 ########## START #####################
@@ -378,29 +405,46 @@ if(bivariate){  corri=cc$corri  }  #  adding models.....
 
 else {  ## for each model..
         rho=cc$corri; cc=(1-as.numeric(covmatrix$param["nugget"]))*rho
-       ##################################################
-        if(covmatrix$model==1)   {  vv=as.numeric(covmatrix$param['sill']); corri=cc   } #Gaussian
- ############################################################
-        if(covmatrix$model==10) {    #skew gaussian
-                        corr2=rho^2; sk=as.numeric(covmatrix$param['skew']);sk2=sk^2; vv=as.numeric(covmatrix$param['sill'])
-                        corri=(2*sk2)*(sqrt(1-corr2) + rho*asin(rho)-1)/(pi*vv+sk2*(pi-2)) + (cc*vv)/(vv+sk2*(1-2/pi))
+
+################ Gaussian ##################################
+if(covmatrix$model==1)   {  vv=as.numeric(covmatrix$param['sill']); 
+          if(is.null(covmatrix$copula)) corri=cc 
+          else {  if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+} 
+#################### skew gaussian #########################################
+if(covmatrix$model==10) {    
+vv=as.numeric(covmatrix$param['sill'])
+if(is.null(covmatrix$copula)){
+    corr2=rho^2; sk=as.numeric(covmatrix$param['skew']);sk2=sk^2; 
+    corri=(2*sk2)*(sqrt(1-corr2) + rho*asin(rho)-1)/(pi*vv+sk2*(pi-2)) + (cc*vv)/(vv+sk2*(1-2/pi))
                         }
-############################################################
-        if(covmatrix$model==12) { # student T
-                        vv=as.numeric(covmatrix$param['sill']); nu=1/as.numeric(covmatrix$param['df'])
-                        if(nu<170) corri=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,rho^2))*cc)/(2*gamma(nu/2)^2)
-                        else       corri=cc
-                        }
-############################################################
-    if(covmatrix$model==34&&type_krig=="Simple") # tukeyh
-                         { vv=as.numeric(covmatrix$param['sill']); h=as.numeric(covmatrix$param['tail'])
-                          if(h>0){ corri=(cc*(1-2*h)^(1.5))/((1-h)^2-(h*cc)^2)^(1.5) }
-                          else{ corri=cc}
-                         }
-############################################################
-        if(covmatrix$model==40&&type_krig=="Simple") # tukeyh2
-                         { vv=as.numeric(covmatrix$param['sill']);
-                           tail1=as.numeric(covmatrix$param['tail1']);tail2=as.numeric(covmatrix$param['tail2'])
+    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+}
+##################### student T ########################################
+if(covmatrix$model==12) 
+{
+vv=as.numeric(covmatrix$param['sill']); nu=1/as.numeric(covmatrix$param['df'])
+if(is.null(covmatrix$copula)){corri=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,rho^2))*cc)/(2*gamma(nu/2)^2)}
+else {
+      if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)
+     }
+}
+########################## tukeyh ###################################
+if(covmatrix$model==34&&type_krig=="Simple") 
+{   vv=as.numeric(covmatrix$param['sill']); h=as.numeric(covmatrix$param['tail'])
+    if(h>0){ 
+            if(is.null(covmatrix$copula)){ corri=(cc*(1-2*h)^(1.5))/((1-h)^2-(h*cc)^2)^(1.5) }
+            else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+            }
+    else{ if(is.null(covmatrix$copula))  corri=cc
+          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+        }
+}
+#########################tukeyh2###################################
+if(covmatrix$model==40&&type_krig=="Simple") # 
+{ vv=as.numeric(covmatrix$param['sill']);
+  tail1=as.numeric(covmatrix$param['tail1']);tail2=as.numeric(covmatrix$param['tail2'])
+  if(is.null(covmatrix$copula)){ 
                            hr=tail1;hl=tail2
                              x1=1-(1-cc^2)*hr; y1=1-(1-cc^2)*hl; x2=(1-hr)^2-(cc*hr)^2;y2=(1-hl)^2-(cc*hl)^2
                              g=1-hl-hr+(1-cc^2)*hl*hr
@@ -412,188 +456,41 @@ else {  ## for each model..
                              mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
                              vv1=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2
                              corri=(p1+p2+2*p3-mm^2)/vv1  # correlation
-
-
-                         }
-############################################################
-if (covmatrix$model == 20 && type_krig == "Simple") { # sas
+                           }
+    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+}
+####################### sas ######################################
+if (covmatrix$model == 20 && type_krig == "Simple") { 
   # Estrazione parametri una volta sola
   vv <- as.numeric(covmatrix$param['sill'])
   tail <- as.numeric(covmatrix$param['tail'])
   skew <- as.numeric(covmatrix$param['skew'])
+    if(is.null(covmatrix$copula)){ 
   d <- tail
   e <- skew
-  
-  # Calcolo mm e vv1 con costanti precalcolate
-  sqrt_8pi <- sqrt(8 * pi)
-  sqrt_32pi <- sqrt(32 * pi)
-  besselK_1 <- besselK(0.25, (d + 1)/(2 * d))
-  besselK_2 <- besselK(0.25, (1 - d)/(2 * d))
-  besselK_3 <- besselK(0.25, (d + 2)/(2 * d))
-  besselK_4 <- besselK(0.25, (2 - d)/(2 * d))
-  
-  sinh_e_d <- sinh(e/d)
-  cosh_2e_d <- cosh(2 * e/d)
-  exp_0.25 <- exp(0.25)
-  
-  mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
-  vv1 <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
-  
-  # Funzione integranda ottimizzata
-  integrand <- function(z, alpha, kappa, j, r) {
-    z_sq <- z^2
-    z_pow <- if(j - 2 * r == 0) 1 else z^(j - 2 * r)
-    aa <- z + sqrt(z_sq + 1)
-    aa_pow1 <- aa^(1/kappa)
-    aa_pow2 <- aa^(-1/kappa)
-    exp(-z_sq/2) * z_pow * (exp(alpha/kappa) * aa_pow1 - exp(-alpha/kappa) * aa_pow2)
-  }
-  
-  # II funzione con memoization
-  II_cache <- new.env(hash = TRUE)
-  II <- function(alpha, kappa, j, r) {
-    key <- paste(alpha, kappa, j, r, sep = "_")
-    if (exists(key, envir = II_cache)) {
-      return(get(key, envir = II_cache))
-    }
-    val <- integrate(integrand, lower = -Inf, upper = Inf, 
-                    alpha = alpha, kappa = kappa, j = j, r = r,
-                    rel.tol = .Machine$double.eps^0.5)$value
-    assign(key, val, envir = II_cache)
-    val
-  }
-  
-  # coeff_j ottimizzata con preallocazione
-  coeff_j <- function(alpha, kappa, j) {
-    max_r <- floor(j/2)
-    if (max_r < 0) return(0)
-    
-    rr <- 0:max_r
-    II_vals <- numeric(length(rr))
-    terms <- numeric(length(rr))
-    
-    for (i in seq_along(rr)) {
-      II_vals[i] <- II(alpha, kappa, j, rr[i])
-      terms[i] <- II_vals[i] * (-1)^rr[i] / 
-        (2^(rr[i] + 1) * gamma(rr[i] + 1) * gamma(j - 2 * rr[i] + 1))
-    }
-    
-    gamma(j + 1) * sum(terms) / sqrt(2 * pi)
-  }
-  
-  # Pre-calcolo dei coefficienti per j=1:4
-  j_vec <- 1:4
-  coeffs <- sapply(j_vec, function(j) coeff_j(e, d, j))
-  
-  # Funzione principale corrsas ottimizzata
-  corrsas <- function(rho) {
-    sum(coeffs^2 * rho^j_vec / gamma(j_vec + 1)) / vv1
-  }
-  
-  # Applicazione vettorizzata ottimizzata
-  corri <- if (length(cc) > 1) {
-    sapply(cc, corrsas)
-  } else {
-    corrsas(cc)
-  }
+  mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
+  vv1=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
+  corri=corrsas(cc,e,d)
 }
-
-#if (covmatrix$model == 20 && type_krig == "Simple") {
-#  vv <- as.numeric(covmatrix$param['sill'])
-#  tail <- as.numeric(covmatrix$param['tail'])
-#  skew <- as.numeric(covmatrix$param['skew'])
-#  d <- tail
-#  e <- skew
-
-  # Funzione fast_besselK ottimizzata: vettorializzata e con cutoff
-#  fast_besselK <- function(x, nu) {
-#    # x può essere vettore, usiamo ifelse per vettorializzare
-#    ifelse(x < 1e-4,
-#           (gamma(nu) * 2^(nu - 1)) / x^nu,
-#           besselK(x, nu))
-#  }
-
-  # Calcolo mm e vv1 con fast_besselK vettorializzato
- # x1 <- c((d + 1) / (2 * d), (1 - d) / (2 * d))
- # mm <- sinh(e / d) * exp(0.25) * sum(fast_besselK(x1, 0.25)) / sqrt(8 * pi)
-#x2 <- c((d + 2) / (2 * d), (2 - d) / (2 * d))
- # vv1 <- cosh(2 * e / d) * exp(0.25) * sum(fast_besselK(x2, 0.25)) / sqrt(32 * pi) - 0.5 - mm^2
-  # Integrale su intervallo finito: vettorializziamo integrand per efficienza
- # integrand <- function(z, alpha, kappa, j, r) {
- #   aa <- z + sqrt(z^2 + 1)
- #   exp(-z^2 / 2) * z^(j - 2 * r) * (exp(alpha / kappa) * aa^(1 / kappa) - exp(-alpha / kappa) * aa^(-1 / kappa))
- # }
-
-  # Memoizzazione per II per evitare ricalcoli identici (opzionale)
- # II <- function(alpha, kappa, j, r) {
- #   integrate(integrand, lower = -5, upper = 5, subdivisions = 200, rel.tol = 1e-4,
- #             alpha = alpha, kappa = kappa, j = j, r = r)$value
- # }
-
-  # coeff_j calcolato con sapply e preallocazione
-  #coeff_j <- function(alpha, kappa, j) {
-  #  rr <- 0:floor(j / 2)
-  #  terms <- sapply(rr, function(r) {
-  #    int_val <- II(alpha, kappa, j, r)
-  #    ((-1)^r) * int_val / (2^(r + 1) * gamma(r + 1) * gamma(j - 2 * r + 1))
-  #  })
-  #  gamma(j + 1) * sum(terms) / sqrt(2 * pi)
-  #}
-
-  # corrsas riscritto con sapply e preallocazione
-  #corrsas <- function(skew, tail, N, vv1, rho) {
-  #  cj_vec <- sapply(1:N, function(j) coeff_j(skew, tail, j))
-  #  total <- sum((cj_vec^2) * (rho^(1:N)) / gamma(2:(N + 1)))
-  #  total / vv1
-  #}
-
-  # CorrSAS vettorializzato con sapply
-  #CorrSAS <- function(skew, tail, N, vv1, rho_vec) {
-  #  sapply(rho_vec, function(rho) corrsas(skew, tail, N, vv1, rho))
-  #}
-
-  # Calcolo finale
- # corri <- CorrSAS(e, d, 4, vv1, cc)
-#}
-
-#############################################
-#if(covmatrix$model==9) # tukeygh
-#                         {
-#                         vv=as.numeric(covmatrix$param['sill']);
-#                         tail=as.numeric(covmatrix$param['tail']);
-#                         skew=as.numeric(covmatrix$param['skew']);
-#                         h=tail;g=skew
-#                         if(!g&&!h) { corri=cc }
-#                         if(g&&!h){
-#                             aa=( -exp(g^2)+exp(g^2*2))*g^(-2)
-#                             corri= (( -exp(g^2)+exp(g^2*(1+cc)))*g^(-2))/aa}
-#                         if(!g&&h){
-#                             aa=(1-2*h)^(-1.5)
-#                             corri = cc/(aa*( (1-h)^2-h^2*cc^2 )^(1.5)) }
-#                        if(h&&g){ # ok
-#                             rho=cc; rho2=cc*cc;
-#                             h2=h*h; g2=g*g; u=1-h;a=1+rho;
-#                             A1=exp(a*g2/(1-h*a));
-#                             A2=2*exp(0.5*g2*  (1-h*(1-rho2))  / (u*u- h2*rho2)  );
-#                             A3=g2*sqrt(u*u- rho2*h2)
-#                             kk=(exp(g2/(2*u))-1)/(g*sqrt(u));
-#                             cova=vv*((A1-A2+1)/A3-kk*kk)
-#                             vari=vv*((exp(2*g2/(1-2*h))-2*exp(g2/(2*(1-2*h)))+1)/(g2*sqrt(1-2*h))-kk*kk)
-#                             corri=cova/vari
-#                             }
-#                          }
-############################################################
-           if(covmatrix$model==18) # skew student T
-                         {
+      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+}
+######################## skew student T#####################################
+if(covmatrix$model==18) 
+{
                   vv=as.numeric(covmatrix$param['sill']); nu=1/as.numeric(covmatrix$param['df']);sk=as.numeric(covmatrix$param['skew'])
+            if(is.null(covmatrix$copula)){ 
                   sk2=sk*sk;l=nu/2; f=(nu-1)/2; w=sqrt(1-sk2);y=rho;
                   CorSkew=(2*sk2/(pi*w*w+sk2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*cc/(w*w+sk2*(1-2/pi)) ;
                   corri=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(l)^2-sk2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,l,y*y))*((1-2*sk2/pi)*CorSkew+2*sk2/pi)-2*sk2/pi);
-                     }
-         if(covmatrix$model==27) {  # two piece StudenT
+              }
+                else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+}
+######################## # two piece StudenT#####################################
+         if(covmatrix$model==27) {  
              nu=as.numeric(1/covmatrix$param['df']);
              sk=as.numeric(covmatrix$param['skew']);
              vv=as.numeric(covmatrix$param['sill'])
+            if(is.null(covmatrix$copula)){ 
              corr2=cc^2;sk2=sk^2
              a1=Re(hypergeo::hypergeo(0.5,0.5,nu/2,corr2))
              a2=cc*asin(cc) + (1-corr2)^(0.5)
@@ -602,10 +499,13 @@ if (covmatrix$model == 20 && type_krig == "Simple") { # sas
              a3=3*sk2 + 2*sk + 4*p11 - 1
              KK=( nu*(nu-2)*gamma((nu-1)/2)^2) / (nu*pi*gamma(nu/2)^2*(3*sk2+1)-4*sk2*nu*(nu-2)*gamma((nu-1)/2)^2 )
              corri= KK*(a1*a2*a3-4*sk2);
+         }
+          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
                       }
-############################################################
-         if(covmatrix$model==38) {  # two piece Tukey h
+########################### two piece Tukey h ##################################
+         if(covmatrix$model==38) {  
                         tail=as.numeric(covmatrix$param['tail']);sk=as.numeric(covmatrix$param['skew']);vv=as.numeric(covmatrix$param['sill'])
+ if(is.null(covmatrix$copula)){ 
                         corr2=cc^2;sk2=sk^2;
                         gg2=(1-(1-corr2)*tail)^2
                         xx=corr2/gg2
@@ -617,6 +517,8 @@ if (covmatrix$model == 20 && type_krig == "Simple") { # sas
                         ff=(1+3*sk2)/(1-2*tail)^(1.5)
                         M=(2*(1-corr2)^(3/2))/(pi*gg2)
                         corri=  (M*A*a3-mm)/( ff- mm)
+                    }
+                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
                       }
 ############################################################
          if(covmatrix$model==39) {  # bimodal
@@ -634,6 +536,7 @@ if (covmatrix$model == 20 && type_krig == "Simple") { # sas
                       }
 ############################################################
         if(covmatrix$model==29) {  # two piece Gaussian
+             if(is.null(covmatrix$copula)){ 
                           corr2=sqrt(1-cc^2)
                           vv=as.numeric(covmatrix$param['sill'])
                           sk=as.numeric(nuisance['skew']); sk2=sk^2
@@ -642,11 +545,16 @@ if (covmatrix$model == 20 && type_krig == "Simple") { # sas
                           KK=3*sk2+2*sk+ 4*p11 - 1
                           corri=(2*((corr2 + cc*asin(cc))*KK)- 8*sk2)/(3*pi*sk2  -  8*sk2   +pi   )
                       }
+                      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                      }
 ############################################################
        if(covmatrix$model==28)   ##  beta case
     {
-         corr2=cc^2
+        
          shape1=as.numeric(covmatrix$param['shape1']);shape2=as.numeric(covmatrix$param['shape2']);
+
+             if(is.null(covmatrix$copula)){ 
+          corr2=cc^2       
          cc1=0.5*(shape1+shape2); vv=shape1*shape2/((cc1+1)*(shape1+shape2)^2)
          idx=which(abs(corr2)>1e-10);corr22=corr2[idx]; nu2=shape1/2;alpha2=shape2/2
          res=0;ss=0;k=0
@@ -660,24 +568,36 @@ if (covmatrix$model == 20 && type_krig == "Simple") { # sas
          cc[idx]=A; corri=shape1*(cc1 + 1 ) * ((1-corr2)^(cc1) *cc -1)/shape2 ## correlation
          corri[-idx]=0
     }
+       else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                      }
 ############################################################    
 ############################################################
 if(covmatrix$model==21) { # gamma
                         sh=as.numeric(covmatrix$param["shape"])
-                        corri=cc^2
-                                }
+                         if(is.null(covmatrix$copula)){  corri=cc^2 }
+                         else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                        }
 if(covmatrix$model==26) {  # weibull
-                        sh=as.numeric(covmatrix$param['shape']); bcorr=    (gamma(1+1/sh))^2/((gamma(1+2/sh))-(gamma(1+1/sh))^2)
+                        sh=as.numeric(covmatrix$param['shape']);
+                        if(is.null(covmatrix$copula)){ 
+                         bcorr=    (gamma(1+1/sh))^2/((gamma(1+2/sh))-(gamma(1+1/sh))^2)
                         corri=bcorr*((1-cc^2)^(1+2/sh)*Re(hypergeo::hypergeo(1+1/sh,1+1/sh ,1 ,cc^2)) -1)
+                         }
+                           else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
          }
 if(covmatrix$model==24) {  # loglogistic
                         sh=as.numeric(covmatrix$param['shape'])
+                             if(is.null(covmatrix$copula)){ 
                         corri=((pi*sin(2*pi/sh))/(2*sh*(sin(pi/sh))^2-pi*sin(2*pi/sh)))*(Re(hypergeo::hypergeo(-1/sh, -1/sh, 1,cc^2))*Re(hypergeo::hypergeo(1/sh, 1/sh, 1,cc^2)) -1)
+                        }
+                        else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
          }
 if(covmatrix$model==22&&type_krig=="Simple") {  # loggauusian
-                        ss=as.numeric(covmatrix$param['sill']); corri= (exp(ss*cc)-1)/(exp(ss)-1)
+                        ss=as.numeric(covmatrix$param['sill']);
+                               if(is.null(covmatrix$copula)){  corri= (exp(ss*cc)-1)/(exp(ss)-1)}
+                                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
          }
-    }
+ }        
 ############################################################
 ############################################################
 if(bivariate)  {          if(which==1)    vvar=covmatrix$param["sill_1"]+covmatrix$param["nugget_1"]
@@ -748,8 +668,6 @@ else    {
           #### additive model on the real line
          if(covmatrix$model %in% c(10,18,29,27,38,39,28, 34,40,20))
                                 { muloc=muloc + M;   mu=mu + M }     
-
-
           ### multiplicative model on the positive real line
           if( (covmatrix$model %in% c(21,26,24,22)))  {emuloc=exp(muloc);emu=exp(mu) }
          }
@@ -757,7 +675,9 @@ else    {
 ##################################################################
 ##########computing kriging weights##################################
 ##################################################################
-CC = matrix(corri*vvar,nrow=dimat,ncol=dimat2)
+if(is.null(covmatrix$copula))                 { CC = matrix(corri*vvar,nrow=dimat,ncol=dimat2)}
+else  {if(covmatrix$copula=="Gaussian")         CC = matrix(corri,nrow=dimat,ncol=dimat2)
+      }
 MM=getInv(covmatrix,CC,mse)  
 krig_weights = MM$a       #compute (\Sigma^-1) %*% cc
 BB=MM$b                   #compute t(cc)%*%(\Sigma^-1) %*% cc
@@ -874,7 +794,6 @@ else  {   ## bivariate  case   cokriging
 ######################################################
 ####formatting data ##################################
 ######################################################
-
 cvv=c(vv)
 ##### setting almost zero when zero mse
 if(mse) { if(anyNA(cvv)) 
@@ -924,25 +843,29 @@ if(covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46,47,57))
      if(covmatrix$model==16||covmatrix$model==45) kk=n
 ## ojo que es la covarianza
 if(covmatrix$model %in% c(2,11,14,16,19,30,36,43,44,45,46,47))
-{   
-   
-   ccorr=dotCall64::.C64('Corr_c_bin',
-   SIGNATURE = c("double","double","double","double","double",
-                 "integer","integer", "double","double","double",
-                 "integer","integer","integer", "integer","integer",
-                 "integer","integer","integer","integer", "double", 
-                 "double", "double","integer","integer","double",
-                 "integer","integer","double"),   
-   corri=dotCall64::vector_dc("double",dimat*dimat2),  ccc[,1], ccc[,2], ccc[,3] ,covmatrix$coordt,corrmodel,as.integer(0),
-   locx, locy,locz,covmatrix$numcoord,numloc,covmatrix$model,  tloc,
-     kk,n,covmatrix$ns,NS,covmatrix$numtime, 
-    rep(c(mu),dimat2),  other_nuis, corrparam,covmatrix$spacetime,
-     bivariate, time,distance,as.integer(which-1), covmatrix$radius,
-  INTENT = c("w",rep("r",27)),
-      PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+{ 
+cop=0  
+if(!is.null(covmatrix$copula)){
+  if(covmatrix$copula=="Gaussian") cop=1  
+}
+ ccorr=dotCall64::.C64('Corr_c_bin',SIGNATURE = c(rep("double",5),
+                                    "integer","integer", "double","double","double",
+                                    rep("integer",9), "double", 
+                                    "double", "double","integer","integer","double", "integer","integer","double","integer"),   
+                                    corri=dotCall64::vector_dc("double",dimat*dimat2),  ccc[,1], ccc[,2], ccc[,3] ,covmatrix$coordt,corrmodel,as.integer(0),
+                                    locx, locy,locz,covmatrix$numcoord,numloc,covmatrix$model,  tloc,
+                                    kk,n,covmatrix$ns,NS,covmatrix$numtime, 
+                                    rep(c(mu),dimat2),  other_nuis, corrparam,covmatrix$spacetime,
+                                    bivariate, time,distance,as.integer(which-1), covmatrix$radius,cop,
+                                    INTENT = c("w",rep("r",28)),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
+
+
  }
 
 corri=ccorr$corri
+
+
+
 ##################inverse of cov matrix##############################################
         if(!bivariate) cc = matrix(corri,nrow=dimat,ncol=dimat2)
         else           {}
@@ -956,11 +879,8 @@ corri=ccorr$corri
        if(covmatrix$model==30||covmatrix$model==36){  ### poisson
         p0=exp(mu0); pmu=exp(mu)
             if(!bivariate) { 
-         #   pp = c(p0) + Rfast::Crossprod(datas, krig_weights)
-
             datas=c(dataT)-c(pmu)
             pp = c(p0) + crossprod(datas, krig_weights)
-
              }  ## simple kriging
             else{} #todo
            if(mse)  vvar=p0  ### variance (possibly no stationary)
@@ -969,12 +889,6 @@ corri=ccorr$corri
       if(covmatrix$model==46||covmatrix$model==47){  ### poisson gamma
          p0=exp(mu0); pmu=exp(mu)
          if(!bivariate) { 
-           # pp = c(p0) + krig_weights %*% (c(dataT)-c(pmu)) 
-           # pp = c(p0) + crossprod(c(dataT)-c(pmu), krig_weights)
-
-               #datas=as.matrix(c(dataT)-c(pmu))
-               #pp = c(p0) + Rfast::Crossprod(datas, krig_weights)
-               
                datas=c(dataT)-c(pmu)
                pp = c(p0) + crossprod(datas, krig_weights)
           }  ## simple kriging
@@ -986,17 +900,14 @@ corri=ccorr$corri
         p=pnorm(covmatrix$param['pmu'])
         p0=exp(mu0); pmu=exp(mu)
             if(!bivariate)  { 
-
              datas=c(dataT)-(1-p)*c(pmu)
              pp = (1-p)*c(p0) + crossprod(datas,krig_weights)
-
              }  ## simple kriging
             else{} #todo
            if(mse)  vvar=(1-p)*p0*(1+p*p0)  ### variance (possibly no stationary)
         }
        ##########################################################
        if(covmatrix$model==2||covmatrix$model==11){  ### binomial
-    
         p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate) { 
            #    pp = kk*c(p0) + Rfast::Crossprod(datas,  krig_weights) 
@@ -1042,8 +953,6 @@ corri=ccorr$corri
         if(mse){
                   bb=0
                   vv = diag(sqrt(tcrossprod(vvar))  - BB  + bb)
-                  #   vv = diag(sqrt(Rfast::Tcrossprod(vvar))  - BB  + bb)
-
                 }
         }
 ##############################################################

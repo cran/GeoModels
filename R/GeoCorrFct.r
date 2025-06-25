@@ -290,44 +290,214 @@ vs=sill
 }
 
 ##########################
- if(model=="SinhAsinh") { if(bivariate) {}
-                        else {
 
-                          if(length(t)>1)
-                            correlation=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
-                          else correlation=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(x==0)
 
-                          corr=correlation
-                          d=as.numeric(nuisance['tail']); 
-                          e=as.numeric(nuisance['skew']); 
-                          sill=as.numeric(nuisance['sill'])
-                  
-    mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-    vs=sill*(cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2)
- integrand=function(z,alpha,kappa,j,r)
- { 
-     aa=z+sqrt(z^2+1)
-     bb=exp(-z^2/2)*z^(j-2*r)*(exp(alpha/kappa)*(aa)^(1/kappa) -  exp(-alpha/kappa)*(aa)^(-1/kappa) )
-     return(bb)
- }
- II=function(alpha,kappa,j,r) integrate(integrand, lower = -Inf, upper = Inf,alpha=alpha,kappa=kappa,j=j,r=r)
- v.II<- Vectorize(II,c("r"))
- coeff_j=function(alpha,kappa,j)
- {
- rr=seq(0,floor(j/2),1)
- res= sum((unlist(v.II(alpha,kappa,j,rr)[1,])*(-1)^rr)/(2^(rr+1)*gamma(rr+1)*gamma(j-2*rr+1)))
- res1=gamma(j+1)*res/sqrt(2*pi)
- return(res1)
- }
-coeff_jvec<- Vectorize(coeff_j,c("j"))
-corrsas<-function(skew,tail,N,vv1,rho) {jj=seq(1,N) ; sum(coeff_jvec(skew,tail,jj)^2*rho^(jj)/gamma(jj+1)) /vv1}
-CorrSAS<-Vectorize(corrsas, c("rho"))
-##########
-corr=CorrSAS(e,d,5,vs,corr)
-vs=vs*sill
-cova=corr; 
-                       }
-          }
+if(model == "SinhAsinh") {
+  if(bivariate) {
+    # Implementazione bivariata da definire
+  } else {
+    # Estrazione parametri
+    nugget <- as.numeric(nuisance['nugget'])
+    d <- as.numeric(nuisance['tail'])     # deve essere > 0
+    e <- as.numeric(nuisance['skew'])     # può essere qualsiasi valore
+    sill <- as.numeric(nuisance['sill'])
+    
+    # Applicazione nugget effect
+    if(length(t) > 1) {
+      correlation <- correlation * (1 - nugget) + nugget * I(A[,1] == 0 & A[,2] == 0)
+    } else {
+      correlation <- correlation * (1 - nugget) + nugget * I(x == 0)
+    }
+    corr_base <- correlation
+    
+    # Imposta dinamicamente max_coeff in base a |e| e d
+    max_coeff <- if (abs(e) > 2 || d > 3) 10 else if (abs(e) > 1 || d > 2) 8 else 6
+    j_vec <- 1:max_coeff
+    
+    # Calcolo robusto delle costanti
+    sqrt_8pi <- sqrt(8 * pi)
+    sqrt_32pi <- sqrt(32 * pi)
+    exp_0.25 <- exp(0.25)
+    
+    # Gestione robusta delle funzioni iperboliche per evitare overflow
+    sinh_e_d <- if (abs(e / d) > 20) {
+      sign(e / d) * 0.5 * exp(abs(e / d))
+    } else {
+      sinh(e / d)
+    }
+    
+    cosh_2e_d <- if (abs(2 * e / d) > 20) {
+      0.5 * exp(abs(2 * e / d))
+    } else {
+      cosh(2 * e / d)
+    }
+    
+    # Calcolo robusto delle funzioni di Bessel con gestione errori
+    besselK_1 <- suppressWarnings(besselK(0.25, (d + 1) / (2 * d)))
+    besselK_2 <- suppressWarnings(besselK(0.25, abs(1 - d) / (2 * d)))
+    besselK_3 <- suppressWarnings(besselK(0.25, (d + 2) / (2 * d)))
+    besselK_4 <- suppressWarnings(besselK(0.25, abs(2 - d) / (2 * d)))
+    
+    # Controllo validità dei risultati di Bessel
+    if(any(is.na(c(besselK_1, besselK_2, besselK_3, besselK_4))) || 
+       any(is.infinite(c(besselK_1, besselK_2, besselK_3, besselK_4)))) {
+      warning("Problemi nel calcolo delle funzioni di Bessel, usando approssimazioni")
+      # Fallback con approssimazioni per casi estremi
+      besselK_1 <- ifelse(is.na(besselK_1) || is.infinite(besselK_1), 0, besselK_1)
+      besselK_2 <- ifelse(is.na(besselK_2) || is.infinite(besselK_2), 0, besselK_2)
+      besselK_3 <- ifelse(is.na(besselK_3) || is.infinite(besselK_3), 0, besselK_3)
+      besselK_4 <- ifelse(is.na(besselK_4) || is.infinite(besselK_4), 0, besselK_4)
+    }
+    
+    # Calcolo momento e varianza
+    mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
+    vs <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
+    
+    # Verifica che vs sia positiva
+    if(vs <= 0) {
+      warning("Varianza negativa o nulla, usando valore minimo")
+      vs <- 1e-10
+    }
+    
+    # Funzione integrand ottimizzata
+    integrand <- function(z, alpha, kappa, j, r) {
+      z_sq <- z^2
+      z_pow <- if (j - 2 * r == 0) 1 else z^(j - 2 * r)
+      aa <- z + sqrt(z_sq + 1)
+      
+      # Gestione robusta delle potenze per evitare overflow
+      alpha_kappa <- alpha / kappa
+      pow_kappa <- 1 / kappa
+      
+      aa_pow1 <- if (abs(log(aa) * pow_kappa) > 700) {
+        sign(aa)^pow_kappa * exp(700 * sign(pow_kappa))
+      } else {
+        aa^pow_kappa
+      }
+      
+      aa_pow2 <- if (abs(log(aa) * (-pow_kappa)) > 700) {
+        sign(aa)^(-pow_kappa) * exp(700 * sign(-pow_kappa))
+      } else {
+        aa^(-pow_kappa)
+      }
+      
+      exp_term1 <- if (abs(alpha_kappa) > 700) {
+        sign(alpha_kappa) * exp(700)
+      } else {
+        exp(alpha_kappa)
+      }
+      
+      exp_term2 <- if (abs(-alpha_kappa) > 700) {
+        sign(-alpha_kappa) * exp(700)
+      } else {
+        exp(-alpha_kappa)
+      }
+      
+      return(exp(-z_sq / 2) * z_pow * (exp_term1 * aa_pow1 - exp_term2 * aa_pow2))
+    }
+    
+    # Cache per gli integrali
+    II_cache <- new.env(hash = TRUE)
+    
+    # Funzione II ottimizzata con cache e gestione errori
+    II <- function(alpha, kappa, j, r) {
+      key <- paste(alpha, kappa, j, r, sep = "_")
+      if (exists(key, envir = II_cache)) {
+        return(get(key, envir = II_cache))
+      }
+      
+      result <- tryCatch({
+        integrate(integrand, lower = -Inf, upper = Inf,
+                  alpha = alpha, kappa = kappa, j = j, r = r,
+                  rel.tol = 1e-6, abs.tol = 1e-10)$value
+      }, error = function(err) {
+        warning(paste("Errore integrazione per j =", j, "r =", r, ". Usando range limitato."))
+        tryCatch({
+          integrate(integrand, lower = -10, upper = 10,
+                    alpha = alpha, kappa = kappa, j = j, r = r,
+                    rel.tol = 1e-4, abs.tol = 1e-8)$value
+        }, error = function(err2) {
+          warning(paste("Fallback fallito per j =", j, "r =", r, ". Usando 0."))
+          return(0)
+        })
+      })
+      
+      assign(key, result, envir = II_cache)
+      result
+    }
+    
+    # Funzione coeff_j ottimizzata
+    coeff_j <- function(alpha, kappa, j) {
+      max_r <- floor(j / 2)
+      if (max_r < 0) return(0)
+      
+      rr <- 0:max_r
+      II_vals <- numeric(length(rr))
+      
+      for (i in seq_along(rr)) {
+        II_vals[i] <- II(alpha, kappa, j, rr[i])
+      }
+      
+      # Controllo validità dei risultati
+      if (any(is.na(II_vals)) || any(is.infinite(II_vals))) {
+        warning(paste("Valori non validi nell'integrale per j =", j))
+        II_vals[is.na(II_vals) | is.infinite(II_vals)] <- 0
+      }
+      
+      terms <- II_vals * (-1)^rr / (2^(rr + 1) * gamma(rr + 1) * gamma(j - 2 * rr + 1))
+      res <- gamma(j + 1) * sum(terms) / sqrt(2 * pi)
+      
+      return(res)
+    }
+    
+    # Calcolo coefficienti con controllo validità
+    coeffs <- sapply(j_vec, function(j) coeff_j(e, d, j))
+    
+    # Verifica coefficienti validi
+    if (any(is.na(coeffs)) || any(is.infinite(coeffs))) {
+      warning("Coefficienti non validi rilevati, applicando correzioni")
+      coeffs[is.na(coeffs) | is.infinite(coeffs)] <- 0
+    }
+    
+    # Funzione di correlazione SAS ottimizzata
+    corrsas <- function(rho) {
+      if (abs(rho) < 1e-12) return(1)
+      
+      # Filtra coefficienti significativi
+      non_zero_idx <- which(abs(coeffs) > 1e-12)
+      if (length(non_zero_idx) == 0) return(1)
+      
+      # Controllo convergenza della serie
+      if (abs(rho) >= 1 && any(j_vec[non_zero_idx] > 0)) {
+        warning("Possibile divergenza della serie per |rho| >= 1")
+      }
+      
+      numerator <- sum(coeffs[non_zero_idx]^2 * rho^j_vec[non_zero_idx] / 
+                         gamma(j_vec[non_zero_idx] + 1))
+      
+      result <- numerator / vs
+      
+      # Controllo risultato valido
+      if (is.na(result) || is.infinite(result)) {
+        warning("Risultato non valido nella correlazione, usando fallback")
+        return(1)
+      }
+      
+      return(result)
+    }
+    
+    # Applica la funzione di correlazione
+    corr <- if (length(corr_base) > 1) {
+      sapply(corr_base, corrsas)
+    } else {
+      corrsas(corr_base)
+    }
+    
+    # Scaling finale
+    vs <- vs * sill
+    cova <- corr
+  }
+}
 ##########################################
  if(model=="TwopieceT")        { if(bivariate) {}
                         else {

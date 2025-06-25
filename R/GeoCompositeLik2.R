@@ -143,7 +143,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==43,likelihood==1,type==2)) fname <- 'Comp_Cond_PoisZIP'                                     
     if(all(model==57,likelihood==1,type==2)) fname <- 'Comp_Cond_PoisGammaZIP'                                                                                 
     if(all(model==44,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss_misp_PoisZIP'                                       
-    if(all(model==45,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegGaussZINB'                                       
+    if(all(model==45,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegGaussZINB'  
+    if(all(model==56,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegGaussZINB1'                                       
     if(all(model==24,likelihood==1,type==2)) fname <- 'Comp_Cond_LogLogistic'                                        
     if(all(model==25,likelihood==1,type==2)) fname <- 'Comp_Cond_Logistic'                                       
     if(all(model==41,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss_misp_Tukeygh'                                         
@@ -197,7 +198,8 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==43,likelihood==3,type==2)) fname <- 'Comp_Pair_PoisZIP'                                         
     if(all(model==57,likelihood==3,type==2)) fname <- 'Comp_Pair_PoisGammaZIP'                                         
     if(all(model==44,likelihood==3,type==2)) fname <- 'Comp_Pair_Gauss_misp_PoisZIP'                                        
-    if(all(model==45,likelihood==3,type==2)) fname <- 'Comp_Pair_BinomnegGaussZINB'                                        
+    if(all(model==45,likelihood==3,type==2)) fname <- 'Comp_Pair_BinomnegGaussZINB'  
+    if(all(model==56,likelihood==3,type==2)) fname <- 'Comp_Pair_BinomnegGaussZINB1'                                        
     if(all(model==47,likelihood==3,type==2)) fname <- 'Comp_Pair_Gauss_misp_PoisGamma'
  #############################################################################
     if(sensitivity) hessian=TRUE
@@ -370,7 +372,7 @@ if(!onlyvar){
 
      if(optimizer=='bobyqa')   
   {
-     CompLikelihood <-minqa::bobyqa(par=param, fn=eval(as.name(lname)),lower=lower,upper=upper,  
+     CompLikelihood <-minqa::bobyqa(par=param, fn = get(lname),lower=lower,upper=upper,  
                         control = list( maxfun=100000),
                         colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,namescorr=namescorr, 
                        namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,
