@@ -12,7 +12,7 @@ CompIndLik2(bivariate, coordx, coordy ,coordz,coordt,
 coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
               lower, model, n, namescorr, namesnuis, 
               namesparam,
-              numparam, optimizer, onlyvar, parallel, 
+              numparam, optimizer, onlyvar, 
               param, spacetime, type,
               upper, namesupper, varest, ns, X,
               sensitivity,copula,MM)
@@ -62,9 +62,6 @@ coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
   \item{onlyvar}{Logical; if \code{TRUE}  (and varest is  \code{TRUE}) only
    the variance covariance matrix is computed
   without optimizing. \code{FALSE} is the default.}  
-   \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel 
-   using the maximum number of cores,  when optimizer is 
-          \code{L-BFGS-B}.\code{FALSE} is the default.}  
   \item{param}{A numeric vector of parameters values.}
   \item{spacetime}{Logical; if \code{TRUE} the random field is spatial-temporal otherwise is a spatial field.}
   \item{type}{String; the type of the likelihood objects. If \code{Pairwise} (the

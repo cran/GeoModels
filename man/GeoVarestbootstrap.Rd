@@ -5,7 +5,7 @@
 \description{
   The procedure update a \code{GeoFit} object  computing stderr estimation, confidence intervals
   and p-values  using parametric bootstrap.}
-\usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE, GPU=NULL,local=c(1,1),
+\usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE, 
   optimizer=NULL, lower=NULL, upper=NULL, 
   method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL)}
 \arguments{
@@ -14,9 +14,6 @@
      \item{K}{The number of simulations in the parametric bootstrap.}
        \item{sparse}{Logical; if \code{TRUE} then  cholesky decomposition is performed
   using sparse matrices algorithms (spam packake).}
-       \item{GPU}{Numeric; if \code{NULL} (the default) 
-      no OpenCL computation is performed. The user can choose the device to be used. Use \code{DeviceInfo()} function to see available devices, only double precision devices are allowed} 
-        \item{local}{Numeric; number of local work-items of the OpenCL setup}
         \item{optimizer}{The type of optimization algorithm (see  \code{\link{GeoFit}} for details). If NULL then the optimization algorithm of 
         the object fit is chosen.}
         \item{lower}{An optional named list giving the values  for the lower bound of the space parameter

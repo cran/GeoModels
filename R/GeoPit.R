@@ -13,13 +13,10 @@ if(inherits(object,"GeoKrig")||inherits(object,"GeoKrigloc")) {EST=FALSE;pp=c(un
 
 
 
-#pnorm(param[, "data"], mean = param[, "pred"], sd = param[, 
- #           "se.pred"])
-
 
 if(EST){     ### for estimation 
 dd=object$data
-allmean=pp["mean"] ### modify here for non contant mean }
+allmean=pp["mean"] 
 allsill=pp["sill"]
 }
 else ## for prediction

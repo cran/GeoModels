@@ -4,11 +4,11 @@
 
 
 GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,corrmodel=NULL, distance="Eucl",
-                         fixed=NULL,anisopars=NULL,est.aniso=c(FALSE,FALSE),GPU=NULL, grid=FALSE, likelihood='Marginal', local=c(1,1),
+                         fixed=NULL,anisopars=NULL,est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',
                          lower=NULL,maxdist=Inf,neighb=NULL,
                           maxtime=Inf, memdist=TRUE,method="cholesky", model='Gaussian',n=1, onlyvar=FALSE ,
-                          optimizer='Nelder-Mead', parallel=FALSE, 
-                         radius=6371,  sensitivity=FALSE,sparse=FALSE, start=NULL, taper=NULL, tapsep=NULL, 
+                          optimizer='Nelder-Mead',  
+                         radius=1,  sensitivity=FALSE,sparse=FALSE, start=NULL, taper=NULL, tapsep=NULL, 
                          type='Pairwise', upper=NULL, varest=FALSE, weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
 {
 ###########  first preliminary check  ###############
@@ -277,6 +277,7 @@ if(!is.null(anisopars)) {
 ###################################################################################
 ###################################################################################
 
+
    # Full likelihood:
     if(likelihood=='Full')
           # Fitting by log-likelihood maximization:
@@ -284,7 +285,7 @@ if(!is.null(anisopars)) {
                                unname(initparam$data),initparam$fixed,initparam$flagcorr,
                                initparam$flagnuis,grid,initparam$lower,method,initparam$model,initparam$namescorr,
                                initparam$namesnuis,initparam$namesparam,initparam$numcoord,initparam$numpairs,
-                               initparam$numparamcorr,initparam$numtime,optimizer,onlyvar,FALSE,
+                               initparam$numparamcorr,initparam$numtime,optimizer,onlyvar,
                                initparam$param,initparam$radius,initparam$setup,initparam$spacetime,sparse,varest,taper,initparam$type,
                                initparam$upper,initparam$ns,unname(initparam$X),initparam$neighb,MM,aniso)
 
@@ -295,20 +296,20 @@ if(!is.null(anisopars)) {
 
     if(!memdist)     ## old style
           fitted <- CompLik(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
-                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
-                                   initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
+                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid, #12
+                                   initparam$likelihood, initparam$lower,initparam$model,initparam$n,#17
                                    initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,FALSE,
+                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,
                                    initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,varest,initparam$weighted,initparam$ns,
                                    unname(initparam$X),sensitivity,MM,aniso)
     if(memdist)
           fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
                                    coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
-                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,GPU,grid, #12
-                                   initparam$likelihood,local, initparam$lower,initparam$model,initparam$n,#17
+                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid, #12
+                                   initparam$likelihood, initparam$lower,initparam$model,initparam$n,#17
                                    initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,FALSE,
+                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,
                                    initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,varest,initparam$weighted,initparam$ns,
                                    unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso)
@@ -320,7 +321,7 @@ if(!is.null(anisopars)) {
                                    initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid,
                                     initparam$lower,initparam$model,initparam$n ,
                                      initparam$namescorr,initparam$namesnuis,
-                                   initparam$namesparam,initparam$numparam,optimizer,onlyvar,FALSE, initparam$param,initparam$spacetime,initparam$type,#27
+                                   initparam$namesparam,initparam$numparam,optimizer,onlyvar, initparam$param,initparam$spacetime,initparam$type,#27
                                    initparam$upper,names(upper),varest, initparam$ns, unname(initparam$X),sensitivity,copula,MM)
   
 
@@ -340,16 +341,24 @@ if(!is.null(anisopars)) {
     if(initparam$bivariate) numtime=2
     dimat <- initparam$numcoord#*numtime#
 
-   #if(!is.null(coordx_dyn)){
-   # if(is.null(dim(initparam$X)))  {
-   #           if(initparam$bivariate) initparam$X=as.matrix(rep(1,2*dimat))
-   #           if(initparam$spacetime) initparam$X=as.matrix(rep(1,numtime*dimat))
-   #           if(space)  initparam$X=as.matrix(rep(1,dimat))
-   #          }
-   # }
-   # else{ if(is.null(X)) initparam$X<- lapply(coordx_dyn, function(mat) {matrix(1, nrow = nrow(mat), ncol = 1)})
-   #          else        initparam$X=X 
-    #    }     
+
+
+###### interpretation  spatial scale parameters for f type models... ####  
+#numbermodel <- CkCorrModel(corrmodel)
+#if (CheckSph(numbermodel)) {
+#  if (numbermodel %in% c(17, 18, 20)) {
+#    fitted$par["scale"]<- fitted$par["scale"] * radius
+#  }
+#  if (numbermodel %in% c(56, 58)) {
+#    fitted$par["scale_s"] <- fitted$par["scale_s"] * radius
+#  }
+#  if (numbermodel == 117) {
+#   fitted$par["scale_1"]<- fitted$par["scale_1"] * radius
+#    fitted$par["scale_2"] <- fitted$par["scale_2"]* radius
+#   fitted$par["scale_12"]<-  fitted$par["scale_12"]* radius
+#  }
+#}
+####################################
 
 
      
@@ -443,10 +452,8 @@ if (bivariate && is.null(coordx_dyn)) {initparam$coordx <- initparam$coordx[1:di
                          distance = distance,
                          est.aniso=est.aniso,
                          fixed = ff,
-                         GPU=GPU,
                          grid = grid,
                          iterations = fitted$counts,
-                         local=local,
                          likelihood = likelihood,
                          logCompLik = fitted$value,
                          lower=lower,

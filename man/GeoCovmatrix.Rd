@@ -10,7 +10,7 @@
 \usage{
 GeoCovmatrix(estobj=NULL,coordx, coordy=NULL,coordz=NULL, coordt=NULL,coordx_dyn=NULL, 
             corrmodel,distance="Eucl", grid=FALSE, maxdist=NULL, maxtime=NULL,
-          model="Gaussian", n=1, param, anisopars=NULL, radius=6371, sparse=FALSE,
+          model="Gaussian", n=1, param, anisopars=NULL, radius=1, sparse=FALSE,
           taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
 }
 
@@ -52,7 +52,7 @@ GeoCovmatrix(estobj=NULL,coordx, coordy=NULL,coordz=NULL, coordt=NULL,coordx_dyn
       \item{anisopars}{ A list of two elements "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
   \item{radius}{Numeric; a value indicating  the radius of the sphere 
      when using covariance models valid using the great circle distance. 
-     Default value is the radius of the earth in Km (i.e. 6371)} 
+     Default value is 1} 
   \item{sparse}{Logical; if \code{TRUE} the function return an object of class spam.
   This option  should be used when  a parametric compactly supporte covariance is 
   used. Default is FALSE. }

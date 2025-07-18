@@ -514,6 +514,9 @@ double biv_Mis_PoissonZIP(double corr,double data_i, double data_j,
                              double mean_i, double mean_j,double mup,double nugget1,double nugget2);
 double triv_skew(double x,double c_0i,double c_0j, double rho,double data_i,double data_j,double *nuis);
 
+double compute_biv_norm_density(double d1, double d2, double mui, double muj, 
+                                             double vvi, double vvj, double corr1);
+
 double LambertW(double z);
 double inverse_lamb(double x,double tail);
 double dbnorm(double x_i,double x_j,double mean_i,double mean_j,double sill,double corr);
@@ -599,170 +602,15 @@ double CorFunWendhole(double lag,double scale);
 double CorFunWend0_tap(double lag,double scale,double smoo);
 double CorFunWend1_tap(double lag,double scale,double smoo);
 double CorFunWend2_tap(double lag,double scale,double smoo);
-
-/****** derivative **************/
-double DCauchyPow(double power2, double scale, double rho);
-double DCauchySc(double lag, double power2, double scale, double rho);
-double DExpoSc(double lag, double scale, double rho);
-double DGaussSc(double lag, double scale, double rho);
-double DGenCauP1(double lag, double power1, double power2, double scale, double rho);
-double DGenCauP2(double lag, double power1, double scale, double rho);
-double DGenCauSc(double lag, double power1, double power2, double scale, double rho);
-double DSferiSc(double lag, double scale);
-double DStabPow(double lag, double power, double scale, double rho);
-double DStabSc(double lag, double power, double scale, double rho);
-double DWaveSc(double lag, double scale);
-double DWhMatSc(double eps, double lag, double scale, double smooth);
-double DWhMatSm(double eps, double lag, double scale, double smooth);
-double Dwen1Sc(double lag, double scale);
-double DWen1Sc(double lag, double scale, double smooth);
-double DWen1Sm(double lag, double scale, double smooth);
-double DGneiting_sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_sep(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_32sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_32sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_32pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_32pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_32sep(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC_sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC_sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC_pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC_pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC_sep(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC2_sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC2_sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC2_pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC2_pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DGneiting_GC2_sep(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DIaco_sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double power2);
-double DIaco_sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double power2);
-double DIaco_pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double power2);
-double DIaco_pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double power2);
-double DIaco_pw2(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double power2);
-double DPorcu_sc_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DPorcu_sc_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DPorcu_pw_s(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DPorcu_pw_t(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DPorcu_sep(double h,double u, double power_s,double power_t,double scale_s,double scale_t,double sep);
-double DStein_sc_s(double h,double u, double power_t,double scale_s,double scale_t,double smooth);
-double DStein_sc_t(double h,double u, double power_t,double scale_s,double scale_t,double smooth);
-double DStein_pw_s(double h,double u, double power_t,double scale_s,double scale_t,double smooth);
-double DStein_pw_t(double h,double u, double power_t,double scale_s,double scale_t,double smooth);
-double DStein_sm(double h,double u,   double power_t,double scale_s,double scale_t,double smooth);
-double DExp_Cauchy_sc_s(double h,double u,double scale_s,double scale_t,double power2);
-double DExp_Cauchy_sc_t(double h,double u,double scale_s,double scale_t,double power2);
-double DExp_Cauchy_pw2 (double h,double u,double scale_s,double scale_t,double power2);
-double DExp_Exp_sc_s(double h,double u,double scale_s,double scale_t);
-double DExp_Exp_sc_t(double h,double u,double scale_s,double scale_t);
-double DMat_Exp_sc_s(double h,double u,double scale_s,double scale_t,double smooth);
-double DMat_Exp_sc_t(double h,double u,double scale_s,double scale_t,double smooth);
-double DMat_Exp_sm(double h,double u,double eps,double scale_s,double scale_t,double smooth);
-double DMat_Cauchy_sc_s(double h,double u,double power2,double scale_s,double scale_t,double smooth);
-double DMat_Cauchy_sc_t(double h, double u,double power2,double scale_s,double scale_t,double smooth);
-double DMat_Cauchy_pw2(double h,double u,double power2,double scale_s,double scale_t,double smooth);
-double DMat_Cauchy_sm(double h,double u,double eps, double power2,double scale_s,double scale_t,double smooth);
-
-double DExpsep_biv_var11(double h,double var11,double var22,double nug11,double nug22, double scale, double col,int c11,int c22);
-double DExpsep_biv_var22(double h,double var11,double var22,double nug11,double nug22, double scale, double col,int c11,int c22);
-double DExpsep_biv_nug11(double h,double var11,double var22,double nug11,double nug22, double scale, double col,int c11,int c22);
-double DExpsep_biv_nug22(double h,double var11,double var22,double nug11,double nug22, double scale, double col,int c11,int c22);
-double DExpsep_biv_scale(double h,double var11,double var22,double nug11,double nug22, double scale, double col,int c11,int c22);
-double DExpsep_biv_col(double h,double var11,double var22,double nug11,double nug22, double scale, double col ,int c11,int c22);
-double DMat_biv_scale1_contr(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                             double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_scale2_contr(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                             double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double Dmatsep_biv_var11(double h,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col,int c11,int c22);
-double Dmatsep_biv_var2(double h,double var11,double var22,double nug11,double nug22, double scale,double smoo, double col,int c11,int c22);
-double Dmatsep_biv_var22(double h,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col,int c11,int c22);
-double Dmatsep_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale,double smoo, double col,int c11,int c22);
-double Dmatsep_biv_nug11(double h,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col,int c11,int c22);
-double Dmatsep_biv_nug22(double h,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col,int c11,int c22);
-double Dmatsep_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale ,double smoo,double col,int c11,int c22);
-
-double Dmatsep_biv_scale(double h,double eps,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col,int c11,int c22);
-double Dmatsep_biv_smo(double h,double eps,double var11,double var22,double nug11,double nug22, double scale, double smooth,double col,int c11,int c22);
-double Dmatsep_biv_col(double h,double var11,double var22,double nug11,double nug22, double scale,double smooth, double col ,int c11,int c22);
-
-
-double DMat_biv_var1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_var2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_col(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_scale1(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_scale12(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11,double eps, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_scale2(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_smoo1(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_smoo12(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DMat_biv_smoo2(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-
-
-
-/***************************************************/
-/* derivative of LMC  (contr) model */
-/***************************************************/
-
-double DLMC_contr_var1(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_var2(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_nug1(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_nug2(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_col(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_scale11(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-double DLMC_contr_scale22(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22,double col,int c11,int c22);
-
-
-/***************************************************/
-/* derivative of bivariate wendland2 model */
-/***************************************************/
-double DWen1_biv_var1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_var2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_col(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                    double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_scale1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_scale12(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                        double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_scale2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_smoo1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                      double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_smoo12(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-double DWen1_biv_smoo2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                        double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-                      
-
-/***************************************************/
-/* derivative of bivariate separable wendland2 model */
-/***************************************************/
-double DWen1sep_biv_var1(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_var2(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_scale(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_col(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
-double DWen1sep_biv_smoo(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22);
+double Matern_Matern_nosep(double h, double u,
+                           double scale_s, double scale_t,
+                           double smooth_s, double smooth_t,
+                           double sep);
+double GenWend_GenWend_nosep(double h, double u,
+                           double scale_s, double scale_t,
+                            double power_s, double power_t,
+                           double smooth_s, double smooth_t,
+                           double sep);
 
 
 
@@ -937,263 +785,15 @@ void Vari_SubSamp_st2(double *betas,double *coordx, double *coordy, double *coor
                    int *type_lik,double *varimat, double *winc, double *winstp,double *winc_t,double *winstp_t,int *weigthed,double *Z,int *ns,int *NS);
 void cumvec(int *ns,int *res,int len);
 void Rep(double *coordt,int *ns, double *res);
-/*----------------------------------------------------------------
-File name: Godambe.c
-Description: procedures for the computation of the Godambe matrix
-End
- ---------------------------------------------------------------*/
-
-// 5)
-/*----------------------------------------------------------------
-File name: Gradient.c
-Description: procedures for computation of the gredients
-Start
- ---------------------------------------------------------------*/
-
-
-
-
-void Grad_Diff_Bin(double rho,double pij, double p,int *flag, double *gradcor,
-           double *grad, int *npar, double *nuis,  double u, double v);
-
-void Grad_Diff_Gauss(double rho, int *flag, double *gradcor, double *grad,
-             int *npar, double *par, double u, double v);
-
-void Grad_Diff_Vario(double rho, int *flag, double *gradcor, double *grad,
-             int *npar, double *par);
-
-
-void Grad_Pair_Binom(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Binom(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Wrapped(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Cond_Wrapped(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Binomneg(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Binomneg(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Gamma(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Gamma(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Poisson(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Poisson(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc,int *nparcT, int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_LogGauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_LogGauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_LogLogistic(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_LogLogistic(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Logistic(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Logistic(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_StudenT(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_StudenT(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Tukeyh(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Tukeyh(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Weibull(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc, int *nparcT,int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Weibull(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc, int *nparcT,int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Sinh(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Sinh(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Skewgauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Skewgauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_Twopiecegauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Twopiecegauss(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-
-void Grad_Pair_TwopieceT(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_TwopieceT(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,
-  double NN,int *npar,int *nparc,int *nparcT, int nbetas, double *nuis, double *par, double u, double v,
-       double ai, double aj,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Gauss2(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Gauss2(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Beta(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Beta(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Kuma(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Kuma(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Kuma2(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Cond_Kuma2(double rho,int *cormod,int *flag,int *flagcor, double *gradcor, double *grad, double lag, double lagt,double NN,
-       int *npar,int *nparc, int *nparcT,int nbetas,double *nuis, double *par,  double u, double v,double ai,double aj
-       ,double **sX,int l,int m,double *betas);
-
-void Grad_Pair_Gauss(double rho, int *flag,int *flagcor,  double *gradcor, double *grad,
-                     int *npar,int *nparc, int nbetas, double *par, double u, double v, double *Xl,double *Xm);
-
-void Grad_Pair_Gauss_biv(double rhott, double rhotv, double rhovt,double rhovv,int *flag,
-                         double *gradcortt, double *gradcortv, double *gradcorvt, double *gradcorvv,
-                         double *grad,int *npar, double *par, double u, double v);
-
-
-void Grad_Cond_Gauss_biv(double *gradcorttii,double *gradcorvvii,double *gradcorvtii,double *gradcortvii ,
-                        double *gradcorttij ,double *gradcorvvij, double *gradcorvtij,double *gradcortvij,
-                        double **inverse,int *flag,double *grad,int *npar, double *par,double *dat,int N);
-
-
+/*----------------------------------------------------------------*/
 
 double mij(double qij, double w, double pij, double p);
 
 double nij(double qij, double w, double pij, double p);
 
-/*----------------------------------------------------------------
-File name: Gradient.c
-Description: procedures for computation of the gradients
-End
- ---------------------------------------------------------------*/
-
-// 5)
-/*----------------------------------------------------------------
-File name: Likelihood.c
-Description: procedures for computation of the full likelihood
-Start
- ---------------------------------------------------------------*/
-
-// Insert here
-
-/*----------------------------------------------------------------
-File name: Likelihood.c
-Description: procedures for computation of the full likelihood
-End
- ---------------------------------------------------------------*/
+/*----------------------------------------------------------------*/
 
 
-// 6)
-/*----------------------------------------------------------------
-File name: WeightedLeastSquare.c
-Description: procedures for the estimation of the model parameters
-via the weighted least square method.
-Start
- ---------------------------------------------------------------*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*----------------------------------------------------------------
-File name: WeightedLeastSquare.c
-Description: procedures for the estimation of the model parameters
-via the weighted least square method.
-End
- ---------------------------------------------------------------*/
-
-// 7)
 /*----------------------------------------------------------------
 File name: Utility.c
 Description: procedures for the computation of useful quantities.
@@ -1286,12 +886,6 @@ Description: procedures for the computation of useful quantities.
 End
  ---------------------------------------------------------------*/
 
-
-
-
-
-
-
 double log_pochhammer(double a, int n);
 double hypergeometric_1F2(double a, double b, double c, double x, double tol);
 
@@ -1355,14 +949,7 @@ double DWen1_biv_smo12(double h,double var11,double var22,double nug11,double nu
                        double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
 double DWen1_biv_smo2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22);
-
-
-
-
 // ******** END: CorrelationFunction ******
-
-
-
 
 // ******** ST: Distributions ******
 
@@ -1383,8 +970,6 @@ double Phi2( double x, double y, double rho );
 //double igam2(int n,double x);
 
 double igam_fac(double a, double x);
-
-
 double biv_chisqu2(double corr,double zi,double zj, double shape);
 
 
@@ -1393,18 +978,11 @@ double asy_log_besselI(double z,double nu);
 //double corrPGs(double corr,double mean,double a);
 
 double CorrPGns(double corr,double mean_i, double mean_j, double a);
-
-
-
-
 double biv_Norm(double corr,double zi,double zj,double mi,double mj,double vari1,double vari2, double nugget);
 
 
 double p3norm(int *cormod, double h0,double h1,double h2, double u0, double u1,double u2,
               double *nuis, double *par);
-
-
-
 
 double aprox(int k,double a, double b) ;
 double aprox1(double a) ;
@@ -1437,8 +1015,6 @@ double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a);
 
 double int_kuma(double x,double eta, double gam,double k,double m);
 
-
-
 double kumaintegral(double *param);
 
 double mean_kuma(double eta,double gam);
@@ -1449,33 +1025,17 @@ double cdf_kuma(double y,double a, double b);
 
 double pdf_kuma(double y,double a, double b);
 
-
 // ******** END: Distributions ******
 
 
 // ******** ST: TB ******
 
-
-
-
-
-
-
 // ******** END: TB ******
 
 
 // ******** ST: Utility ******
-
-
 double qnorm55(double p, double mu, double sigma, int lower_tail, int log_p);
 
 // ******** END: Utility ******
-
-
-
-
-
-
-
 
 void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius);

@@ -5,7 +5,7 @@
 double CheckCor(int *cormod, double *par)
 {
   double col=0.0, R_power=0.0, R_power1=0.0, R_power2=0.0, R_power_s=0.0, R_power_t=0.0, var11=0.0, var22=0.0;
-  double rho=0.0, sep=0, scale=0.0, smooth=0.0, scale_s=0.0, scale_t=0;
+  double rho=0.0, sep=0, scale=0.0, smooth=0.0, scale_s=0.0, scale_t=0,smooth_s=0.0,smooth_t=0.0;
   double scale11=0.0, scale22=0, scale12=0.0, smoo11=0.0, smoo12=0.0, smoo22=0,
     R_power11=0.0, R_power12=0.0, R_power22=0,nug11=0.0,nug22=0.0;
 
@@ -236,6 +236,26 @@ double CheckCor(int *cormod, double *par)
         smooth=par[6];
    if(scale_s<=0||scale_t<=0 || R_power<(2.5+2*smooth) || R_power_s>2|| R_power_s<0||sep<0 ||sep >1|| R_power_s<(3.5+smooth)||smooth<0)  rho=-2;
     break;
+         case 89:
+        scale_s=par[0];
+        scale_t=par[1];
+        smooth_s=par[2];
+        smooth_t=par[3];
+        sep=par[4];
+   if(scale_s<=0||scale_t<=0 || smooth_s<=0||smooth_t<=0 ||  sep<0 )  rho=-2;
+    break;
+
+         case 85:
+        scale_s=par[0];
+        scale_t=par[1];
+        R_power_s=par[2];
+      R_power_t=par[3];
+        smooth_s=par[4];
+        smooth_t=par[5];
+        sep=par[6];
+   if(scale_s<=0||scale_t<=0 || smooth_s<=0||smooth_t<=0 ||  sep<0 || R_power_s<1.5|| R_power_t<1.5)  rho=-2;
+    break;
+
     case 69:  // separable wendlands
     case 70:
     case 71:
@@ -267,19 +287,7 @@ double CheckCor(int *cormod, double *par)
       scale_t=par[2];
       if(scale_s<=0 || scale_t<=0 || R_power2<=0) rho=-2;
       break;
-    case 84:// Double exp:
-    /*case 88:// Exp-cos:
-      scale_s=par[0];
-      scale_t=par[1];
-      if(scale_s<=0 || scale_t<=0) rho=-2;
-      break;*/
-   /* case 86:
-      scale_s=par[0];
-      scale_t=par[1];
-      smooth_s=par[2];
-      smooth_t=par[3];
-      if(scale_s<=0 || scale_t<=0|| smooth_t<=0|| smooth_t<=0) rho=-2;
-    break;*/
+ 
     case 90:// Matern-Cauchy:
       R_power2=par[0];
       scale_s=par[1];
@@ -857,7 +865,25 @@ case 23: // hyperg correlation  parameter with matern my version
         arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);
         rho=R_pow(arg,R_power)*CorFunW_gen(u,R_power_t,smooth,scale_t*R_pow(arg,sep));
         break;
+   case 89:
+      scale_s=par[0];
+      scale_t=par[1];
+      smooth_s=par[2];
+       smooth_t=par[3];
+       sep=par[4];
+     rho=Matern_Matern_nosep(h,u,scale_s,scale_t,smooth_s,smooth_t,sep);
+       break;
 
+          case 85:
+      scale_s=par[0];
+      scale_t=par[1];
+      R_power_s=par[2];
+      R_power_t=par[3];
+      smooth_s=par[4];
+       smooth_t=par[5];
+       sep=par[6];
+     rho=GenWend_GenWend_nosep(h,u,scale_s,scale_t, R_power_s,R_power_t,smooth_s,smooth_t,sep);
+       break;
 
 
     case 63:  //
@@ -1028,11 +1054,6 @@ case 23: // hyperg correlation  parameter with matern my version
        smooth_t=par[3];
       rho=CorFunWitMat(h, scale_s,smooth_s)*CorFunWitMat(u, scale_t, smooth_t);
       break;
-  /*  case 88://  exp_cos:
-        scale_s=par[0];
-        scale_t=par[1];
-        rho=CorFunStable(h,1,scale_s)*CorFunWave(u,scale_t);
-        break;*/
     case 90:// Matern-Cauchy:
       R_power2=par[0];
       scale_s=par[1];
@@ -1872,7 +1893,7 @@ double CorFunSmoke(double lag, double scale, double smooth)
     double logg3 = lgammafn(2.0 / scale + a);
     double logg4 = lgammafn(smooth);
     double pow_term = R_pow(one_minus_coslag, smooth);
-    double hyperg = hypergeo2(1.0 / scale + a, 1.0 / scale + smooth, 2.0 / scale + a, coslag);
+    double hyperg = hypergeo(1.0 / scale + a, 1.0 / scale + smooth, 2.0 / scale + a, coslag);
     double log_coeff = logg1 + logg2 - logg3 - logg4;
     double rho = exp(log_coeff) * pow_term * hyperg;
     return rho;
@@ -1897,6 +1918,47 @@ double CorFunWitMat(double lag, double scale, double smooth)
 
     return exp(log_num - log_den);
 }
+
+
+
+double Matern_Matern_nosep(double h, double u,
+                           double scale_s, double scale_t,
+                           double smooth_s, double smooth_t,
+                           double sep)
+{
+
+    double C_s = CorFunWitMat(h, scale_s, smooth_s);
+    double C_t = CorFunWitMat(u, scale_t, smooth_t);
+
+    if (sep <= 0.0)            /* caso separabile */
+        return C_s * C_t;
+
+    /* fattore di interazione non-separabile */
+    double denom = 1.0 + sep * h * h * u * u/(1+sep);
+    return C_s * C_t / denom;
+}
+
+
+
+
+double GenWend_GenWend_nosep(double h, double u,
+                           double scale_s, double scale_t,
+                            double power_s, double power_t,
+                           double smooth_s, double smooth_t,
+                           double sep)
+{
+
+    double C_s = CorFunW_gen(h, scale_s, power_s, smooth_s);
+    double C_t = CorFunW_gen(u, scale_t, power_t, smooth_t);
+
+    if (sep <= 0.0)            /* caso separabile */
+        return C_s * C_t;
+
+    /* fattore di interazione non-separabile */
+    double denom = 1.0 + sep * h * h * u * u/(1+sep);
+    return C_s * C_t / denom;
+}
+
 
 
 
@@ -2028,43 +2090,51 @@ double CorFunHyperg(double lag, double R_power, double smooth, double scale)
 /* Optimized Wendland correlation function */
 /* generalized wendland function*/
 
-double CorFunW_gen(double lag,double R_power1,double smooth,double scale)  // mu alpha beta
+
+double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
 {
-    double rho=0.0,x=0.0;
 
-    x=lag/scale;
-    if(x<1e-32) {rho=1; return(rho);}
-     if(x>=1) {rho=1; return 0.0;}
-    if(smooth==0) {
-         if(x<1)    rho=R_pow(1-x,R_power1);//rho=exp(R_power1*log1p(-x));
-         else rho=0;
-         return(rho);
-    }
-    if(smooth==1) {
-         if(x<1) rho=R_pow(1-x,R_power1+1)*(1+x*(R_power1+1));
-         else rho=0;
-         return(rho);
-    }
-    if(smooth==2) {
-         if(x<1) rho=R_pow(1-x,R_power1+2)*(1+x*(R_power1+2)+x*x*(R_power1*R_power1 +4*R_power1 +3 )/3  );
-         else rho=0;
-         return(rho);
-    }
-    if(smooth==3) {
-       if(x<1) rho=R_pow(1-x,R_power1+3)*( 1+R_pow(x,1)*(R_power1+3)+
-                    R_pow(x,2)*(2*R_pow(R_power1,2) +12*R_power1 +15 )/5 +
-                    R_pow(x,3)*(R_pow(R_power1,3)+9*R_pow(R_power1,2)+ 23*R_power1+15)/15);
-         else rho=0;
-         return(rho);
+    double x = lag / scale;
+
+    if (fabs(x) < DBL_EPSILON)
+        return 1.0;
+
+    if (x >= 1.0)
+        return 0.0;
+
+    if (smooth == 0) {
+        return R_pow(1.0 - x, R_power1);
     }
 
-    if(x<=1)
-    {rho=exp((lgammafn(smooth)+lgammafn(2*smooth+R_power1+1))-(lgammafn(2*smooth)+
-            lgammafn(smooth+R_power1+1)))*R_pow(2,-R_power1-1)*R_pow(1-x*x,smooth+R_power1)*hypergeo2(R_power1/2,(R_power1+1)/2,smooth+R_power1+1, 1-x*x);
+    if (smooth == 1) {
+        return R_pow(1.0 - x, R_power1 + 1.0) * (1.0 + x * (R_power1 + 1.0));
     }
-    else rho=0;
-    return(rho);   
+
+    if (smooth == 2) {
+        return R_pow(1.0 - x, R_power1 + 2.0) *
+               (1.0 + x * (R_power1 + 2.0) + 
+               x * x * (R_power1 * R_power1 + 4.0 * R_power1 + 3.0) / 3.0);
+    }
+
+    if (smooth == 3) {
+        double x2 = x * x;
+        double x3 = x2 * x;
+        return R_pow(1.0 - x, R_power1 + 3.0) *
+               (1.0 +
+                x * (R_power1 + 3.0) +
+                x2 * (2.0 * R_power1 * R_power1 + 12.0 * R_power1 + 15.0) / 5.0 +
+                x3 * (R_power1 * R_power1 * R_power1 + 9.0 * R_power1 * R_power1 + 23.0 * R_power1 + 15.0) / 15.0);
+    }
+
+    // General case using hypergeometric function
+    return exp(lgammafn(smooth) + lgammafn(2.0 * smooth + R_power1 + 1.0) -
+               (lgammafn(2.0 * smooth) + lgammafn(smooth + R_power1 + 1.0))) *
+           R_pow(2.0, -R_power1 - 1.0) *
+           R_pow(1.0 - x * x, smooth + R_power1) *
+           hypergeo2(R_power1 / 2.0, (R_power1 + 1.0) / 2.0,
+                     smooth + R_power1 + 1.0, 1.0 - x * x);
 }
+
 
 /* kummer function*/
 double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
@@ -2484,7 +2554,7 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
            muj=exp(mean[j]);
            ai=mui*(1+mui/nuis[1]);
            aj=muj*(1+muj/nuis[1]);
-           rho[h]=sqrt(ai*aj)*corr_pois_gen(corr,mui, muj, nuis[1]); // it's the  covariance
+           rho[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[1]); // it's the  covariance
        }
   if(*model==43||*model==44) // poisson inflado
        {
@@ -2495,8 +2565,31 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
            p1=1-2*p+psj;
           rho[h]=p1*dd +  ai*aj*(p1-R_pow((1-p),2));
        }
-  if(*model==57||*model==58) // poissongamma inflado
+
+
+         if(*model==57) // poissongamma inflado 2 nuggets
        {
+         //  Rprintf("%f %f %f %f  %f \n",nuis[0],nuis[1],nuis[2],nuis[3],nuis[4]);
+           mui=exp(mean[i]);muj=exp(mean[j]);
+           ai=mui*(1+mui/nuis[4]);aj=muj*(1+muj/nuis[4]);
+           dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[1])*corr,mui, muj, nuis[4]); // it's the pem  covariance
+           p=pnorm(nuis[3],0,1,1,0);
+           psj=pbnorm22(nuis[3],nuis[3],(1-nuis[2])*corr);
+           p1=1-2*p+psj;
+           rho[h]=p1*dd +  ai*aj*(p1-R_pow((1-p),2));
+      
+       }
+
+           if(*model==58) // poissongamma inflado 1 nugget
+       {
+       // Rprintf("%f %f %f %f   \n",nuis[0],nuis[1],nuis[2],nuis[3]);
+           mui=exp(mean[i]);muj=exp(mean[j]);
+           ai=mui*(1+mui/nuis[2]);aj=muj*(1+muj/nuis[2]);
+           dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[2]); // it's the pem  covariance
+           p=pnorm(nuis[1],0,1,1,0);
+           psj=pbnorm22(nuis[1],nuis[1],(1-nuis[0])*corr);
+           p1=1-2*p+psj;
+           rho[h]=p1*dd +  ai*aj*(p1-R_pow((1-p),2));
       
        }
             h++;
@@ -2883,6 +2976,18 @@ void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy, double 
       rho[i]=CorFct(cormod,lags[i],0,par,first[i],second[i]);}
   return;
 }
+
+
+
+
+
+
+
+
+
+
+
+
 /************************************************************************************************/
 /************************************************************************************************/
 /************************************************************************************************/
@@ -2936,6 +3041,9 @@ double dis=0.0;
 
 }
 
+
+
+
 ///compute the covariance btwen loc to predict and locaton sites for binomial and geometric RF
 void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,  double *locy, double *locz,int *ncoord, int *nloc,
                 int *model,int *tloc,int *nn,int *n, int *ns,int *NS,int *ntime, double *mean,double *nuis, double *par, int *spt, int *biv, 
@@ -2945,54 +3053,57 @@ void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double
 
     if(!spt[0]&&!biv[0])  {   //spatial case
     int i=0,j=0,h=0;
-    double p,dd,dis=0.0,p1=0.0,p2=0.0,psj=0.0,ai=0.0,aj=0.0,corr=0.0,p00=0.0,p11=0.0,bi=0.0,bj=0.0;
+    double ll,p,dd,dis=0.0,p1=0.0,p2=0.0,psj=0.0,ai=0.0,aj=0.0,corr=0.0,p00=0.0,p11=0.0,bi=0.0,bj=0.0;
             
 for(j=0;j<(*nloc);j++){
+
                 for(i=0;i<(*ncoord);i++){
+
                      dis=dist(type[0],coordx[i],locx[j],coordy[i],locy[j],coordz[i],locz[j],radius[0]);
                      corr=CorFct(cormod,dis,0,par,0,0);
+                     ll=(1-nuis[0])*corr;
 
        /*****************************************************************/
-      if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)
+      if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45||*model==30||*model==36)
                 {
                         ai=mean[i];aj=mean[j];
-                        psj=pbnorm22(ai,aj,(1-nuis[0])*corr);
+                        psj=pbnorm22(ai,aj,ll);
                         p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
 
                        // compute the covariance!
-                   if(*model==2||*model==11||*model==19) { if(*cop==0){ cc[h]=fmin2(nn[j],n[i])*(psj-p1*p2);}
-                                                           if(*cop==1){ cc[h]=1;}
+                   if(*model==2||*model==11||*model==19) { if(*cop==0) cc[h]=fmin2(nn[j],n[i])*(psj-p1*p2);
+                                                           if(*cop==1) cc[h]=ll;
                                                          }
 
-                   if(*model==14)       {   if(*cop==0) {cc[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);}  // geometric
-                                            if(*cop==1){ cc[h]=1;} 
+                   if(*model==14)       {   if(*cop==0)   cc[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);
+                                            if(*cop==1)  cc[h]=ll;//calculate_covariance((1-nuis[0])*corr, *model,n[i],n[j],p1,p2);}
                                         }
                    if(*model==16)          {   if(*cop==0)    cc[h]=cov_binom_neg(n[0],psj,p1,p2);
-                                               if(*cop==1){ cc[h]=1;} 
+                                               if(*cop==1)    cc[h]=ll;//calculate_covariance((1-nuis[0])*corr, *model,n[i],n[j],p1,p2);}
                                            }
                    if(*model==45)   {
                              p=pnorm(nuis[2],0,1,1,0);
                              p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);p11=1-2*p+p00;
                              dd=cov_binom_neg(n[0],psj,p1,p2);
-                             cc[h]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+                             if(*cop==0) cc[h]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+                             if(*cop==1){ cc[h]=ll;}
                                     }
-                 }
-              if(*model==30||*model==36)   //poisson
-              {
+                   if(*model==30||*model==36)   //poisson
+                               {
                          ai=exp(mean[i]);
                          aj=exp(mean[j]);
-                if(*cop==0){cc[h]=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj);}
-                if(*cop==1){ cc[h]=1;}
-              }
+                         if(*cop==0) cc[h]=sqrt(ai*aj)*corr_pois(ll,ai, aj);
+                         if(*cop==1) cc[h]=ll;//cc[h]=calculate_covariance((1-nuis[0])*corr, *model,n[i],n[j],ai,aj);}
+                               }
                 if(*model==46||*model==47)   //poisson gamma
-              {
+                        {
                         bi=exp(mean[i]);bj=exp(mean[j]);
                         ai= bi*(1+bi/nuis[1]); aj= bj*(1+bj/nuis[1]);
-                if(*cop==0){cc[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,bi, bj, nuis[1]); }
-                if(*cop==1){ cc[h]=1;} 
-              }
+                        if(*cop==0){cc[h]=sqrt(ai*aj)*corr_pois_gen(ll,bi, bj, nuis[1]); }
+                        if(*cop==1){ cc[h]=ll;} 
+                       }
 
-                 if(*model==43||*model==44)
+                 if(*model==43||*model==44) // poisson zip 
        {
            ai=exp(mean[i]);aj=exp(mean[j]);
               if(*cop==0){
@@ -3002,14 +3113,15 @@ for(j=0;j<(*nloc);j++){
                  p1=1-2*p+psj;
                  cc[h]=p1*dd +  ai*aj*(p1-(1-p)*(1-p));
              }
-        if(*cop==1){ cc[h]=1;} 
+        if(*cop==1){ cc[h]=ll;}} 
        }
                /*****************************************************************/
-                    h++;}}
+                    h++;
+        }}
       }
 if(*spt) { // spacetime
       int i=0,j=0,h=0,t=0,v=0;
-    double p,dd,dit=0.0,dis=0.0,p1=0.0,p2=0.0,psj=0.0,p11=0.0,p00=0.0,ai=0.0,aj=0.0,corr=0.0,mui,muj;
+    double ll,p,dd,dit=0.0,dis=0.0,p1=0.0,p2=0.0,psj=0.0,p11=0.0,p00=0.0,ai=0.0,aj=0.0,corr=0.0,mui,muj;
         for(j=0;j<(*nloc);j++){
         for(v=0;v<(*tloc);v++){
            for(t=0;t<*ntime;t++){
@@ -3018,21 +3130,41 @@ if(*spt) { // spacetime
                  //  dis=dist(type[0],coordx[(i+NS[t])],locx[j],coordy[(i+NS[t])],locy[j],radius[0]);
                        dis=dist(type[0],coordx[(i+NS[t])],locx[j],coordy[(i+NS[t])],locy[j],coordz[(i+NS[t])],locz[j],radius[0]);
                     corr=CorFct(cormod,dis,dit,par,t,v);
+                       ll=(1-nuis[0])*corr;
           /*****************************************************************/
-                 if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)
+                 if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45||*model==30||*model==36)
                 {
                              ai=mean[j+*nloc * v];
                              aj=mean[i+*nloc * t];
-                             psj=pbnorm22(ai,aj,(1-nuis[0])*corr);
+                             psj=pbnorm22(ai,aj,ll);
                              //   psj=pbnorm(cormod,dis,dit,ai,aj,nuis[0],nuis[1],par,0);
                                 p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
 
-                   if(*model==2||*model==11||*model==19) cc[h]=fmin2(nn[j],n[i+NS[t]])*(psj-p1*p2);//binomial
-                   if(*model==14)            cc[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);  // geometric
-                   if(*model==16)          cc[h]=cov_binom_neg(n[0],psj,p1,p2);
+                   if(*model==2||*model==11||*model==19) {
+                              if(*cop==0){  cc[h]=fmin2(nn[j],n[i+NS[t]])*(psj-p1*p2);}
+                             if(*cop==1){   cc[h]=ll;} 
+
+                                      }//binomial
+
+
+
+                   if(*model==14)           { 
+                                      if(*cop==0){     cc[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2); }
+                                       if(*cop==1){   cc[h]=ll;} 
+
+
+                   } // geometric
+
+
+                   if(*model==16)    {      
+                               if(*cop==0){   cc[h]=cov_binom_neg(n[0],psj,p1,p2);}
+                                if(*cop==1){   cc[h]=ll;} 
+ 
+               }
+
                    if(*model==45)       {
                                 p=pnorm(nuis[2],0,1,1,0);
-                                p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
+                                p00=pbnorm22(nuis[2],nuis[2],ll);
                                 p11=1-2*p+p00;
                                 dd=cov_binom_neg(n[0],psj,p1,p2);
                                 cc[i]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
@@ -3042,7 +3174,8 @@ if(*spt) { // spacetime
                 {
                              ai=exp(mean[j+*nloc * v]);
                              aj=exp(mean[i+*nloc * t]);
-                             cc[h]=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj);
+                              if(*cop==0) cc[h]=sqrt(ai*aj)*corr_pois(ll,ai, aj);
+                              if(*cop==1)   cc[h]=ll;
 
                 }
                   if(*model==46||*model==47) // poissongamma
@@ -3050,18 +3183,20 @@ if(*spt) { // spacetime
                              mui=exp(mean[j+*nloc * v]);
                              muj=exp(mean[i+*nloc * t]);
                               ai= mui*(1+mui/nuis[1]); aj= muj*(1+muj/nuis[1]);
-                             cc[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[1]);
+                             if(*cop==0)   cc[h]=sqrt(ai*aj)*corr_pois_gen(ll,mui, muj, nuis[1]);
+                              if(*cop==1)   cc[h]=ll;
 
                 }
-                              if(*model==43||*model==44) // poisson inflated
+         if(*model==43||*model==44) // poisson inflated
        {
            ai=exp(mean[j+*nloc * v]);
            aj=exp(mean[i+*nloc * t]);
-           dd=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj); // it's the  covariance
+           dd=sqrt(ai*aj)*corr_pois(ll,ai, aj); // it's the  covariance
            p=pnorm(nuis[2],0,1,1,0);
            psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
            p1=1-2*p+psj;
-           cc[h]=p1*dd +  ai*aj*(p1-(1-p)*(1-p));
+             if(*cop==0)   cc[h]=p1*dd +  ai*aj*(p1-(1-p)*(1-p));
+               if(*cop==1)   cc[h]=ll;
        }
                  /*****************************************************************/
                     h++;}}}}
@@ -4153,11 +4288,11 @@ void VectCorrelation(double *rho, int *cormod, double *h, int *nlags, int *nlagt
     for(i=0;i<*nlags;i++){
       if((*model==1)||(*model==10)||(*model==12)||(*model==21)||(*model==30)||(*model==36)||(*model==18)
         ||(*model==43)||(*model==44)||(*model==20)||(*model==33)||(*model==42)||(*model==46)||(*model==47)||
-      (*model==22)||(*model==24)|(*model==26)||(*model==27)||(*model==29)||(*model==34)||(*model==38)
-      ||(*model==39)||(*model==40)||(*model==41)||(*model==35)||(*model==37)||(*model==9)||(*model==41)||(*model==50))
+      (*model==22)||(*model==24)||(*model==26)||(*model==27)||(*model==29)||(*model==34)||(*model==38)
+      ||(*model==39)||(*model==40)||(*model==41)||(*model==35)||(*model==37)||(*model==9)||(*model==50))
 
 
-    rho[t]=CorFct(cormod, h[i], u[j], par,0,0);
+    {rho[t]=CorFct(cormod, h[i], u[j], par,0,0);}
            /***************************************/
       if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)   // binomial  type I or  II or geometric case
       {
@@ -4166,7 +4301,10 @@ void VectCorrelation(double *rho, int *cormod, double *h, int *nlags, int *nlagt
           psj=pbnorm22(ai,aj,(1-nuis[0])*ccc);
           p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
 
-          if(*model==2||*model==11||*model==19) rho[t]=(psj-p1*p2)/sqrt(p1*p2*(1-p1)*(1-p2));  // binomyal type I II
+          if(*model==2||*model==11||*model==19) {
+            double denom = sqrt(p1*p2*(1-p1)*(1-p2));
+            rho[t] = (denom != 0.0) ? (psj - p1*p2)/denom : 0.0;
+        }
           if(*model==14)                        rho[t]= ((psj-p1*p2)/((-psj+p1+p2)*p1*p2))/(sqrt((1-p1)*(1-p2))/(p1*p2));  //covar12/sqrt(var1var2)
           if(*model==16)                        rho[t]=cov_binom_neg(N[0],psj,p1,p2)/(N[0]* sqrt((1-p1)*(1-p2))/(p1*p2));
           if(*model==45)

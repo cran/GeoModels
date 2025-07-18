@@ -87,10 +87,11 @@ CkCorrModel <- function(corrmodel)
                              Wen1_time=66,wen1_time=66,    #ok
                              Wen2_space=67,wen2_space=67,  #ok
                              Wen2_time=68,wen2_time=68,    #ok
-                             #Wen_time=88,
-                             #Wen_space=87,
+                             Matern_Matern_sep=88,
                              Gneiting_wen_S=87,gneiting_wen_S=87,Gneiting_Wen_S=87,
                              Gneiting_wen_T=88,gneiting_wen_T=88, #ok
+                             Matern_Matern_nosep=89,
+                             Genwend_Genwend_nosep=85,
               # spatial-temporal separable models
                              Wend0_Wend0=69,wend0_wend0=69, #ok
                              Wend0_Wend1=70,wend0_wend1=70, #ok
@@ -743,196 +744,114 @@ CkType <- function(type)
 #####  names of the correlation models ###############
 CorrParam <- function(corrmodel)
 {
-   return(CorrelationPar(CkCorrModel(corrmodel)))
+  val <- CorrelationPar(CkCorrModel(corrmodel))
+  if (is.null(val)) warning("Unrecognized correlation model ")
+  return(val)
 }
 
+
+
 #####  names of the correlation models ###############
-CorrelationPar <- function(corrmodel)
-  {
-    param <- NULL  
-    if(is.null(corrmodel)){param <- NULL}
-    else { 
-    # Exponential and Gaussian and spherical and wave correlation :
-     if(corrmodel %in% c(2,3,4,16,28)) {
-      param <- c('scale')
-      return(param)}
-    #if(corrmodel %in% c(45)) {
-    #  param <- c('scale','pmu')
-    #  return(param)}
-        if(corrmodel %in% c(10)) {
-      param <- c('scale_1','scale_2','smooth')
-      return(param)}
-    # Generalised Cauchy correlation model:
-   if(corrmodel %in% c(8,5)) {
-      param <- c('power1', 'power2','scale')
-      return(param)}
-    # hypergeometric2 gen_wend_matern hole gen_wend_matern hole
-     if(corrmodel %in% c(21,26,29)) {
-        param <- c('power1', 'power2','scale','smooth')
-        return(param)}
-     if(corrmodel %in% c(27)) { # matern hole
-        param <- c('power1','scale','smooth')
-        return(param)}
-        # hypergeometric
-   #  if(corrmodel %in% c(22,23,30)) {
-   #     param <- c('power2','scale','smooth')
-   #     return(param)}  
-    # Generalised wend correlation model abnd reparametrized version and kummer correlation model
-     if(corrmodel %in% c(22,23,30,19,6,7,24,25)) {
-        param <- c('power2', 'scale','smooth')
-        return(param)}
-    # sine power on sphere 
-    if(corrmodel==18){
-      param <- c('power')
-      return(param)}
-     # multiquadric on sphere and stable
-   if(corrmodel %in% c(12,17)){
-      param <- c('power', 'scale')
-      return(param)}     
-    # Cauchy and wendx x=0,1,2 
-    if(corrmodel %in% c(1,11,13,15)){
-        param <- c('power2', 'scale')
-        return(param)}
-    # Whittle-Matern correlation model:
-    if(corrmodel %in% c(14,20)){
-      param <- c('scale', 'smooth')
-      return(param)}
-    # Gneiting or Porcu model:
-    if(corrmodel %in% c(42,46,50,60,52,54)) {
-      param <- c('power_s', 'power_t','scale_s','scale_t','sep')
-      return(param)}
-    # Iaco-Cesare model:
-    if(corrmodel==44){
-      param <- c('power2','power_s', 'power_t','scale_s','scale_t')
-      return(param)}
-    # Stein model:
-    if(corrmodel==48){
-      param <- c('power_t','scale_s','scale_t','smooth_s')
-      return(param)}
-
-     if(corrmodel==61){
-         param <- c('power_s','power2_s','scale_s','scale_t','sep','smooth_t')
-         return(param)}  
-    if(corrmodel==62){
-         param <- c('power_t','power2_t','scale_s','scale_t','sep','smooth_s')
-         return(param)}  
-    # Wendland dynamic spatio temporal model:
-     if(corrmodel %in% c(63,65,67)) {
-         param <- c('power_t','power2_s','power2_t','scale_s','scale_t','sep')
-         return(param)}  
-     if(corrmodel==87){
-         param <- c('power_t','power2_s','power2_t','scale_s','scale_t','sep','smooth_s')
-         return(param)}   
-         # Wendland dynamic spatio temporal model:
-     if(corrmodel %in% c(64,66,68)) {
-              param <- c('power_s','power2_s','power2_t','scale_s','scale_t','sep')
-         return(param)}   
-         if(corrmodel==88){
-              param <- c('power_s','power2_s','power2_t','scale_s','scale_t','sep','smooth_t')
-         return(param)}         
-      # Wendland  separable spacetime
-     if(corrmodel %in% c(69,70,71,72,73,74,75,77,96))
-        {param <- c('power2_s','power2_t','scale_s','scale_t')
-         return(param)}        
-    
-  ##########Separable spatial-temporal correlations##########################################  
-    # Exponential-exponential 
-    if(corrmodel==84){
-      param <- c('scale_s','scale_t')
-      return(param)}
-    # Matern_Matern
-    if(corrmodel==86){
-      param <- c('scale_s','scale_t','smooth_s','smooth_t')
-      return(param)}  
-     if(corrmodel==78){
-      param <- c('scale_s','scale_t','smooth_s','smooth_t','power2_s','power2_t')
-      return(param)} 
-       # sinpower_st
-    if(corrmodel==56){
-      param <- c('scale_s','scale_t','smooth_t')
-      return(param)}     
-    # stable_stable  
-     if(corrmodel==94||corrmodel==58){
-       param <- c('power_s','power_t','scale_s','scale_t')
-       return(param)}
- ###############################################################################################
-    ###Multivariate models
-    ## biv sep exp and sep wenhole and sep wen
-  # if(corrmodel==130||corrmodel==132){
-   #   param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale')
-   #   return(param)}
-   ## biv sep matern
-   if(corrmodel==122||corrmodel==119){
-      param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale','smooth')
-      return(param)}
-      ## biv sep wendland
-   if(corrmodel==111||corrmodel==113|corrmodel==115){  
-      param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','power2','scale')
-      return(param)}   
-
-       if(corrmodel==130){  
-      param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','power2','scale','smooth')
-      return(param)} 
-       ## biv LMC parsimonious
-   if(corrmodel==124){
-      param <- c('a_1','a_12','a_2','nugget_1','nugget_2','scale_1','scale_2')
-      return(param)}
-   ## biv LMC not parsimonious
-   if(corrmodel==126){
-      param <- c('a_1','a_12','a_2','a_21','nugget_1','nugget_2','scale_1','scale_2')
-      return(param)}
-      ## biv full endland bivariate models    
-   if(corrmodel==112||corrmodel==114||corrmodel==116){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol',
-        'power2_1', 'power2_12', 'power2_2','scale_1','scale_12','scale_2')
-    return(param)}
-       if(corrmodel==132){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol',
-        'power2_1', 'power2_12', 'power2_2','scale_1','scale_12','scale_2','smooth_1','smooth_12','smooth_2')
-    return(param)}
-
-      ## biv full matern a bivariate models
-       if(corrmodel==128||corrmodel==117){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_12','scale_2',
-        'smooth_1','smooth_12','smooth_2')
-    return(param)}
-     ## biv  matern with contrainsts
-   if(corrmodel==118||corrmodel==121){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_2','smooth_1','smooth_2')
-     return(param)}
-      ## biv contr wend bivariate models
-      if(corrmodel==129||corrmodel==131||corrmodel==120){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','power2_1','power2_2','scale_1','scale_2')
-     return(param)}
-
-        if(corrmodel==134){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','power2_1','power2_2','scale_1','scale_2','smooth_1','smooth_2')
-     return(param)}
-        ## biv asy
-     # if(corrmodel==130){
-     #param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale','smooth')
-     #return(param)}
-    if(corrmodel==136){
-       param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_12','scale_2',
-        'smooth_1','smooth_12','smooth_2','power2_2')
-       return(param)
-    }
-     if(corrmodel==137){
-       param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_12','scale_2',
-        'smooth_1','smooth_12','smooth_2','power2_1','power2_12','power2_2')
-       return(param)
-    }
-       if(corrmodel==138){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_12','scale_2',
-        'power1_1','power1_12','power1_2','power2_1','power2_12','power2_2')
-    return(param)}
-        if(corrmodel==139){
-     param <- c('sill_1','sill_2','nugget_1','nugget_2','pcol','scale_1','scale_12','scale_2',
-        'power_1','power_12','power_2')
-    return(param)}
-    }
-    return(param)
+CorrelationPar <- function(corrmodel) {
+  param_map <- list(
+    "1" = c("power2", "scale"),
+    "2" = c("scale"),
+    "3" = c("scale"),
+    "4" = c("scale"),
+    "5" = c("power1", "power2", "scale"),
+    "6" = c("power2", "scale", "smooth"),
+    "7" = c("power2", "scale", "smooth"),
+    "8" = c("power1", "power2", "scale"),
+    "10" = c("scale_1", "scale_2", "smooth"),
+    "11" = c("power2", "scale"),
+    "12" = c("power", "scale"),
+    "13" = c("power2", "scale"),
+    "14" = c("scale", "smooth"),
+    "15" = c("power2", "scale"),
+    "16" = c("scale"),
+    "17" = c("power", "scale"),
+    "18" = c("power"),
+    "19" = c("power2", "scale", "smooth"),
+    "20" = c("scale", "smooth"),
+    "21" = c("power1", "power2", "scale", "smooth"),
+    "22" = c("power2", "scale", "smooth"),
+    "23" = c("power2", "scale", "smooth"),
+    "24" = c("power2", "scale", "smooth"),
+    "25" = c("power2", "scale", "smooth"),
+    "26" = c("power1", "power2", "scale", "smooth"),
+    "27" = c("power1", "scale", "smooth"),
+    "28" = c("scale"),
+    "29" = c("power1", "power2", "scale", "smooth"),
+    "30" = c("power2", "scale", "smooth"),
+    "42" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "44" = c("power2", "power_s", "power_t", "scale_s", "scale_t"),
+    "46" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "48" = c("power_t", "scale_s", "scale_t", "smooth_s"),
+    "50" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "52" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "54" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "56" = c("scale_s", "scale_t", "smooth_t"),
+    "58" = c("power_s", "power_t", "scale_s", "scale_t"),
+    "60" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
+    "61" = c("power_s", "power2_s", "scale_s", "scale_t", "sep", "smooth_t"),
+    "62" = c("power_t", "power2_t", "scale_s", "scale_t", "sep", "smooth_s"),
+    "63" = c("power_t", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "64" = c("power_s", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "65" = c("power_t", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "66" = c("power_s", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "67" = c("power_t", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "68" = c("power_s", "power2_s", "power2_t", "scale_s", "scale_t", "sep"),
+    "69" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "70" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "71" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "72" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "73" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "74" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "75" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "77" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "78" = c("scale_s", "scale_t", "smooth_s", "smooth_t", "power2_s", "power2_t"),
+    "84" = c("scale_s", "scale_t"),
+    "85" = c("scale_s", "scale_t", "power2_s", "power2_t", "smooth_s", "smooth_t", "sep"),
+    "86" = c("scale_s", "scale_t", "smooth_s", "smooth_t"),
+    "87" = c("power_t", "power2_s", "power2_t", "scale_s", "scale_t", "sep", "smooth_s"),
+    "88" = c("power_s", "power2_s", "power2_t", "scale_s", "scale_t", "sep", "smooth_t"),
+    "89" = c("scale_s", "scale_t", "smooth_s", "smooth_t", "sep"),
+    "94" = c("power_s", "power_t", "scale_s", "scale_t"),
+    "96" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "111" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2", "scale"),
+    "112" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_12", "power2_2", "scale_1", "scale_12", "scale_2"),
+    "113" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2", "scale"),
+    "114" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_12", "power2_2", "scale_1", "scale_12", "scale_2"),
+    "115" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2", "scale"),
+    "116" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_12", "power2_2", "scale_1", "scale_12", "scale_2"),
+    "117" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "smooth_1", "smooth_12", "smooth_2"),
+    "118" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_2", "smooth_1", "smooth_2"),
+    "119" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale", "smooth"),
+    "120" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_2", "scale_1", "scale_2"),
+    "121" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_2", "smooth_1", "smooth_2"),
+    "122" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale", "smooth"),
+    "124" = c("a_1", "a_12", "a_2", "nugget_1", "nugget_2", "scale_1", "scale_2"),
+    "126" = c("a_1", "a_12", "a_2", "a_21", "nugget_1", "nugget_2", "scale_1", "scale_2"),
+    "128" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "smooth_1", "smooth_12", "smooth_2"),
+    "129" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_2", "scale_1", "scale_2"),
+    "130" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2", "scale", "smooth"),
+    "131" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_2", "scale_1", "scale_2"),
+    "132" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_12", "power2_2", "scale_1", "scale_12", "scale_2", "smooth_1", "smooth_12", "smooth_2"),
+    "134" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "power2_1", "power2_2", "scale_1", "scale_2", "smooth_1", "smooth_2"),
+    "136" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "smooth_1", "smooth_12", "smooth_2", "power2_2"),
+    "137" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "smooth_1", "smooth_12", "smooth_2", "power2_1", "power2_12", "power2_2"),
+    "138" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "power1_1", "power1_12", "power1_2", "power2_1", "power2_12", "power2_2"),
+    "139" = c("sill_1", "sill_2", "nugget_1", "nugget_2", "pcol", "scale_1", "scale_12", "scale_2", "power_1", "power_12", "power_2")
+  )
+  
+  corrmodel_char <- as.character(corrmodel)
+  if (corrmodel_char %in% names(param_map)) {
+    return(param_map[[corrmodel_char]])
+  } else {
+    return(NULL)
   }
+}
+
   #############################################################  
   #############################################################
 
@@ -967,12 +886,8 @@ if(!bivariate)      {
     return(param)
   }
 
-   if( (model %in% c('PoissonGammaZIP')))
-  {
-    param <- c(mm, 'nugget1','nugget2','pmu','sill','shape')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
-  }
+
+
 
  if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1')))
   {
@@ -984,6 +899,13 @@ if(!bivariate)      {
  if( (model %in% c('PoissonGammaZIP1','Gaussian_misp_PoissonGammaZIP1')))
   {
     param <- c(mm, 'nugget','pmu','sill','shape')
+    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
+    return(param)
+  }
+
+   if( (model %in% c('PoissonGammaZIP','Gaussian_misp_PoissonGammaZIP')))
+  {
+    param <- c(mm, 'nugget1','nugget2','pmu','sill','shape')
     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
     return(param)
   }

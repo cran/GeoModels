@@ -4,8 +4,8 @@
 
 
 # Simulate spatial and spatio-temporal random felds:
-GeoSimCopula <- function(coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=6371, sparse=FALSE,
+GeoSimCopula <- function(coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+     method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=1, sparse=FALSE,
      copula="Gaussian",seed=NULL,X=NULL,spobj=NULL,nrep=1)
 {
 
@@ -61,8 +61,8 @@ if(copula=="Gaussian")
 param1=c(list(mean=0,sill=1,nugget=param$nugget),paramcorr)
 
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
-    distance=distance,GPU=GPU, grid=grid,
-     local=local,method=method,model='Gaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
+    distance=distance, grid=grid,
+ method=method,model='Gaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 unif=pnorm(sim$data,mean=0,sd=1);
 }
 
@@ -72,8 +72,8 @@ if(copula=="SkewGaussian")
 param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=param$nu),paramcorr)
 
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
-    distance=distance,GPU=GPU, grid=grid,
-     local=local,method=method,model='SkewGaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
+    distance=distance, grid=grid,
+     method=method,model='SkewGaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 omega=as.numeric(sqrt((param$nu^2 + 1)/1))
 alpha=as.numeric(param$nu)
 unif=sn::psn(sim$data,xi=0,omega= omega,alpha= alpha)
@@ -86,8 +86,8 @@ if(copula=="Clayton")
 pp=round(as.numeric(param['nu']))
 param1=c(list(shape1=pp,shape2=2,sill=1,mean=0,min=0,max=1,nugget=param$nugget),paramcorr)
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
-    distance=distance,GPU=GPU, grid=grid,
-     local=local,method=method,model='Beta', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
+    distance=distance, grid=grid,
+     method=method,model='Beta', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 unif=(sim$data)^(pp/2)
 }
 ####AMH copula #############################################
@@ -96,12 +96,12 @@ if(copula=="AMH")
 
 param1=c(list(mean=0,nugget=as.numeric(param$nugget),shape=2),paramcorr)
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
-    distance=distance,GPU=GPU, grid=grid,
-     local=local,method=method,model='Gamma', param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
+    distance=distance, grid=grid,
+   method=method,model='Gamma', param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 param2=c(list(mean=as.numeric(param['nu']),nugget=as.numeric(param$nugget)),paramcorr)
 sim2=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
-    distance=distance,GPU=GPU, grid=grid,
-     local=local,method=method,model='BinomialNeg', n=1, param=param2,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
+    distance=distance, grid=grid,
+     method=method,model='BinomialNeg', n=1, param=param2,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 kk=sim$data/(sim2$data+1)
 pp=pnorm(as.numeric(param['nu']))
 unif=pp/(exp(kk)+pp-1)
@@ -189,6 +189,7 @@ if(model=="StudentT") {
 vv=as.numeric(param$sill)
 dd=as.numeric(param$df)
 simcop=mm+sqrt(vv)*qt(unif,df=round(1/dd))
+
          }
 ############
 if(model=="SkewGaussian") 

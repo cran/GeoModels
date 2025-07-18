@@ -1,15 +1,7 @@
 
-####################################################
-### File name: GeoCovmatrix.r
-####################################################
-
-######################################################################################################
-######################################################################################################
-######################################################################################################
-######################################################################################################
 
 GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NULL,coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
-                       maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=6371,
+                       maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=1,
                        sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
 
 {
@@ -617,7 +609,13 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
                             p=pnorm(param$pmu)
                             MM=pnorm(mu)
                             vv=n*(1-MM)*(1-p)*(1+n*p*(1-MM)) /MM^2
-                            diag(varcov)=vv }
+                            diag(varcov)=vv 
+                        }
+
+  if(model %in% c(57))   { mm=exp(mu); vv=mm*(1+mm/as.numeric(param$shape))
+                            pg=pnorm(param$pmu)
+                           vv=(1-pg)*vv*(1+pg*vv)
+                           diag(varcov)=vv }
 }
 
 }
@@ -665,7 +663,9 @@ else  { coordx=estobj$coordx;
    radius=estobj$radius
    copula=estobj$copula
    anisopars=estobj$anisopars
+    if(!is.null(anisopars))  {param$angle=NULL; param$ratio=NULL}
    X=estobj$X
+
 }
 ################# end extracting information###################################################
 if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
@@ -721,20 +721,22 @@ if(sparse) {
     covmod=CkCorrModel(corrmodel)
     if(covmod %in% c(10,11,13,15,19,6,7,21,22,23,30,
                      63,64,65,66,67,68,
-                     69,70,71,72,73,74,75,76,77,
+                     69,70,71,72,73,74,75,76,77,78,
                      111,112,129,113,114,131,132,130,134,
                      115,116,120))
     {
       type="Tapering"
       if(bivariate){
-      #taper="unit_matrix_biv"
-      if(covmod %in% c(111,113,115,130)) maxdist=c(param$scale,param$scale,param$scale)
-      if(covmod %in% c(112,114,116,134)) maxdist=c(param$scale_1,param$scale_12,param$scale_2)
-      if(covmod %in% c(120,129,131,132)) maxdist=c(param$scale_1,0.5*(param$scale_1+param$scale_2),param$scale_2)
+                  #taper="unit_matrix_biv"
+                  if(covmod %in% c(111,113,115,130)) maxdist=c(param$scale,param$scale,param$scale)
+                  if(covmod %in% c(112,114,116,134)) maxdist=c(param$scale_1,param$scale_12,param$scale_2)
+                  if(covmod %in% c(120,129,131,132)) maxdist=c(param$scale_1,0.5*(param$scale_1+param$scale_2),param$scale_2)
       }
       if(spacetime)
       {
+
       maxdist=param$scale_s;maxtime=param$scale_t
+
        if(covmod==63||covmod==65||covmod==67) {  tapsep=c(param$power2_s,param$power_t,param$scale_s,param$scale_t,param$sep) }
        if(covmod==64||covmod==66||covmod==68) {  tapsep=c(param$power_s,param$power2_t,param$scale_s,param$scale_t,param$sep) }
     }
@@ -786,10 +788,9 @@ if(is.null(coordx_dyn)){
 }
     coords_orig=coords
  #######################################  
-
+ 
     if(!is.null(anisopars)) {  coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))}
 #######################################
-
 
 
     checkinput <- CkInput(coords[,1], coords[,2],coordz, coordt, coordx_dyn, corrmodel, NULL, distance, "Simulation",
@@ -804,7 +805,6 @@ if(is.null(coordx_dyn)){
     spacetime_dyn=FALSE
     if(!is.null(coordx_dyn))  spacetime_dyn=TRUE
     # Initialising the parameters:
-
     
     initparam <- StartParam(coords[,1], coords[,2],coordz, coordt,coordx_dyn, corrmodel, NULL, distance, "Simulation",
                            NULL, grid, NULL, maxdist, NULL,maxtime, model, n,
@@ -903,6 +903,7 @@ if(is.null(copula)) {
                         initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
                     }
 else {
+
  if(copula=="Gaussian") 
     covmatrix<- Cmatrix_copula(initparam$bivariate,cc[,1],cc[,2],cc[,3],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
                         initparam$NS, initparam$param[initparam$namesnuis],
@@ -953,7 +954,7 @@ if(is.null(X)) initparam$X=NULL
                    numcoordy = initparam$numcoordy,
                    numtime = initparam$numtime,
                    param = param,
-                   radius = initparam$radius,
+                   radius = radius,
                    setup=setup,
                    spacetime = initparam$spacetime,
                    sparse=sparse,

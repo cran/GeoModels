@@ -10,9 +10,9 @@ GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = N
            coordx_dyn = NULL, corrmodel, distance = "Eucl", grid = FALSE, loc,
            maxdist = NULL, maxtime = NULL, method = "Cholesky", model = "Gaussian",
            n = 1, nrep = 1, local = FALSE, L = 1000, neighb = NULL,
-           param, anisopars = NULL, radius = 6371, sparse = FALSE, time = NULL,
+           param, anisopars = NULL, radius = 1, sparse = FALSE, time = NULL,
            copula = NULL, X = NULL, Xloc = NULL, Mloc = NULL,
-           parallel=FALSE, ncores = NULL)
+           parallel=TRUE, ncores = NULL)
 }
 \arguments{
   \item{estobj}{Object of class \code{Geofit} containing model information}
@@ -124,7 +124,7 @@ xx=seq(0,1,0.025)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5)$condsim
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5,parallel=FALSE)$condsim
 sim_result <- do.call(rbind, sim_result)
 
 par(mfrow=c(1,2))
@@ -170,7 +170,7 @@ xx=seq(0,1,0.025)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5)$condsim
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5,parallel=FALSE)$condsim
 sim_result <- do.call(rbind, sim_result)
 
 par(mfrow=c(1,2))

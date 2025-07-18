@@ -12,7 +12,7 @@
 // Composite marginal (pariwise) log-likelihood for the spatial Gaussian model:
 void Comp_Pair_Gauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                         double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                        double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                        double *nuis,  int *type_cop, int *cond)
 {
     // Controllo rapido dei parametri
     const double sill = nuis[1];
@@ -66,7 +66,7 @@ void Comp_Pair_Gauss2mem(int *cormod, double *data1, double *data2, int *N1, int
 /******************************************************************************************/
 void Comp_Diff_Gauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
   int i=0;
   double vario=0.0,u,v,weights=1.0;
@@ -90,7 +90,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /******************************************************************************************/
 void Comp_Pair_WrapGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                           double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                           double *nuis,  int *type_cop, int *cond)
 {
     // Controllo rapido dei parametri
     const double sill = nuis[1];
@@ -143,7 +143,7 @@ void Comp_Pair_WrapGauss2mem(int *cormod, double *data1, double *data2, int *N1,
 /******************************************************************************************/
 void Comp_Pair_SinhGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                              double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                              double *nuis,  int *type_cop, int *cond)
 {
     const double nuis0 = nuis[0];
     const double nuis1 = nuis[1];
@@ -191,7 +191,7 @@ void Comp_Pair_SinhGauss2mem(int *cormod, double *data1, double *data2, int *N1,
 /******************************************************************************************/
 void Comp_Pair_SkewGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *nuis,  int *type_cop, int *cond)
 {
     const double sill = nuis[1];
     const double nugget = nuis[0];
@@ -237,7 +237,7 @@ void Comp_Pair_SkewGauss2mem(int *cormod, double *data1, double *data2, int *N1,
 /*********************************************************/
 void Comp_Pair_Gamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                           double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                          double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                          double *nuis,  int *type_cop, int *cond)
 {
     const double nugget = nuis[0];
     const double shape_param = nuis[2];
@@ -289,7 +289,7 @@ void Comp_Pair_Gamma2mem(int *cormod, double *data1, double *data2, int *N1, int
 /*********************************************************/
 void Comp_Pair_Weibull2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                            double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -341,7 +341,7 @@ void Comp_Pair_Weibull2mem(int *cormod, double *data1, double *data2, int *N1, i
 /*********************************************************/
 void Comp_Pair_Kumaraswamy2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i;double corr,zi,zj,weights=1.0,bl;
@@ -367,7 +367,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Kumaraswamy22mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i;double corr,zi,zj,weights=1.0,bl;
@@ -391,7 +391,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Beta2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i;double corr,zi,zj,weights=1.0,bl;
@@ -413,7 +413,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_LogGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                             double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                             double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double sill = nuis[1];
@@ -464,7 +464,7 @@ void Comp_Pair_LogGauss2mem(int *cormod, double *data1, double *data2, int *N1, 
 /*********************************************************/
 void Comp_Pair_PoisbinnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                 double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                 double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -514,7 +514,7 @@ void Comp_Pair_PoisbinnegGauss2mem(int *cormod, double *data1, double *data2, in
 /*********************************************************/
 void Comp_Pair_PoisbinGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0,  uu=0,vv=0;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -543,7 +543,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                  double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                  double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -597,7 +597,7 @@ void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int 
 /******************************************************/
 void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0,  uu=0,vv=0;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -627,7 +627,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0,  uu=0,vv=0;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -658,7 +658,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                     double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                    double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                    double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget1 = nuis[0];
@@ -710,7 +710,7 @@ void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2, 
 /******************************************************************************************/
 void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -791,7 +791,7 @@ void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
 /******************************************************************************************/
 void Comp_Pair_BinomLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,vv=0;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -817,7 +817,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_BinomNNGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,vv=0;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -846,7 +846,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_BinomNNGauss_misp2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, N=2,n1,n2;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -890,7 +890,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_BinomNNLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,vv=0,n1,n2;
     double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0;
@@ -919,7 +919,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_LogLogistic2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                              double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                              double *nuis,  int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -967,7 +967,7 @@ void Comp_Pair_LogLogistic2mem(int *cormod, double *data1, double *data2, int *N
 /*********************************************************/
 void Comp_Pair_Logistic2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i;double bl,corr,zi,zj,weights=1.0,nugget=0.0;
         nugget=nuis[0];
@@ -988,7 +988,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Pois2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                        double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                       double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                       double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double nugget = nuis[0];
@@ -1066,7 +1066,7 @@ void Comp_Pair_Pois2mem(int *cormod, double *data1, double *data2, int *N1, int 
 /*********************************************************/
 void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                            double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double nugget = nuis[0];
@@ -1147,12 +1147,12 @@ void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1,
 
 void Comp_Pair_PoisGammaZIP2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0, uu,vv;
     double weights=1.0,corr,mui,muj,bl,u,v;
-   double nugget1=nuis[0];double nugget2=nuis[1];
+   double nugget1=nuis[0];double nugget2=nuis[1]; //two nuggets
     double mup=nuis[2]; double shape=nuis[3];
 
 
@@ -1176,7 +1176,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_Gauss_misp_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                       double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                      double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                      double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double nugget = nuis[0];
@@ -1252,7 +1252,7 @@ void Comp_Pair_Gauss_misp_PoisGamma2mem(int *cormod, double *data1, double *data
 /*********************************************************/
 void Comp_Pair_PoisZIP2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu,ww;
     double weights=1.0,corr,mui,muj,bl;
@@ -1283,7 +1283,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Gauss_misp_Pois2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                 double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                 double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double nugget = nuis[0];
@@ -1354,7 +1354,7 @@ void Comp_Pair_Gauss_misp_Pois2mem(int *cormod, double *data1, double *data2, in
 
 void Comp_Pair_Gauss_misp_PoisZIP2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0;
     double weights=1.0,corr,mui,muj,bl;
@@ -1381,7 +1381,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Gauss_misp_SkewT2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0;
     double weights=1.0,sill,nugget,skew,corr,corr2,df,bl;
@@ -1415,7 +1415,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_Gauss_misp_T2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double sill = nuis[2];
@@ -1477,7 +1477,7 @@ void Comp_Pair_Gauss_misp_T2mem(int *cormod, double *data1, double *data2, int *
 /*********************************************************/
  void Comp_Pair_Tukeyhh2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                           double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                          double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                          double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double sill = nuis[1];
@@ -1533,7 +1533,7 @@ void Comp_Pair_Gauss_misp_T2mem(int *cormod, double *data1, double *data2, int *
 /*********************************************************/
 void Comp_Pair_Tukeyh2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                          double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                         double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                         double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double sill = nuis[1];
@@ -1582,7 +1582,7 @@ void Comp_Pair_Tukeyh2mem(int *cormod, double *data1, double *data2, int *N1, in
 /*********************************************************/
 void Comp_Pair_Gauss_misp_Tukeygh2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i;double bl,corr,corr2,zi,zj,weights=1.0,eta,tail,sill,nugget,u,eta2,mu,vv;
     eta  = nuis[2];  //skewness parameter
@@ -1619,7 +1619,7 @@ if(!ISNAN(zi)&&!ISNAN(zj) ){
 /*********************************************************/
 void Comp_Pair_T2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                     double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                    double *nuis, int *local, int *GPU, int *type_cop, int *cond) 
+                    double *nuis,  int *type_cop, int *cond) 
 {
     // Controllo precoce dei parametri
     const double sill = nuis[2];
@@ -1656,7 +1656,7 @@ void Comp_Pair_T2mem(int *cormod, double *data1, double *data2, int *N1, int *N2
 /*********************************************************/
 void Comp_Pair_TWOPIECETukeyh2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i;double bl,corr,zi,zj,weights=1.0,p11,eta,tail,qq,sill,nugget;
     eta  = nuis[2];  //skewness parameter
@@ -1683,7 +1683,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_TWOPIECET2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i;double bl,corr,zi,zj,weights=1.0,p11,qq;
 
@@ -1714,7 +1714,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /*********************************************************/
 void Comp_Pair_TWOPIECEGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                 double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                double *nuis,  int *type_cop, int *cond)
 {
     // Early parameter validation
     const double eta = nuis[2];  // skewness parameter
@@ -1758,7 +1758,7 @@ void Comp_Pair_TWOPIECEGauss2mem(int *cormod, double *data1, double *data2, int 
 
 void Comp_Pair_TWOPIECEBIMODAL2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i;double bl,corr,zi,zj,weights=1.0,p11,eta,qq,sill,df,nugget,delta;
 
@@ -1800,7 +1800,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_Gauss_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                           double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                           double *nuis,  int *type_cop, int *cond)
 {
     // Estrai valori una sola volta
     const int n_pairs = npairs[0];
@@ -1858,7 +1858,7 @@ void Comp_Pair_Gauss_st2mem(int *cormod, double *data1, double *data2, int *N1, 
 /******************************************************************************************/
 void Comp_Pair_WrapGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0;
     double  u=0.0, w=0.0,weights=1.0;
@@ -1880,7 +1880,7 @@ void Comp_Pair_WrapGauss_st2mem(int *cormod, double *data1,double *data2,int *N1
 /******************************************************************************************/
 void Comp_Pair_T_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                        double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                       double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                       double *nuis,  int *type_cop, int *cond)
 {
     // Estrai valori una sola volta
     const int n_pairs = npairs[0];
@@ -1940,7 +1940,7 @@ void Comp_Pair_T_st2mem(int *cormod, double *data1, double *data2, int *N1, int 
 /******************************************************************************************/
 void Comp_Pair_Gauss_misp_T_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                  double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                  double *nuis,  int *type_cop, int *cond)
 {
     // Estrai valori una sola volta
     const int n_pairs = npairs[0];
@@ -2010,7 +2010,7 @@ void Comp_Pair_Gauss_misp_T_st2mem(int *cormod, double *data1, double *data2, in
 /******************************************************************************************/
 void Comp_Pair_Gauss_misp_Pois_stmem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                    double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                   double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                   double *nuis,  int *type_cop, int *cond)
 {
     // Estrai valori una sola volta
     const int n_pairs = npairs[0];
@@ -2096,7 +2096,7 @@ void Comp_Pair_Gauss_misp_Pois_stmem(int *cormod, double *data1, double *data2, 
 /******************************************************************************************/
 void Comp_Pair_Pois_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                           double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                          double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                          double *nuis,  int *type_cop, int *cond)
 {
     // Pre-carica le variabili globali in variabili locali
     const int npairs_val = npairs[0];
@@ -2141,7 +2141,7 @@ void Comp_Pair_Pois_st2mem(int *cormod, double *data1, double *data2, int *N1, i
 /******************************************************************************************/
 void Comp_Pair_PoisGamma_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *nuis,  int *type_cop, int *cond)
 {
     // Pre-carica variabili globali e parametri
     const int npairs_val = npairs[0];
@@ -2199,7 +2199,7 @@ void Comp_Pair_PoisGamma_st2mem(int *cormod, double *data1, double *data2, int *
 void Comp_Pair_Gauss_misp_PoisGamma_st2mem(int *cormod, double *data1, double *data2, 
                                           int *N1, int *N2, double *par, int *weigthed, 
                                           double *res, double *mean1, double *mean2,
-                                          double *nuis, int *local, int *GPU, 
+                                          double *nuis,  
                                           int *type_cop, int *cond)
 {
     // Pre-carica variabili globali e parametri
@@ -2275,7 +2275,7 @@ void Comp_Pair_Gauss_misp_PoisGamma_st2mem(int *cormod, double *data1, double *d
 /******************************************************************************************/
 void Comp_Pair_PoisZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 
 {
     int i=0,uu,ww;
@@ -2307,7 +2307,7 @@ void Comp_Pair_PoisZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,i
 /******************************************************************************************/
 void Comp_Pair_Gauss_misp_Pois_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0,N=2;
      double weights=1.0,corr,corr2,mui,muj,bl,u=0.0, w=0.0;
@@ -2339,7 +2339,7 @@ if(!ISNAN(u)&&!ISNAN(w) ){
 /******************************************************************************************/
 void Comp_Pair_Gauss_misp_PoisZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0;
      double weights=1.0,corr,mui,muj,bl;
@@ -2367,7 +2367,7 @@ void Comp_Pair_Gauss_misp_PoisZIP_st2mem(int *cormod, double *data1,double *data
 /******************************************************************************************/
 void Comp_Pair_Tukeyh_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
 
@@ -2397,7 +2397,7 @@ for(i=0;i<npairs[0];i++){
 /******************************************************************************************/
 void Comp_Pair_Tukeyhh_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
 
@@ -2424,7 +2424,7 @@ bl=biv_tukey_hh((1-nugget)*corr,zi,zj,mean1[i],mean2[i],sill,h1,h2);
 /******************************************************************************************/
 void  Comp_Pair_TWOPIECEGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
        int i=0;
     double corr,zi,zj,weights=1.0,p11,eta,qq,sill,bl,nugget;
@@ -2454,7 +2454,7 @@ for(i=0;i<npairs[0];i++){
 /******************************************************************************************/
 void  Comp_Pair_TWOPIECETukeyh_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
        int i=0;
     double corr,zi,zj,weights=1.0,p11,eta,qq,sill,bl,nugget,tail;
@@ -2490,7 +2490,7 @@ for(i=0;i<npairs[0];i++){
 /******************************************************************************************/
 void  Comp_Pair_TWOPIECET_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
        int i=0;
     double corr,zi,zj,weights=1.0,p11,qq,bl;
@@ -2523,7 +2523,7 @@ for(i=0;i<npairs[0];i++){
 /******************************************************************************************/
 void Comp_Pair_PoisbinGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double dens=0.0,weights=1.0,u,w,corr=0.0;
@@ -2553,7 +2553,7 @@ void Comp_Pair_PoisbinGauss_st2mem(int *cormod, double *data1,double *data2,int 
 /******************************************************************************************/
 void Comp_Pair_PoisbinnegGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0,uu=0,ww=0;
     double dens=0.0,weights=1.0,u,w,corr;
@@ -2582,7 +2582,7 @@ void Comp_Pair_PoisbinnegGauss_st2mem(int *cormod, double *data1,double *data2,i
 
 void Comp_Pair_BinomGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0;
@@ -2609,7 +2609,7 @@ void Comp_Pair_BinomGauss_st2mem(int *cormod, double *data1,double *data2,int *N
 }
 void Comp_Pair_BinomLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0;
@@ -2635,7 +2635,7 @@ void Comp_Pair_BinomLogi_st2mem(int *cormod, double *data1,double *data2,int *N1
 }
 void Comp_Pair_BinomNNGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0,n1,n2;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0;
@@ -2665,7 +2665,7 @@ void Comp_Pair_BinomNNGauss_st2mem(int *cormod, double *data1,double *data2,int 
 
 void Comp_Pair_BinomNNLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0,n1,n2;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0;
@@ -2694,7 +2694,7 @@ void Comp_Pair_BinomNNLogi_st2mem(int *cormod, double *data1,double *data2,int *
 
 void Comp_Pair_BinomnegGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0,p1=0.0,p2=0.0,psj=0.0;
@@ -2723,7 +2723,7 @@ void Comp_Pair_BinomnegGauss_st2mem(int *cormod, double *data1,double *data2,int
 
 void Comp_Pair_BinomnegLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0,p1=0.0,p2=0.0,psj=0.0;
@@ -2752,7 +2752,7 @@ void Comp_Pair_BinomnegLogi_st2mem(int *cormod, double *data1,double *data2,int 
 
 void Comp_Pair_BinomnegGaussZINB_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0, uu=0,ww=0;
     double bl=0.0,weights=1.0,u=0.0,w=0.0,a=0.0,b=0.0,corr=0.0;
@@ -2783,7 +2783,7 @@ void Comp_Pair_BinomnegGaussZINB_st2mem(int *cormod, double *data1,double *data2
 // Composite marginal (difference) log-likelihood for the spatial-temporal Gaussian model:
 void Comp_Diff_Gauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=00;
     double u,w,vario=0.0,weights=1.0;
@@ -2805,7 +2805,7 @@ void Comp_Diff_Gauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int
 /******************************************************************************************/
 void Comp_Pair_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -2829,7 +2829,7 @@ void Comp_Pair_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1
 /******************************************************************************************/
 void Comp_Pair_SinhGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -2853,7 +2853,7 @@ void Comp_Pair_SinhGauss_st2mem(int *cormod, double *data1,double *data2,int *N1
 /******************************************************************************************/
 void Comp_Pair_Gamma_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 {
 
@@ -2878,7 +2878,7 @@ void Comp_Pair_Gamma_st2mem(int *cormod, double *data1,double *data2,int *N1,int
 /******************************************************************************************/
 void Comp_Pair_Kumaraswamy_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
 
@@ -2905,7 +2905,7 @@ void Comp_Pair_Kumaraswamy_st2mem(int *cormod, double *data1,double *data2,int *
 /******************************************************************************************/
 void Comp_Pair_Kumaraswamy2_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
 
@@ -2931,7 +2931,7 @@ void Comp_Pair_Kumaraswamy2_st2mem(int *cormod, double *data1,double *data2,int 
 /******************************************************************************************/
 void Comp_Pair_Beta_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
     int i=0;
     double corr,zi,zj,weights=1.0,bl;
@@ -2955,7 +2955,7 @@ void Comp_Pair_Beta_st2mem(int *cormod, double *data1,double *data2,int *N1,int 
 /******************************************************************************************/
 void Comp_Pair_Weibull_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -2977,7 +2977,7 @@ void Comp_Pair_Weibull_st2mem(int *cormod, double *data1,double *data2,int *N1,i
 /******************************************************************************************/
 void Comp_Pair_LogGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -3001,7 +3001,7 @@ void Comp_Pair_LogGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,
 
 void Comp_Pair_LogLogistic_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -3025,7 +3025,7 @@ void Comp_Pair_LogLogistic_st2mem(int *cormod, double *data1,double *data2,int *
 
 void Comp_Pair_Logistic_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -3052,7 +3052,7 @@ void Comp_Pair_Logistic_st2mem(int *cormod, double *data1,double *data2,int *N1,
 
 void Comp_Pair_TWOPIECEBIMODAL_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
 
     int i=0;
@@ -3092,7 +3092,7 @@ void Comp_Pair_TWOPIECEBIMODAL_st2mem(int *cormod, double *data1,double *data2,i
 /* pairwise for bivariate GRF*/
 void Comp_Pair_Gauss_biv2mem(int *cormod, double *data1,double *data2,int *NN,
     double *par, int *weigthed,double *res,double *mean1,double *mean2,
-    double *nuis, int *local,int *GPU)
+    double *nuis)
 {
     int i=0;
 
@@ -3112,7 +3112,7 @@ void Comp_Pair_Gauss_biv2mem(int *cormod, double *data1,double *data2,int *NN,
 /* pairwise  skew for bivariate GRF*/
 void Comp_Pair_SkewGauss_biv2mem(int *cormod, double *data1,double *data2,int *NN,
     double *par, int *weigthed,double *res,double *mean1,double *mean2,
-    double *nuis, int *local,int *GPU)
+    double *nuis)
 
 {
     int i=0;
@@ -3193,7 +3193,7 @@ void Comp_Pair_SkewGauss_biv2mem(int *cormod, double *data1,double *data2,int *N
 // Composite marginal (pariwise) log-likelihood for the spatial Gaussian model:
 void Comp_Pair_GaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                            double *nuis,  int *type_cop, int *cond)
 {
     // === 1. Initialization and Validation ===
     const double sill = nuis[1];
@@ -3254,7 +3254,7 @@ void Comp_Pair_GaussCop2mem(int *cormod, double *data1, double *data2, int *N1, 
 // Composite marginal (pariwise) log-likelihood for the spatial Gaussian model:
 void Comp_Pair_TCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                         double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                        double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                        double *nuis,  int *type_cop, int *cond)
 {
     int model = 12;
     const double sill = nuis[1];
@@ -3303,7 +3303,7 @@ void Comp_Pair_TCop2mem(int *cormod, double *data1, double *data2, int *N1, int 
 
 void Comp_Pair_BetaCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *local,int *GPU,int *type_cop, int *cond)
+ double *nuis, int *type_cop, int *cond)
 {
      int model=28; 
     /*############*/
@@ -3325,7 +3325,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 void Comp_Pair_Beta2Cop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                            double *nuis,  int *type_cop, int *cond)
 {
     int model = 50;
     const double sill = nuis[1];
@@ -3371,7 +3371,7 @@ void Comp_Pair_Beta2Cop2mem(int *cormod, double *data1, double *data2, int *N1, 
 }
 void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                  double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                  double *nuis,  int *type_cop, int *cond)
 {
     int model = 33;
     const double sill = nuis[1];
@@ -3422,7 +3422,7 @@ void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1, double *data2, int
 
 void Comp_Pair_WeibullCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                              double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                              double *nuis,  int *type_cop, int *cond)
 {
     const int model = 26;
     const double nugget = nuis[0];
@@ -3470,7 +3470,7 @@ void Comp_Pair_WeibullCop2mem(int *cormod, double *data1, double *data2, int *N1
 
 void Comp_Pair_GammaCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                            double *nuis,  int *type_cop, int *cond)
 {
     const int model = 21;
     const double nugget = nuis[0];
@@ -3516,7 +3516,7 @@ void Comp_Pair_GammaCop2mem(int *cormod, double *data1, double *data2, int *N1, 
 
 void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                               double *nuis,  int *type_cop, int *cond)
 {
     const int model = 24;
     const double sill = nuis[1];
@@ -3563,7 +3563,7 @@ void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1, double *data2, int *N
 
      void Comp_Pair_PoisCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                           double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                           double *nuis,  int *type_cop, int *cond)
 {
     const int model = 30;
     const double nugget = nuis[0];
@@ -3610,7 +3610,7 @@ void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1, double *data2, int *N
 
 void Comp_Pair_BinomNNGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                    double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                   double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                   double *nuis,  int *type_cop, int *cond)
 {
     const int model = 11;
     const double nugget = nuis[0];
@@ -3658,7 +3658,7 @@ void Comp_Pair_BinomNNGaussCop2mem(int *cormod, double *data1, double *data2, in
 
 void Comp_Pair_BinomnegGaussCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                     double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                    double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                    double *nuis,  int *type_cop, int *cond)
 {
     const int model = 16;
     const double nugget = nuis[0];
@@ -3704,7 +3704,7 @@ void Comp_Pair_BinomnegGaussCop2mem(int *cormod, double *data1, double *data2, i
 
 void Comp_Pair_LogisticCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                 double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                double *nuis, int *local, int *GPU, int *type_cop, int *cond)
+                                double *nuis,  int *type_cop, int *cond)
 {
     const int model = 25;
     const double nugget = nuis[0];

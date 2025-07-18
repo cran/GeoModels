@@ -1,6 +1,6 @@
 ####################################################
 GeoNeighIndex<-function(coordx,coordy=NULL,coordz=NULL,coordt=NULL,coordx_dyn=NULL,
-                              distance="Eucl",neighb=4,maxdist=NULL,maxtime=1,radius=6371,bivariate=FALSE)
+                              distance="Eucl",neighb=4,maxdist=NULL,maxtime=1,radius=1,bivariate=FALSE)
 {
 
 indices <- function(X, Y) {
@@ -11,7 +11,7 @@ indices <- function(X, Y) {
   list(xy = xy, d = d)
 }
 ##############################################################
-nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius = 6371) {
+nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius=1) {
   # Controlli input base
   if (!is.matrix(x) || !is.matrix(y)) stop("x e y devono essere matrici")
   n_x <- nrow(x)
@@ -83,7 +83,7 @@ nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius = 6371) {
 ##############################################################
 spacetime_index <- function(coords, coordx_dyn = NULL, N, K = 4, coordt = NULL,
                             numtime, maxtime = 1, maxdist = NULL, 
-                            distance = "Eucl", radius = 6371) {
+                            distance = "Eucl", radius=1) {
   
   m_s <- vector("list", numtime)
   

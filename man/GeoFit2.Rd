@@ -13,13 +13,13 @@
 \usage{
 GeoFit2(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,
   copula=NULL,corrmodel,distance="Eucl",fixed=NULL,
-     anisopars=NULL,est.aniso=c(FALSE,FALSE),GPU=NULL, 
+     anisopars=NULL,est.aniso=c(FALSE,FALSE),
      grid=FALSE, likelihood='Marginal',
-     local=c(1,1),  lower=NULL,maxdist=Inf,neighb=NULL,
+     lower=NULL,maxdist=Inf,neighb=NULL,
       maxtime=Inf, memdist=TRUE,method="cholesky", 
       model='Gaussian',n=1, onlyvar=FALSE ,
-      optimizer='Nelder-Mead', parallel=FALSE, 
-      radius=6371,  sensitivity=FALSE,sparse=FALSE,
+      optimizer='Nelder-Mead',
+      radius=1,  sensitivity=FALSE,sparse=FALSE,
        start=NULL, taper=NULL, tapsep=NULL, 
       type='Pairwise', upper=NULL, varest=FALSE, 
        weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
@@ -52,14 +52,12 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,
     given correlation function will be not estimated.}
   \item{anisopars}{ A list of two elements: "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
   \item{est.aniso}{ A bivariate logical vector  providing which anisotropic parameters must be estimated.}
-    \item{GPU}{Numeric; if \code{NULL} (the default) 
-      no OpenCL computation is performed. The user can choose the device to be used. Use \code{DeviceInfo()} function to see available devices, only double precision devices are allowed} 
+ 
   \item{grid}{Logical; if \code{FALSE} (the default) the data
     are interpreted as spatial or spatial-temporal realisations on a set
      of non-equispaced spatial sites (irregular grid).}
   \item{likelihood}{String; the configuration of the composite
     likelihood. \code{Marginal} is the default, see the Section \bold{Details}.}
-    \item{local}{Numeric; number of local work-items of the OpenCL setup}
    \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
     when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
@@ -85,10 +83,9 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,
   \item{optimizer}{String; the optimization algorithm
     (see \code{\link{optim}} for details). \code{Nelder-Mead} is the
     default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN},  \code{L-BFGS-B} and \code{nlminb} and \code{bobyqa}. In these last three cases upper and lower bounds can be passed by the user. In the case
-    of one-dimensional optimization, the function \code{optimize} is used.  }  
-  \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel using the maximum number of cores,  when optimizer is  \code{L-BFGS-B}.\code{FALSE} is the default.}  
+    of one-dimensional optimization, the function \code{optimize} is used.  }   
    \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
-   The default is 6371, the radius of the earth.}
+  Default value is 1.}
    \item{sensitivity}{Logical; if \code{TRUE} then  the sensitivy  matrix is computed}
   \item{sparse}{Logical; if \code{TRUE} then  maximum likelihood is computed
   using sparse matrices algorithms (spam packake).It should be used

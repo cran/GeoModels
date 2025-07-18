@@ -1,4 +1,93 @@
 #include "header.h"
+
+
+/*************************************************/
+
+
+int is_integer(double x) {
+    return fabs(x - round(x)) < DBL_EPSILON;
+}
+
+int is_nonneg_integer(double x) {
+    return is_integer(x) && x >= -DBL_EPSILON;
+}
+/*
+double hypergeo_m(double a, double b, double c, double x) {
+    if (!is_nonneg_integer(-b)) {
+        return hypergeo(a, b, c, x);
+    }
+    
+    int m = (int)(-b);
+    
+    // Casi speciali veloci
+    if (m == 0) return 1.0;
+    if (x == 0.0) return 1.0;
+    
+    double sum = 1.0;
+    double term = 1.0;
+    
+    for (int n = 1; n <= m; ++n) {
+        double num = (a + n - 1) * (m - n + 1) * x;
+        double den = (c + n - 1) * n;
+        if (den == 0.0) return NA_REAL;
+        term *= num / den;
+        sum += term;
+        if (fabs(term) < DBL_EPSILON * fabs(sum)) break;
+    }
+    
+    return sum;
+}*/
+
+
+double hypergeo_m(double a, double b, double c, double x) {
+    // Controllo se -b è un intero non negativo
+    if (!is_nonneg_integer(-b)) {
+        return hypergeo(a, b, c, x);
+    }
+    
+    int m = (int)round(-b);
+    
+    // Casi speciali
+    if (m == 0) return 1.0;
+    if (fabs(x) < DBL_EPSILON) return 1.0;
+    
+    // Controllo per evitare overflow/underflow
+    if (fabs(x) > 100.0 && m > 50) {
+        return hypergeo(a, b, c, x);
+    }
+    
+    double sum = 1.0;
+    double term = 1.0;
+    
+    // Versione ricorsiva ottimizzata
+    for (int n = 1; n <= m; ++n) {
+        // Calcolo ricorsivo del termine
+        double num = (a + n - 1) * (m - n + 1) * x;
+        double den = (c + n - 1) * n;
+        
+        // Controllo denominatore robusto
+        if (fabs(den) < DBL_EPSILON) {
+            return NA_REAL;
+        }
+        
+        term *= num / den;
+        
+        // Controllo overflow/underflow
+        if (!isfinite(term)) {
+            break;
+        }
+        
+        sum += term;
+        
+        // Criterio di convergenza
+        if (fabs(term) < DBL_EPSILON * fabs(sum)) {
+            break;
+        }
+    }
+    
+    return sum;
+}
+
 //******************************************************************************
 double polevl(double x, const double coef[], int N)
 
@@ -443,6 +532,44 @@ double d2lognorm(double x, double y, double sill,double nugget, double mux,doubl
 
 
 
+
+ double compute_biv_norm_density(double d1, double d2, double mui, double muj, 
+                                             double vvi, double vvj, double corr1) {
+    // Centered data
+    double z1 = d1 - mui;
+    double z2 = d2 - muj;
+    
+    // Compute correlation coefficient
+    double rho = corr1;
+    
+    // Ensure correlation is within valid bounds
+    if (rho >= 1.0) rho = 0.9999;
+    if (rho <= -1.0) rho = -0.9999;
+    
+    // Compute standardized values
+    double s1 = sqrt(vvi);
+    double s2 = sqrt(vvj);
+    double u1 = z1 / s1;
+    double u2 = z2 / s2;
+    
+    // Compute discriminant
+    double rho2 = rho * rho;
+    double disc = 1.0 - rho2;
+    
+    if (disc < 1e-10) {
+        // Handle near-singular case
+        return 1e-10;
+    }
+    
+    // Compute quadratic form
+    double quad = (u1 * u1 - 2.0 * rho * u1 * u2 + u2 * u2) / disc;
+    
+    // Compute log density
+    double log_density = -0.5 * (quad + log(2.0 * M_PI * s1 * s2 * disc));
+    
+    return exp(log_density);
+}
+
 double d2lognorm(double x, double y, double sill, double nugget, double mux, double muy, double rho)
 {
 
@@ -659,11 +786,9 @@ double corrPGs(double corr, double mean, double a) {
     if (!R_FINITE(corr) || !R_FINITE(mean) || !R_FINITE(a)) {
         return R_NaN;
     }
-    
     if (fabs(corr) >= 1.0 || mean <= MIN_MEAN_THRESHOLD || a <= MIN_A_THRESHOLD) {
         return R_NaN;
     }
-    
     // Gestione casi limite per correlazione quasi zero
     if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
         return 0.0;  // Correlazione effettivamente zero
@@ -681,9 +806,7 @@ double corrPGs(double corr, double mean, double a) {
     if (two_plus_KK <= 0.0 || four_plus_KK <= 0.0) {
         return R_NaN;
     }
-    
     const double cc = 4.0 / (two_plus_KK * two_plus_KK);
-    
     // Controllo per cc: deve essere in [0,1) per convergenza delle ipergeometriche
     if (cc >= 1.0 || cc < 0.0) {
         return R_NaN;
@@ -709,7 +832,6 @@ double corrPGs(double corr, double mean, double a) {
     if (!R_FINITE(dd) || dd <= 0.0) {
         return R_NaN;
     }
-
     const double aa_param1 = (1.0 - a) / 2.0;
     const double aa_param2 = -a / 2.0;
     const double bb_param1 = (2.0 - a) / 2.0;
@@ -719,55 +841,61 @@ double corrPGs(double corr, double mean, double a) {
         !R_FINITE(bb_param1) || !R_FINITE(bb_param2)) {
         return R_NaN;
     }
-    
-    const double aa = hypergeo(aa_param1, aa_param2, 1.0, cc);
-    const double bb_hypergeo = hypergeo(bb_param1, bb_param2, 2.0, cc);
+    const double aa = hypergeo_m(aa_param1, aa_param2, 1.0, cc);
+    const double bb_hypergeo = hypergeo_m(bb_param1, bb_param2, 2.0, cc);
     if (!R_FINITE(aa) || !R_FINITE(bb_hypergeo) || aa <= 0.0 || bb_hypergeo <= 0.0) {
         return R_NaN;
     }
-
     const double bb_coeff = (a + 1.0) / two_plus_KK;
     if (!R_FINITE(bb_coeff)) {
         return R_NaN;
     }
-    
     const double bb = bb_coeff * bb_hypergeo;
-
     const double aa_plus_bb = aa + bb;
     if (!R_FINITE(aa_plus_bb)) {
         return R_NaN;
     }
-    
     const double dd_term = dd * aa_plus_bb;
     if (!R_FINITE(dd_term)) {
         return R_NaN;
     }
     const double inner_term = 1.0 - dd_term;const double result = corr2 * inner_term;
-    
     // Controllo finale del risultato
     if (!R_FINITE(result)) {
         return R_NaN;
     }
-    
     if (result < 0.0 || result > 1.0) {
         return fmax(0.0, fmin(1.0, result));
     }
-    
     return result;
 }
 
-   
-#define DEFAULT_MAX_ITER 1000
+
+
+/********* non stationary *********************************/
+#define DEFAULT_MAX_ITER 200
 #define CONVERGENCE_TOL 1e-12
 #define LOG_EPSILON -230.0
 /********* non  stationary *********************************/
-double CorrPGns(double corr, double mean_i, double mean_j, double a) {
-    // Validazione input
-    if (fabs(corr) >= 1.0 || mean_i <= 0.0 || mean_j <= 0.0 || a <= 0.0) {
-        return R_NaN;  // Input non valido
+
+// Trasformazione di Kummer per funzioni ipergeometriche
+double hypergeo_kummer(double a, double b, double c, double x) {
+    // Usa la trasformazione di Kummer: F(a,b,c,x) = exp(x) * F(c-a,c-b,c,-x)
+    if (x < 0) {
+        return hypergeo(a, b, c, x);
     }
     
+    const double new_a = c - a;
+    const double new_b = c - b;
+    const double new_x = -x;
+    
+    const double result = exp(x) * hypergeo(new_a, new_b, c, new_x);
+    return result;
+}
 
+
+// Serie ottimizzata per a moderatamente piccolo
+double CorrPGns_OptimizedSeries(double corr, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double nu_i = a / mean_i;
     const double nu_j = a / mean_j;
@@ -787,14 +915,18 @@ double CorrPGns(double corr, double mean_i, double mean_j, double a) {
     double sum = 0.0;
     double prev_sum = 0.0;
     int convergence_count = 0;
-    const int convergence_threshold = 3;  // Richiedi 3 iterazioni stabili
+    const int convergence_threshold = 2;  // Ridotto per a piccolo
+    const int max_iter = 50;  // Ridotto per a piccolo
     
-    double lgamma_cache_a_plus_m[DEFAULT_MAX_ITER];
-    for (int m = 0; m < DEFAULT_MAX_ITER; m++) {
+    // Pre-calcolo dei logaritmi delle funzioni gamma
+    double lgamma_cache_a_plus_m[max_iter];
+    for (int m = 0; m < max_iter; m++) {
         lgamma_cache_a_plus_m[m] = lgammafn(m + a);
     }
-
-    for (int r = 0; r < DEFAULT_MAX_ITER; r++) {
+    
+    // Usa trasformazione di Kummer per le funzioni ipergeometriche
+    // per migliorare la stabilità numerica
+    for (int r = 0; r < max_iter; r++) {
         const int r2 = r + 2;
         const double lgamma_r2 = lgammafn(r2);
         const double log_r2_factorial = 2.0 * lgamma_r2;
@@ -802,49 +934,803 @@ double CorrPGns(double corr, double mean_i, double mean_j, double a) {
         double row_sum = 0.0;
         bool row_converged = false;
         
-        for (int m = 0; m < DEFAULT_MAX_ITER; m++) {
-            // Calcolo delle funzioni ipergeometriche
+        for (int m = 0; m < max_iter; m++) {
+            // Usa la trasformazione di Kummer per stabilità
             const double a1m = 1.0 - a - m;
-            const double h1 = hypergeo(1.0, a1m, r2, mnui);
-            const double h2 = hypergeo(1.0, a1m, r2, mnuj);
-
+            
+            // Calcolo più stabile delle funzioni ipergeometriche
+            double h1, h2;
+            if (fabs(mnui) > 0.5) {
+                h1 = hypergeo_kummer(1.0, a1m, r2, mnui);
+            } else {
+                h1 = hypergeo_m(1.0, a1m, r2, mnui);
+            }
+            
+            if (fabs(mnuj) > 0.5) {
+                h2 = hypergeo_kummer(1.0, a1m, r2, mnuj);
+            } else {
+                h2 = hypergeo_m(1.0, a1m, r2, mnuj);
+            }
+            
             if (h1 <= 0.0 || h2 <= 0.0 || !R_FINITE(h1) || !R_FINITE(h2)) {
                 break;
             }
             
             const double log_h1h2 = log(h1) + log(h2);
             const double H = log_h1h2 - log_r2_factorial;
+            
+            // Calcolo più accurato dei termini logaritmici
             const double aux1 = 2.0 * m * log_corr + m * lnuij + 
                                2.0 * lgammafn(r + m + 1 + a);
             const double aux2 = (r + m) * lpnuij + 
                                lgamma_cache_a_plus_m[m] + lgammafn(m);
             
             const double log_term = H + aux1 - aux2;
-            if (!R_FINITE(log_term) || log_term < LOG_EPSILON) {
+            
+            // Controllo più rigoroso dell'underflow
+            if (!R_FINITE(log_term) || log_term < -500.0) {
                 break;
             }
             
             const double term = exp(log_term);
             row_sum += term;
-            if (fabs(term) < CONVERGENCE_TOL * fabs(row_sum)) {
+            
+            // Criterio di convergenza adattivo
+            const double rel_term = fabs(term) / (fabs(row_sum) + 1e-16);
+            if (rel_term < 1e-12) {
                 row_converged = true;
                 break;
             }
-        } 
+        }
+        
         sum += row_sum;
+        
         if (r > 0) {
-            const double relative_change = fabs((sum - prev_sum) / sum);
-            if (relative_change < CONVERGENCE_TOL) {
+            const double relative_change = fabs((sum - prev_sum)) / (fabs(sum) + 1e-16);
+            if (relative_change < 1e-10) {
                 convergence_count++;
                 if (convergence_count >= convergence_threshold) {
-                    break;  // Convergenza raggiunta
+                    break;
                 }
             } else {
-                convergence_count = 0;  // Reset del contatore
+                convergence_count = 0;
             }
-        }  
+        }
+        
         prev_sum = sum;
-        if (row_converged && fabs(row_sum) < CONVERGENCE_TOL * fabs(sum)) {
+        
+        // Criterio di arresto anticipato per righe che convergono rapidamente
+        if (row_converged && fabs(row_sum) < 1e-12 * fabs(sum)) {
+            break;
+        }
+    }
+    
+    // Calcolo finale più robusto
+    const double log_aux3_base = log_rho2 + (a + 1.0) * log1m_rho2 + 
+                                 (a - 0.5) * lnuij - lgamma_a - 
+                                 (a + 0.5) * lpnuij - 0.5 * log_mean_prod;
+    
+    if (!R_FINITE(log_aux3_base)) {
+        return R_NaN;
+    }
+    
+    const double aux3 = exp(log_aux3_base);
+    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
+    const double aux4 = exp(log_aux4);
+    
+    const double result = aux4 + aux3 * sum;
+    
+    return R_FINITE(result) ? result : R_NaN;
+}
+
+
+
+// Approssimazione asintotica per a molto piccolo
+double CorrPGns_AsymptoticSmallA(double corr, double mean_i, double mean_j, double a) {
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    
+    // Approssimazione del primo ordine in a
+    const double log_nu_prod = log(nu_i * nu_j);
+    const double log_means_prod = log(mean_i * mean_j);
+    
+    // Termine principale
+    const double main_term = rho2 * nu_i * nu_j / ((1.0 + nu_i) * (1.0 + nu_j));
+    
+    // Correzione del secondo ordine
+    const double correction = a * rho2 * (
+        log_nu_prod - log(1.0 + nu_i) - log(1.0 + nu_j) - 
+        0.5 * log_means_prod
+    );
+    
+    return main_term + correction;
+}
+
+
+
+
+
+
+double binomial(int m, int n) {
+    if (n < 0 || n > m) return 0.0;
+    return exp(lgammafn(m + 1) - lgammafn(n + 1) - lgammafn(m - n + 1));
+}
+double hypergeo_polynomial(int m, int r, double x) {
+    double sum = 0.0;
+    double sign = 1.0;
+
+    for (int n = 0; n <= m; ++n) {
+        double binom = binomial(m, n);
+        double denom = poch(r + 2, n);
+        double term = sign * binom * R_pow(x, n) / denom;
+        sum += term;
+        sign *= -1.0;  // alterna il segno
+    }
+
+    return sum;
+}
+
+// Funzione specializzata per il caso a = 1 (molto efficiente)
+double CorrPGns_UnitA(double corr, double mean_i, double mean_j) {
+    const double rho2 = corr * corr;
+    const double nu_i = 1.0 / mean_i;
+    const double nu_j = 1.0 / mean_j;
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+    const double mnui = -1.0 / nu_i;  // = -mean_i
+    const double mnuj = -1.0 / nu_j;  // = -mean_j
+    const double log_corr = log(fabs(corr));
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+    const double log_mean_prod = log(mean_i * mean_j);
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    int convergence_count = 0;
+    const int convergence_threshold = 2;
+    const int max_iter = 50;  // Mantengo sicuro per a=1
+    // Cache per log(m!)
+    double log_factorial_cache[max_iter];
+    log_factorial_cache[0] = 0.0;  // log(0!) = 0
+    for (int m = 1; m < max_iter; m++) {
+        log_factorial_cache[m] = log_factorial_cache[m-1] + log(m);
+    }
+    
+    for (int r = 0; r < max_iter; r++) {
+        const int r2 = r + 2;
+        const double lgamma_r2 = lgammafn(r2);
+        const double log_r2_factorial = 2.0 * lgamma_r2;
+        
+        double row_sum = 0.0;
+        bool row_converged = false;
+        
+        for (int m = 0; m < max_iter; m++) {
+            // Per a=1: a1m = 1-1-m = -m
+            const double a1m = -m;
+            
+            // Calcolo delle funzioni ipergeometriche
+            double h1, h2;
+            
+            if (m == 0) {
+                // F(1, 0, r+2, x) = 1
+                h1 = h2 = 1.0;
+            } else {
+                // Per m > 0, F(1, -m, r+2, x) è un polinomio
+                h1 = hypergeo_polynomial(a1m, r2, mnui);
+                h2 = hypergeo_polynomial(a1m, r2, mnuj);
+            }
+            
+            if (h1 <= 0.0 || h2 <= 0.0 || !R_FINITE(h1) || !R_FINITE(h2)) {
+                break;
+            }
+            
+            const double log_h1h2 = log(h1) + log(h2);
+            const double H = log_h1h2 - log_r2_factorial;
+            
+            // Per a=1: lgammafn(r+m+1+a) = lgammafn(r+m+2) = log((r+m+1)!)
+            const double log_gamma_r_m_1_a = lgammafn(r + m + 2);
+            
+            const double aux1 = 2.0 * m * log_corr + m * lnuij + 2.0 * log_gamma_r_m_1_a;
+            
+            // Per a=1: lgammafn(a+m) = lgammafn(1+m) = log(m!)
+            const double log_gamma_a_m = (m < max_iter) ? log_factorial_cache[m] : lgammafn(1 + m);
+            const double log_gamma_m = (m == 0) ? 0.0 : log_factorial_cache[m];
+            
+            const double aux2 = (r + m) * lpnuij + log_gamma_a_m + log_gamma_m;
+            
+            const double log_term = H + aux1 - aux2;
+            
+            if (!R_FINITE(log_term) || log_term < -500.0) {
+                break;
+            }
+            
+            const double term = exp(log_term);
+            row_sum += term;
+            
+            // Criterio di convergenza
+            const double rel_term = fabs(term) / (fabs(row_sum) + 1e-16);
+            if (rel_term < 1e-12) {
+                row_converged = true;
+                break;
+            }
+        }
+        
+        sum += row_sum;
+        
+        if (r > 0) {
+            const double relative_change = fabs((sum - prev_sum)) / (fabs(sum) + 1e-16);
+            if (relative_change < 1e-10) {
+                convergence_count++;
+                if (convergence_count >= convergence_threshold) {
+                    break;
+                }
+            } else {
+                convergence_count = 0;
+            }
+        }
+        
+        prev_sum = sum;
+        
+        if (row_converged && fabs(row_sum) < 1e-12 * fabs(sum)) {
+            break;
+        }
+    }
+    
+    // Per a=1: lgammafn(1) = 0
+    const double log_aux3_base = log_rho2 + (1.0 + 1.0) * log1m_rho2 + 
+                                 (1.0 - 0.5) * lnuij - 0.0 - 
+                                 (1.0 + 0.5) * lpnuij - 0.5 * log_mean_prod;
+    
+    if (!R_FINITE(log_aux3_base)) {
+        return R_NaN;
+    }
+    const double aux3 = exp(log_aux3_base);
+    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
+    const double aux4 = exp(log_aux4);
+    const double result = aux4 + aux3 * sum;
+    return R_FINITE(result) ? result : R_NaN;
+}
+
+double CorrPGns_SmallA(double corr, double mean_i, double mean_j, double a) {
+    // Validazione input
+    if (fabs(corr) >= 1.0 || mean_i <= 0.0 || mean_j <= 0.0 || a <= 0.0 || a > 1.0) {
+        return R_NaN;
+    }
+    // Caso speciale per a = 1 (molto efficiente)
+   if (fabs(a - 1.0) < 1e-14) {return CorrPGns_UnitA(corr, mean_i, mean_j);}
+    // Per a molto piccolo (< 0.01), usa approssimazione asintotica
+    if (a < 0.01) {
+        return CorrPGns_AsymptoticSmallA(corr, mean_i, mean_j, a);
+    }
+    // Per a moderatamente piccolo (0.01 <= a < 1), usa serie ottimizzata
+    return CorrPGns_OptimizedSeries(corr, mean_i, mean_j, a);
+}
+
+// Funzione specializzata per a intero >= 1
+double CorrPGns_IntegerA(double corr, double mean_i, double mean_j, int a_int) {
+    const double a = (double)a_int;
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+    const double mnui = -1.0 / nu_i;
+    const double mnuj = -1.0 / nu_j;
+    const double log_corr = log(fabs(corr));
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+    const double log_mean_prod = log(mean_i * mean_j);
+    
+    // Per a intero, lgammafn(a) = log((a-1)!) = log(factorial(a-1))
+    double lgamma_a;
+    if (a_int == 1) {
+        lgamma_a = 0.0;  // log(0!) = 0
+    } else {
+        lgamma_a = lgammafn(a);
+    }
+    
+    // Parametri ottimizzati per a intero
+    int max_iter = (a_int < 3) ? 80 : (a_int < 6) ? 120 : 180;
+    double convergence_tol = 1e-16;  // Tolleranza molto stringente per a intero
+    int convergence_threshold = 5;
+    
+    if (fabs(corr) > 0.8) {
+        max_iter = (int)(max_iter * 1.2);
+    }
+    
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    int convergence_count = 0;
+    
+    // Pre-calcolo ottimizzato per a intero
+    double lgamma_cache_a_plus_m[max_iter];
+    for (int m = 0; m < max_iter; m++) {
+        lgamma_cache_a_plus_m[m] = lgammafn(m + a);
+    }
+    
+    // Cache per log(m!)
+    double log_factorial_cache[max_iter];
+    log_factorial_cache[0] = 0.0;
+    for (int m = 1; m < max_iter; m++) {
+        log_factorial_cache[m] = log_factorial_cache[m-1] + log(m);
+    }
+    
+    for (int r = 0; r < max_iter; r++) {
+        const int r2 = r + 2;
+        const double lgamma_r2 = lgammafn(r2);
+        const double log_r2_factorial = 2.0 * lgamma_r2;
+        
+        double row_sum = 0.0;
+        double row_correction = 0.0;
+        bool row_converged = false;
+        
+        for (int m = 0; m < max_iter; m++) {
+            const double a1m = 1.0 - a - m;
+            const int a1m_int = 1 - a_int - m;
+            
+            // Calcolo ottimizzato per a intero
+            double h1, h2;
+            
+            // Quando a1m è un intero negativo, la funzione ipergeometrica è un polinomio
+            if (a1m_int <= 0) {
+                h1 = hypergeo_m(1.0, a1m, r2, mnui);
+                h2 = hypergeo_m(1.0, a1m, r2, mnuj);
+            } else {
+                // Per a1m positivo, usa il metodo standard
+                if (fabs(mnui) > 1.0) {
+                    h1 = hypergeo_kummer(1.0, a1m, r2, mnui);
+                } else {
+                    h1 = hypergeo_m(1.0, a1m, r2, mnui);
+                }
+                
+                if (fabs(mnuj) > 1.0) {
+                    h2 = hypergeo_kummer(1.0, a1m, r2, mnuj);
+                } else {
+                    h2 = hypergeo_m(1.0, a1m, r2, mnuj);
+                }
+            }
+            
+            if (h1 <= 0.0 || h2 <= 0.0 || !R_FINITE(h1) || !R_FINITE(h2)) {
+                break;
+            }
+            
+            const double log_h1h2 = log(h1) + log(h2);
+            const double H = log_h1h2 - log_r2_factorial;
+            
+            // Calcolo più preciso per a intero
+            const double aux1 = 2.0 * m * log_corr + m * lnuij + 
+                               2.0 * lgammafn(r + m + 1 + a_int);
+            
+            const double log_gamma_m = (m == 0) ? 0.0 : 
+                                      (m < max_iter) ? log_factorial_cache[m] : lgammafn(m + 1);
+            
+            const double aux2 = (r + m) * lpnuij + 
+                               lgamma_cache_a_plus_m[m] + log_gamma_m;
+            
+            const double log_term = H + aux1 - aux2;
+            
+            if (!R_FINITE(log_term) || log_term < -700.0) {
+                break;
+            }
+            
+            const double term = exp(log_term);
+            
+            // Compensazione di Kahan
+            const double y = term - row_correction;
+            const double t = row_sum + y;
+            row_correction = (t - row_sum) - y;
+            row_sum = t;
+            
+            const double rel_term = fabs(term) / (fabs(row_sum) + 1e-16);
+            if (rel_term < convergence_tol) {
+                row_converged = true;
+                break;
+            }
+            
+            if (fabs(row_sum) > 1e100) {
+                break;
+            }
+        }
+        
+        sum += row_sum;
+        
+        if (r > 0) {
+            const double relative_change = fabs((sum - prev_sum)) / (fabs(sum) + 1e-16);
+            if (relative_change < convergence_tol) {
+                convergence_count++;
+                if (convergence_count >= convergence_threshold) {
+                    break;
+                }
+            } else {
+                convergence_count = 0;
+            }
+        }
+        
+        prev_sum = sum;
+        
+        if (row_converged && fabs(row_sum) < convergence_tol * fabs(sum)) {
+            break;
+        }
+        
+        if (r > 15 && fabs(row_sum) < convergence_tol * 0.01 * fabs(sum)) {
+            break;
+        }
+    }
+    
+    // Calcolo finale per a intero
+    const double log_aux3_base = log_rho2 + (a + 1.0) * log1m_rho2 + 
+                                 (a - 0.5) * lnuij - lgamma_a - 
+                                 (a + 0.5) * lpnuij - 0.5 * log_mean_prod;
+    
+    if (!R_FINITE(log_aux3_base)) {
+        return R_NaN;
+    }
+    
+    const double aux3 = exp(log_aux3_base);
+    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
+    const double aux4 = exp(log_aux4);
+    
+    const double result = aux4 + aux3 * sum;
+    
+    return R_FINITE(result) ? result : R_NaN;
+}
+
+// Versione ottimizzata per a >= 1 con maggiore precisione
+double CorrPGns_HighPrecision(double corr, double mean_i, double mean_j, double a) {
+    // Validazione input
+    if (fabs(corr) >= 1.0 || mean_i <= 0.0 || mean_j <= 0.0 || a <= 0.0) {
+        return R_NaN;
+    }
+    
+    // Caso speciale per a intero
+    if (fabs(a - round(a)) < 1e-14) {
+        int a_int = (int)round(a);
+        return CorrPGns_IntegerA(corr, mean_i, mean_j, a_int);
+    }
+    
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+    const double mnui = -1.0 / nu_i;
+    const double mnuj = -1.0 / nu_j;
+    const double log_corr = log(fabs(corr));
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+    const double lgamma_a = lgammafn(a);
+    const double log_mean_prod = log(mean_i * mean_j);
+    
+    // Parametri adattivi basati su a e correlazione
+    int max_iter = (a < 2.0) ? 120 : (a < 5.0) ? 180 : 250;
+    double convergence_tol = (a < 2.0) ? 1e-15 : (a < 5.0) ? 1e-14 : 1e-13;
+    int convergence_threshold = (a < 2.0) ? 5 : 4;
+    
+    // Aggiusta i parametri per correlazioni alte
+    if (fabs(corr) > 0.8) {
+        max_iter = (int)(max_iter * 1.5);
+        convergence_tol *= 0.1;
+    }
+    
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    int convergence_count = 0;
+    
+    // Pre-calcolo delle funzioni gamma per efficienza
+    double lgamma_cache_a_plus_m[max_iter];
+    for (int m = 0; m < max_iter; m++) {
+        lgamma_cache_a_plus_m[m] = lgammafn(m + a);
+    }
+    
+    // Cache per log(m!) - più efficiente per grandi valori
+    double log_factorial_cache[max_iter];
+    log_factorial_cache[0] = 0.0;
+    for (int m = 1; m < max_iter; m++) {
+        log_factorial_cache[m] = log_factorial_cache[m-1] + log(m);
+    }
+    
+    // Cache per log(Gamma(r+2)) per efficienza
+    double lgamma_r2_cache[max_iter];
+    for (int r = 0; r < max_iter; r++) {
+        lgamma_r2_cache[r] = lgammafn(r + 2);
+    }
+    
+    for (int r = 0; r < max_iter; r++) {
+        const int r2 = r + 2;
+        const double lgamma_r2 = lgamma_r2_cache[r];
+        const double log_r2_factorial = 2.0 * lgamma_r2;
+        
+        double row_sum = 0.0;
+        double row_correction = 0.0;  // Per compensazione di Kahan
+        bool row_converged = false;
+        
+        for (int m = 0; m < max_iter; m++) {
+            const double a1m = 1.0 - a - m;
+            
+            // Calcolo ottimizzato delle funzioni ipergeometriche
+            double h1, h2;
+            
+            // Caso speciale: quando a1m è un intero negativo, hypergeo_m è molto efficiente
+            if (a1m <= 0.0 && fabs(a1m - floor(a1m)) < 1e-14) {
+                // hypergeo_m gestisce automaticamente questo caso
+                h1 = hypergeo_m(1.0, a1m, r2, mnui);
+                h2 = hypergeo_m(1.0, a1m, r2, mnuj);
+            } else {
+                // Per altri casi, scegli il metodo migliore
+                if (fabs(mnui) > 1.0) {
+                    h1 = hypergeo_kummer(1.0, a1m, r2, mnui);
+                } else {
+                    h1 = hypergeo_m(1.0, a1m, r2, mnui);
+                }
+                
+                if (fabs(mnuj) > 1.0) {
+                    h2 = hypergeo_kummer(1.0, a1m, r2, mnuj);
+                } else {
+                    h2 = hypergeo_m(1.0, a1m, r2, mnuj);
+                }
+            }
+            
+            // Controllo di validità più rigoroso
+            if (h1 <= 0.0 || h2 <= 0.0 || !R_FINITE(h1) || !R_FINITE(h2)) {
+                break;
+            }
+            
+            const double log_h1h2 = log(h1) + log(h2);
+            const double H = log_h1h2 - log_r2_factorial;
+            
+            // Calcolo più accurato dei termini logaritmici
+            const double aux1 = 2.0 * m * log_corr + m * lnuij + 
+                               2.0 * lgammafn(r + m + 1 + a);
+            
+            const double log_gamma_m = (m == 0) ? 0.0 : 
+                                      (m < max_iter) ? log_factorial_cache[m] : lgammafn(m + 1);
+            
+            const double aux2 = (r + m) * lpnuij + 
+                               lgamma_cache_a_plus_m[m] + log_gamma_m;
+            
+            const double log_term = H + aux1 - aux2;
+            
+            // Controllo dell'underflow più rigoroso
+            if (!R_FINITE(log_term) || log_term < -700.0) {
+                break;
+            }
+            
+            const double term = exp(log_term);
+            
+            // Accumulo con compensazione di Kahan per ridurre errori numerici
+            const double y = term - row_correction;
+            const double t = row_sum + y;
+            row_correction = (t - row_sum) - y;
+            row_sum = t;
+            
+            // Criterio di convergenza più stringente
+            const double rel_term = fabs(term) / (fabs(row_sum) + 1e-16);
+            if (rel_term < convergence_tol) {
+                row_converged = true;
+                break;
+            }
+            
+            // Controllo per evitare overflow nella somma
+            if (fabs(row_sum) > 1e100) {
+                break;
+            }
+            
+            // Controllo per serie che divergono
+            if (m > 10 && fabs(term) > fabs(row_sum)) {
+                break;
+            }
+        }
+        
+        // Accumulo globale con compensazione di Kahan
+        static double global_correction = 0.0;
+        const double y = row_sum - global_correction;
+        const double t = sum + y;
+        global_correction = (t - sum) - y;
+        sum = t;
+        
+        // Controllo di convergenza globale
+        if (r > 0) {
+            const double relative_change = fabs((sum - prev_sum)) / (fabs(sum) + 1e-16);
+            if (relative_change < convergence_tol) {
+                convergence_count++;
+                if (convergence_count >= convergence_threshold) {
+                    break;
+                }
+            } else {
+                convergence_count = 0;
+            }
+        }
+        
+        prev_sum = sum;
+        
+        // Criterio di arresto anticipato per righe che convergono rapidamente
+        if (row_converged && fabs(row_sum) < convergence_tol * fabs(sum)) {
+            break;
+        }
+        
+        // Controllo per evitare calcoli inutili se la riga contribuisce poco
+        if (r > 20 && fabs(row_sum) < convergence_tol * 0.1 * fabs(sum)) {
+            break;
+        }
+    }
+    
+    // Calcolo finale più robusto
+    const double log_aux3_base = log_rho2 + (a + 1.0) * log1m_rho2 + 
+                                 (a - 0.5) * lnuij - lgamma_a - 
+                                 (a + 0.5) * lpnuij - 0.5 * log_mean_prod;
+    
+    if (!R_FINITE(log_aux3_base)) {
+        return R_NaN;
+    }
+    
+    const double aux3 = exp(log_aux3_base);
+    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
+    const double aux4 = exp(log_aux4);
+    
+    const double result = aux4 + aux3 * sum;
+    
+    return R_FINITE(result) ? result : R_NaN;
+}
+
+// Funzione logH migliorata per maggiore stabilità
+double logH_stable(double a, double b, double c, double x, double xp) {
+    double log_gamma_c = lgammafn(c);
+    double F1, F2;
+    
+    // Ottimizza la scelta del metodo basandosi sul tipo di parametro b
+    if (b <= 0.0 && fabs(b - floor(b)) < 1e-14) {
+        // b è un intero negativo: hypergeo_m è ottimale
+        F1 = hypergeo_m(a, b, c, x);
+        F2 = hypergeo_m(a, b, c, xp);
+    } else {
+        // Usa trasformazione di Kummer se necessario
+        if (fabs(x) > 1.0) {
+            F1 = hypergeo_kummer(a, b, c, x);
+        } else {
+            F1 = hypergeo_m(a, b, c, x);
+        }
+        
+        if (fabs(xp) > 1.0) {
+            F2 = hypergeo_kummer(a, b, c, xp);
+        } else {
+            F2 = hypergeo_m(a, b, c, xp);
+        }
+    }
+    
+    if (!R_FINITE(F1) || !R_FINITE(F2) || F1 <= 0.0 || F2 <= 0.0) {
+        return NA_REAL;
+    }
+    
+    double log_H = log(F1) + log(F2) - 2.0 * log_gamma_c;
+    return log_H;
+}
+
+// Versione alternativa che usa logH_stable invece di calcolare h1 e h2 separatamente
+double CorrPGns_HighPrecision_v2(double corr, double mean_i, double mean_j, double a) {
+    // Validazione input
+    if (fabs(corr) >= 1.0 || mean_i <= 0.0 || mean_j <= 0.0 || a <= 0.0) {
+        return R_NaN;
+    }
+    
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+    const double mnui = -1.0 / nu_i;
+    const double mnuj = -1.0 / nu_j;
+    const double log_corr = log(fabs(corr));
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+    const double lgamma_a = lgammafn(a);
+    const double log_mean_prod = log(mean_i * mean_j);
+    
+    // Parametri adattivi
+    int max_iter = (a < 2.0) ? 120 : (a < 5.0) ? 180 : 250;
+    double convergence_tol = (a < 2.0) ? 1e-15 : (a < 5.0) ? 1e-14 : 1e-13;
+    int convergence_threshold = (a < 2.0) ? 5 : 4;
+    
+    if (fabs(corr) > 0.8) {
+        max_iter = (int)(max_iter * 1.5);
+        convergence_tol *= 0.1;
+    }
+    
+    double sum = 0.0;
+    double prev_sum = 0.0;
+    int convergence_count = 0;
+    
+    // Pre-calcolo delle funzioni gamma
+    double lgamma_cache_a_plus_m[max_iter];
+    for (int m = 0; m < max_iter; m++) {
+        lgamma_cache_a_plus_m[m] = lgammafn(m + a);
+    }
+    
+    double log_factorial_cache[max_iter];
+    log_factorial_cache[0] = 0.0;
+    for (int m = 1; m < max_iter; m++) {
+        log_factorial_cache[m] = log_factorial_cache[m-1] + log(m);
+    }
+    
+    for (int r = 0; r < max_iter; r++) {
+        const int r2 = r + 2;
+        
+        double row_sum = 0.0;
+        double row_correction = 0.0;
+        bool row_converged = false;
+        
+        for (int m = 0; m < max_iter; m++) {
+            const double a1m = 1.0 - a - m;
+            
+            // Usa logH_stable per calcolo più robusto
+            const double H = logH_stable(1.0, a1m, r2, mnui, mnuj);
+            
+            if (!R_FINITE(H)) {
+                break;
+            }
+            
+            const double aux1 = 2.0 * m * log_corr + m * lnuij + 
+                               2.0 * lgammafn(r + m + 1 + a);
+            
+            const double log_gamma_m = (m == 0) ? 0.0 : 
+                                      (m < max_iter) ? log_factorial_cache[m] : lgammafn(m + 1);
+            
+            const double aux2 = (r + m) * lpnuij + 
+                               lgamma_cache_a_plus_m[m] + log_gamma_m;
+            
+            const double log_term = H + aux1 - aux2;
+            
+            if (!R_FINITE(log_term) || log_term < -700.0) {
+                break;
+            }
+            
+            const double term = exp(log_term);
+            
+            // Compensazione di Kahan
+            const double y = term - row_correction;
+            const double t = row_sum + y;
+            row_correction = (t - row_sum) - y;
+            row_sum = t;
+            
+            const double rel_term = fabs(term) / (fabs(row_sum) + 1e-16);
+            if (rel_term < convergence_tol) {
+                row_converged = true;
+                break;
+            }
+            
+            if (fabs(row_sum) > 1e100 || (m > 10 && fabs(term) > fabs(row_sum))) {
+                break;
+            }
+        }
+        
+        sum += row_sum;
+        
+        if (r > 0) {
+            const double relative_change = fabs((sum - prev_sum)) / (fabs(sum) + 1e-16);
+            if (relative_change < convergence_tol) {
+                convergence_count++;
+                if (convergence_count >= convergence_threshold) {
+                    break;
+                }
+            } else {
+                convergence_count = 0;
+            }
+        }
+        
+        prev_sum = sum;
+        
+        if (row_converged && fabs(row_sum) < convergence_tol * fabs(sum)) {
+            break;
+        }
+        
+        if (r > 20 && fabs(row_sum) < convergence_tol * 0.1 * fabs(sum)) {
             break;
         }
     }
@@ -865,16 +1751,25 @@ double CorrPGns(double corr, double mean_i, double mean_j, double a) {
     
     return R_FINITE(result) ? result : R_NaN;
 }
-/******************************************/
-double corr_pois_gen(double corr,double mean_i, double mean_j, double a){ 
-if(fabs(corr)<1e-200){return(0.0);}
-    else{
-    double res=0.0;
-    if (fabs(mean_i-mean_j)<MACHEP) res=corrPGs(corr,mean_i,a);
-    else                            res=CorrPGns(corr,mean_i,mean_j,a);
-    return(res);
+
+// Versione migliorata della funzione principale con gestione speciale per a intero
+double corr_pois_gen(double corr, double mean_i, double mean_j, double a) {
+
+
+
+        if(fabs(corr)< 1e-14){return(0.0);}
+if (fabs(mean_i-mean_j)<MACHEP) return  corrPGs(corr,mean_i,a);
+
+
+    if (a <= 1.0) {
+        return CorrPGns_SmallA(corr, mean_i, mean_j, a);
+    } else {
+        return CorrPGns_HighPrecision(corr, mean_i, mean_j, a);
+    }
 }
-}
+
+
+
 
 /******************************************/
 /******** Poisson correlation *************/
@@ -1411,7 +2306,7 @@ double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11
     double diff_p01 = p01 - p11;
     double diff_p10 = p10 - p11;
     
-    // Pre-calcolo array di lgamma per evitare ricalcoli
+    // Pre-calcolo array di lgammafn per evitare ricalcoli
     int max_i = NN - 1;
     double *lgamma_cache = (double*)malloc((max_i + 2) * sizeof(double));
     for (int k = 0; k <= max_i + 1; k++) {
@@ -1457,7 +2352,7 @@ double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11) {
     double diff_y = y - p11;
     double one_minus_y = 1 - y;
     
-    // Pre-calcolo array di lgamma per evitare ricalcoli
+    // Pre-calcolo array di lgammafn per evitare ricalcoli
     int max_val = fmax_int(NN + u, v - u) + 5; // margine di sicurezza
     double *lgamma_cache = (double*)malloc(max_val * sizeof(double));
     for (int k = 0; k < max_val; k++) {
@@ -3593,6 +4488,7 @@ double biv_PoissonGamma(double corr, int r, int t, double mean_i, double mean_j,
 
 
 
+
 double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape)
 {
 double dens=0.0,p,p00,p10,p01,p11;
@@ -3614,9 +4510,6 @@ dens=      p11*biv_PoissonGamma((1-nugget1)*corr,r, t, mean_i, mean_j,shape);
 return(dens);
 
 }
-
-
-
 
 /*####*/
 double int_kuma(double x,double eta, double gam,double k,double m)
@@ -4841,8 +5734,8 @@ double cdf_norm(double lim1, double lim2, double a11, double a12) {
     double upper[2] = {lim1 / sqrt(a11), lim2 / sqrt(a11)};
     int infin[2] = {0, 0};
     double corr = a12 / a11;
-    double auxil = 1.0 - pow(corr, 2);
-    double det = pow(a11, 2) - pow(a12, 2);
+    double auxil = 1.0 - R_pow(corr, 2);
+    double det = R_pow(a11, 2) - R_pow(a12, 2);
     res = a11 * sqrt(auxil / det) * bvnmvn(lower, upper, infin, corr);
     return res;
 }
@@ -4855,8 +5748,8 @@ double cdf_norm2(double lim1, double lim2, double a11, double a12, double a22) {
     double upper[2] = {lim1 / sqrt(a11), lim2 / sqrt(a22)};
     int infin[2] = {0, 0};
     double corr = a12 / sqrt(a11 * a22);
-    double auxil = 1.0 - pow(corr, 2);
-    double det = a11 * a22 - pow(a12, 2);
+    double auxil = 1.0 - R_pow(corr, 2);
+    double det = a11 * a22 - R_pow(a12, 2);
     res = sqrt(a11 * a22) * sqrt(auxil / det) * bvnmvn(lower, upper, infin, corr);
 
     return res;

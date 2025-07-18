@@ -562,6 +562,7 @@ void Comp_supp(double *c_supp,int *cormod, double h,double u, double *par)
         case 75:
         case 76:
         case 77:
+        case 78:   
             c_supp[0]=par[0];
             c_supp[1]=par[1];
             break;

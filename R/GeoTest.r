@@ -18,7 +18,6 @@ GeoTests <- function(object1, object2, ..., statistic)
                            WilksPSS=4,
                            WilksRJ=5,
                            WilksS=6
-                           #Rao=7
                            )
           return(Istest)
       }
@@ -68,15 +67,7 @@ StatiTest <- function(df, model1, model2, statistic)
               G <- H%*%Ji%*%H# compute the Godambe matrix
               varcov <- solve(G)# variance-covariance matrix
 
-              #if(statistic=="WilksPSS"){
-              #    W <- 2*(model1$logCompLik-model2$logCompLik)
-              #    varcov <- varcov[namesparam,namesparam]
-              #    G <- try(solve(varcov),silent=TRUE)
-              #    score <- null$score[namesparam]# select the score related to the null
-              #    Hi <- Hi[namesparam,namesparam]# select the inversed of sens related to the null
-              #    Rao <- t(score)%*%Hi%*%G%*%Hi%*%score# compute the Rao statistic
-              #    W <- W*Rao/(t(score)%*%Hi%*%score)
-              #    nu <- df}
+     
               if(statistic=="WilksRJ"){
                   W <- 2*(model1$logCompLik-model2$logCompLik)
                   lambda <- eigen(solve(Hi[namesparam, namesparam])%*%varcov[namesparam, namesparam])$values
@@ -88,13 +79,6 @@ StatiTest <- function(df, model1, model2, statistic)
                   slambda <- sum(lambda)
                   nu <- slambda^2/sum(lambda^2)
                   W <- nu*W/slambda}
-          #if(statistic=="Rao"){
-          #        varcov <- varcov[namesparam,namesparam]
-          #        G <- try(solve(varcov),silent=TRUE)
-          #        score <- null$score[namesparam]# select the score related to the null
-          #        Hi <- Hi[namesparam,namesparam]# select the inversed of sens related to the null
-          #        W <- t(score)%*%Hi%*%G%*%Hi%*%score# compute the Rao statistic
-          #        nu <- df}
       
                 }
         }

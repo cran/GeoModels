@@ -4,7 +4,7 @@
 
 # Simulate approximate spatial and spatio-temporal random felds:
 GeoSimapprox <- function(coordx, coordy=NULL,coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),max.ext=1,method="TB", L=1000,model='Gaussian', parallel=FALSE,ncores=NULL,
+ max.ext=1,method="TB", L=1000,model='Gaussian', parallel=FALSE,ncores=NULL,
      n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################

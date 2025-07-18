@@ -3,8 +3,7 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal', 
   lower=NULL, neighb=c(1,2,3,4,5),
   maxtime=Inf, memdist=TRUE, model='Gaussian', n=1, ncores=NULL,
-  optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE,
-  radius=6371, start=NULL, type='Pairwise', upper=NULL, weighted=FALSE,
+  optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE,radius=1, start=NULL, type='Pairwise', upper=NULL, weighted=FALSE,
   X=NULL, nosym=FALSE, spobj=NULL, spdata=NULL, vario=NULL)
 {
 

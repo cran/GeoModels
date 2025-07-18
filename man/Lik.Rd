@@ -13,7 +13,7 @@ coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,
            grid,lower,mdecomp,model,namescorr,
            namesnuis,namesparam,numcoord,
            numpairs,numparamcor,numtime,optimizer,
-           onlyvar,parallel,param,radius,setup,
+           onlyvar,param,radius,setup,
            spacetime,sparse,varest,taper,type,
            upper,ns,X,neighb,MM,aniso)
 }
@@ -69,9 +69,6 @@ coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,
     of one-dimensional optimization, the function \code{optimize} is used.}  
    \item{onlyvar}{Logical; if \code{TRUE}  (and varest is  \code{TRUE}) only the variance covariance matrix is computed
   without optimizing. \code{FALSE} is the default.}  
-  \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel 
-   using the maximum number of cores,  when optimizer is  
-          \code{L-BFGS-B}.\code{FALSE} is the default.} 
   \item{param}{A numeric vector of parameters.}
   \item{sparse}{Logical; if \code{TRUE} then  maximum likelihood is computed
   using sparse matrices algorithms.\code{FALSE} is the default.}

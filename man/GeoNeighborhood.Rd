@@ -13,7 +13,7 @@ GeoNeighborhood(data=NULL, coordx, coordy=NULL,coordz=NULL,
 coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
                distance="Eucl", grid=FALSE, 
                loc, neighb=NULL,maxdist=NULL,
-               maxtime=NULL, radius=6371, time=NULL, 
+               maxtime=NULL, radius=1, time=NULL, 
                X=NULL,M=NULL,spobj=NULL,spdata=NULL,
                parallel=FALSE,ncores=NULL)
 }
@@ -52,7 +52,7 @@ coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
   \item{maxtime}{Numeric; an optional positive integer indicating the 
     order of temporal  neighborhood.}
     \item{radius}{Numeric; a value indicating  the radius of the sphere when using the great 
-    circle distance. Default value is the radius of the earth in Km (i.e. 6371)}  
+    circle distance. Default value is 1.}  
    \item{time}{Numeric; a value  giving the temporal instant for which a neighborhood is computed.}
   \item{X}{Numeric; an optional Matrix of spatio (temporal) covariates.}
    \item{M}{Numeric; an estimated spatio (temporal) mean vector.}

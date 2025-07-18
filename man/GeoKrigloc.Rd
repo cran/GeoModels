@@ -15,7 +15,7 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
     loc, neighb=NULL, maxdist=NULL, 
     maxtime=NULL, method="cholesky",
     model="Gaussian", n=1,nloc=NULL, mse=FALSE,  
-    param, anisopars=NULL,radius=6371,
+    param, anisopars=NULL,radius=1,
     sparse=FALSE, time=NULL, type="Standard",type_mse=NULL,
     type_krig="Simple",weigthed=TRUE, 
     which=1, copula=NULL,X=NULL,Xloc=NULL,
@@ -66,7 +66,7 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
     \bold{Details}.}      
    \item{param}{A list of parameter values required  for the correlation model.See the Section \bold{Details}.}
        \item{anisopars}{ A list of two elements: "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
-    \item{radius}{Numeric: the radius of the sphere if coordinates are passed in lon/lat format;}
+    \item{radius}{Numeric: the radius of the sphere if coordinates are passed in lon/lat format;Default value is 1.}
      \item{sparse}{Logical; if \code{TRUE} kriging is computed with sparse matrices algorithms 
           using spam package. Default is FALSE. It should be used with compactly supported covariances.}        
     \item{time}{A numeric (\eqn{m \times 1}{m x 1}) vector (where

@@ -2,9 +2,9 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
                        coordx_dyn = NULL, corrmodel, distance = "Eucl",
                        grid = FALSE, loc, maxdist = NULL, maxtime = NULL, method = "Cholesky",
                        model = "Gaussian", n = 1, nrep = 1, local = FALSE, L = 1000,
-                       neighb = NULL, param, anisopars = NULL, radius = 6371, sparse = FALSE,
+                       neighb = NULL, param, anisopars = NULL, radius = 1, sparse = FALSE,
                        time = NULL, copula = NULL, X = NULL, Xloc = NULL, Mloc = NULL,
-                       parallel = FALSE, ncores = NULL) {
+                       parallel = TRUE, ncores = NULL) {
 
 ################################################################################# 
 ### internal function conditional simulation  of Gaussian RF
@@ -14,7 +14,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
                      coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
                      local, neighb, maxdist, maxtime,
                      space, spacetime, bivariate, parallel, ncores) {
-
   #############################################
   # Unconditional simulation on combined coordinates (observed + prediction locations)
   #############################################
@@ -58,7 +57,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
   } else {
     krig_sim <- do.call(GeoKrig, krig_sim_args)
   }
-
   #############################################
   # Construct conditional simulations
   #############################################
@@ -77,7 +75,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
       for (i in seq_len(nrep)) {
 
          pb(sprintf("i=%d", i))
-
         sim_nc_obs_data <- sim_nc$data[[i]][1:n_obs]
         sim_nc_loc_data <- sim_nc$data[[i]][(n_obs + 1):(n_obs + n_loc)]
 
@@ -100,7 +97,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
       }
 
     } else { # parallel
-
       cat("Performing", nrep, "conditional simulations using", ncores, "cores...\n")
       future::plan(future::multisession, workers = ncores)
       on.exit(future::plan(future::sequential), add = TRUE)
@@ -137,7 +133,6 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
 ###############################################################
 ###############################################################
 ###############################################################
-
   call <- match.call()
   ###### Check GeoFit object ######
   if (!is.null(estobj)) {
@@ -235,14 +230,10 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
   # Temporal coordinates to use
   coordt_use <- if (spacetime || bivariate) coordt else NULL
 
-
-
 ############################################################################
 ######################### not copula models ################################
 ############################################################################
 if(is.null(copula)){
-
-
   if(model=="Gaussian") {
                       res=Gauss_cd(data,corrmodel,nrep,method,L,
                               param,
@@ -464,6 +455,51 @@ if(copula=="Gaussian")
         res <- lapply(res, function(r) pnorm(r))
         res <- lapply(res, function(r) qnorm(r,mm,sqrt(vv)))
         }
+
+         if(model=="Binomial")
+        {
+         mm <- param$mean; prob <- pnorm(mm)
+         datanorm1 <- (pbinom(data - 1, size = n, prob = prob) + pbinom(data, size = n, prob = prob)) / 2 # Applicare correzione di continuità per la discrezione
+         datanorm <- qnorm(datanorm1)
+         param$mean <- 0;param$sill <- 1
+         res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+                coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                local, neighb, maxdist, maxtime,
+                space, spacetime, bivariate, parallel, ncores)
+        res <- lapply(res, function(r) pnorm(r))
+        res <- lapply(res, function(r) qbinom(p = r, size = n, prob = prob))
+        }
+        if (model == "BinomialNeg")
+         {
+           mm <- param$mean; prob <- pnorm(mm);size=n
+           datanorm1 <- (pnbinom(data - 1, size = size, prob = prob) + pnbinom(data,     size = size, prob = prob)) / 2 # Applicare correzione di continuità per la discrezione
+           datanorm <- qnorm(datanorm1)
+           param$mean <- 0; param$sill <- 1
+           res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    local, neighb, maxdist, maxtime,
+                    space, spacetime, bivariate, parallel, ncores)
+           res <- lapply(res, function(r) pnorm(r))
+           res <- lapply(res, function(r) qnbinom(p = r, size = size, prob = prob))
+         }
+         if (model == "Poisson")
+         {
+            mu <- exp(param$mean)
+            datanorm1 <- (ppois(data - 1, lambda = mu) + ppois(data,     lambda = mu)) / 2    # Trasformazione: discreto → normale (con correzione di continuità)
+            datanorm <- qnorm(datanorm1)
+            # Standardizzazione per copula gaussiana
+            param$mean <- 0; param$sill <- 1
+            # Simulazione condizionata
+            res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    local, neighb, maxdist, maxtime,
+                    space, spacetime, bivariate, parallel, ncores)
+            # Back-transform: N(0,1) → Poisson(μ)
+            res <- lapply(res, function(r) pnorm(r))
+            res <- lapply(res, function(r) qpois(r, lambda = mu))
+        }
+
+
     }
 }
 

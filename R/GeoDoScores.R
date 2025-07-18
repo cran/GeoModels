@@ -2,136 +2,172 @@
 ### File name: GeoDoScores.r
 ####################################################
 
-GeoDoScores=function(data,method="cholesky",matrix)   {
-
-
-########## internal function ############################
-getInv2=function(covmatrix,b){
-
-if(!covmatrix$sparse){
-               U =MatDecomp(covmatrix$covmatrix,method);Inv=0
-               if(is.logical(U)){print(" Covariance matrix is not positive definite");stop()}
-               vec=forwardsolve(U, b)
-               Invc=forwardsolve(U, vec,transpose=T) ## R^-1 %*% c
-               Inv=FastGP::rcppeigen_invert_matrix(covmatrix$covmatrix)
-               diagInv=diag(Inv)
-
-             }
-if(covmatrix$sparse){
-               cc=covmatrix$covmatrix
-               if(spam::is.spam(cc))  U = try(spam::chol.spam(cc),silent=TRUE)
-               else                    U = try(spam::chol.spam(spam::as.spam(cc)),silent=TRUE)
-               if(inherits(U,"try-error")) {print(" Covariance matrix is not positive definite");stop()}#Inv=spam::chol2inv.spam(U)
-             
-               vec=  spam::forwardsolve(U, b)
-               Invc= spam::backsolve(U, vec) ## R^-1 %*% c
-               Inv= spam::solve.spam(U)
-               diagInv=diag(Inv)
-
-                       
-        }
-     return(list(a=Invc,b=Inv,c=diagInv))
-}
+GeoDoScores <- function(data, method = "cholesky", matrix) {
+  
+  if (!inherits(matrix, "GeoCovmatrix")) {
+    stop("A GeoCovmatrix object is needed as input\n")
+  }
+  nsites <- length(matrix$coordx)
+  ntime <- if (matrix$spacetime) length(matrix$coordt) else if (matrix$bivariate) 2L else 1L
+  dime <- nsites * ntime
+  varcov <- matrix$covmatrix
+  if (nrow(varcov) != length(data)) {
+    stop("The dimension of the covariance matrix and/or the vector data are not correct\n")
+  }
+  # Rimozione nomi per efficienza
+  dimnames(varcov) <- NULL
+  data <- as.numeric(data)
+  
+########## Funzione interna ottimizzata ############################
+  getInv2 <- function(covmatrix, b) {
+    if (!covmatrix$sparse) {
+      # Case non sparse
+      U <- MatDecomp(covmatrix$covmatrix, method)
+      if (is.logical(U)) {
+        stop("Covariance matrix is not positive definite")
+      }
+      
+      vec <- forwardsolve(U, b)
+      Invc <- forwardsolve(U, vec, transpose = TRUE)
+      Inv <- FastGP::rcppeigen_invert_matrix(covmatrix$covmatrix)
+      diagInv <- diag(Inv)
+      
+    } else {
+      # Case sparse
+      cc <- covmatrix$covmatrix
+      
+      # Conversione efficiente a spam se necessario
+      if (!spam::is.spam(cc)) {
+        cc <- spam::as.spam(cc)
+      }
+      
+      U <- tryCatch(
+        spam::chol.spam(cc),
+        error = function(e) stop("Covariance matrix is not positive definite")
+      )
+      
+      vec <- spam::forwardsolve(U, b)
+      Invc <- spam::backsolve(U, vec)
+      Inv <- spam::solve.spam(U)
+      diagInv <- diag(Inv)
+    }
+    
+    list(a = Invc, b = Inv, c = diagInv)
+  }
 ################################################
-if(!inherits(matrix,"GeoCovmatrix"))  stop("A GeoCovmatrix object is needed as input\n")
+  
+  param <- matrix$param
+  if (is.null(matrix$X)) {
+    matrix$X <- matrix(1, ncol = 1, nrow = dime)
+  }
+  MM <- 0
+  namesnuis <- matrix$namesnuis
+  nuisance <- param[namesnuis]
+  
+  if (length(param$mean) == 1L) {
+    sel <- startsWith(names(nuisance), "mean")
+    mm <- as.numeric(nuisance[sel])
+    MM <- matrix$X %*% mm
+  } else {
+    MM <- param$mean
+  }
+  model <- matrix$model
+  data <- switch(
+    as.character(model),
+    # Gaussian, StudentT, Tukey, Logistic
+    "1" = , "35" = , "12" = , "34" = , "25" = data - MM,
+    # SkewGaussian
+    "10" = {
+      kk <- as.numeric(param['skew'])
+      data - (MM + kk * sqrt(2/pi))
+    },
+    # Binomial
+    "11" = data - matrix$n * pnorm(MM),
+    # Poisson
+    "30" = , "36" = data - exp(MM),
+    # Poisson inflated
+    "43" = , "44" = {
+      p <- pnorm(as.numeric(param['pmu']))
+      data - (1 - p) * exp(MM)
+    },
+    # Two piece t models
+    "27" = {
+      kk <- as.numeric(param['skew'])
+      dd <- as.numeric(param['df'])
+      ss <- as.numeric(param['sill'])
+      adjustment <- (2 * kk * sqrt(ss * dd) * gamma((dd - 1) / 2)) / 
+                   (gamma(dd / 2) * sqrt(pi))
+      data - (MM - adjustment)
+    },
+    # Two piece gaussian
+    "29" = {
+      kk <- as.numeric(param['skew'])
+      ss <- as.numeric(param['sill'])
+      data - (MM - 2 * kk * sqrt(2 * ss / pi))
+    },
+    # Two piece tukeyh
+    "38" = {
+      kk <- as.numeric(param['skew'])
+      ss <- as.numeric(param['sill'])
+      tt <- as.numeric(param['tail'])
+      data - (MM - 2 * kk * sqrt(2 * ss / pi) / (1 - tt))
+    },
+    # Tukeyh2
+    "40" = {
+      ss <- as.numeric(param['sill'])
+      t1 <- as.numeric(param['tail1'])
+      t2 <- as.numeric(param['tail2'])
+      data - (MM + sqrt(ss) * (t1 - t2) / (sqrt(2 * pi) * (1 - t1) * (1 - t2)))
+    },
+    # Binomial negative
+    "16" = data - matrix$n * (1 - pnorm(MM)) / pnorm(MM),
+    
+    # Binomial negative inflated
+    "45" = {
+      p <- pnorm(as.numeric(param['pmu']))
+      data - (1 - p) * matrix$n * (1 - pnorm(MM)) / pnorm(MM)
+    },
+    
+    # SAS
+    "20" = {
+      ss <- as.numeric(param['sill'])
+      kk <- as.numeric(param['skew'])
+      tt <- as.numeric(param['tail'])
+      bessel_term <- besselK(0.25, (tt + 1) / (2 * tt)) + 
+                     besselK(0.25, (1 - tt) / (2 * tt))
+      adjustment <- sqrt(ss) * sinh(kk / tt) * exp(0.25) * bessel_term / sqrt(8 * pi)
+      data - (MM + adjustment)
+    },
+    data
+  )
+  # computing inverse
+  cc <- getInv2(matrix, data)
+  temp <- cc$a  # inv %*% data
+  inv <- cc$b   # inv
+  vv <- cc$c    # diag inv
+  inv_sqrt_vv <- 1 / sqrt(vv)
+  inv_vv <- 1 / vv
+  z <- inv_vv * temp
+  zz <- inv_sqrt_vv * temp
+  dime_inv <- 1 / dime
 
-varcov=matrix$covmatrix
-rownames(varcov)=c();colnames(varcov)=c()
-if(nrow(varcov)!=length(data)) stop("The dimension of the covariance  matrix and/or the vector data are not correct  \n")
-data=c(unname(data))
-
-
-###########################
-nsites=length(matrix$coordx)
-ntime=1
-if(matrix$spacetime) ntime=length(matrix$coordt)
-if(matrix$bivariate) ntime=2
-dime = nsites*ntime
-
-
-MM=0
-param=matrix$param
-
-if(is.null(matrix$X))  matrix$X=matrix(1,ncol=1,nrow=dime)
-
-
-namesnuis=matrix$namesnuis
-nuisance <- param[namesnuis]
-if(length(param$mean)==1){
- sel=substr(names(nuisance),1,4)=="mean"
- mm=as.numeric(nuisance[sel])
- MM=(matrix$X)%*%mm
+  MAD <- median(z)
+  RMSE <- sqrt(dime_inv * sum(z^2))
+  MAE <- dime_inv * sum(abs(z))
+  LSCORE <- 0.5 * dime_inv * (sum(log(2 * pi * vv)) + sum(zz^2))
+  pnorm_zz <- pnorm(zz)
+  CRPS <- dime_inv * (
+    sum(inv_sqrt_vv * zz * (2 * pnorm_zz - 1)) +
+    2 * sum(inv_sqrt_vv * pnorm_zz) +
+    sum(inv_sqrt_vv) / sqrt(pi)
+  )
+  
+  # Results
+  list(
+    RMSE   = RMSE,
+    LSCORE = LSCORE,
+    MAD    = MAD,
+    CRPS   = CRPS,
+    MAE    = MAE
+  )
 }
-else {MM=param$mean}
-########
-if(matrix$model %in% c(1,35,12,34,25))  data=data-MM#Gaussian #StudentT Tukey  Logistic
-if(matrix$model %in% c(10))             #SkewGauussian
-                 { kk=as.numeric(param['skew']);
-                   data=data-(MM+kk*sqrt(2/pi))}
-if(matrix$model %in% c(11))     data=data-(matrix$n)*pnorm(MM) #binomial
-if(matrix$model %in% c(30,36))  data=data-exp(MM) #poisson
-if(matrix$model %in% c(43,44))  {p=pnorm(as.numeric(param['pmu']));data=data-(1-p)*exp(MM)} #poisson inlated
-if(matrix$model %in% c(27)) #two piece t models
-     {kk=as.numeric(param['skew']);dd=as.numeric(param['df']);ss=as.numeric(param['sill']);
-      data=data-(MM-(2*kk*sqrt(ss*dd)*gamma((dd-1)/2))/(gamma(dd/2)*sqrt(pi)))
-     }
-if(matrix$model %in% c(29)) #two piece gaussian
-     {kk=as.numeric(param['skew']);ss=as.numeric(param['sill']);
-      data=data-(MM-(2*kk*sqrt(2*ss/pi)))
-     }
-if(matrix$model %in% c(38)) #two piece tukeyh
-     {kk=as.numeric(param['skew']);ss=as.numeric(param['sill']);tt=as.numeric(param['tail']);
-      data=data-(MM-(2*kk*sqrt(2*ss/pi)/(1-tt)))
-     }
-if(matrix$model %in% c(40))      #tukeyh2
-     {ss=as.numeric(param['sill']);t1=as.numeric(param['tail1']);t2=as.numeric(param['tail2']);
-      data=data-(MM+sqrt(ss)*(t1-t2)/(sqrt(2*pi)*(1-t1)*(1-t2)))
-     }
-if(matrix$model %in% c(16))     data=data-(matrix$n)*(1-pnorm(MM))/pnorm(MM) #binomialnegative
-if(matrix$model %in% c(45))     data=data-(1-pnorm(as.numeric(param['pmu'])))*(matrix$n)*(1-pnorm(MM))/pnorm(MM) #binomialnegative inflated
-if(matrix$model %in% c(20))      #sas
-     {ss=as.numeric(param['sill']);kk=as.numeric(param['skew']);tt=as.numeric(param['tail']); 
-      data=data-(MM+sqrt(ss)*sinh(kk/tt)*exp(0.25)*(besselK(.25,(tt+1)/(2*tt))+besselK(.25,(1-tt)/(2*tt)))/(sqrt(8*pi)))
-     }
-#if(matrix$model %in% c(39))      #twopiecebimodal
-#     {ss=param['sill'];sk=param['skew'];nu=param['df'];delta=param['shape'];alpha=2*(delta+1)/nu;nn=2^(1-alpha/2)
-#      data=data-(MM-sqrt(ss)*sk*2^(1/alpha+1)*gamma(nu/2+1/alpha)/(nn^(1/alpha)*gamma(nu*0.5)))
- #    }
-#######
-
-
-cc=getInv2(matrix,data)
-
-
-temp=cc$a# inv%*%data
-inv=cc$b   #inv
-vv=cc$c    # diag inv
-
-D=diag(1/vv,dime,dime)
-DD=diag(sqrt(1/vv),dime,dime)
-
-z=crossprod(D,temp)
-zz=crossprod(DD,temp)
-
-
-
-MAD=median(z)
-RMSE=sqrt((1/dime)*crossprod(z,z))
-#RMSE=sqrt((1/dime)*Rfast::Crossprod(z,z))
-MAE=(1/dime)*(sum(abs(z)))
-
-
-LSCORE=(1/(2*dime))*(sum(log(2*pi/vv))+sum(zz^2))
-CRPS=(1/dime)*(sum((1/vv)^0.5*zz*(2*pnorm(zz)-1))+2*sum((1/vv)^0.5*pnorm(zz))+sum((1/vv)^0.5)/sqrt(pi))
-
-###########################
-scores = list(RMSE = as.numeric(RMSE),
-               LSCORE = as.numeric(LSCORE),
-               MAD=as.numeric(MAD),
-               CRPS = as.numeric(CRPS),
-               MAE=as.numeric(MAE))
-return(scores)
-}
-
-###################################################################################################
-###################################################################################################

@@ -9,7 +9,7 @@
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordz=NULL,coordt=NULL, 
 coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
-grid=FALSE,local=c(1,1),max.ext=1,
+grid=FALSE,max.ext=1,
 method="TB", L=1000,model='Gaussian',parallel=FALSE,ncores=NULL,
 n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,
 nrep=1,progress=TRUE)
@@ -44,7 +44,6 @@ nrep=1,progress=TRUE)
   \item{grid}{Logical; if \code{FALSE} (the default) the data
     are interpreted as spatial or spatial-temporal realisations on a set
     of non-equispaced spatial sites (irregular grid).}
-          \item{local}{Numeric; number of local work-items of the GPU}
       \item{max.ext}{Numeric; The maximum extension of the simulation window (for the spatial CE method).}
      \item{method}{String; the type of approximation method. Default is \code{TB}  that is the 
      turning band method. The other possible choice is 

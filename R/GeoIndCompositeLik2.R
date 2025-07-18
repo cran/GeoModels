@@ -6,7 +6,7 @@
 
 CompIndLik2 <- function(bivariate, coordx, coordy ,coordz,coordt,coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
                            lower, model, n, namescorr, namesnuis, namesparam,
-                           numparam,  optimizer, onlyvar, parallel, param, spacetime, type,
+                           numparam,  optimizer, onlyvar, param, spacetime, type,
                            upper,namesupper, varest, ns, X,sensitivity,copula,MM)
   {
 
@@ -326,7 +326,7 @@ param=as.numeric(param)
    if(length(param)>1) {
     
    
-    if(optimizer=='L-BFGS-B'&&!parallel){
+    if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(par=param,fn= compindloglik2, 
                               control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
                                 data=data, fixed=fixed,
@@ -334,20 +334,7 @@ param=as.numeric(param)
                                namesnuis=namesnuis,namesparam=namesparam, 
                               upper=upper,  X=X,MM=MM,   hessian=FALSE)
   }
-      if(optimizer=='L-BFGS-B'&&parallel){
-        ncores=max(1, parallel::detectCores() - 1)
-        if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
-        else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
-        parallel::setDefaultCluster(cl = cl)
-        CompLikelihood <- optimParallel::optimParallel(par=param,fn= compindloglik2, 
-                              control=list(pgtol=1e-14, maxit=100000,factr=1e-10),
-                                 
-                               data=data,fixed=fixed,fan=fname, lower=lower, method='L-BFGS-B',n=n,
-                               namesnuis=namesnuis,namesparam=namesparam, 
-                              upper=upper,  X=X,MM=MM,  hessian=FALSE)
-         parallel::setDefaultCluster(cl=NULL)
-         parallel::stopCluster(cl)
-         }
+
     if(optimizer=='BFGS') 
         CompLikelihood <- optim(par=param, fn= compindloglik2,     
                            control=list(factr=1e-10,
@@ -366,34 +353,6 @@ param=as.numeric(param)
           control=list( reltol=1e-14, maxit=100000), data=data, fixed=fixed, fan=fname,
                               hessian=FALSE, method='Nelder-Mead',n=n,
                                   namesnuis=namesnuis,namesparam=namesparam,  X=X,MM=MM)
-# if(optimizer=='multinlminb'){
- #      CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn= compindloglik2,
-  #         data=data, fixed=fixed,
-   #                            fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-    #                             X=X,MM=MM,  
-     #     lower=lower,upper=upper,method = "nlminb", nbtrials = 400, typerunif = "sobol",
-      #                        control = list( iter.max=100000),
-       #                    )}
- #if(optimizer=='multiNelder-Mead'){
-  #     CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn= compindloglik2,
-   #        data=data, fixed=fixed,
-    #                           fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-     #                            X=X,MM=MM,  lower=lower,upper=upper,#
-     #     method = "Nelder-Mead", nbtrials = 500, 
-    #                          control=list( reltol=1e-14, maxit=100000),
-     #                      typerunif = "sobol" )
-  #}
-
-
-   # if(optimizer=='nmk')
-    #  CompLikelihood <-dfoptim::nmk(par=param, fn= compindloglik2, control = list(maxfeval=100000,tol=1e-10),
-     #                       data=data,fixed=fixed, fan=fname,
-      #                     n=n,namesnuis=namesnuis,namesparam=namesparam,  X=X,MM=MM)
-   # if(optimizer=='nmkb')
-    #  CompLikelihood <-dfoptim::nmkb(par=param, fn= compindloglik2, control = list(maxfeval=100000,tol=1e-10),
-     #                    lower=lower,upper=upper,
-      #                      data=data, fixed=fixed, fan=fname,
-       #                  n=n,namesnuis=namesnuis,namesparam=namesparam,  X=X,MM=MM)
     if(optimizer=='nlm')
     CompLikelihood <- nlm(f= compindloglik2,p=param,steptol = 1e-4,    data=data, fixed=fixed,
                                fan=fname,hessian=FALSE,n=n, namesnuis=namesnuis,namesparam=namesparam, 
@@ -421,37 +380,15 @@ param=as.numeric(param)
                                namesnuis=namesnuis, namesparam=namesparam,maximum = FALSE,
                               upper=upper,  X=X,MM=MM )}
       if(length(param)>1) {   
-    if(optimizer=='L-BFGS-B'&&!parallel){
+    if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(param, compindloglik_biv2, control=list(pgtol=1e-14, maxit=100000),
                               method='L-BFGS-B',hessian=FALSE,lower=lower, upper=upper,
                                   
                               data=data, fixed=fixed,fan=fname,n=n,
                                namesnuis=namesnuis, namesparam=namesparam,
                                X=X ,MM=MM )}
-     #  if(optimizer=='lbfgsb3')
-     # CompLikelihood <- lbfgsb3c::lbfgsb3c(param, compindloglik_biv, 
-     #                         #control=list(pgtol=1e-14, maxit=100000),
-     #                         lower=lower, upper=upper,
-     #                             
-     #                         data=data, fixed=fixed,fan=fname,n=n,
-     #                          namesnuis=namesnuis, namesparam=namesparam,
-     #                          X=X  )
-    if(optimizer=='L-BFGS-B'&&parallel){
-           ncores=max(1, parallel::detectCores() - 1)
-           if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
-           else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
-           parallel::setDefaultCluster(cl = cl)
-           CompLikelihood <- optimParallel::optimParallel(param, compindloglik_biv2, 
-                              control=list(pgtol=1e-14, maxit=100000),
-                                  
-                              data=data, fixed=fixed,
-                              fan=fname,  n=n,  namesnuis=namesnuis, namesparam=namesparam,
-                                X=X,MM=MM, 
-                              lower=lower,upper=upper,
-                              hessian=FALSE)
-              parallel::setDefaultCluster(cl=NULL)
-              parallel::stopCluster(cl)
-         }
+
+    
       if(optimizer=='BFGS')
       CompLikelihood <- optim(param, compindloglik_biv2,     control=list(
                               reltol=1e-14, maxit=100000), data=data, fixed=fixed, fan=fname,
@@ -462,15 +399,6 @@ param=as.numeric(param)
                               reltol=1e-14, maxit=100000), data=data, fixed=fixed, fan=fname,
                               hessian=FALSE, method='Nelder-Mead',n=n,
                                namesnuis=namesnuis,namesparam=namesparam ,  X=X,MM=MM )
-    #if(optimizer=='nmk')
-     #   CompLikelihood <- dfoptim::nmk(par=param, fn= compindloglik_biv2, control = list(maxfeval=100000,tol=1e-10),
-      #                           data=data, fixed=fixed, fan=fname,
-       #                     n=n,  namesnuis=namesnuis,namesparam=namesparam ,  X=X ,MM=MM)
-    #if(optimizer=='nmkb')
-       # CompLikelihood <- dfoptim::nmkb(par=param, fn= compindloglik_biv2, control = list(maxfeval=100000,tol=1e-10),
-        #                     lower=lower,upper=upper,
-         #                        data=data, fixed=fixed, fan=fname,
-          #                  n=n,  namesnuis=namesnuis,namesparam=namesparam ,  X=X ,MM=MM)
      if(optimizer=='nlm') 
         CompLikelihood <- nlm( f= compindloglik_biv2,p=param,     data=data, fixed=fixed,
                                fan=fname,hessian=FALSE,n=n, namesnuis=namesnuis,namesparam=namesparam, 
@@ -482,26 +410,6 @@ param=as.numeric(param)
                                    data=data, fixed=fixed,
                                fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
                                  X=X ,MM=MM)
-     #if(optimizer=='multinlminb'){
-      # CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn= compindloglik_biv2,
-       #    data=data, fixed=fixed,
-        #                       fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-         #                        X=X,MM=MM,
-          #                          lower=lower,upper=upper,method = "nlminb", nbtrials = 500, 
-           #                   control = list( iter.max=100000),
-            #               typerunif = "sobol")
-             #                  }
-     #if(optimizer=='multiNelder-Mead'){
-      # CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn= compindloglik_biv2,
-       #    data=data, fixed=fixed,
-        #                       fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-         #                        X=X,MM=MM,  lower=lower,upper=upper,
-         # method = "Nelder-Mead", nbtrials = 500, 
-          #                    control=list( reltol=1e-14, maxit=100000),
-           #                typerunif = "sobol"#,nbclusters=4,
-            #         )
-  #}
-
    }
  }  
 

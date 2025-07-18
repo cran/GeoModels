@@ -4,8 +4,8 @@
 
 
 # Simulate spatial and spatio-temporal random felds:
-GeoSim <- function(coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
-     local=c(1,1),method="cholesky",model='Gaussian', n=1, param, anisopars=NULL, radius=6371,
+GeoSim <- function(coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+     method="cholesky",model='Gaussian', n=1, param, anisopars=NULL, radius=1,
       sparse=FALSE,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################
@@ -188,7 +188,7 @@ ll=list(sill=param$sill,nugget=param$nugget)
 mc=append(zz,ll)
 
 pc=param[CorrParam(corrmodel)]
-#print(append(pc,mc))
+
 
 
 ccov = GeoCovmatrix(coordx=coordx, coordy=coordy,coordz=coordz, coordt=coordt, coordx_dyn=coordx_dyn, corrmodel=corrmodel,
@@ -337,13 +337,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   for(i in 1:k) {
 
     ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
-   #### simulating with cholesky decomposition using GPU
-    #if(!is.null(GPU)) {  ## todo...
-                         ## here we wave to set the context!!!
-                         ## setContext(id=3L)  example
-                         ##varcov=gpuR::vclMatrix(varcov, type="float")
-                         ##ss=gpuR::vclMatrix(ss, type="float")
-     #                  }
+
     #### simulating N(0,1) with matrix decomposition using sparse or dense matrices without nugget!
       if(sparse)   simd=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R) [,iord] )
       else         #simd=crossprod(sqrtvarcov,ss) 

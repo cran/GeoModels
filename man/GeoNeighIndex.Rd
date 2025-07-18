@@ -8,7 +8,7 @@
 \usage{
 GeoNeighIndex(coordx,coordy=NULL,coordz=NULL,
 coordt=NULL,coordx_dyn=NULL,distance="Eucl",neighb=4,maxdist=NULL,
-maxtime=1,radius=6371,bivariate=FALSE)
+maxtime=1,radius=1,bivariate=FALSE)
 }
 \arguments{
         \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
@@ -32,7 +32,7 @@ maxtime=1,radius=6371,bivariate=FALSE)
  \item{maxdist}{A numeric value denoting the spatial  distance \bold{Details}.}
    \item{maxtime}{A numeric value denoting the temporal distance \bold{Details}.}
   \item{radius}{Numeric; a value indicating  the radius of the sphere when 
-  using the great circle distance. Default value is the radius of the earth in Km (i.e. 6371)} 
+  using the great circle distance. Default value is 1.} 
     \item{bivariate}{Logical; if \code{FALSE} (the default) the data
     are interpreted as univariate spatial or spatial-temporal realisations. 
     Otherwise they are intrepreted as a a realization from a bivariate field.}

@@ -8,7 +8,7 @@
 \usage{
 GeoScatterplot(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=NULL,
            distance='Eucl', grid=FALSE, maxdist=NULL,neighb=NULL,
-           times=NULL, numbins=4, radius=6371, bivariate=FALSE,\dots)
+           times=NULL, numbins=4, radius=1, bivariate=FALSE,\dots)
 }
 \arguments{
   \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{n \times d}{n x d})-matrix
@@ -45,7 +45,7 @@ GeoScatterplot(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=N
   \item{numbins}{A numeric value denoting the numbers of bins, see the
     Section \bold{Details}.}
   \item{radius}{Numeric; a value indicating  the radius of the sphere when 
-  using the great circle distance. Default value is the radius of the earth in Km (i.e. 6371)} 
+  using the great circle distance. Default value is 1.} 
     \item{bivariate}{Logical; if \code{FALSE} (the default) the data
     are interpreted as univariate spatial or spatial-temporal realisations. 
     Otherwise they are intrepreted as a a realization from a bivariate field.}

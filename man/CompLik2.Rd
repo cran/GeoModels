@@ -10,10 +10,10 @@
 \usage{
 CompLik2(copula,bivariate, coordx, coordy ,coordz,coordt,
 coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, 
-         fixed, GPU,grid,likelihood, local,lower, 
+         fixed,grid,likelihood, lower, 
          model, n, namescorr, namesnuis, namesparam,
          numparam, numparamcorr, optimizer, onlyvar,
-         parallel, param, spacetime, type,
+          param, spacetime, type,
          upper, varest, weigthed, ns, X,sensitivity,
          colidx,rowidx,neighb,MM,aniso)
 }
@@ -45,8 +45,7 @@ coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis,
     nuisance paramerters will be estimated.}
   \item{fixed}{A numeric vector of parameters that
     will be considered as known values.}
-  \item{GPU}{Numeric; if \code{NULL} (the default) 
-      no GPU computation is performed.} 
+
 
   \item{grid}{Logical; if \code{FALSE} (the default) the data
     are interpreted as a vector or a (\eqn{n \times d}{n x d})-matrix,
@@ -56,7 +55,7 @@ coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis,
   \item{likelihood}{String; the configuration of the
     compositelikelihood, see \code{\link{GeoFit}}.}
 
- \item{local}{Numeric; number of local work-items of the GPU}
+
    \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
     when the optimizer is  \code{L-BFGS-B} or \code{nlminb}  or \code{optimize}. The 
     names of the list must be the same of the names in the   \code{start} list.}
@@ -76,9 +75,7 @@ coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis,
   \item{onlyvar}{Logical; if \code{TRUE}  (and varest is  \code{TRUE}) only
    the variance covariance matrix is computed
   without optimizing. \code{FALSE} is the default.}  
-   \item{parallel}{Logical; if \code{TRUE} optmization is performed using optimParallel 
-   using the maximum number of cores,  when optimizer is 
-          \code{L-BFGS-B}.\code{FALSE} is the default.}  
+
   \item{param}{A numeric vector of parameters' values.}
   \item{spacetime}{Logical; if \code{TRUE} the random field is
     spatial-temporal otherwise is a spatial field.}

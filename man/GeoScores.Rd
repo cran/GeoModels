@@ -5,7 +5,7 @@
 \description{
   The function computes some predictive scores for a spatial, spatiotemporal and bivariate Gaussian RFs}
 \usage{GeoScores(data_to_pred, probject=NULL,pred=NULL,mse=NULL,
-   score=c("brie","crps","lscore","pit","pe"))
+   score=c("brie","crps","lscore","pit","pe", "intscore", "coverage"))
 }
 
 \arguments{
@@ -25,12 +25,14 @@ deviations equal to the Kriging standard errors. This assumption is an approxima
 
 \value{
   Returns a list  containing the following informations:
-  \item{LSCORE}{Logarithmic predictive score}
-  \item{CRPS}{Continuous ranked probability predictive score}
-  \item{RMSE}{Root mean squared error}
-  \item{MAE}{Mean absolute error}
-  \item{MAD}{Median absolute error}
-  \item{PIT}{A vector of  probability integral transformation }
+  \item{lscore}{Logarithmic predictive score}
+  \item{crps}{Continuous ranked probability predictive score}
+  \item{rmse}{Root mean squared error}
+  \item{mae}{Mean absolute error}
+  \item{mad}{Median absolute error}
+  \item{pit}{A vector of  probability integral transformation }
+  \item{intscore}{Mean interval score}
+  \item{coverage}{Coverage of the prediction intervals}
 }
 
 

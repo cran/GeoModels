@@ -304,7 +304,7 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
 ####################################################################################################################
 GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_dyn=NULL, corrmodel, distance="Eucl",
                          fixed=NULL,grid=FALSE, maxdist=NULL, neighb=NULL,maxtime=NULL, model='Gaussian',
-                         optimizer='Nelder-Mead', numbins=NULL, radius=6371,  start=NULL,
+                         optimizer='Nelder-Mead', numbins=NULL, radius=1,  start=NULL,
                          weighted=FALSE,optimization=TRUE)
   {
     ### Check first if the model is not binary:

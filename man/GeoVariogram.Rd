@@ -11,7 +11,7 @@ GeoVariogram(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 coordx_dyn=NULL,cloud=FALSE, distance="Eucl",
               grid=FALSE, maxdist=NULL,neighb=NULL,
               maxtime=NULL, numbins=NULL, 
-              radius=6371, type='variogram',bivariate=FALSE)
+              radius=1, type='variogram',bivariate=FALSE)
 }
 \arguments{
   \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{n \times d}{n x d})-matrix
@@ -52,7 +52,7 @@ coordx_dyn=NULL,cloud=FALSE, distance="Eucl",
   \item{numbins}{A numeric value denoting the numbers of bins, see the
     Section \bold{Details}.}
   \item{radius}{Numeric; a value indicating  the radius of the sphere when 
-  using the great circle distance. Default value is the radius of the earth in Km (i.e. 6371)} 
+  using the great circle distance. Default value is 1.} 
   \item{type}{A String denoting the type of semivariogram. The option
      available is : \code{variogram}.}
     \item{bivariate}{Logical; if \code{FALSE} (the default) the data

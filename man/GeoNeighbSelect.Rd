@@ -16,7 +16,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
     est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',lower=NULL,
     neighb=c(1,2,3,4,5),maxtime=Inf, memdist=TRUE,model='Gaussian',
     n=1, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
-    bivariate=FALSE,radius=6371, start=NULL,type='Pairwise', upper=NULL, 
+    bivariate=FALSE,radius=1, start=NULL,type='Pairwise', upper=NULL, 
     weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL)
 }
 \arguments{
@@ -92,7 +92,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
   \item{bivariate}{Logical; if \code{TRUE} the bivariate case is considered.}  
  
    \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
-   The default is 6371, the radius of the earth.}
+   Default value is 1.}
  
   \item{start}{An optional named list with the initial values of the
     parameters that are used by the numerical routines in maximization
@@ -125,7 +125,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
     The procedure needs an object obtained using the GeoVariogram function.
 }
 \value{
-  Returns a list with information on the best selected neighbor.
+Returns a list containing the estimates for each neighborhood, the optimal neighborhood selected, and, if the selected neighborhood is large, a recommended alternative.
 }
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},

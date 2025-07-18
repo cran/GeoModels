@@ -6,7 +6,7 @@
 ### Optim call for log-likelihood maximization 
 Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,grid,lower,
                        mdecomp,model,namescorr,namesnuis,namesparam,numcoord,numpairs,numparamcor,numtime,
-                       optimizer,onlyvar,parallel,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso)
+                       optimizer,onlyvar,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso)
 {
  ######### computing upper trinagular of covariance matrix   
     matr<- function(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius)
@@ -1105,7 +1105,7 @@ if(!onlyvar){   # performing optimization
      #                        model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,X=X,MM=MM,aniso=aniso,namesaniso=namesaniso)
      #                  }
      #   else{  ### no vecchia
-if(optimizer=='L-BFGS-B'&&!parallel)
+if(optimizer=='L-BFGS-B')
                         Likelihood <- optim(param,fn=eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordz=coordz,coordt=coordt,corr=corr,corrmat=corrmat,
                           corrmodel=corrmodel,control=list(
                           pgtol=1e-14,maxit=maxit),data=t(data),dimat=dimat,fixed=fixed,
@@ -1113,21 +1113,7 @@ if(optimizer=='L-BFGS-B'&&!parallel)
                           model=model,namescorr=namescorr,hessian=hessian,
                           namesnuis=namesnuis,upper=upper,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso) 
 
-   if(optimizer=='L-BFGS-B'&&parallel){
-         #ncores=max(1, parallel::detectCores() - 1)
-        ncores=length(param) * 2 + 1
-        if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
-        else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
-        parallel::setDefaultCluster(cl = cl)
-                          Likelihood <- optimParallel::optimParallel(param,fn=eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordz=coordz,coordt=coordt,corr=corr,corrmat=corrmat,
-                          corrmodel=corrmodel,   control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
-                          data=t(data),dimat=dimat,fixed=fixed,
-                          fname=fname,grid=grid,ident=ident,lower=lower,mdecomp=mdecomp,method=optimizer,
-                          model=model,namescorr=namescorr,hessian=hessian,    parallel = list(forward = FALSE,loginfo=FALSE),
-                          namesnuis=namesnuis,upper=upper,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
-     parallel::setDefaultCluster(cl=NULL)
-     parallel::stopCluster(cl)
-  }
+
   #if(optimizer=='BFGS')
    #                   Likelihood <- optim(param,eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordt=coordt,corr=corr,corrmat=corrmat,
     #                      corrmodel=corrmodel,control=list(

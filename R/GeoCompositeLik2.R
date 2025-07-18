@@ -4,19 +4,20 @@
 
 ### Optim call for Composite log-likelihood maximization
 
-CompLik2 <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed, GPU,grid,
-                           likelihood, local,lower, model, n, namescorr, namesnuis, namesparam,
-                           numparam, numparamcorr, optimizer, onlyvar, parallel, param, spacetime, type,
+CompLik2 <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed,grid,
+                           likelihood,lower, model, n, namescorr, namesnuis, namesparam,
+                           numparam, numparamcorr, optimizer, onlyvar, param, spacetime, type,
                            upper, varest,  weigthed, ns, X,sensitivity,
                            colidx,rowidx,neighb,MM,aniso)
   {
 
 
 comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, namescorr, 
-                              namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
+                              namesnuis,namesparam,namesaniso,weigthed,X,MM,aniso,type_cop,cond_pair)
       {
         names(param) <- namesparam
         param <- c(param, fixed)
+        #print(param)
         paramcorr <- as.numeric(param[namescorr])
         nuisance <- param[namesnuis]
         sel=substr(names(nuisance),1,4)=="mean"
@@ -25,15 +26,17 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
                        }
         else           Mean=MM                     ### fixed mean
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)         
+      #  print(other_nuis);print(fan)
+      #  print(paramcorr)
         if(aniso){
             anisopar<-param[namesaniso]
             coords1=GeoAniso(coords, anisopars=anisopar)
           c1=c(t(coords1[colidx,]));c2=c(t(coords1[rowidx,]))
           result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,c1,c2,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,
+         SIGNATURE = c("integer","double","double","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer"),  
+                        corrmodel,c1,c2,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,
                         type_cop,cond_pair,
-          INTENT =    c(rep("r",9),"w",rep("r",7)),
+          INTENT =    c(rep("r",9),"w",rep("r",5)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
 
 
@@ -41,9 +44,9 @@ comploglik2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed
          else
          {      
          result=dotCall64::.C64(as.character(fan),
-         SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer","integer","integer"),  
-                        corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,local,GPU,type_cop,cond_pair,
-          INTENT =    c(rep("r",7),"w",rep("r",7)),
+         SIGNATURE = c("integer","double","double", "integer","integer","double","integer","double","double","double","double","integer","integer"),  
+                        corrmodel,data1, data2, n[colidx],n[rowidx],paramcorr,weigthed, res= dotCall64::vector_dc("double",1),Mean[colidx], Mean[rowidx], other_nuis,type_cop,cond_pair,
+          INTENT =    c(rep("r",7),"w",rep("r",5)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
        }
 return(-result)
@@ -51,7 +54,7 @@ return(-result)
 ##################################################################
 ##################################################################
 comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,fixed, fan, n, 
-                          namescorr, namesnuis,namesparam,namesaniso,weigthed,X,GPU,local,MM,aniso,type_cop,cond_pair)
+                          namescorr, namesnuis,namesparam,namesaniso,weigthed,X,MM,aniso,type_cop,cond_pair)
       {
 
         names(param) <- namesparam
@@ -71,9 +74,9 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
         res=double(1)
        
         result=dotCall64::.C64(as.character(fan),
-          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double","integer","integer"),  
-                        corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx],Mean[rowidx],other_nuis,local,GPU,
-          INTENT =    c(rep("r",6),"w", rep("r", 5)),
+          SIGNATURE = c("integer","double","double", "integer","double","integer","double","double","double","double"),  
+                        corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx],Mean[rowidx],other_nuis,
+          INTENT =    c(rep("r",6),"w", rep("r", 3)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
         return(-result)
       }
@@ -225,28 +228,7 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(aniso) fname <- paste(fname,"_aniso",sep="")
      
    
-    #path.parent <- getwd()
-
   
-    # if(!is.null(GPU)) 
-    # {
-    #   path <- system.file("CL", "Kernel.cl", package = "GeoModels")
-    #   path <- gsub("/Kernel.cl","/",path);setwd(path)
-    #   fname <- paste(fname,"_OCL",sep="")
-    #   .C("create_binary_kernel",  as.integer(GPU),as.character(fname),  PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-    # }
-    if(!is.null(GPU))
-    {
-      # fname <- paste(fname,"_OCL",sep="")
-      # #cat("fname de Composit.r: ",fname,"\n")
-      # 
-      # path <- system.file("CL", paste(fname,".cl",sep = ""), package = "GeoModels")
-      # path <- gsub(paste("/",paste(fname,".cl",sep = ""),sep = ""),"/",path)
-      # # .C("create_binary_kernel",  as.integer(GPU),as.character(fname),  PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-      # setwd(path)
-      # .C("create_binary_kernel",  as.integer(GPU),as.character(fname),  PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-    }
-
   
      if((spacetime||bivariate)&&(!spacetime_dyn))    data=c(t(data))
      if((spacetime||bivariate)&&(spacetime_dyn))     data=unlist(data)          
@@ -259,7 +241,7 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
  
 
    if((model==11||model==49||model==51)&&length(n)>1) {n1=n[colidx];n2=n[rowidx];n=c(n1,n2)} ## for binomials type models
-   if(is.null(GPU)) GPU=0
+
 
 
 
@@ -286,88 +268,41 @@ if(!onlyvar){
                               data1=data1,data2=data2, fixed=fixed, fan=fname,  lower=lower, n=n,
                               namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,
                                maximum = FALSE,
-                              upper=4,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
+                              upper=4,weigthed=weigthed,X=X, MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
    if(length(param)>1) {
 
-    if(optimizer=='L-BFGS-B'&&!parallel)
+    if(optimizer=='L-BFGS-B')
       CompLikelihood <- optim(par=param,fn=eval(as.name(lname)), 
                               control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
                               colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords,data1=data1,data2=data2, fixed=fixed,
                               fan=fname, lower=lower, method='L-BFGS-B',n=n,
                               namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                              upper=upper,weigthed=weigthed,X=X, local=local,GPU=GPU, hessian=FALSE,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                              upper=upper,weigthed=weigthed,X=X,  hessian=FALSE,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     
-    if(optimizer=='L-BFGS-B'&&parallel){
-        #ncores=max(1, parallel::detectCores() - 1)
-        ncores=length(param) * 2 + 1
-        if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
-        else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
-        parallel::setDefaultCluster(cl = cl)
-        CompLikelihood <- optimParallel::optimParallel(par=param,fn=eval(as.name(lname)), 
-                              #control=list(pgtol=1e-14, maxit=100000,factr = 1e8), # factr = 1e-10
-                                control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
-                              colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                               data1=data1,data2=data2,fixed=fixed,fan=fname, lower=lower,n=n,
-                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                         parallel = list(forward = FALSE,loginfo=FALSE),
-                          upper=upper,weigthed=weigthed,X=X, local=local,GPU=GPU, hessian=FALSE,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-         parallel::setDefaultCluster(cl=NULL)
-         parallel::stopCluster(cl)
-         }
     if(optimizer=='BFGS') 
         CompLikelihood <- optim(par=param, fn=eval(as.name(lname)),  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                            control=list(factr=1e-10,
                              reltol=1e-14, maxit=100000),data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=FALSE, method='BFGS',n=n,namescorr=namescorr,
-                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     if(optimizer=='SANN') 
         CompLikelihood <- optim(par=param, fn=eval(as.name(lname)),  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                            control=list(factr=1e-10,
                              reltol=1e-14, maxit=100000),data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=FALSE, method='SANN',n=n,namescorr=namescorr,
-                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
 
       if(optimizer=='Nelder-Mead')
         CompLikelihood <- optim(par=param, fn=eval(as.name(lname)),  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
           control=list( reltol=1e-14, maxit=100000), data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=FALSE, method='Nelder-Mead',n=n,namescorr=namescorr,
-                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-
- #if(optimizer=='multinlminb'){
-  #     CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=eval(as.name(lname)),
-   #     colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
-    #                           fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-     #                          weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,
-      #    lower=lower,upper=upper,method = "nlminb", nbtrials = 400, typerunif = "sobol",
-       #                       control = list( iter.max=100000))
-  #}
- #if(optimizer=='multiNelder-Mead'){
-  #     CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=eval(as.name(lname)),
-   #     colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
-    #                           fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-     #                          weigthed=weigthed,X=X, local=local,GPU=GPU,lower=lower,upper=upper,MM=MM,aniso=aniso,
-      #    method = "Nelder-Mead", nbtrials = 500, 
-       #                       control=list( reltol=1e-14, maxit=100000),
-        #                   typerunif = "sobol"#,nbclusters=4,
-         #            )
-  #}
+                                  namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
 
 
-    #if(optimizer=='nmk')
-     # CompLikelihood <-dfoptim::nmk(par=param, fn=eval(as.name(lname)), control = list(maxfeval=100000,tol=1e-10),
-      #                    colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords,data1=data1,data2=data2,fixed=fixed, fan=fname,
-       #                    n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-    #if(optimizer=='nmkb')
-    #{
-     # CompLikelihood <-dfoptim::nmkb(par=param, fn=eval(as.name(lname)), control = list(maxfeval=100000,tol=1e-10),
-      #                   lower=lower,upper=upper,
-       #                  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed, fan=fname,
-        #                 n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-    #}
     if(optimizer=='nlm')
     CompLikelihood <- nlm(f=eval(as.name(lname)),p=param,steptol = 1e-4, colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
                                fan=fname,hessian=FALSE,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, 
-                               iterlim=100000, weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                               iterlim=100000, weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
   
 
      if(optimizer=='bobyqa')   
@@ -375,7 +310,7 @@ if(!onlyvar){
      CompLikelihood <-minqa::bobyqa(par=param, fn = get(lname),lower=lower,upper=upper,  
                         control = list( maxfun=100000),
                         colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,namescorr=namescorr, 
-                       namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,
+                       namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, weigthed=weigthed,X=X,MM=MM,
                         aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     }
 
@@ -388,7 +323,7 @@ if(!onlyvar){
                                 control = list( iter.max=100000),
                               lower=lower,upper=upper,hessian=FALSE,
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                               weigthed=weigthed,X=X, ,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
      # tt1 <- proc.time()-tt1;
     }
  
@@ -402,7 +337,7 @@ if(!onlyvar){
      #     #control=list( reltol=1e-14, maxit=100000), 
       #    data1=data1,data2=data2, fixed=fixed, fan=fname,
        #                     n=n,namescorr=namescorr,
-        #                          namesnuis=namesnuis,namesparam=namesparam,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso)  
+        #                          namesnuis=namesnuis,namesparam=namesparam,weigthed=weigthed,X=X, local=local,MM=MM,aniso=aniso)  
 
        # bb=data1*data2/length(data1)                     
     }}
@@ -416,47 +351,30 @@ if(!onlyvar){
        CompLikelihood <- optimize(f=comploglik_biv2,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                               data1=data1,data2=data2, fixed=fixed,fan=fname,  lower=lower,n=n,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,maximum = FALSE,
-                              upper=upper,weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
+                              upper=upper,weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
       if(length(param)>1) {   
-    if(optimizer=='L-BFGS-B'&&!parallel){
+    if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(param,comploglik_biv2, control=list(pgtol=1e-14, maxit=100000),
                               method='L-BFGS-B',hessian=FALSE,lower=lower, upper=upper,
                                colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                               data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                                   parallel = list(forward = FALSE,loginfo=FALSE),
-                             weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
-  
-    if(optimizer=='L-BFGS-B'&&parallel){
-           ncores=max(1, parallel::detectCores() - 1)
-           if(Sys.info()[['sysname']]=="Windows") cl <- parallel::makeCluster(ncores,type = "PSOCK")
-           else                                   cl <- parallel::makeCluster(ncores,type = "FORK")
-           parallel::setDefaultCluster(cl = cl)
-           CompLikelihood <- optimParallel::optimParallel(param,comploglik_biv2, 
-                              control=list(pgtol=1e-14, maxit=100000),
-                               colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed,
-                              fan=fname,  n=n, namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                              weigthed=weigthed,X=X,local=local,GPU=GPU, 
-                              lower=lower,upper=upper,
-                              hessian=FALSE,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-              parallel::setDefaultCluster(cl=NULL)
-              parallel::stopCluster(cl)
-         }
+                             weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
+
       if(optimizer=='BFGS')
       CompLikelihood <- optim(param,comploglik_biv2,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,control=list(
                               reltol=1e-14, maxit=100000), data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=FALSE, method='BFGS',n=n,
-                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam ,namesaniso=namesaniso,weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam ,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
    if(optimizer=='Nelder-Mead')
       CompLikelihood <- optim(param,comploglik_biv2,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,control=list(
                               reltol=1e-14, maxit=100000), data1=data1,data2=data2, fixed=fixed, fan=fname,
                               hessian=FALSE, method='Nelder-Mead',n=n,
-                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam ,namesaniso=namesaniso,weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam ,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     if(optimizer=='nlm') 
         CompLikelihood <- nlm( f=comploglik_biv2,p=param,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
                                fan=fname,hessian=FALSE,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                               weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
     
    if(optimizer=='bobyqa')   {
         CompLikelihood <- minqa::bobyqa(fn=comploglik_biv2,par=param, 
@@ -464,7 +382,7 @@ if(!onlyvar){
                               lower=lower,upper=upper,
                                 colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                               weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
                       }
     if(optimizer=='nlminb') 
         CompLikelihood <- nlminb( objective=comploglik_biv2,start=param, 
@@ -472,25 +390,8 @@ if(!onlyvar){
                               lower=lower,upper=upper, hessian=FALSE,
                                 colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,data1=data1,data2=data2, fixed=fixed,
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                               weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-     #if(optimizer=='multinlminb'){
-      # CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=comploglik_biv2,
-       # colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
-        #                       fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-         #                      weigthed=weigthed,X=X,local=local,GPU=GPU,,MM=MM,aniso=aniso,
-          #                          lower=lower,upper=upper,method = "nlminb", nbtrials = 500, 
-           #                   control = list( iter.max=100000),
-            #               typerunif = "sobol")
-             #                  }
-    # if(optimizer=='multiNelder-Mead'){
-     #  CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=comploglik_biv2,
-      #  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords, data1=data1,data2=data2, fixed=fixed,
-       #                        fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-        #                       weigthed=weigthed,X=X, local=local,GPU=GPU,lower=lower,upper=upper,,MM=MM,aniso=aniso,
-         # method = "Nelder-Mead", nbtrials = 500, 
-          #                    control=list( reltol=1e-14, maxit=100000),
-           #                typerunif = "sobol")
-  #}
+                               weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+
 
    }
  }  
@@ -606,10 +507,10 @@ if(!onlyvar){
           CompLikelihood$convergence <- 'Successful'
           if(!bivariate) CompLikelihood$value = - comploglik2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                               data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
-                             n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU)
+                             n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X)
           else CompLikelihood$value = -comploglik_biv2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                 data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
-                             n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X, local=local,GPU=GPU,MM=MM,aniso=aniso)
+                             n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso)
 
           if(hessian) 
           {
@@ -617,12 +518,12 @@ if(!onlyvar){
                 CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(param),method="Richardson",  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                               data1=data1,data2=data2,fixed=fixed,fan=fname,n=n,type_cop=type_cop,
                               namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                              weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
+                              weigthed=weigthed,X=X,MM=MM,aniso=aniso)
                if(bivariate)  
                CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(param),method="Richardson",colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                             weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso)
+                             weigthed=weigthed,X=X,MM=MM,aniso=aniso)
                rownames(CompLikelihood$hessian)=namesparam
                colnames(CompLikelihood$hessian)=namesparam
           }
@@ -640,14 +541,14 @@ if(!bivariate)  { if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=ma
                                  CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(CompLikelihood$par),method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                                                         data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                                                         namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                                                        weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                                                        weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
                                    }
                  }
 
 if(bivariate)   CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(CompLikelihood$par),method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                           data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
                           namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                          weigthed=weigthed,X=X,local=local,GPU=GPU,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+                          weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
 
 rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
@@ -662,7 +563,6 @@ colnames(CompLikelihood$hessian)=namesparam
             }
       }
       if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
-    if(!is.null(GPU)) gc()
     return(CompLikelihood)
   }
 

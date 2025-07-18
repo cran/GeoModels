@@ -10,10 +10,10 @@
 \usage{
 CompLik(copula, bivariate, coordx, coordy, coordz, coordt, 
         coordx_dyn, corrmodel, data, distance, flagcorr, 
-        flagnuis, fixed, GPU, grid, likelihood, local, lower, 
+        flagnuis, fixed, grid, likelihood,  lower, 
         model, n, namescorr, namesnuis, namesparam,
         numparam, numparamcorr, optimizer, 
-        onlyvar, parallel, param,
+        onlyvar,  param,
         spacetime, type, upper, varest,
         weigthed, ns, X, sensitivity, MM, aniso)
 }
@@ -41,11 +41,9 @@ CompLik(copula, bivariate, coordx, coordy, coordz, coordt,
   \item{flagnuis}{Numeric vector of binary values indicating which
     nuisance parameters will be estimated.}
   \item{fixed}{Numeric vector of parameters considered as known values.}
-  \item{GPU}{Numeric; if \code{NULL} (default), no GPU computation is performed.}
   \item{grid}{Logical; if \code{FALSE} (default), data are interpreted as vector or \eqn{n \times d} matrix;
     if \code{TRUE}, then a \eqn{d \times d \times n} array is considered.}
   \item{likelihood}{String; configuration of the composite likelihood (see \code{\link{GeoFit}}).}
-  \item{local}{Numeric; number of local work-items of the GPU.}
   \item{lower}{Named list; optional lower bounds for parameters when using
     optimizers \code{L-BFGS-B}, \code{nlminb}, or \code{optimize}.
     Names must match those in the \code{start} list.}
@@ -62,9 +60,6 @@ CompLik(copula, bivariate, coordx, coordy, coordz, coordt,
     For 1D optimization, \code{optimize} is used.}
   \item{onlyvar}{Logical; if \code{TRUE} (and \code{varest} is \code{TRUE}),
     only the variance-covariance matrix is computed without optimizing.
-    Default is \code{FALSE}.}
-  \item{parallel}{Logical; if \code{TRUE}, optimization uses \code{optimParallel}
-    with maximum cores, when \code{optimizer} is \code{"L-BFGS-B"}.
     Default is \code{FALSE}.}
   \item{param}{Numeric vector of parameter values.}
   \item{spacetime}{Logical; if \code{TRUE}, the random field is spatio-temporal,

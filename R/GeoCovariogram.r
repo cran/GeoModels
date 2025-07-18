@@ -155,6 +155,7 @@ fitted$fixed=unlist(fitted$fixed)
     poisson<- model==30
     poissongamma<- model==46
     poissonZIP<- model==43||model==44
+    poissongammaZIP<- model==57
     loglogistic <- model==24
     tukeygh<- model==9||model==41
     Gaussian_misp_Binomial<-model==51
@@ -599,6 +600,20 @@ covariance=sill*vv*corr;variogram=sill*vv*(1-corr)
                            variogram=vv*(1-cc)
                       }  
             }
+       if(poissongammaZIP) {
+                    if(bivariate) {}
+                    if(!bivariate) {   
+                           p=pnorm(as.numeric(nuisance['pmu']));
+
+                           ##....
+                           cc=1
+                           variogram=vv*(1-cc)
+                      }  
+            }
+
+
+
+
 ##########################################
 ############ starting graphics############
 ##########################################
@@ -807,6 +822,10 @@ OLS=NULL
 
             if(poissonZIP){        p=pnorm(nuisance['pmu']); MM=exp(mm['mean']); 
                               vvv=(1-p)*MM*(1+p*MM)}
+
+            if(poissongammaZIP){     p=pnorm(nuisance['pmu']); MM=exp(mm['mean']);      ### to fix 
+                              vvv=(1-p)*MM*(1+p*MM)}
+
             if(geom)          vvv= (1-pnorm(mm['mean']))/pnorm(mm['mean'])^2
             if(binomialneg)   vvv= fitted$n*(1-pnorm(mm['mean']))/pnorm(mm['mean'])^2
             if(binomialnegZINB) {
@@ -870,7 +889,6 @@ OLS=NULL
         }
  #################################       
 }
-        
     if(ispatim) par(mai=c(1.02 ,0.85 ,0.85 ,0.45),mgp=c(3,1,0))
     # return the estimated covariance function
     if(answer.cov) {result <- list(lags=lags_m,lagt=lagt_m, covariance=covariance)}

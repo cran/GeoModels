@@ -9,7 +9,7 @@ using a specific algorithm.
 \usage{
 GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, 
              distance="Eucl", grid=FALSE,  neighb=10,alpha=0.001,
-             method="Z-Median", radius=6371, bivariate=FALSE,X=NULL)
+             method="Z-Median", radius=1, bivariate=FALSE,X=NULL)
 }
 \arguments{
   \item{data}{An optional \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
@@ -46,7 +46,7 @@ GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
 
   \item{method}{String; The name of the algorithm for detecting spatial ouliers. Default is Z-median proposed in Chen et al. (2008)}
 \item{radius}{Numeric; a value indicating  the radius of the sphere when using the great 
-    circle distance. Default value is the radius of the earth in Km (i.e. 6371)}  
+    circle distance. Default value is 1.}  
 
   \item{bivariate}{If TRUE then data  is considered as spatial  bivariate data.}
 

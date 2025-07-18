@@ -6,7 +6,7 @@
 
 GeoVariogram <- function(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,cloud=FALSE, distance="Eucl",
                        grid=FALSE, maxdist=NULL,neighb=NULL, maxtime=NULL,numbins=NULL,
-                       radius=6371, type='variogram',bivariate=FALSE)
+                       radius=1, type='variogram',bivariate=FALSE)
   {
     call <- match.call()
     corrmodel <- 'exponential'
@@ -286,9 +286,16 @@ if(spacetime_dyn)
 
  if(is.null(coordz)) coordz=double(length(coordx))
 
+
+    #print(head(coordx))
+    #  print(head(coordy))
+    #   print(head(coordz))
+    #   print(memdist)
+
      if(!memdist)  { 
      fname <- paste(fname,"2",sep="") 
      # Computes the spatial moments
+  
       EV=.C("Binned_Variogram2", bins=bins,  as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data), 
         lenbins=as.integer(lenbins), moments=as.double(moments), as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
        }
@@ -296,12 +303,10 @@ if(spacetime_dyn)
        fname="Binned_Variogram2new"
          idx=GeoNeighIndex(cbind(coordx,coordy,coordz),distance = distance, neighb = neighb, maxdist = maxdist,radius=radius)
          mm=range(idx$lags)
-        
-    
-EV=dotCall64::.C64("Binned_Variogram2",bins=bins,coordx=coordx,coordy=coordy,coordz=coordz,
-  coordt=coordt,data=data,lenbins=lenbins,moments=moments,numbins=numbins,
-  SIGNATURE=c("double","double","double","double","double","double","integer","double","integer"),
-  INTENT=c("rw","r","r","r","r","r","rw","rw","r"),NAOK=TRUE,PACKAGE="GeoModels",VERBOSE=0)
+         EV=dotCall64::.C64("Binned_Variogram2",bins=bins,coordx=coordx,coordy=coordy,coordz=coordz,
+                   coordt=coordt,data=data,lenbins=lenbins,moments=moments,numbins=numbins,
+                   SIGNATURE=c("double","double","double","double","double","double","integer","double","integer"),
+                   INTENT=c("rw","r","r","r","r","r","rw","rw","r"),NAOK=TRUE,PACKAGE="GeoModels",VERBOSE=0)
 
 
        }

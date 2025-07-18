@@ -10,8 +10,8 @@
 }
 \usage{
 GeoSim(coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, 
-      distance="Eucl",GPU=NULL, grid=FALSE, local=c(1,1),method="cholesky", 
-      model='Gaussian', n=1, param,anisopars=NULL,radius=6371, 
+      distance="Eucl", grid=FALSE, method="cholesky", 
+      model='Gaussian', n=1, param,anisopars=NULL,radius=1, 
       sparse=FALSE,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 }
 \arguments{
@@ -33,12 +33,9 @@ GeoSim(coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel,
   \item{distance}{String; the name of the spatial distance. The default
     is \code{Eucl}, the euclidean distance. See the Section
     \bold{Details}  of \code{\link{GeoFit}}.}
-    \item{GPU}{Numeric; if \code{NULL} (the default) 
-      no GPU computation is performed.} 
   \item{grid}{Logical; if \code{FALSE} (the default) the data
     are interpreted as spatial or spatial-temporal realisations on a set
     of non-equispaced spatial sites (irregular grid).}
-          \item{local}{Numeric; number of local work-items of the GPU}
      \item{method}{String; the type of matrix decomposition used in the simulation. 
        Default is cholesky. The other possible choices is \code{svd}.} 
   \item{model}{String; the type of RF and therefore the densities associated to the likelihood
@@ -50,7 +47,7 @@ GeoSim(coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel,
     simulation procedure of RFs, see \bold{Examples}.}
          \item{anisopars}{ A list of two elements "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
     \item{radius}{Numeric; a value indicating  the radius of the sphere when using the great 
-    circle distance. Default value is the radius of the earth in Km (i.e. 6371)}  
+    circle distance. Default value is 1.}  
   \item{sparse}{Logical; if \code{TRUE} then  cholesky decomposition is performed
   using sparse matrices algorithms (spam packake). It should be used
   with compactly supported covariance models.\code{FALSE} is the default.}

@@ -268,13 +268,13 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
 variance_disp <- function(model_type, params) {
   switch(as.character(model_type),
     "1"  = as.numeric(params["sill"]),  # Gaussian
-    "12" = as.numeric(params["sill"]) * as.numeric(params["df"]) / (as.numeric(params["df"]) - 2),  # StudentT
+    "12" = as.numeric(params["sill"]) * (1/as.numeric(params["df"])) / (1/as.numeric(params["df"]) - 2),  # StudentT
     "22" = exp(2 * as.numeric(params["mean"])) * (exp(as.numeric(params["sill"])) - 1),  # LogGaussian
     "30" = exp(as.numeric(params["mean"])),  # Poisson
-    "23" = 2 * exp(2 * as.numeric(params["mean"])) / as.numeric(params["shape"]),  # Gamma
+    "21" = 2 * exp(2 * as.numeric(params["mean"])) / as.numeric(params["shape"]),  # Gamma
     "26" = exp(2 * as.numeric(params["mean"])) * (gamma(1 + 2 / as.numeric(params["shape"])) /(gamma(1 + 1 / as.numeric(params["shape"]))^2) - 1),  # Weibull
-    "11" = {n <- as.numeric(params["n"]);mu <- as.numeric(params["mean"]):n * pnorm(mu) * (1 - pnorm(mu))},  # Binomial
-    "16" = {n <- as.numeric(params["n"]); mu <- as.numeric(params["mean"]);n * (1 - pnorm(mu)) / (pnorm(mu)^2)},  # BinomialNeg
+    "11" = {n <- as.numeric(params["n"]);pp <- pnorm(as.numeric(params["mean"])); n * pp * (1 - pp)},  # Binomial
+    "16" = {n <- as.numeric(params["n"]); pp<- pnorm(as.numeric(params["mean"]));n  * (1 - pp )/ pp^2},  # BinomialNeg
     "18" = {df <- round(1 / as.numeric(params["df"]));skew <- as.numeric(params["skew"]); mu <- as.numeric(params["mean"])
             mu * ((df / (df - 2)) * (1 + skew^2) - df * skew^2 * gamma(0.5 * (df - 1)) / (pi * gamma(0.5 * df)))
            },  # SkewStudentT
@@ -290,8 +290,8 @@ quantile_disp <- function(p, model_type, params) {
     "1" = qnorm(p, mean = as.numeric(params["mean"]), sd = sqrt(as.numeric(params["sill"]))), # gaussian
     "12" = as.numeric(params["mean"]) + sqrt(as.numeric(params["sill"])) * qt(p, df = 1 / as.numeric(params["df"])), # StudentT
     "22" = qlnorm(p, meanlog = as.numeric(params["mean"]) - as.numeric(params["sill"]) / 2, sdlog = sqrt(as.numeric(params["sill"]))), # loggauss
-    "30" = qpois(p, lambda = exp(as.numeric(params["mean"]))), 
-    "23" = exp(as.numeric(params["mean"])) * qgamma(p, shape = as.numeric(params["shape"]) / 2, rate = as.numeric(params["shape"]) / 2), # gamma
+    "30" = qpois(p, lambda = exp(as.numeric(params["mean"]))),  #poisson
+    "21" = exp(as.numeric(params["mean"])) * qgamma(p, shape = as.numeric(params["shape"]) / 2, rate = as.numeric(params["shape"]) / 2), # gamma
     "26" = exp(as.numeric(params["mean"])) * qweibull(p, shape = as.numeric(params["shape"]), scale = 1 / gamma(1 + 1 / as.numeric(params["shape"]))), #weibull
     "11" = { n <- as.numeric(params["n"]); qbinom(p, size = n, prob = pnorm(as.numeric(params["mean"]))) },   #   binom
     "16" = { n <- as.numeric(params["n"]); qnbinom(p, size = n, prob = pnorm(as.numeric(params["mean"])))  }, # neg  binom
@@ -324,6 +324,7 @@ quantile_disp <- function(p, model_type, params) {
 compute_ak_vectorized <- function(M, model_type, params) {
   ak <- numeric(M)
   failed_integrations <- c()
+
 
   for (k in 1:M) {
     integrand <- function(t) {
@@ -395,14 +396,7 @@ compute_ak_vectorized <- function(M, model_type, params) {
 gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE, 
                                      auto_reduce_M = TRUE, verbose = FALSE) {
   
-  # Validazione input
-  if (!is.numeric(rho) || any(abs(rho) > 1)) {
-    stop("rho deve essere numerico con valori in [-1, 1]")
-  }
-  if (!is.numeric(M) || M <= 0) {
-    stop("M deve essere un intero positivo")
-  }
-  
+
   # Cache management
   cache_key <- paste(model_type, paste(nuisance, collapse = "_"), M, sep = "_")
   
@@ -422,8 +416,8 @@ gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak =
       significant_coeffs <- which(abs(ak_coeffs) > 1e-10)
       if (length(significant_coeffs) > 0) {
         effective_M <- max(significant_coeffs)
-        if (effective_M < M * 0.7) {  # Se perdiamo più del 30% dei coefficienti
-          M_new <- min(effective_M + 5, M)  # Aggiungi un margine
+        if (effective_M < M * 0.7) {  
+          M_new <- min(effective_M + 5, M)  
           ak_coeffs <- ak_coeffs[1:M_new]
           M <- M_new
           #message(paste("M automatically reduced to", M, "to improve stability"))
@@ -442,9 +436,9 @@ gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak =
     last_coeffs <- abs(ak_coeffs[(length(ak_coeffs)-4):length(ak_coeffs)])
     if (all(last_coeffs < 1e-8)) {
       if (verbose) message("Series converges well - last coefficients are small")
-    } else {
-      warning("Series may not converge well - consider reducing M")
-    }
+    } #else {
+     # warning("Series may not converge well - consider reducing M")
+    #}
   }
   
   # Calcolo covarianze
@@ -462,15 +456,10 @@ gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak =
     # Controlla per overflow/underflow
     valid_terms <- is.finite(terms) & abs(terms) > .Machine$double.eps
     
-    if (sum(valid_terms) == 0) {
-      warning(paste("All series terms are numerically zero for rho =", r))
-      return(0)
-    }
-    
     result <- sum(terms[valid_terms])
     
     if (!is.finite(result)) {
-      warning(paste("Non-finite result for rho =", r))
+      #warning(paste("Non-finite result for rho =", r))
       return(0)
     }
     
@@ -485,45 +474,7 @@ gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak =
   return(covariances)
 }
 
-# Funzione per diagnosticare problemi di integrazione
-diagnose_integration <- function(model_type, nuisance, k_test = c(1, 5, 10, 15, 20)) {
-  cat("Integration diagnosis for k =", paste(k_test, collapse = ", "), "\n")
-  
-  for (k in k_test) {
-    cat(paste("\nTesting k =", k, ":\n"))
-    
-    integrand <- function(t) {
-      p <- pnorm(t)
-      q <- quantile_disp(p, model_type, nuisance)
-      q[!is.finite(q)] <- 0
-      result <- q * hermite_single(k, t) * dnorm(t)
-      result[!is.finite(result)] <- 0
-      return(result)
-    }
-    
-    # Test on different intervals
-    intervals <- list(c(-6, 6), c(-8, 8), c(-10, 10), c(-12, 12))
-    
-    for (i in 1:length(intervals)) {
-      int_result <- tryCatch({
-        integrate(integrand, lower = intervals[[i]][1], upper = intervals[[i]][2], 
-                  subdivisions = 1000L)
-      }, error = function(e) list(value = NA, message = e$message))
-      
-      cat(paste("  Interval [", intervals[[i]][1], ",", intervals[[i]][2], "]: "))
-      if (is.na(int_result$value)) {
-        cat("FAILED -", int_result$message, "\n")
-      } else {
-        cat("OK - value =", format(int_result$value, scientific = TRUE), "\n")
-      }
-    }
-  }
-}
 
-# Clean cache function (unchanged)
-clear_ak_cache <- function() {
-  .GeoModels_env$ak_cache <- list()
-}
 
 ###############################################
 Cmatrix_copula <- function(bivariate, coordx, coordy,coordz, coordt,corrmodel, dime, n, ns, NS, nuisance, numpairs,
@@ -571,7 +522,7 @@ cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","doub
   
 corr=cr$corr*(1-as.numeric(nuisance['nugget'])) 
 if(model==11||model==16)  nuisance["n"]=n
-#print(nuisance)
+
 cova=gaussian_copula_cov_fast(corr, model,nuisance  )
 vv=variance_disp(model,nuisance)
 

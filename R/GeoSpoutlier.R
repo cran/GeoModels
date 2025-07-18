@@ -4,7 +4,7 @@
 
 GeoOutlier <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, 
                          distance="Eucl", grid=FALSE,  neighb=10,alpha=0.001,
-                         method="Z-Median",radius=6371, bivariate=FALSE,X=NULL)
+                         method="Z-Median",radius=1, bivariate=FALSE,X=NULL)
 
 {
     

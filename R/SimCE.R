@@ -118,7 +118,7 @@ Cov_Mat_CE <- function(xrange, yrange, M,N, corrmodel, param, ext = 2, approx = 
   if( approx ){
     fft.sigma[fft.sigma < 0] <- 0
     prefix <- sqrt(fft.sigma)
-    print( "Negative eigenvalues detected. Truncation is done." )
+    cat( "Negative eigenvalues detected. Truncation is done.." )
   }else{
     prefix <- suppressWarnings(sqrt(fft.sigma))
   }
