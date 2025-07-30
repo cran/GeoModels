@@ -278,11 +278,13 @@ SIM=list()
 ### starting number of replicates
 ###################################################
 if(nrep>1){
+
+cat("Performing", nrep, "simulations using Cholesky method...\n")}
 if(progress){
 progressr::handlers(global = TRUE)
 progressr::handlers("txtprogressbar")
 pb <- progressr::progressor(along = 1:nrep)
-cat("Performing", nrep, "simulations\n")}
+
 }
 
 for( L in 1:nrep){

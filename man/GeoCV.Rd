@@ -6,7 +6,7 @@
 \usage{GeoCV(fit, K=100, estimation=TRUE, optimizer=NULL,
      lower=NULL, upper=NULL, n.fold=0.05,local=FALSE,
     neighb=NULL, maxdist=NULL,maxtime=NULL,sparse=FALSE,
-    type_krig="Simple", which=1, parallel=TRUE, ncores=NULL)}
+    type_krig="Simple", which=1, parallel=TRUE, ncores=NULL,progress=TRUE)}
 
 \arguments{
   \item{fit}{An object of class
@@ -38,6 +38,7 @@
       the estimation step is  parallelized 
       }
        \item{ncores}{Numeric; number of cores involved in parallelization.} 
+      \item{progress}{Logic; If TRUE then a progress bar is shown.}
 }
 
 \value{

@@ -772,6 +772,10 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
 
 cond=dime*nrep
 if (cond > 1000000 && parallel) {
+
+
+ 
+         cat("Performing", nrep, "simulation using",method ," method"," ...\n")
   # Sopprimi i warning
   old_warn <- getOption("warn")
   options(warn = -1)

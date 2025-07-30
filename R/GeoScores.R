@@ -7,6 +7,7 @@ GeoScores <- function(data_to_pred, probject = NULL, pred = NULL, mse = NULL,
 
   data_to_pred <- c(data_to_pred)
 
+
   if (inherits(probject, "GeoKrig") || inherits(probject, "GeoKrigloc")) {
     pred <- c(probject$pred)
     mse  <- c(probject$mse)
@@ -57,6 +58,7 @@ GeoScores <- function(data_to_pred, probject = NULL, pred = NULL, mse = NULL,
     std <- err / sqrtvv
 
     if ("lscore" %in% score) {
+
       lscore <- mean(0.5 * (log(2 * pi * mse) + std^2))
     }
 

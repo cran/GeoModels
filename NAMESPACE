@@ -10,15 +10,14 @@ importFrom("grDevices", dev.cur,gray.colors)
 importFrom("graphics", abline, lines, par, persp,plot,points,image,plot.default,box,
 axis,plot.new,plot.window,title)
 importFrom("graphics", "hist","legend")
-importFrom("stats", median, nlminb, dist, fft, quantile, qqnorm, qbinom,qpois,qnbinom,  pweibull, pgamma, plnorm, nlm, optim, optimize, integrate,approxfun,pchisq,pnorm,rt,qnorm,dnorm,dpois,dbeta,dnbinom,dbinom,dweibull,dgamma,dlnorm,pbinom, plogis, pnbinom, ppois,
+importFrom("stats", setNames, median, nlminb, dist, fft, quantile, qqnorm, qbinom,qpois,qnbinom,  pweibull, pgamma, plnorm, nlm, optim, optimize, integrate,approxfun,pchisq,pnorm,rt,qnorm,dnorm,dpois,dbeta,dnbinom,dbinom,dweibull,dgamma,dlnorm,pbinom, plogis, pnbinom, ppois,
 pbeta,dt,dlogis,qlnorm,qgamma,qweibull, qbeta,qlogis,lm, rnorm, runif, rgamma, pt,qt,qunif,uniroot, var,cor)
 importFrom("methods","is", "new", "slot<-","as")
-importFrom("utils", "setTxtProgressBar", "txtProgressBar")
+importFrom("utils", "setTxtProgressBar", "txtProgressBar","capture.output")
 importFrom("utils", "head")
 importFrom("sp", "coordinates","is.projected")
 importFrom("minqa","bobyqa")
 importFrom("plotrix", "draw.circle")
-importFrom("lamW","lambertW0")
 importFrom("FastGP","rcppeigen_get_chol","rcppeigen_invert_matrix")
 importFrom("VGAM","qzinegbin","qzipois")
 import("fields", "mapproj","shape")

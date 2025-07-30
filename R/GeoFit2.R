@@ -13,8 +13,6 @@ GeoFit2 <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_d
 {
 
 ###########  first preliminary check  ###############
-
-
     call <- match.call()
 
     if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
@@ -46,8 +44,6 @@ GeoFit2 <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_d
     if(type=='Standard'){
         if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
     stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
-
- 
 
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
@@ -103,8 +99,6 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic","PoissonGam
                         else                    fixed$sill=1}
 }
 
-
-
 #############################################################################
 
     checkinput <- CkInput(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, "Fitting",
@@ -122,9 +116,6 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic","PoissonGam
     if(is.null(coordx_dyn)){
     coordx=unname(coordx);coordy=unname(coordy);coordz=unname(coordz);}
 
-
-
-
     initparam <- WlsStart(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, "Fitting", fixed, grid,#10
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
@@ -135,19 +126,13 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic","PoissonGam
   if(!is.null(fixed))
      if(length(fixed$mean)>1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
 
-  
-
     ## moving sill from starting to fixed parameters if necessary
   #      if(sum(initparam$namesparam=='sill')==1){
   #  if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11)) 
   #  {initparam$param=initparam$param[initparam$namesparam!='sill'];initparam$namesparam=names(initparam$param)
   #  a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
-
-  
     if(!is.null(initparam$error))   stop(initparam$error)
     ## checking for upper and lower bound for method 'L-BFGS-B' and optimize method
-
-
     if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','bobyqa'))&is.null(lower)&is.null(upper))
              stop("lower and upper bound are missing\n")
 
@@ -180,7 +165,6 @@ if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic","PoissonGam
 
       initparam$upper <- uu;initparam$lower <- ll
      }}
-
 ###############################################################################################
 fitted_ini<-CompIndLik2(initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
                                    coordx_dyn,unname(initparam$data), 
@@ -200,7 +184,6 @@ aa[sel]=fitted_ini$par      #replacing
 sel=match(names(aa),initparam$namesparam);sel=sel[!is.na(sel)]  
 initparam$param=aa[sel]   
 ######################################################
-
 
 #updating with aniso parameters
 update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,estimate_aniso)
@@ -319,7 +302,6 @@ if(!is.null(anisopars)) {
      else        .C('DeleteGlobalVar' , PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
     }
     #if(is.null(neighb)&is.numeric(maxdist)) .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
-
 #!!ojo this is the case maxdist and neighb =NULL and likelihood="Marginal"
 # distances are computed in C  with i=1 j>i
 # for comparson we the defauts case we consider this code

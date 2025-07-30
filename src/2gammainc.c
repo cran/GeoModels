@@ -94,9 +94,6 @@ static inline double handle_edge_cases(double a, double x, int lower_part) {
     return -1.0;
 }
 
-/**
- * 
- */
 double ratevl(double x, const double num[], int M,
               const double denom[], int N) {
     int i, dir;
@@ -176,9 +173,6 @@ double igam_fac(double a, double x) {
     return (ax < -MAXLOG) ? 0.0 : exp(ax);
 }
 
-/**
- *  
- */
 double igamc_continued_fraction(double a, double x) {
     int i;
     double ans, ax, c, yc, r, t, y, z;
@@ -254,9 +248,6 @@ double igamc_continued_fraction(double a, double x) {
     return ans * ax;
 }
 
-/**
- *  
- */
 double igam_series(double a, double x) {
     int i;
     double ans, ax, c, r;
@@ -289,9 +280,6 @@ double igam_series(double a, double x) {
     return (ans * ax) / a;
 }
 
-/**
- *  40: Serie igamc ottimizzata
- */
 double igamc_series(double a, double x) {
     int n;
     double fac = 1.0;
@@ -321,9 +309,6 @@ double igamc_series(double a, double x) {
     return term - exp(log_term_base) * sum;
 }
 
-/**
- *  
- */
 double asymptotic_series(double a, double x, int func) {
     int k, n, sgn;
     int maxpow = 0;
@@ -391,9 +376,6 @@ double asymptotic_series(double a, double x, int func) {
     return res;
 }
 
-/**
- *  
- */
 double igam(double a, double x) {
     double absxma_a;
     double result;
@@ -417,9 +399,6 @@ double igam(double a, double x) {
     return 1.0 - igamc(a, x);
 }
 
-/**
- *  
- */
 double igamc(double a, double x) {
     double absxma_a;
     double result;
@@ -448,9 +427,6 @@ double igamc(double a, double x) {
     }
 }
 
-/**
- *  
- */
 void igam_call(double *a, double *x, double *res) {
     __builtin_prefetch(a, 0, 3);
     __builtin_prefetch(x, 0, 3);
@@ -459,9 +435,7 @@ void igam_call(double *a, double *x, double *res) {
     *res = igam(*a, *x);
 }
 
-/**
- *  
- */
+
 void igam_batch(double *a, double *x, double *res, int n) {
     int i;
     
@@ -472,4 +446,9 @@ void igam_batch(double *a, double *x, double *res, int n) {
     }
 }
 
-//************************************* END igam.c*****************************************
+
+//************************************* END igam.c*****************************************//
+
+
+
+

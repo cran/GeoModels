@@ -8,7 +8,6 @@ typedef struct {
 } IntegrandParams;
 
 
-
 // Optimized convergence check with relative and absolute tolerances
 static inline int converged(double current, double previous, double tol_rel, double tol_abs) {
     if (current == 0.0) return (fabs(previous) <= tol_abs);

@@ -106,10 +106,30 @@ if(model %in% c("LogGaussian"))
 #######################################   OK
 if(model %in% c("LogLogistic"))
 {
+
+pllogis1 <- function(q, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
+  x <- (q / scale)^shape
+  p <- x / (1 + x)
+  if (!lower.tail) p <- 1 - p
+  if (log.p) p <- log(p)
+  return(p)
+}  
+qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
+  if (missing(shape)) stop("argument 'shape' is missing, with no default")
+  if (shape <= 0) stop("'shape' must be positive")
+  if (scale <= 0) stop("'scale' must be positive")
+  if (log.p) { p <- exp(p)}
+  if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
+  if (!lower.tail) {p <- 1 - p }
+  result <- numeric(length(p)); result[p == 0] <- 0;result[p == 1] <- Inf
+  valid <- p > 0 & p < 1
+  if (any(valid)) {p_valid <- p[valid];result[valid] <- scale * (p_valid / (1 - p_valid))^(1/shape)}
+  return(result)
+}
 MM=allmean
 shape=pp["shape"]
 cc=gamma(1+1/shape)*gamma(1-1/shape)
-data = actuar::pllogis(dd,shape = shape,scale=exp(MM)/cc)
+data = pllogis1(dd,shape = shape,scale=exp(MM)/cc)
 }
 #######################################   OK
 if(model %in% c("Logistic"))   

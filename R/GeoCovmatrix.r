@@ -1,8 +1,8 @@
 
 
 GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NULL,coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
-                       maxdist=NULL, maxtime=NULL, model="Gaussian", n=1, param, anisopars=NULL,radius=1,
-                       sparse=FALSE,taper=NULL, tapsep=NULL, type="Standard",copula=NULL,X=NULL,spobj=NULL)
+                     model="Gaussian", n=1, param, anisopars=NULL,radius=1,
+                       sparse=FALSE,copula=NULL,X=NULL,spobj=NULL)
 
 {
   ########################################################################################################
@@ -675,6 +675,7 @@ bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
 
+tapsep=NULL ;   maxdist=NULL; maxtime=NULL; type="Standard"    #setted for older compatibility
 ##############################################################################
 ###### extracting sp object informations if necessary              ###########
 ##############################################################################
@@ -939,8 +940,6 @@ if(is.null(X)) initparam$X=NULL
                    distance = distance,
                    grid=   grid,
                    nozero=initparam$setup$nozero,
-                   maxdist = maxdist,
-                   maxtime = maxtime,
                    n=n,
                    ns=initparam$ns,
                    NS=initparam$NS,
@@ -958,8 +957,7 @@ if(is.null(X)) initparam$X=NULL
                    setup=setup,
                    spacetime = initparam$spacetime,
                    sparse=sparse,
-                   tapmod=taper,
-                   tapsep=tapsep,
+    
                    X=initparam$X)
     structure(c(CovMat, call = call), class = c("GeoCovmatrix"))
 }

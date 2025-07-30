@@ -160,9 +160,22 @@ simcop= exp(mm)*qweibull(unif,shape=p2,scale=1/(gamma(1+1/p2 )))
 ########################
 if(model=="LogLogistic") 
          {
+qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
+  if (missing(shape)) stop("argument 'shape' is missing, with no default")
+  if (shape <= 0) stop("'shape' must be positive")
+  if (scale <= 0) stop("'scale' must be positive")
+  if (log.p) { p <- exp(p)}
+  if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
+  if (!lower.tail) {p <- 1 - p }
+  result <- numeric(length(p)); result[p == 0] <- 0;result[p == 1] <- Inf
+  valid <- p > 0 & p < 1
+  if (any(valid)) {p_valid <- p[valid];result[valid] <- scale * (p_valid / (1 - p_valid))^(1/shape)}
+  return(result)
+}
+
 p2=as.numeric(param$shape)
 cc=gamma(1+1/p2)*gamma(1-1/p2)
-simcop=actuar::qllogis(unif,shape = p2,scale=exp(mm)/cc)            
+simcop=qllogis1(unif,shape = p2,scale=exp(mm)/cc)            
          }
 ##############################
 
@@ -269,27 +282,27 @@ vv=as.numeric(param$sill)
 simcop =mm+sqrt(vv)*qtpGaussian(unif,skew)
 }
 #######################################  OK
-if(model %in% c("TwoPieceBimodal"))
-{
-ptpbimodal = function(x,skew,delta,df){  
-  alpha=2*(delta+1)/df
-  nn=2^(1-alpha/2)
-  ll=1:length(x)
-  sel1=I(x<0)*ll
-  sel2=I(x>=0)*ll
-  x1=x[sel1];x2=x[sel2];
-  pp1=(0.5*(1+skew)*as.numeric(zipfR::Igamma(df/2,nn*(-x1)^(alpha)/(2*((1+skew)^(alpha))),lower=FALSE))/(gamma(df/2)))
-  pp2=(0.5*(skew+1)+(0.5*(1-skew)*as.numeric(zipfR::Igamma(df/2,nn*(x2)^(alpha)/(2*((1-skew)^(alpha))),lower=TRUE))/(gamma(df/2))))
-  return(c(pp1,pp2))
-}
-vv=as.numeric(param$sill) 
-skew = as.numeric(param$skew)
-df   = as.numeric(param$df)
-delta= as.numeric(param$shape)
-f = function(x) ptpbimodal(x,skew = skew,delta=delta,df=df)
-f.inv = GoFKernel::inverse(f,lower = -4,upper = 4)
-simcop = mm+sqrt(vv)*sort(as.numeric(lapply(unif,f.inv)))
-}
+#if(model %in% c("TwoPieceBimodal"))
+#{
+#ptpbimodal = function(x,skew,delta,df){  
+#  alpha=2*(delta+1)/df
+#  nn=2^(1-alpha/2)
+#  ll=1:length(x)
+#  sel1=I(x<0)*ll
+#  sel2=I(x>=0)*ll
+#  x1=x[sel1];x2=x[sel2];
+#  pp1=(0.5*(1+skew)*as.numeric(zipfR::Igamma(df/2,nn*(-x1)^(alpha)/(2*((1+skew)^(alpha))),lower=FALSE))/(gamma(df/2)))
+#  pp2=(0.5*(skew+1)+(0.5*(1-skew)*as.numeric(zipfR::Igamma(df/2,nn*(x2)^(alpha)/(2*((1-skew)^(alpha))),lower=TRUE))/(gamma(df/2))))
+#  return(c(pp1,pp2))
+#}
+#vv=as.numeric(param$sill) 
+#skew = as.numeric(param$skew)
+#df   = as.numeric(param$df)
+#delta= as.numeric(param$shape)
+#f = function(x) ptpbimodal(x,skew = skew,delta=delta,df=df)
+#f.inv = GoFKernel::inverse(f,lower = -4,upper = 4)
+#simcop = mm+sqrt(vv)*sort(as.numeric(lapply(unif,f.inv)))
+#}
 #######################################  
 if(model=="TwoPieceStudentT")
 {

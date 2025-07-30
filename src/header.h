@@ -905,9 +905,10 @@ double p1evl(double x, const double coef[], int N);
 
 
 // START hyperg.c
-double hy1f1p(double a, double b, double x, double *acanc);
-double hy1f1a(double a, double b, double x, double *acanc);
-double hyp2f0(double a, double b, double x, int type, double *err);
+//static double hy1f1p(double a, double b, double x, double *acanc);
+//static double hy1f1a(double a, double b, double x, double *acanc);
+
+//static double hyp2f0(double a, double b, double x, int type, double *err);
 double hyperg(double a, double b, double x);
 double hypergeo2(double a, double b, double c, double x);
 double hyper_2f1(double a, double b, double c, double z) ;
@@ -955,7 +956,7 @@ double DWen1_biv_smo2(double h,double var11,double var22,double nug11,double nug
 
 int is_nonpos_int(double x);
 double poch(double a, double m);
-double log_hyp1F1_reg(int n,int m,double z);
+//double log_hyp1F1_reg(int n,int m,double z);
 double log_regularized1F1(int n, int m,double z) ;
 double aprox_reg_1F1(int n, int m,double z) ;
 

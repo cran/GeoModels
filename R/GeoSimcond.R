@@ -23,7 +23,7 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
   n_obs <- nrow(coord_obs)
   n_loc <- nrow(loc)
 
- cat("Performing", nrep, "unconditional simulations...\n")
+ cat("Performing", nrep, "unconditional simulations ...\n")
   if (method == "Cholesky") {
     sim_args <- list(coordx = coord_sim, coordt = time_sim, corrmodel = corrmodel,progress = FALSE,
                      X = X_sim, nrep = nrep, distance = distance, radius = radius)
@@ -65,7 +65,7 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
   if (space) {
 
     if (!parallel) {
-      cat("Performing", nrep, "conditional simulations...\n")
+      cat("Performing", nrep, "conditional simulations ...\n")
 
       # Setup progress bar
       progressr::handlers(global = TRUE)
@@ -97,7 +97,7 @@ Gauss_cd <- function(data,corrmodel,nrep, method, L,
       }
 
     } else { # parallel
-      cat("Performing", nrep, "conditional simulations using", ncores, "cores...\n")
+      cat("Performing", nrep, "conditional simulations using", ncores, "cores ...\n")
       future::plan(future::multisession, workers = ncores)
       on.exit(future::plan(future::sequential), add = TRUE)
       # Setup progress bar

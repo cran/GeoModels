@@ -7,7 +7,7 @@
   and p-values  using parametric bootstrap.}
 \usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE, 
   optimizer=NULL, lower=NULL, upper=NULL, 
-  method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL)}
+  method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL,progress=TRUE)}
 \arguments{
   \item{fit}{A fitted object obtained from the
     \code{\link{GeoFit}}.}
@@ -27,6 +27,7 @@
       the estimation step is  parallelized 
       }
        \item{ncores}{Numeric; number of cores involved in parallelization.} 
+      \item{progress}{Logic; If TRUE then a progress bar is shown.}
      }
 \details{ The function update a \code{GeoFit} object  estimating stderr estimation 
 and confidence interval using parametric bootstrap.}

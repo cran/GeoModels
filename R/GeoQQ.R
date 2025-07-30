@@ -5,6 +5,21 @@ GeoQQ<-function(fit,type="Q",add=FALSE,ylim=c(0,1),breaks=10,...)
 {
 
 
+###### utility functions ##########
+    qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
+  if (missing(shape)) stop("argument 'shape' is missing, with no default")
+  if (shape <= 0) stop("'shape' must be positive")
+  if (scale <= 0) stop("'scale' must be positive")
+  if (log.p) { p <- exp(p)}
+  if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
+  if (!lower.tail) {p <- 1 - p }
+  result <- numeric(length(p)); result[p == 0] <- 0;result[p == 1] <- Inf
+  valid <- p > 0 & p < 1
+  if (any(valid)) {p_valid <- p[valid];result[valid] <- scale * (p_valid / (1 - p_valid))^(1/shape)}
+  return(result)
+}
+##################################
+
 if(!inherits(fit,"GeoFit"))  stop("A GeoFit object is needed as input\n")
 if(type!="Q"&type!="D") stop("Type can be Q or D \n")
 
@@ -162,10 +177,12 @@ if(model %in% c("LogGaussian"))
 #######################################  OK
 if(model %in% c("LogLogistic"))
 {
+
+
 shape=pp["shape"]
 cc=gamma(1+1/shape)*gamma(1-1/shape)
-q_t = actuar::qllogis(probabilities,shape = shape,scale=exp(MM)/cc)
-q_t1 = actuar::qllogis(probabilities1,shape = shape,scale=exp(MM)/cc)
+q_t = qllogis1(probabilities,shape = shape,scale=exp(MM)/cc)
+q_t1 = qllogis1(probabilities1,shape = shape,scale=exp(MM)/cc)
 q_e=quantile(dd,probabilities)
 plot(q_t,q_e,main = "LogLogistic qq-plot",xlab=xlab,ylab=ylab,...)
 }
@@ -242,28 +259,28 @@ q_t1 =MM+sqrt(VV)*qtpGaussian(probabilities1,skew)
 plot(q_t,q_e,main="Two-Piece Gaussian qq-plot",xlab=xlab,ylab=ylab,...)
 }
 #######################################  OK
-if(model %in% c("TwoPieceBimodal"))
-{
-ptpbimodal = function(x,skew,delta,df){  
-  alpha=2*(delta+1)/df
-  nn=2^(1-alpha/2)
-  ll=1:length(x)
-  sel1=I(x<0)*ll
-  sel2=I(x>=0)*ll
-  x1=x[sel1];x2=x[sel2];
-  pp1=(0.5*(1+skew)*as.numeric(zipfR::Igamma(df/2,nn*(-x1)^(alpha)/(2*((1+skew)^(alpha))),lower=FALSE))/(gamma(df/2)))
-  pp2=(0.5*(skew+1)+(0.5*(1-skew)*as.numeric(zipfR::Igamma(df/2,nn*(x2)^(alpha)/(2*((1-skew)^(alpha))),lower=TRUE))/(gamma(df/2))))
-  return(c(pp1,pp2))
-}
-skew = as.numeric(pp["skew"])
-df   = as.numeric(pp["df"])
-delta= as.numeric(pp["shape"])
-f = function(x) ptpbimodal(x,skew = skew,delta=delta,df=df)
-f.inv = GoFKernel::inverse(f,lower = -4,upper = 4)
-q_t = MM+sqrt(VV)*sort(as.numeric(lapply(probabilities,f.inv)))
-q_t1 = MM+sqrt(VV)*sort(as.numeric(lapply(probabilities1,f.inv)))
-plot(q_t,q_e,main="Two-Piece Bimodal qq-plot",xlab=xlab,ylab=ylab,...)
-}
+#if(model %in% c("TwoPieceBimodal"))
+#{
+#ptpbimodal = function(x,skew,delta,df){  
+#  alpha=2*(delta+1)/df
+#  nn=2^(1-alpha/2)
+#  ll=1:length(x)
+#  sel1=I(x<0)*ll
+#  sel2=I(x>=0)*ll
+#  x1=x[sel1];x2=x[sel2];
+#  pp1=(0.5*(1+skew)*as.numeric(zipfR::Igamma(df/2,nn*(-x1)^(alpha)/(2*((1+skew)^(alpha))),lower=FALSE))/(gamma(df/2)))
+#  pp2=(0.5*(skew+1)+(0.5*(1-skew)*as.numeric(zipfR::Igamma(df/2,nn*(x2)^(alpha)/(2*((1-skew)^(alpha))),lower=TRUE))/(gamma(df/2))))
+#  return(c(pp1,pp2))
+#}
+#skew = as.numeric(pp["skew"])
+#df   = as.numeric(pp["df"])
+#delta= as.numeric(pp["shape"])
+#f = function(x) ptpbimodal(x,skew = skew,delta=delta,df=df)
+#f.inv = GoFKernel::inverse(f,lower = -4,upper = 4)
+#q_t = MM+sqrt(VV)*sort(as.numeric(lapply(probabilities,f.inv)))
+#q_t1 = MM+sqrt(VV)*sort(as.numeric(lapply(probabilities1,f.inv)))
+#plot(q_t,q_e,main="Two-Piece Bimodal qq-plot",xlab=xlab,ylab=ylab,...)
+#}
 #######################################  OK
 if(model %in% c("TwoPieceStudentT"))
 {
@@ -498,7 +515,7 @@ if(model %in% c("LogLogistic"))
 shape=pp["shape"]
 cc=gamma(1+1/shape)*gamma(1-1/shape)
 ll=seq(min(dd),max(dd),  (max(dd)-min(dd))/100 )
-d_l = actuar::dllogis(ll,shape = shape,scale=exp(MM)/cc)
+d_l = qllogis1(ll,shape = shape,scale=exp(MM)/cc)
 if(!add) hist(dd,freq=F,xlim=c(min(dd),max(dd)),ylab="Density",xlab="",main="LogLogistic Histogram",ylim=ylim,breaks=breaks,...)
 lines(ll,d_l,...) 
 

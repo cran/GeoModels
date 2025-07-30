@@ -112,37 +112,27 @@ CkCorrModel <- function(corrmodel)
                              Bi_wend0_sep=111,Bi_Wend0_sep=111,
                              Bi_Wend0_contr=129,Bi_wend0_contr=129,
                              Bi_wend0=112,Bi_Wend0=112,
-                             
                              Bi_F_sphere=117,Bi_F_sphere=117,
                               Bi_F_sphere_sep=119,Bi_F_sphere_sep=119,
                               Bi_F_sphere_contr=121,Bi_F_sphere_contr=121,
-                             
-
                              Bi_wend1_sep=113,Bi_Wend1_sep=113,
                              Bi_Wend1_contr=131,Bi_wend1_contr=131,
                              Bi_wend1=114,Bi_Wend1=114,  
-                             
-
                              Bi_wend2_sep=115,Bi_Wend2_sep=115,
                              Bi_wend2=116,Bi_Wend2=116,
                              Bi_Wend2_contr=120,Bi_wend2_contr=120,
-
                              Bi_matern_contr=118,Bi_Matern_contr=118, 
                              Bi_matern_sep=122,  Bi_Matern_sep=122, 
                              Bi_matern=128,Bi_Matern=128,
-
                              Bi_LMC_contr=124,
                              Bi_LMC=126,
-
                              Bi_GenWend_sep=130,Bi_genWend_sep=130,
                              Bi_GenWend_contr=134,Bi_genWend_contr=134,
                              Bi_GenWend=132,Bi_genWend=132,
-
                              Bi_Matern_Cauchy=136,  
                              Bi_GenMatern_Cauchy=137,   Bi_genMatern_Cauchy=137,
                              Bi_genCauchy=138,Bi_GenCauchy=138,
-                             Bi_Stable=139,Bi_stable=139,
-                             
+                             Bi_Stable=139,Bi_stable=139,   
             ########Tapers
                    ##spatial
                              Bohman=28,
@@ -167,12 +157,10 @@ CkCorrModel <- function(corrmodel)
                              Wendland2_Wendland0=212,
                              Wendland2_Wendland1=214,
                              Wendland2_Wendland2=216,
-
                     ##spacetime no separable
                              Wendland0_time=218,
                              Wendland1_time=220,
                              Wendland2_time=222,
-
                              Wendland0_space=224,
                              Wendland1_space=226,
                              Wendland2_space=228,
@@ -189,8 +177,6 @@ CheckSph<- function(numbermodel)
     if(numbermodel %in% c(17,18,56,58,20,117))  Check=TRUE    
     return(Check)
   }
-
-
 
 
 CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed, grid,
@@ -348,21 +334,7 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
             error <- 'the parameter std.err need to be a logical value\n'
             return(list(error=error))}
 
-      #  if(type=="Tapering"){
-      #  if(is.null(taper) || is.null(maxdist)){
-      #    error <- 'tapering need a taper correlation model and/or a compact support\n'
-      #    return(list(error=error))}
-      #  if(!taper %in% c("Bohman","Wendland0","Wendland1","Wendland2","Spherical","spherical",
-      #                   "Wendland0_Wendland0","Wendland0_Wendland1","Wendland0_Wendland2",
-      #                   "Wendland1_Wendland0","Wendland1_Wendland1","Wendland1_Wendland2",
-      #                   "Wendland2_Wendland0","Wendland2_Wendland1","Wendland2_Wendland2",
-      #                    "Wendland0_space","Wendland1_space","Wendland2_space",
-      #                    "Wendland0_time","Wendland1_time","Wendland2_time",
-      #                     "tap_st_dyn_wendland1","tap_wen_t","tap_wen_s","Bi_Wendland1",
-      #                   "Bi_Wendland2","Bi_Wendland3","Bi_wendland_asy","Bi_Wendland_asy",
-      #                   "unit_matrix","unit_matrix_biv","unit_matrix_st")){
-      #     error <- 'insert a correct name for the taper correlation model\n'
-      #      return(list(error=error))}}
+
         if(!is.null(type) & !is.character(type)){
             error <- 'insert the configuration of the likelihood objects\n'
             return(list(error=error))}
@@ -560,14 +532,7 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
     if(fcall=="Simulation"){
         if(type=="Tapering")
           {
-           #if(!taper %in% c("Bohman","Wendland1","Wendland2","Wendland3","spherical","Spherical",
-           #              "Wendland1_Wendland1","Wendland1_Wendland2","Wendland1_Wendland3",
-           #              "Wendland2_Wendland1","Wendland2_Wendland2","Wendland2_Wendland3",
-           #              "Wendland3_Wendland1","Wendland3_Wendland2","Wendland3_Wendland3",
-           #              "tap_s_dyn_wendland1","tap_s_dyn_wendland1","tap_st_dyn_wendland1","Bi_Wendland1_sep",
-           #              "Bi_Wendland2_sep","Bi_Wendland3_sep","unit_matrix","unit_matrix_biv","unit_matrix_st")){
-           # error <- 'insert a correct name for the taper correlation model\n'
-           # return(list(error=error))}
+  
          if(!is.null(coordx_dyn))
             {if(!is.list(coordx_dyn)){
                 error<-"Dynamical coordinates mst be a list object"
@@ -711,7 +676,6 @@ CkModel <- function(model)
                          BinomialNegZINB=45,
                          PoissonGamma=46,poissongamma=46,
                          Gaussian_misp_PoissonGamma=47,
-                         #PoissonWeibull=48,poissonweibull=48,
                          BinomialLogistic=49,Binomiallogistic=49,
                          Beta2=50,
                          Gaussian_misp_Binomial=51,
@@ -748,8 +712,6 @@ CorrParam <- function(corrmodel)
   if (is.null(val)) warning("Unrecognized correlation model ")
   return(val)
 }
-
-
 
 #####  names of the correlation models ###############
 CorrelationPar <- function(corrmodel) {
@@ -854,169 +816,164 @@ CorrelationPar <- function(corrmodel) {
 
   #############################################################  
   #############################################################
-
-
- #############################################################
-NuisParam2 <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
-{
-  param <- NULL
-if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
- #if((!bivariate) && ((num_betas==c(1,1)))) num_betas=1 
- if(!bivariate&all(num_betas==c(1,1))) num_betas=1
-  ############################################################# 
-if(!bivariate)      {
-
-  if(num_betas==1) {mm='mean'}
-  else {mm='mean' 
-        for(i in 1:(num_betas-1)) mm=c(mm,paste("mean",i,sep=""))}
-
-  if( (model %in% c('Gaussian' ,'Gauss' ,'Binomial','Gaussian_misp_Binomial', 'BinomialLogistic','Binomial2','BinomialNeg',"Bernoulli",
-          'Gaussian_misp_BinomialNeg','Binary_misp_BinomialNeg','Poisson','Gaussian_misp_Poisson',
-      'Geom','Geometric','Wrapped','PoisBin','PoisBinNeg','LogGaussian','LogGauss','Logistic')))
-  {
-    param <- c(mm, 'nugget', 'sill')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
-}
-
- if( (model %in% c('PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB')))
-  {
-    param <- c(mm, 'nugget1','nugget2','pmu','sill')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
+NuisParam2 <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NULL) {
+  if (is.null(CkModel(model))) {
+    stop("The name of the model is not correct.\n")
   }
 
-
-
-
- if( (model %in% c('PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1')))
-  {
-    param <- c(mm, 'nugget','pmu','sill')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
+  # Normalizza num_betas per univariati
+  if (!bivariate && all(num_betas == c(1, 1))) {
+    num_betas <- 1
   }
 
- if( (model %in% c('PoissonGammaZIP1','Gaussian_misp_PoissonGammaZIP1')))
-  {
-    param <- c(mm, 'nugget','pmu','sill','shape')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
-  }
-
-   if( (model %in% c('PoissonGammaZIP','Gaussian_misp_PoissonGammaZIP')))
-  {
-    param <- c(mm, 'nugget1','nugget2','pmu','sill','shape')
-    if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-    return(param)
-  }
-
-if(model %in% c("Weibull","weibull",'Gamma','gamma','LogLogistic',"Loglogistic","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma")){
-      param <- c(mm, 'nugget', 'sill','shape')
-     if(!is.null(copula))  if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)} 
-  
-  if(model %in% c('Beta2','Kumaraswamy2')){
-      param <- c(mm, 'nugget', 'sill','shape','min','max')
-     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)} 
-
-
-if((model %in% c('Beta','Kumaraswamy'))) {
-      param <- c(mm, 'nugget', 'sill','shape1','shape2','min','max')
-     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}     
-  # Skew Gaussian univariate random field:
-   if((model %in% c('SkewGaussian','SkewGauss','TwoPieceGaussian','TwoPieceGauss',
-     'Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss','BinomialNeg_TwoPieceGaussian','BinomialNeg_TwoPieceGauss'))){
-      param <- c(mm, 'nugget', 'sill','skew')
-      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-    # T univariate ra
-  # Skew T univariate random field:
-  if((model %in% c('SkewStudentT',"TwoPieceStudentT","Gaussian_misp_SkewStudentT")) ){
-      param <- c(mm, 'df','nugget', 'sill','skew')
-   if(!is.null(copula))   if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-  if((model %in% c("TwoPieceBimodal")) ){
-      param <- c(mm, 'df','nugget', 'sill','shape','skew')
-     if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-    # T univariate random field:
-  if((model %in% c('StudentT','Gaussian_misp_StudentT')) ){
-      param <- c(mm, 'df','nugget', 'sill')
-      if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}  
-     if( (model %in% c('Tukeyh','tukeyh'))){
-      param <- c(mm, 'nugget', 'sill','tail')
-      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-   if( (model %in% c('Tukeyh2','tukeyh2'))){
-      param <- c(mm, 'nugget', 'sill','tail1','tail2')
-      if(!is.null(copula))if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-   # Tukeygh  or SinhAsinhGaussian univariate random field: 
-  if( (model %in% c('Tukeygh','SinhAsinh',"TwoPieceTukeyh","Gaussian_misp_Tukeygh"))) {
-      param <- c(mm, 'nugget', 'sill','skew','tail')
-      if(!is.null(copula)) if(copula=="Clayton"||copula=="SkewGaussian") param=c(param,'nu')
-      return(param)}
-}
-  #############################################################  
   #############################################################
-  ############################################################# 
+  # Univariate case
+  #############################################################
+  if (!bivariate) {
+    mm <- if (num_betas == 1) "mean" else {
+      c("mean", paste0("mean", 1:(num_betas - 1)))
+    }
 
-    if(bivariate)     
-   {   
-     if(num_betas[1]==1&&num_betas[2]==1) {mm1='mean_1';mm2='mean_2'}
-  else {mm1='mean_1';mm2='mean_2' 
-        for(i in 1:(num_betas[1]-1)) mm1=c(mm1,paste("mean_1",i,sep=""))
-        for(i in 1:(num_betas[2]-1)) mm2=c(mm2,paste("mean_2",i,sep=""))}
+    base_params <- c(mm, "nugget", "sill")
 
-   mm=c(mm1,mm2)
+    # Aggiungi nu se copula è Clayton o SkewGaussian
+    add_nu <- !is.null(copula) && copula %in% c("Clayton", "SkewGaussian")
 
-   if( model %in% c('Gaussian' ,'Gauss' ,'Binomial','BinomialLogistic','Binomial2','BinomialNeg','Geom','Geometric','Poisson',
-        'Wrapped','PoisBin','PoisBinNeg','LogGaussian','LogGauss',"Logistic")){
-    param <- mm
-    return(param)} 
-      # Skew Gaussian bivariate random field:
-     if(model %in% c('SkewGaussian','SkewGauss','TwoPieceGaussian','TwoPieceGauss')){
-      param <- c(mm,'skew_1','skew_2')
-      return(param)}  
-      }  
-    if((model %in% c('Weibull','Gamma','LogGauss','LogGaussian',"LogLogistic"))){
-      param <- c(mm,'shape_1','shape_2')
-      return(param)}  
-    if((model %in% c('StudentT','Gaussian_misp_StudentT'))) {
-      param <- c(mm,'df_1','df_2')
-      return(param)}  
-     if((model %in% c('Tukeyh','tukeyh'))) {
-      param <- c(mm,'tail_1','tail_2')
-      return(param)}  
- if((model %in% c('Tukeygh','SinhAsinh',"TwoPieceTukeyh"))) {
-      param <- c(mm,'skew_1','skew_2','tail_1','tail_2')
-      return(param)}  
-    ###################  
-  return(param)
+    # Lista modelli con parametri specifici
+    model_list <- list(
+      simple = c("Gaussian", "Gauss", "Binomial", "Gaussian_misp_Binomial",
+                 "BinomialLogistic", "Binomial2", "BinomialNeg", "Bernoulli",
+                 "Poisson", "Gaussian_misp_Poisson", "Geom", "Geometric", "Wrapped",
+                 "PoisBin", "PoisBinNeg", "LogGaussian", "LogGauss", "Logistic"),
+      
+      double_nugget = c("PoissonZIP", "Gaussian_misp_PoissonZIP", "BinomialNegZINB"),
+      single_nugget_zip = c("PoissonZIP1", "Gaussian_misp_PoissonZIP1", "BinomialNegZINB1"),
+      
+      shape1 = c("PoissonGammaZIP1", "Gaussian_misp_PoissonGammaZIP1"),
+      shape2 = c("PoissonGammaZIP", "Gaussian_misp_PoissonGammaZIP"),
+      
+      shape_only = c("Weibull", "weibull", "Gamma", "gamma", "LogLogistic",
+                     "Loglogistic", "PoissonGamma", "PoissonWeibull",
+                     "Gaussian_misp_PoissonGamma"),
+      
+      beta_like = c("Beta2", "Kumaraswamy2"),
+      beta_full = c("Beta", "Kumaraswamy"),
+      
+      skew = c("SkewGaussian", "SkewGauss", "TwoPieceGaussian", "TwoPieceGauss",
+               "Binomial_TwoPieceGaussian", "Binomial_TwoPieceGauss",
+               "BinomialNeg_TwoPieceGaussian", "BinomialNeg_TwoPieceGauss"),
+      
+      skew_t = c("SkewStudentT", "TwoPieceStudentT", "Gaussian_misp_SkewStudentT"),
+      bimodal = "TwoPieceBimodal",
+      
+      student_t = c("StudentT", "Gaussian_misp_StudentT"),
+      
+      tukey_h = c("Tukeyh", "tukeyh"),
+      tukey_h2 = c("Tukeyh2", "tukeyh2"),
+      tukey_gh = c("Tukeygh", "SinhAsinh", "TwoPieceTukeyh", "Gaussian_misp_Tukeygh")
+    )
+
+    # Assegnazione parametri
+    if (model %in% model_list$simple) {
+      param <- base_params
+    } else if (model %in% model_list$double_nugget) {
+      param <- c(mm, "nugget1", "nugget2", "pmu", "sill")
+    } else if (model %in% model_list$single_nugget_zip) {
+      param <- c(mm, "nugget", "pmu", "sill")
+    } else if (model %in% model_list$shape1) {
+      param <- c(mm, "nugget", "pmu", "sill", "shape")
+    } else if (model %in% model_list$shape2) {
+      param <- c(mm, "nugget1", "nugget2", "pmu", "sill", "shape")
+    } else if (model %in% model_list$shape_only) {
+      param <- c(mm, "nugget", "sill", "shape")
+    } else if (model %in% model_list$beta_like) {
+      param <- c(mm, "nugget", "sill", "shape", "min", "max")
+    } else if (model %in% model_list$beta_full) {
+      param <- c(mm, "nugget", "sill", "shape1", "shape2", "min", "max")
+    } else if (model %in% model_list$skew) {
+      param <- c(mm, "nugget", "sill", "skew")
+    } else if (model %in% model_list$skew_t) {
+      param <- c(mm, "df", "nugget", "sill", "skew")
+    } else if (model %in% model_list$bimodal) {
+      param <- c(mm, "df", "nugget", "sill", "shape", "skew")
+    } else if (model %in% model_list$student_t) {
+      param <- c(mm, "df", "nugget", "sill")
+    } else if (model %in% model_list$tukey_h) {
+      param <- c(mm, "nugget", "sill", "tail")
+    } else if (model %in% model_list$tukey_h2) {
+      param <- c(mm, "nugget", "sill", "tail1", "tail2")
+    } else if (model %in% model_list$tukey_gh) {
+      param <- c(mm, "nugget", "sill", "skew", "tail")
+    } else {
+      stop("Model not recognized in univariate case.")
+    }
+
+    if (add_nu) param <- c(param, "nu")
+    return(param)
+  }
+
+  #############################################################
+  # Bivariate case
+  #############################################################
+  if (bivariate) {
+    mm1 <- if (num_betas[1] == 1) "mean_1" else c("mean_1", paste0("mean_1", 1:(num_betas[1] - 1)))
+    mm2 <- if (num_betas[2] == 1) "mean_2" else c("mean_2", paste0("mean_2", 1:(num_betas[2] - 1)))
+    mm <- c(mm1, mm2)
+
+    model_list <- list(
+      biv_simple = c("Gaussian", "Gauss", "Binomial", "BinomialLogistic", "Binomial2",
+                     "BinomialNeg", "Geom", "Geometric", "Poisson", "Wrapped", "PoisBin",
+                     "PoisBinNeg", "LogGaussian", "LogGauss", "Logistic"),
+      
+      biv_skew = c("SkewGaussian", "SkewGauss", "TwoPieceGaussian", "TwoPieceGauss"),
+      biv_shape = c("Weibull", "Gamma", "LogGauss", "LogGaussian", "LogLogistic"),
+      biv_t = c("StudentT", "Gaussian_misp_StudentT"),
+      biv_tukeyh = c("Tukeyh", "tukeyh"),
+      biv_tukeygh = c("Tukeygh", "SinhAsinh", "TwoPieceTukeyh")
+    )
+
+    if (model %in% model_list$biv_simple) {
+      param <- mm
+    } else if (model %in% model_list$biv_skew) {
+      param <- c(mm, "skew_1", "skew_2")
+    } else if (model %in% model_list$biv_shape) {
+      param <- c(mm, "shape_1", "shape_2")
+    } else if (model %in% model_list$biv_t) {
+      param <- c(mm, "df_1", "df_2")
+    } else if (model %in% model_list$biv_tukeyh) {
+      param <- c(mm, "tail_1", "tail_2")
+    } else if (model %in% model_list$biv_tukeygh) {
+      param <- c(mm, "skew_1", "skew_2", "tail_1", "tail_2")
+    } else {
+      stop("Model not recognized in bivariate case.")
+    }
+
+    return(param)
+  }
+
+  stop("Unexpected error: check inputs.")
 }
 
-NuisParam <- function(model,bivariate=FALSE,num_betas=c(1,1),copula=NULL)
-{
-
-    a=NuisParam2(model,bivariate,num_betas,copula)
-    if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-        "PoissonGammaZIP","PoissonGamma","PoissonGammaZIP1","Binary_misp_BinomialNeg",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
-        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
-        'Beta2','Kumaraswamy2','Beta','Kumaraswamy'))  a=a[ !a == 'sill']
-return(a)
+# Wrapper NuisParam
+NuisParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NULL) {
+  a <- NuisParam2(model, bivariate, num_betas, copula)
+  models_no_sill <- c(
+    "Weibull", "Poisson", "Binomial", "Gamma", "LogLogistic",
+    "BinomialNeg", "Bernoulli", "Geometric", "Gaussian_misp_Poisson",
+    "PoissonGammaZIP", "PoissonGamma", "PoissonGammaZIP1", "Binary_misp_BinomialNeg",
+    "PoissonZIP", "Gaussian_misp_PoissonZIP", "BinomialNegZINB",
+    "PoissonZIP1", "Gaussian_misp_PoissonZIP1", "BinomialNegZINB1",
+    "Beta2", "Kumaraswamy2", "Beta", "Kumaraswamy"
+  )
+  if (model %in% models_no_sill) {
+    a <- a[a != "sill"]
+  }
+  return(a)
 }
 ####################################################################################
 #########################################################################################
 #########################################################################################
 #########################################################################################
-
-
-
 
 StartParam <- function(coordx, coordy,coordz ,coordt,coordx_dyn, corrmodel, data, distance, fcall,
                       fixed, grid,likelihood,  maxdist, neighb,maxtime, model, n, 
@@ -1349,8 +1306,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 
  if(!is.null(copula)) {if(copula=="Clayton"||copula=="SkewGaussian") nuisance=c(nuisance,2)}
 # Update the parameter vector     
-  
-      
         names(nuisance) <- namesnuis
         namesparam <- sort(c(namescorr, namesnuis))
         param <- c(nuisance, paramcorr)
@@ -1419,8 +1374,6 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             numstart <- length(start)
             param[pmatch(namesstart,namesparam)] <- start
             }
-
-
         ### set the scale of the parameters:
         # Insert here!
         # set the range of the parameters if its the case
@@ -1490,11 +1443,9 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         K=neighb
 }  # END code for the simulation procedure
 #####################################################################################
-    
 numpairs <- integer(1); srange <- double(1); trange <- double(1)
 
 if(typereal=="Independence"){ maxdist=NULL;maxtime=NULL;K=neighb}
-    
   
 #################
 distC=FALSE
@@ -1506,7 +1457,6 @@ if(!tapering) { if(is.null(neighb)&is.numeric(maxdist)) distC=TRUE  }### just fo
     isinit <- as.integer(1)
     if(is.null(tapsep))  tapsep=c(0.5,0.5)
     else  {if(length(tapsep)==1) tapsep=c(tapsep,0)}
-    
     mem=FALSE
     if(tapering||memdist)  { mem=TRUE }   #### NB
 
@@ -1524,14 +1474,10 @@ if(!tapering) { if(is.null(neighb)&is.numeric(maxdist)) distC=TRUE  }### just fo
     if(!srange[1]&&!srange[2])  srange=c(srange,0,0)
     if(is.na(srange[3])) srange[3]=srange[2];
     if(is.na(srange[4])) srange[4]=srange[2];}
-    
-  
     ###
     if(CheckSph(corrmodel))   radius=1
     ###
-
     aa=double(5);for(i in 1:length(tapsep)) aa[i]=tapsep[i];tapsep=aa
- 
 
 if(fcall=="Fitting"&likelihood==2&!is.null(neighb)) mem=FALSE # Vecchia gp case
 if(fcall=="Fitting"&likelihood==2||fcall=="Simulation") mem=FALSE 
@@ -1558,52 +1504,7 @@ else{          # all the rest
 if(distC||fcall=="Simulation"||(fcall=="Fitting"&likelihood==2)||(fcall=="Fitting"&typereal=="GeoWLS")) {
 if(fcall=="Fitting"&mem==TRUE&(!space)&!tapering)   {vv=length(NS); numcoord=NS[vv]+ns[vv]} # number of space time point in the case of coordxdyn
 
-#gb=dotCall64::.C64('SetGlobalVar',SIGNATURE = c(
-#         "integer","double","double","double","integer", "integer","integer",  #7
-#         "integer","integer","integer","integer", "integer","integer", #6
-#         "integer","double","double","double", "integer",  #5
-#         "integer","double", "integer","integer","integer","integer", #6
-#         "integer","integer", # 2
-#         "integer","integer","integer"),  # 3
-#     bivariate, coordx, coordy, coordt,grid,ia=ia,idx=idx,  #7
-#           isinit=isinit,ja=ja, mem, numcoord, numcoordx,  numcoordy, #6
-#           numpairs=numpairs, radius,srange,  tapsep,  spacetime, #5
-#            numtime,trange, tapering, tapmodel,distance, weighted, #6
-#           colidx= colidx,rowidx= rowidx, # 2
-#            ns, NS, isdyn, #3
-# INTENT = c("r","r","r","r","r","rw","rw", #7
-#            "rw","rw", "rw", "r", "r", "r", #6
-#           "rw", "r", "rw", "r", "r", #5
-#             "r",  "rw", "r", "r", "r", "r", #6
-#             "w", "w",#2
-#             "r", "r", "r"),
-#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-  
-
-#gb=dotCall64::.C64('SetGlobalVar',SIGNATURE = c(
-#         "integer","double","double","double","integer", "integer","integer",  #7
-#         "integer","integer","integer","integer", "integer","integer", #6
-#         "integer","double","double","double", "integer",  #5
-#         "integer","double", "integer","integer","integer","integer", #6
-#         "integer","integer", # 2
-#         "integer","integer","integer"),  # 3
-#     bivariate, coordx, coordy, coordt,grid,ia=ia,idx=idx,  #7
-#           isinit=isinit,ja=ja, mem, numcoord, numcoordx,  numcoordy, #6
-#           numpairs=numpairs, radius,srange,  tapsep,  spacetime, #5
-#            numtime,trange, tapering, tapmodel,distance, weighted, #6
-#           colidx= colidx,rowidx= rowidx, # 2
-#            ns, NS, isdyn, #3
-# INTENT = c("r","r","r","r","r","rw","rw", #7
-#            "rw","rw", "rw", "r", "r", "r", #6
-#           "rw", "r", "rw", "r", "r", #5
-#             "r",  "rw", "r", "r", "r", "r", #6
-#             "w", "w",#2
-#             "r", "r", "r"),
-#             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-  
 if(is.null(coordz)) coordz=double(numcoordx*numtime) ## is it necessary?
-
- 
 
 srange[which(srange==Inf)]=1e+50;trange[which(trange==Inf)]=1e+50
 gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy),as.double(coordz), as.double(coordt),as.integer(grid),ia=as.integer(ia),idx=as.integer(idx),  #7
@@ -1644,7 +1545,6 @@ else
 #### it works when CL  using neighb  or maxdist AND neighb 
 #############################################################
 { 
-
 if(typereal!="Independence") {
   ########################## 
 if(distance==0) distance1="Eucl";
@@ -1652,13 +1552,7 @@ if(distance==2) distance1="Geod";
 if(distance==1) distance1="Chor";
 
 if(all(neighb==0.5)) neighb=NULL ## ojo!!
-
-
-
-#if(maxdist==Inf) maxdist=NULL
-
 if(sum(!is.finite(maxdist))) maxdist=NULL
-
 
 if(space)   #  spatial case
 {
@@ -1690,13 +1584,6 @@ if(space)   #  spatial case
   mmm=1;ttt=1
 if(weighted)  mmm=max(sol$lags)
   
-  #ss=.C("SetGlobalVar2", as.integer(numcoord),  as.integer(numtime),  
-  #  as.double(sol$lags),
-  #  as.integer(nn), as.double(mmm),
-  #  as.double(sol$lagt), 
-  #  as.integer(nn),as.double(ttt),
-  #  as.integer(spacetime),as.integer(bivariate),as.integer(1),as.integer(1))
-
     ss <- dotCall64::.C64("SetGlobalVar2",
            SIGNATURE = c("integer", "integer",
             "double",
@@ -1766,9 +1653,6 @@ if(weighted) { mmm=max(sol$lags) ;ttt=max(sol$lagt)}
       nn,ttt,
        spacetime,bivariate,1,1, INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
-
-
-
 } 
 ##############################################  
 if(bivariate)   # bivariate case 
@@ -1844,10 +1728,3 @@ if(is.null(coordt)) coordt=1
                 spacetime=spacetime,srange=srange,start=start,upper=paramrange$upper,type=type,
                 trange=trange,weighted=weighted,X=X))
 }
-
-
-
-#DeviceInfo <- function()
-#{
-#    .C("DeviceInfo",PACKAGE='GeoModels',DUP = TRUE, NAOK=TRUE)
-#}

@@ -4,99 +4,62 @@
 ######################################################################################################
 ### decomposition of a square  matrix
 MatDecomp <- function(mtx, method) {
-    
-    if(method == "cholesky") {
-        # Verifica che la matrice sia definita positiva
-        if(any(is.na(mtx)) || any(is.infinite(mtx))) {
-            return(FALSE)
-        }
-        # Prova la decomposizione di Cholesky
-        mat.decomp <- try(FastGP::rcppeigen_get_chol(mtx), silent = TRUE)
-        if(inherits(mat.decomp, "try-error")) {
-            return(FALSE)
-        }
-        if(is.null(mat.decomp) || any(is.na(mat.decomp)) || any(is.infinite(mat.decomp))) {
-            return(FALSE)
-        }
-        if(any(diag(mat.decomp) <= 0)) {
-            return(FALSE)
-        }
-    }
-    if(method == "svd") {
-        if(any(is.na(mtx)) || any(is.infinite(mtx))) {
-            return(FALSE)
-        }
-        mat.decomp <- try(svd(mtx), silent = TRUE)
-        if(inherits(mat.decomp, "try-error")) {
-            return(FALSE)
-        }
-        # Verifica che la decomposizione SVD sia valida
-        if(is.null(mat.decomp) || is.null(mat.decomp$d) || 
-           any(is.na(mat.decomp$d)) || any(is.infinite(mat.decomp$d))) {
-            return(FALSE)
-        }
-        # Verifica che i valori singolari siano positivi
-        if(any(mat.decomp$d <= 0)) {
-            return(FALSE)
-        }
-        # Test preliminare del calcolo del log-determinante
-        cov.logdet <- try(sum(log(mat.decomp$d)), silent = TRUE)
-        if(inherits(cov.logdet, "try-error") || is.na(cov.logdet) || is.infinite(cov.logdet)) {
-            return(FALSE)
-        }
-    }
-    return(mat.decomp)
+  # Controlli preliminari veloci
+  if (!is.matrix(mtx) || anyNA(mtx) || any(!is.finite(mtx))) return(FALSE)
+  
+  if (method == "cholesky") {
+    if (!isSymmetric(mtx)) return(FALSE)
+    mat.decomp <- tryCatch(
+      FastGP::rcppeigen_get_chol(mtx),
+      error = function(e) FALSE
+    )
+    if (isFALSE(mat.decomp)) return(FALSE)
+    d <- diag(mat.decomp)
+    if (any(d <= 0, na.rm = TRUE)) return(FALSE) 
+  } else if (method == "svd") {
+    mat.decomp <- tryCatch(
+      svd(mtx),
+      error = function(e) FALSE
+    )
+    if (isFALSE(mat.decomp)) return(FALSE)
+    d <- mat.decomp$d
+    if (any(d <= 0, na.rm = TRUE)) return(FALSE)
+    if (!is.finite(sum(log(d)))) return(FALSE)
+  }
+  mat.decomp
 }
 
-### square root of a square matrix
-MatSqrt<-function(mat.decomp,method)    {
-        if(method=="cholesky")  varcov.sqrt <- mat.decomp
-        if(method=="svd")       varcov.sqrt <- t(mat.decomp$v %*% sqrt(diag(mat.decomp$d)))  #sqrt(diag(mat.decomp$d))%*%t(mat.decomp$u)
-        return(varcov.sqrt)
-    }
-
-### inverse a square matrix given a decomposition
-MatInv<-function(mtx)    {
-     varcov.inv <- try(FastGP::rcppeigen_invert_matrix(mtx))
-            if (inherits(varcov.inv , "try-error")) return (FALSE)
-        return(varcov.inv)
-    }
-### determinant a square matrix given a decomposition
+MatSqrt <- function(mat.decomp, method) {
+  if (method == "cholesky") return(mat.decomp)
+  if (method == "svd") {
+    d_sqrt <- sqrt(mat.decomp$d)
+    return(t(mat.decomp$v * rep(d_sqrt, each = nrow(mat.decomp$v))))
+  }
+  stop("Invalid method")
+}
+MatInv <- function(mtx) {
+  # Aggiunto controllo preliminare
+  if (!is.matrix(mtx) || anyNA(mtx)) return(FALSE)
+  tryCatch(
+    FastGP::rcppeigen_invert_matrix(mtx),
+    error = function(e) FALSE
+  )
+}
 MatLogDet <- function(mat.decomp, method) {
-    if(method == "cholesky") {
-        diag_vals <- try(diag(mat.decomp), silent = TRUE)
-        if(inherits(diag_vals, "try-error") || is.null(diag_vals)) {
-            return(NA)
-        }
-        if(any(diag_vals <= 0) || any(is.na(diag_vals)) || any(is.infinite(diag_vals))) {
-            return(NA)
-        }
-        log_diag <- try(log(diag_vals), silent = TRUE)
-        if(inherits(log_diag, "try-error") || any(is.na(log_diag)) || any(is.infinite(log_diag))) {
-            return(NA)
-        }
-        det.mat <- 2 * sum(log_diag)
-    }
+  if (method == "cholesky") {
+    d <- diag(mat.decomp)
+    if (any(d <= 0, na.rm = TRUE)) return(NA)
+    2 * sum(log(d))
     
-    if(method == "svd") {
-        if(!is.list(mat.decomp) || is.null(mat.decomp$d)) {
-            return(NA)
-        }
-        if(any(mat.decomp$d <= 0) || any(is.na(mat.decomp$d)) || any(is.infinite(mat.decomp$d))) {
-            return(NA)
-        }
-        log_d <- try(log(mat.decomp$d), silent = TRUE)
-        if(inherits(log_d, "try-error") || any(is.na(log_d)) || any(is.infinite(log_d))) {
-            return(NA)
-        }
-        det.mat <- sum(log_d)
-    }
-    if(is.na(det.mat) || is.infinite(det.mat)) {
-        return(NA)
-    }
-    return(det.mat)
+  } else if (method == "svd") {
+    d <- mat.decomp$d
+    if (any(d <= 0, na.rm = TRUE)) return(NA)
+    sum(log(d))
+    
+  } else {
+    NA
+  }
 }
-
 ######################################################################################################
 ######################################################################################################
 ######################################################################################################

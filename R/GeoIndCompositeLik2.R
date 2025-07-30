@@ -10,18 +10,72 @@ CompIndLik2 <- function(bivariate, coordx, coordy ,coordz,coordt,coordx_dyn, dat
                            upper,namesupper, varest, ns, X,sensitivity,copula,MM)
   {
 
+############# utility functions ############
+lambertW0_custom <- function(x, tol = 1e-12, maxiter = 100) {
+  if (length(x) > 1) {
+    return(sapply(x, function(xi) lambertW0_custom(xi, tol, maxiter)))
+  }
+  if (is.na(x) || is.infinite(x)) return(x)
+  if (x < -1/exp(1)) return(NaN)
+  if (x == 0) return(0)
+  if (x == -1/exp(1)) return(-1)
+  if (x > 3) {
+    # Per valori grandi: W(x) ≈ log(x) - log(log(x))
+    w <- log(x) - log(log(x))
+  } else if (x > -0.32358) {
+    if (x < 1.5) {
+      # Serie di potenze modificata
+      w <- x * (1 - x + (3/2) * x^2 - (8/3) * x^3 + (125/24) * x^4)
+    } else {
+      # Approssimazione logaritmica migliorata
+      lx <- log(x)
+      w <- lx - log(lx) + lx/(1 + lx)
+    }
+  } else {
+    sigma <- -1 - exp(1) * x
+    if (sigma > 0) {
+      p <- sqrt(2 * sigma)
+      w <- -1 + p * (1 - p/3 + 11*p^2/72 - 43*p^3/540 + 769*p^4/17280)
+    } else {
+      w <- log(-x) - log(-log(-x))
+    }
+  }
+  for (iter in 1:maxiter) {
+    ew <- exp(w)
+    wew <- w * ew
+    f <- wew - x
+    if (abs(f) <= tol * (1 + abs(x))) break
+    fprime <- ew * (1 + w)
+    if (abs(fprime) < 1e-20) break  # Evita divisione per zero
+    delta <- f / fprime
+    w_new <- w - delta
+    if (abs(delta) <= tol * (1 + abs(w))) break
+    w <- w_new
+  }
+  return(w)
+}
+one_log_tukeyh <- function(data, mm, sill, tail) {
+  q <- (data - mm) / sqrt(sill)
+  aa <- tail * q * q
+  lambert_vals <- lambertW0_custom(aa)
+  x <- sign(q) * sqrt(lambert_vals / tail)
+  extra <- 1 / (1 + lambert_vals)
+  return(log(dnorm(x) * x * extra / (q * sqrt(sill))))
+}
+qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
+  if (missing(shape)) stop("argument 'shape' is missing, with no default")
+  if (shape <= 0) stop("'shape' must be positive")
+  if (scale <= 0) stop("'scale' must be positive")
+  if (log.p) { p <- exp(p)}
+  if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
+  if (!lower.tail) {p <- 1 - p }
+  result <- numeric(length(p)); result[p == 0] <- 0;result[p == 1] <- Inf
+  valid <- p > 0 & p < 1
+  if (any(valid)) {p_valid <- p[valid];result[valid] <- scale * (p_valid / (1 - p_valid))^(1/shape)}
+  return(result)
+}
 
-##################################
-one_log_tukeyh=function(data,mm,sill,tail) {
-          q = (data - mm)/sqrt(sill);
-          aa=tail*q*q
-          x = sign(q)*sqrt(lamW::lambertW0(aa)/tail);
-          extra = 1/((1+lamW::lambertW0(aa)));
-          return(log(dnorm(x)* x  * extra/(q*sqrt(sill))))
- }
-#################################
 indloglik<- function(fan,data,mm,nuis){
-
 
 ## gaussian and misspecified gaussian
     if(fan=="Ind_Pair_Gauss")                  { sill=nuis[1];
@@ -109,9 +163,18 @@ if(fan== "Ind_Pair_Weibull")              {
                                               c1=mm-sill/2
                                               res=sum(dlnorm(data, meanlog =c1, sdlog = sqrt(sill), log = TRUE))
                                             }
-if(fan== "Ind_Pair_LogLogistic")            {  shape=nuis[2]
+if(fan== "Ind_Pair_LogLogistic")            {    
+                                             dllogis1 <- function(x, shape, rate = 1, scale = 1/rate, log = FALSE) {
+                                               z <- x / scale
+                                               num <- (shape / scale) * z^(shape - 1)
+                                               denom <- (1 + z^shape)^2
+                                               dens <- num / denom
+                                               if (log) dens <- log(dens)
+                                               return(dens)
+                                             }
+                                              shape=nuis[2]
                                               ci=gamma(1+1/shape)*gamma(1-1/shape)
-                                              res=sum(actuar::dllogis(data, shape, scale = exp(mm)/ci, log = TRUE))
+                                              res=sum(dllogis1(data, shape, scale = exp(mm)/ci, log = TRUE))
                                             }
 ## non Gassian bounded support
   if(fan== "Ind_Pair_Beta2")                {    mmax=nuis[4];mmin=nuis[3]
@@ -160,19 +223,14 @@ return(-res)
  compindloglik2 <- function(param,  data,fixed, fan, n, 
                               namesnuis,namesparam,X,MM)
       {
-
-
         names(param) <- namesparam
         param <- c(param, fixed)
         nuisance <- param[namesnuis]
         sel=substr(names(nuisance),1,4)=="mean"
         mm=as.numeric(nuisance[sel])   ## mean paramteres
-   
         other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)
         if((is.null(MM))) Mean=c(X%*%mm)
         else Mean=c(MM)
-        
-    
         result=indloglik(fan,data,Mean,other_nuis)
         return(result)
       }
@@ -202,7 +260,6 @@ return(-res)
    ############### starting function ###############################################################
    ##################################################################################################
 
-
     numcoord=length(coordx);numtime=1;spacetime_dyn=FALSE
     if(spacetime) numtime=length(coordt)
     if(bivariate) numtime=2
@@ -217,48 +274,49 @@ return(-res)
 
     fname <- NULL; hessian <- FALSE
      
-
-
 ###################### pairwise ###############################################
-    if( model==1 ) fname <- 'Ind_Pair_Gauss'                #
-    if( model==2 ) fname <- 'Ind_Pair_BinomGauss'           #
-    if( model==14 ) fname <- 'Ind_Pair_BinomnegGauss'       #                                 
-    if( model==16 ) fname <- 'Ind_Pair_BinomnegGauss'       #                                   
-    #if( model==15 ) fname <- 'Ind_Pair_PoisbinGauss'   
-    #if( model==17 ) fname <- 'Ind_Pair_PoisbinnegGauss'
-    if( model==13) fname <- 'Ind_Pair_WrapGauss'            #
-    if( model==10) fname <- 'Ind_Pair_SkewGauss'            #
-    if( model==21 ) fname <- 'Ind_Pair_Gamma'                #
-   # if( model==33 ) fname <- 'Ind_Pair_Kumaraswamy'                                           
-    if( model==42 ) fname <- 'Ind_Pair_Kumaraswamy2'         #                            
-    #if( model==28 ) fname <- 'Ind_Pair_Beta'                                     
-    if( model==50 ) fname <- 'Ind_Pair_Beta2'                #      
-    if( model==26 ) fname <- 'Ind_Pair_Weibull'              #                                                                  
-    if( model==24 ) fname <- 'Ind_Pair_LogLogistic'          #
-    if( model==25 ) fname <- 'Ind_Pair_Logistic'             #                                                                                                                                                                                
-    if( model==22 ) fname <- 'Ind_Pair_LogGauss';            #                                  
-    if( model==27 ) fname <- 'Ind_Pair_TWOPIECET'            #                             
-    #if( model==39 ) fname <- 'Ind_Pair_TWOPIECEBIMODAL'
-    if( model==29 ) fname <- 'Ind_Pair_TWOPIECEGauss'                #
-    if( model==12 ) fname <- 'Ind_Pair_T'                            #                            
-    if( model==34 ) fname <- 'Ind_Pair_Tukeyh'                       #                                     
-    if( model==40 ) fname <- 'Ind_Pair_Tukeyhh'                      #                      
-    if( model==41 ) fname <- 'Ind_Pair_Gauss_misp_Tukeygh'           #                                 
-    if( model==36 ) fname <- 'Ind_Pair_Gauss_misp_Pois'              #                                  
-    if( model==35 ) fname <- 'Ind_Pair_Gauss_misp_T'                 #                                  
-    if( model==37 ) fname <- 'Ind_Pair_Gauss_misp_SkewT'             #                                 
-    if( model==20 ) fname <- 'Ind_Pair_SinhGauss'                    #                                  
-    if( model==38 ) fname <- 'Ind_Pair_TWOPIECETukeyh'               #
-    if( model==30 ) fname <- 'Ind_Pair_Pois'                         #
-    if( model==46 ) fname <- 'Ind_Pair_PoisGamma'
-    if( model==57 ) fname <- 'Ind_Pair_PoisGammaZIP'
-    if( model==43 ) fname <- 'Ind_Pair_PoisZIP'
-    if( model==44 ) fname <- 'Ind_Pair_Gauss_misp_PoisZIP'
-    if( model==45 ) fname <- 'Ind_Pair_BinomnegGaussZINB'
-    if( model==47 ) fname <- 'Ind_Pair_Gauss_misp_PoisGamma'
-    if( model==11 ) fname <- 'Ind_Pair_BinomGauss'                   #                    
-    if( model==51 ) fname <- 'Ind_Pair_BinomGauss_misp'              #
-    #if( model==49) fname <- 'Ind_Pair_BinomLogi'
+
+    # --- lookup vector ---------------------------------------------------------
+#  (keep only the models that are actually used)
+lookup <- c(
+  Gauss                    =  1,
+  BinomGauss               = 11,          # duplicate key: last one wins
+  BinomnegGauss            = c(14, 16),   # both map to the same name
+  WrapGauss                = 13,
+  SkewGauss                = 10,
+  Gamma                    = 21,
+  Kumaraswamy2             = 42,
+  Beta2                    = 50,
+  Weibull                  = 26,
+  LogLogistic              = 24,
+  Logistic                 = 25,
+  LogGauss                 = 22,
+  TWOPIECET                = 27,
+  TWOPIECEGauss            = 29,
+  T                        = 12,
+  Tukeyh                   = 34,
+  Tukeyhh                  = 40,
+  Gauss_misp_Tukeygh       = 41,
+  Gauss_misp_Pois          = 36,
+  Gauss_misp_T             = 35,
+  Gauss_misp_SkewT         = 37,
+  SinhGauss                = 20,
+  TWOPIECETukeyh           = 38,
+  Pois                     = 30,
+  PoisGamma                = 46,
+  PoisGammaZIP             = 57,
+  PoisZIP                  = 43,
+  Gauss_misp_PoisZIP       = 44,
+  BinomnegGaussZINB        = 45,
+  Gauss_misp_PoisGamma     = 47,
+  BinomGauss_misp          = 51
+)
+
+# reverse the map: model numbers → names
+model2name <- setNames(rep(names(lookup), lengths(lookup)),
+                       unlist(lookup, use.names = FALSE))
+fname <- paste0("Ind_Pair_", model2name[ as.character(model) ])
+if (is.na(fname)) stop("Unknown model: ", model)
    
 ########################################################################                                            
     if(sensitivity) hessian=TRUE
@@ -267,9 +325,7 @@ return(-res)
      if((spacetime||bivariate)&&(spacetime_dyn))     data=unlist(data)          
      if(spacetime||bivariate)   NS=c(0,NS)[-(length(ns)+1)]
 
-
 ####     
-
 tot=c(param,fixed) ## all the parameters
 ## deleting corr para
 tot=tot[is.na(pmatch(names(tot),namescorr))]
@@ -277,11 +333,9 @@ tot=tot[is.na(pmatch(names(tot),namescorr))]
 tot=tot[names(tot)!='nugget'];namesnuis=namesnuis[namesnuis!="nugget"]
 param=tot[pmatch(namesparam,names(tot))];param=param[!is.na(names(param))];param=param[!is.na(param)];
 
-
 if(model  %in%  c(2,14,16,21,42,50,26,24,25,30,46,43,11))  ## model where sill must be fixed = to 1
  {param=param[names(param)!='sill'];a=1; names(a)="sill";
   if(is.null(unlist(fixed['sill']))) fixed=c(fixed,a)}
-
 
 if(!is.null(copula))
     {if(copula=="Clayton")
@@ -289,8 +343,6 @@ if(!is.null(copula))
            if(is.null(unlist(fixed['nu']))) fixed=c(fixed,a)}}
 
 namesparam=names(param)
-  
-
 ###updating upper and lower bound if necessary
 sel=pmatch(namesparam,namesupper)
 lower=lower[sel]
@@ -298,11 +350,8 @@ upper=upper[sel]
 #### not exactly zero for the mean parameters starting values
 sel=substr(names(param),1,4)=="mean"&param==0
 param[sel]=0.1
-###
 param=as.numeric(param)
 
-
- ###
    if(!onlyvar){
   ##############################.  spatial or space time ############################################
    if(!bivariate)           {
@@ -316,16 +365,12 @@ param=as.numeric(param)
          else{
              if(model %in% c(2,14,16,45,11,30,36)) {lower=-5;upper=5}
          }  
-
-
-#print(lower);print(upper)
      CompLikelihood <- optimize(f= compindloglik2,    
                               data=data, fixed=fixed, fan=fname,  lower=lower, n=n,
                                namesnuis=namesnuis,namesparam=namesparam, maximum = FALSE,
                               upper= upper,  X=X,MM=MM)}
    if(length(param)>1) {
     
-   
     if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(par=param,fn= compindloglik2, 
                               control=list(factr=1e-10,pgtol=1e-14, maxit=100000), 
@@ -363,9 +408,7 @@ param=as.numeric(param)
                                 control = list( iter.max=100000),
                               lower=lower,upper=upper,
                                fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-                                 X=X,MM=MM)
-
-                               
+                                 X=X,MM=MM)                   
     }}
 ######################################################################################
 ############################## bivariate  ############################################ 
@@ -417,7 +460,7 @@ param=as.numeric(param)
       ########################################################################################   
       ########################################################################################
     # check the optimisation outcome
-      if(optimizer=='Nelder-Mead'||optimizer=='multiNelder-Mead'||optimizer=='SANN'){
+      if(optimizer=='Nelder-Mead'||optimizer=='SANN'){
         CompLikelihood$value = -CompLikelihood$value
         names(CompLikelihood$par)<- namesparam
         if(CompLikelihood$convergence == 0)
@@ -438,7 +481,7 @@ param=as.numeric(param)
         if(CompLikelihood$value==-1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
     }
       
-    if(optimizer=='L-BFGS-B'||optimizer=='BFGS'||optimizer=='lbfgsb3c'){
+    if(optimizer=='L-BFGS-B'||optimizer=='BFGS'){
         CompLikelihood$value = -CompLikelihood$value
         names(CompLikelihood$par)<- namesparam
         if(CompLikelihood$convergence == 0)
@@ -515,7 +558,6 @@ param=as.numeric(param)
 if((sensitivity||varest))
   {
 if(!bivariate)  
-
 CompLikelihood$hessian=numDeriv::hessian(func= compindloglik2,x=CompLikelihood$par,method="Richardson",      
                               data=data, fixed=fixed,fan=fname,n=n,
                                namesnuis=namesnuis, namesparam=namesparam,
@@ -527,7 +569,6 @@ CompLikelihood$hessian=numDeriv::hessian(func= compindloglik_biv2,x=CompLikeliho
 rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
   }
-
 
 if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
 

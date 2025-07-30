@@ -16,10 +16,8 @@ nn2Geo <- function(x, y, K = 1, distance = 0, maxdist = NULL, radius=1) {
   if (!is.matrix(x) || !is.matrix(y)) stop("x e y devono essere matrici")
   n_x <- nrow(x)
   n_y <- nrow(y)
-  
   # Imposta K massimo per evitare errori
   K <- min(K, n_x, n_y)
-  
   # Funzione helper per proiezione sinusoidale
   project_coords <- function(coords) {
     prj <- mapproj::mapproject(coords[,1], coords[,2], projection = "sinusoidal")

@@ -3,8 +3,8 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
                       maxdist=NULL, maxtime=NULL, method="cholesky", model="Gaussian",
                       n=1, nloc=NULL, mse=FALSE, param, anisopars=NULL,
                       radius=1, sparse=FALSE, time=NULL, type="Standard",
-                      type_mse=NULL, type_krig="Simple", weigthed=TRUE, which=1,
-                      copula=NULL, X=NULL, Xloc=NULL, Mloc=NULL,
+                       type_krig="Simple", weigthed=TRUE, which=1,
+                      copula=NULL, X=NULL, Xloc=NULL, Mloc=NULL, varcov=NULL,
                       spobj=NULL, spdata=NULL, parallel=FALSE, ncores=NULL, progress=TRUE)
 {
   ###########################################################################
@@ -97,6 +97,7 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     copula = estobj$copula
     anisopars = estobj$anisopars
     X = estobj$X
+    varcov=estobj$varcov
   }
 
   bivariate = CheckBiv(CkCorrModel(corrmodel))
@@ -161,7 +162,7 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
                      Xloc = Xloc[i, ], Mloc = Mloc[i], type_krig = type_krig,
                      sparse = sparse, model = model, param = param,
                      anisopars = anisopars, radius = radius, mse = mse,
-                     copula = copula)
+                     copula = copula,varcov=varcov)
         res1[i] = pr$pred
         if(mse) res2[i] = pr$mse
       }
@@ -188,7 +189,7 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
                  type_krig = type_krig, sparse = sparse,
                  model = model, param = local_param,
                  anisopars = anisopars, radius = radius,
-                 mse = mse, copula = copula)
+                 mse = mse, copula = copula,varcov)
   })
   if(progress) pb(sprintf("i=%d", i))
   list(pred = pr$pred, mse = if(mse) pr$mse else NULL)
@@ -233,6 +234,7 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
                        sparse = sparse, corrmodel = corrmodel,
                        distance = distance, model = model, param = param,
                        anisopars = anisopars, radius = radius, mse = mse,
+                       varcov=varcov,
                        copula = copula, n = n)
           res1[k] = pr$pred
           if(mse) res2[k] = pr$mse
@@ -254,16 +256,16 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
         suppressMessages({
           local_param = param
           if(!is.null(M)) local_param$mean = neigh$M[[k]]
+          j = ((k-1) %% Tloc) + 1
           i = ((k-1) %/% Tloc) + 1
-          j = ((k-1) %%  Tloc) + 1
           pr = GeoKrig(data = neigh$data[[k]], coordx = neigh$coordx[[k]],
                        coordt = neigh$coordt[[k]], loc = loc[i, ],
                        time = time[j], X = neigh$X[[k]],
-                       Mloc = Mloc[i + Nloc*(j-1)],
-                       Xloc = Xloc[i + Nloc*(j-1), ], type_krig = type_krig,
+                       Mloc = Mloc[k],
+                       Xloc = Xloc[k, ], type_krig = type_krig,
                        sparse = sparse, corrmodel = corrmodel,
                        distance = distance, model = model, param = local_param,
-                       anisopars = anisopars, radius = radius, mse = mse,
+                       anisopars = anisopars, radius = radius, mse = mse,varcov=varcov,
                        copula = copula, n = n)
         })
         if(progress) pb(sprintf("k=%d", k))
@@ -307,7 +309,7 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
                        Mloc = Mloc[i + Nloc*(j-1)],
                        Xloc = Xloc[i + Nloc*(j-1), ], type_krig = type_krig,
                        sparse = sparse, corrmodel = corrmodel,
-                       distance = distance, model = model, param = param,
+                       distance = distance, model = model, param = param,varcov=varcov,
                        anisopars = anisopars, radius = radius, mse = mse,
                        copula = copula, n = n)
           res1[k] = pr$pred
@@ -330,14 +332,14 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
         suppressMessages({
           local_param = param
           if(!is.null(M)) local_param$mean = neigh$M[[k]]
+          j = ((k-1) %% Tloc) + 1
           i = ((k-1) %/% Tloc) + 1
-          j = ((k-1) %%  Tloc) + 1
           pr = GeoKrig(data = neigh$data[[k]], coordx = neigh$coordx[[k]],
                        loc = loc[i, ], X = neigh$X[[k]],
-                       Mloc = Mloc[i + Nloc*(j-1)],
-                       Xloc = Xloc[i + Nloc*(j-1), ], type_krig = type_krig,
+                       Mloc = Mloc[k],
+                       Xloc = Xloc[k, ], type_krig = type_krig,
                        sparse = sparse, corrmodel = corrmodel,
-                       distance = distance, model = model, param = local_param,
+                       distance = distance, model = model, param = local_param,varcov=varcov,
                        anisopars = anisopars, radius = radius, mse = mse,
                        copula = copula, n = n)
         })
@@ -392,7 +394,8 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
     spacetime = spacetime,
     time = time,
     type_krig = type_krig,
-    mse = varpred
+    mse = varpred,
+    varcov=varcov
   )
   structure(c(GeoKrigloc_out, call = call), class = c("GeoKrigloc"))
 }

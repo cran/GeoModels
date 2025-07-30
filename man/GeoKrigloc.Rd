@@ -16,10 +16,10 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
     maxtime=NULL, method="cholesky",
     model="Gaussian", n=1,nloc=NULL, mse=FALSE,  
     param, anisopars=NULL,radius=1,
-    sparse=FALSE, time=NULL, type="Standard",type_mse=NULL,
+    sparse=FALSE, time=NULL, type="Standard",
     type_krig="Simple",weigthed=TRUE, 
-    which=1, copula=NULL,X=NULL,Xloc=NULL,
-    Mloc=NULL,spobj=NULL,spdata=NULL,parallel=FALSE,ncores=NULL,progress=TRUE)
+    which=1, copula=NULL,X=NULL,Xloc=NULL,Mloc=NULL,varcov=NULL,
+    spobj=NULL,spdata=NULL,parallel=FALSE,ncores=NULL,progress=TRUE)
 }
 \arguments{
    \item{estobj}{An object of class Geofit that includes information about data, model and estimates.}
@@ -75,10 +75,8 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
    \item{type}{String; if \code{Standard}   then standard kriging is performed;if \code{Tapering}   
    then  kriging with covariance tapering is performed;if \code{Pairwise} then pairwise
      kriging is performed}
-    \item{type_mse}{String; if  \code{Theoretical} then theoretical MSE pairwise kriging is computed.
-       If \code{SubSamp} then  an estimation based on subsampling is computed.}  
          \item{type_krig}{String; the type of kriging. If \code{Simple} (the
-    default) then simple kriging is performed. If \code{Optim} then optimal kriging is performed for some non-Gaussian RFs}
+    default) then simple kriging is performed. Otherwise  \code{Universal} }
    \item{weigthed}{Logical; if \code{TRUE} then decreasing weigths coming 
   from a compactly supported correlation function
   with compact support \code{maxdist} (\code{maxtime})are used in the pairwise kriging.}
@@ -90,7 +88,8 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
      associated to predicted locations.}
     \item{Mloc}{Numeric; Vector of spatio(temporal) estimated means 
      associated to predicted locations.}
-                \item{spobj}{An object of class sp or spacetime}
+    \item{varcov}{Inverse of the covariance matrix estimates.}
+   \item{spobj}{An object of class sp or spacetime}
    \item{spdata}{Character:The name of data in the sp or spacetime object}
        \item{parallel}{Logical; if \code{TRUE} then 
       the prediction computation is  parallelized 
@@ -135,7 +134,7 @@ The neighborhood is specified with the option \code{maxdist}  and \code{maxtime}
    \item{tapmod}{String: the taper model if \code{type} is \code{Tapering}. Otherwise is NULL.}
   \item{time}{A \eqn{m}{m}-dimensional vector of temporal coordinates to be predicted;}
   \item{type}{String:  the type of kriging (Standard or Tapering).}
-  \item{type_krig}{String: the type of kriging.}
+  \item{type_krig}{String: the type of kriging: Simple or Universal}
   \item{mse}{A (\eqn{m \times n}{n x m})-matrix of spatio or spatio temporal mean square error kriging prediction;}
 
 }

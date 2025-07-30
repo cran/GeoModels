@@ -14,10 +14,7 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
 ###########  first preliminary check  ###############
     call <- match.call()
 
-
-
     if(is.null(start)) stop("Starting parameters are missing")
-
     if(is.null(corrmodel)&& likelihood=="Marginal"&&type=="Independence") 
     {
         if(is.null(coordt)){corrmodel="Exponential";tlist=list(nugget=0,scale=1)}
@@ -39,7 +36,6 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
      if(type=='Standard'){
         if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
         stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
-
 
 
     if((likelihood=='Marginal'&&type=="Independence")) {anisopars=NULL;est.aniso=c(FALSE,FALSE)}
@@ -66,15 +62,9 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
     if(!is.character(distance)) stop("invalid distance\n")
      
 
- 
-
-
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
-
-
-
 
 ###### checking if neighb or maxdist or maxtime has been specified when using cl
 if(space){
@@ -158,15 +148,12 @@ if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))=
     coordt=unname(coordt);
     if(is.null(coordx_dyn)){
     coordx=unname(coordx);coordy=unname(coordy)}
-    #fixedtemp=initparam$fixed['mean'
-
 
 
     initparam <- WlsStart(coordx, coordy,coordz, coordt, coordx_dyn, corrmodel, data, distance, "Fitting", fixed, grid,#10
                          likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
                          parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
                          type, varest,  weighted, copula,X,memdist,nosym)#32
-
 
 
   ### fixing initparam if all parameters are estimated
@@ -195,7 +182,7 @@ if(type=="Independence"){
            a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
      
     if(!is.null(initparam$error))   stop(initparam$error)
-    ## checking for upper and lower bound for method 'L-BFGS-B' and optimize method
+
 
 if(!(optimizer %in% c('L-BFGS-B','nlminb','nlm','nmkb','nmk','multiNelder-Mead',
     'multinlminb',"BFGS","Nelder-Mead","optimize","SANN","bobyqa","sbplx")))
@@ -203,21 +190,19 @@ if(!(optimizer %in% c('L-BFGS-B','nlminb','nlm','nmkb','nmk','multiNelder-Mead',
 if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))&is.null(lower)&is.null(upper))
              stop("lower and upper bound are missing\n")
 ######################## handling lower and upper bound parameters####################################        
-    if(optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','multiNelder-Mead',"bobyqa","sbplx") || length(initparam$param)==1){
+    if(optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','multiNelder-Mead',"bobyqa","sbplx") || length(initparam$param)==1)
+    {
    
-    if(!is.null(lower)||!is.null(upper)){
-       if(!is.list(lower)||!is.list(upper))  stop("lower and upper bound must be a list\n")
-
-       if(sum(unlist(lower)>unlist((upper)))>0) stop("some values of the lower bound is greater of the upper bound \n")
-
- if(sum(names(lower)=='sill')==1){
+     if(!is.null(lower)||!is.null(upper)){
+     if(!is.list(lower)||!is.list(upper))  stop("lower and upper bound must be a list\n")
+     if(sum(unlist(lower)>unlist((upper)))>0) stop("some values of the lower bound is greater of the upper bound \n")
+     if(sum(names(lower)=='sill')==1){
           if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11,54)) 
             {lower=lower[names(lower)!='sill'];upper=upper[names(upper)!='sill']; }}
     #setting alphabetic order
       lower=lower[order(names(lower))]
       upper=upper[order(names(upper))] 
       npar<-length(initparam$param) 
-     
       ll<-as.numeric(lower);uu<-as.numeric(upper)
       if(length(ll)!=npar||length(uu)!=npar)
            stop("lower and upper bound must be of the same length of starting values\n") 
@@ -226,7 +211,8 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))
       ll[ll==0]=.Machine$double.eps ## when 0 we don't want exactly zero
       uu[uu==Inf]=1e+12
       initparam$upper <- uu;initparam$lower <- ll
-     }}
+     }
+}
 ############################################################ 
 
 ## in the case on external fixed mean
@@ -234,8 +220,6 @@ if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))
   if(!is.null(fixed))
      if(length(fixed$mean)>1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
     ###################################################################################
-    ###################################################################################
-
 ####################################################################
 #############  handling anisotropy parameters ######################
 ###################################################################
@@ -276,8 +260,6 @@ if(!is.null(anisopars)) {
     }
 ###################################################################################
 ###################################################################################
-
-
    # Full likelihood:
     if(likelihood=='Full')
           # Fitting by log-likelihood maximization:
@@ -341,28 +323,6 @@ if(!is.null(anisopars)) {
     if(initparam$bivariate) numtime=2
     dimat <- initparam$numcoord#*numtime#
 
-
-
-###### interpretation  spatial scale parameters for f type models... ####  
-#numbermodel <- CkCorrModel(corrmodel)
-#if (CheckSph(numbermodel)) {
-#  if (numbermodel %in% c(17, 18, 20)) {
-#    fitted$par["scale"]<- fitted$par["scale"] * radius
-#  }
-#  if (numbermodel %in% c(56, 58)) {
-#    fitted$par["scale_s"] <- fitted$par["scale_s"] * radius
-#  }
-#  if (numbermodel == 117) {
-#   fitted$par["scale_1"]<- fitted$par["scale_1"] * radius
-#    fitted$par["scale_2"] <- fitted$par["scale_2"]* radius
-#   fitted$par["scale_12"]<-  fitted$par["scale_12"]* radius
-#  }
-#}
-####################################
-
-
-     
-     
     if( !(likelihood=='Marginal'&&type=="Independence"))
     {             
      if(memdist) .C('DeleteGlobalVar2', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE) # my distances

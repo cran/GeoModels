@@ -13,10 +13,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     {
 
 
-  #      cc <- .C(as.character(corrmat),
-  #  cr=double(length(corr)),as.double(coordx), as.double(coordy),as.double(coordz),as.double(coordt), as.integer(corrmodel),
-  #              as.double(nuisance),as.double(paramcorr),as.double(radius), as.integer(ns),as.integer(NS),
-  #          PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE)$cr
+
 
            cc=dotCall64::.C64(as.character(corrmat),
         SIGNATURE =c(rep("double",5),"integer","double","double","double","integer","integer"),
@@ -29,10 +26,6 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     matr2 <- function(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius,model,mu)
     {
 
-  #     cc <- .C(as.character(corrmat),
-  #     cr=double(length(corr),as.double(coordx), as.double(coordy), as.double(coordz),as.double(coordt), as.integer(corrmodel), as.double(c(mu)),
-  #                        as.integer(ns), as.double(nuisance),as.double(paramcorr),as.double(radius), as.integer(ns),as.integer(NS),as.integer(model),
-  #      PACKAGE='GeoModels',DUP=TRUE,NAOK=TRUE)$cr
         
   cc=dotCall64::.C64(as.character(corrmat),
          SIGNATURE = c(rep("double",5),"integer","double", "integer","double","double","double","integer","integer","integer"),  
@@ -49,12 +42,10 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 ######### 
 build_correlation_matrix <- function(corr_vec, ident) {
     corrmat_full <- ident  
-    # Riempimento efficiente
     lt <- lower.tri(ident)
     corrmat_full[lt] <- corr_vec
-    corrmat_full <- t(corrmat_full)  # Trasponi
-    corrmat_full[lt] <- corr_vec  # Ri-riempi il triangolo inferiore
-    
+    corrmat_full <- t(corrmat_full)  
+    corrmat_full[lt] <- corr_vec  
     return(corrmat_full)
 }
 ######### Restricted log-likelihood for multivariate normal density:
@@ -97,86 +88,79 @@ build_correlation_matrix <- function(corr_vec, ident) {
     
     
 ######### Tapering 2 log-likelihood for multivariate normal density:
-    LogNormDenTap <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
-    {
-        lliktap <- 1.0e8
-        # Computes the vector of the correlations:
-        varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
-        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
-        cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
-        #if(class(cholvctap)=="try-error") return(lliktap)
-        logdet <- c(spam::determinant(cholvctap)$modulus)
-        inv <- spam::solve.spam(cholvctap)
-        slot(varcovtap,"entries") <- inv[setup$idx]*setup$taps
-        lliktap= 0.5*(const+2*logdet+drop(t(stdata)%*%varcovtap%*%stdata))
-        return(lliktap)
-    }
+#    LogNormDenTap <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+#   {
+#        lliktap <- 1.0e8
+#        # Computes the vector of the correlations:
+#        varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
+#        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
+#        cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
+#        #if(class(cholvctap)=="try-error") return(lliktap)
+#        logdet <- c(spam::determinant(cholvctap)$modulus)
+#        inv <- spam::solve.spam(cholvctap)
+#        slot(varcovtap,"entries") <- inv[setup$idx]*setup$taps
+#        lliktap= 0.5*(const+2*logdet+drop(t(stdata)%*%varcovtap%*%stdata))
+#        return(lliktap)
+#    }
 
 ######### Tapering 1 sas log-likelihood 
-LogshDenTap1<- function(const,cova,ident,dimat,mdecomp,nuisance,setup,sill,stdata)
-{
-
-    varcovtap <- new("spam",entries=setup$taps*cova,colindices=setup$ja,
-    rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
-   
-          #cholvctap <-spam::chol.spam(varcovtap)
-           cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
-          logdet <- 2*c(spam::determinant(cholvctap)$modulus)
-
-    ################################################
-        skew=as.numeric(nuisance["skew"])
-        delta=as.numeric(nuisance["tail"])
-        Z=sinh(delta * asinh(stdata)-skew)
-        C=delta*sqrt((1+Z^2)/(stdata^2+1))
-    llik <- 0.5*( const + const*log(sill)/log(2*pi)+logdet - 2*sum(log(C)) +sum(Z* spam::solve.spam(cholvctap, Z)))
-                    
-    return(llik)
-}
+#LogshDenTap1<- function(const,cova,ident,dimat,mdecomp,nuisance,setup,sill,stdata)
+#{
+#    varcovtap <- new("spam",entries=setup$taps*cova,colindices=setup$ja,
+#    rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))  
+#           cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
+#          logdet <- 2*c(spam::determinant(cholvctap)$modulus)
+#        skew=as.numeric(nuisance["skew"])
+#        delta=as.numeric(nuisance["tail"])
+#        Z=sinh(delta * asinh(stdata)-skew)
+#        C=delta*sqrt((1+Z^2)/(stdata^2+1))
+#    llik <- 0.5*( const + const*log(sill)/log(2*pi)+logdet - 2*sum(log(C)) +sum(Z* spam::solve.spam(cholvctap, Z)))                   
+#    return(llik)
+#}
 
 
 ######### Tapering 1 normal log-likelihood 
-LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
-{
-
-    varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
-    rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
-    cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
-    #cholvctap <-spam::chol.spam(varcovtap)
-    logdet <- c(spam::determinant(cholvctap)$modulus)
-    lliktap= 0.5*(const+2*logdet+sum(stdata* spam::solve.spam(cholvctap, stdata)))
-    return(lliktap)
-}
+#LogNormDenTap1 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+#{
+#    varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
+#    rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
+#    cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
+#    #cholvctap <-spam::chol.spam(varcovtap)
+#    logdet <- c(spam::determinant(cholvctap)$modulus)
+#    lliktap= 0.5*(const+2*logdet+sum(stdata* spam::solve.spam(cholvctap, stdata)))
+#    return(lliktap)
+#}
 
     
 ######### Tapering 2 log-likelihood for bivariate multivariate normal density:
-    LogNormDenTap_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
-    {
-        lliktap <- 1.0e8
-        # Computes the vector of the correlations:
-        varcovtap <- try(new("spam",entries=cova*setup$taps,colindices=setup$ja,
-        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2))),silent=TRUE)
-        cholvctap <- try(spam::chol.spam(varcovtap),silent=TRUE)
-        if(inherits(cholvctap,"try-error")) {return(lliktap)}
-        logdet <- c(spam::determinant(cholvctap)$modulus)
-        inv <- spam::solve.spam(cholvctap)
-        slot(varcovtap,"entries") <- inv[setup$idx]*setup$taps
-        lliktap= 0.5*(const+2*logdet+drop(t(stdata)%*%varcovtap%*%stdata))
-        return(lliktap)
-    }
+#    LogNormDenTap_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+#    {
+#        lliktap <- 1.0e8
+#        # Computes the vector of the correlations:
+#        varcovtap <- try(new("spam",entries=cova*setup$taps,colindices=setup$ja,
+#        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2))),silent=TRUE)
+#        cholvctap <- try(spam::chol.spam(varcovtap),silent=TRUE)
+#        if(inherits(cholvctap,"try-error")) {return(lliktap)}
+#        logdet <- c(spam::determinant(cholvctap)$modulus)
+#        inv <- spam::solve.spam(cholvctap)
+#        slot(varcovtap,"entries") <- inv[setup$idx]*setup$taps
+#        lliktap= 0.5*(const+2*logdet+drop(t(stdata)%*%varcovtap%*%stdata))
+#        return(lliktap)
+#    }
 ######### Tapering 1 log-likelihood for bivariate multivariate normal density:
-    LogNormDenTap1_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
-    {
-        lliktap <- 1.0e8
-        # Computes the vector of the correlations:
-        cova[cova==(nuisance['sill'])] <- nuisance['sill']+nuisance['nugget']
-        varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
-        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
-        cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
-        if(inherits(cholvctap, "try-error"))  {return(lliktap)}
-        logdet <- c(spam::determinant.spam.chol.NgPeyton(cholvctap)$modulus)
-        lliktap <- 0.5*(const+2*logdet+sum(stdata* spam::solve.spam(cholvctap, stdata)))
-        return(lliktap)
-    }
+#    LogNormDenTap1_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
+#    {
+#        lliktap <- 1.0e8
+#        # Computes the vector of the correlations:
+#        cova[cova==(nuisance['sill'])] <- nuisance['sill']+nuisance['nugget']
+#        varcovtap <- new("spam",entries=cova*setup$taps,colindices=setup$ja,
+#        rowpointers=setup$ia,dimension=as.integer(rep(dimat,2)))
+#        cholvctap <- spam::update.spam.chol.NgPeyton(setup$struct, varcovtap)
+#        if(inherits(cholvctap, "try-error"))  {return(lliktap)}
+#        logdet <- c(spam::determinant.spam.chol.NgPeyton(cholvctap)$modulus)
+#        lliktap <- 0.5*(const+2*logdet+sum(stdata* spam::solve.spam(cholvctap, stdata)))
+#        return(lliktap)
+#    }
 
 ######### Standard log-likelihood function for multivariate normal density with sparse alg matrices
     LogNormDenStand_spam <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
@@ -247,30 +231,6 @@ CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
         return(llik)
     }
 
- ######## Standard log-likelihood function for log gaussian random fields   
-
-
- #LogNormDenStand_LG <- function(const, cova, ident, dimat, mdecomp, nuisance, det, sill, setup, stdata) {
-  #  llik <- 1.0e8  
-   # varcov <- sill * ident
-   # varcov[lower.tri(varcov)] <- cova
-   # varcov <- t(varcov)
-   # varcov[lower.tri(varcov)] <- cova  
-   # decompvarcov <- MatDecomp(varcov, mdecomp)
-   # if (is.logical(decompvarcov)) return(llik)  # Fallimento
-   # logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
-  #  quad_form <-sum((forwardsolve(decompvarcov, stdata, transpose = FALSE))^2)
-  #  llik <- 0.5 * (const + logdetvarcov + 2 * det + quad_form)
-  #  return(llik)
-#}
-
-
-
-
-
-
-
-       
        
 ######### Standard log-likelihood function for multivariate bivariate normal density:
  LogNormDenStand_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata)
@@ -612,8 +572,6 @@ llik <- 1.0e8
     if(is.na(logdetvarcov)) {
         return(llik)
     }
-
-
   # Inversa della trasformazione Tukey-h (usando Lambert W)
   Wval <- VGAM::lambertW(delta * stdata^2)
   IL <- sign(stdata) * sqrt(Wval / delta)
@@ -870,30 +828,6 @@ loglik <- function(param, const, coordx, coordy, coordz, coordt, corr, corrmat, 
     return(loglik_u)
 }
 
-  #####################################################    
-
-# loglikvecchia <- function(param,vecchia.approx,data,fixed,dimat,
- #                   model,namescorr,namesnuis,namesparam,X,MM,aniso,namesaniso)
- #   {
- #       llik <- 1.0e8
- #       names(param) <- namesparam
- #       # Set the parameter vector:
- #       pram <- c(param, fixed)
- #       paramcorr <- pram[namescorr]
- #       nuisance <- pram[namesnuis]
- #       sel=substr(names(nuisance),1,4)=="mean"
- #       mm=as.numeric(nuisance[sel])
- #       Mean=c(X%*%mm)
- #       if(!is.null(MM)) Mean=MM
- #  
- #         nuggets=as.numeric(nuisance['nugget'])+ 0.00001
- #       data=c(data-X%*%mm)
- #       ppar=as.numeric(c(nuisance['sill'], paramcorr[1], paramcorr[2]))
- #   if(ppar[2]<0|| ppar[3]<0||nuisance['sill']<0||nuisance['nugget']<0||nuisance['nugget']>1){return(llik)}
- #       loglik_u=GPvecchia::vecchia_likelihood(data,vecchia.approx,
- #                        covparms=ppar,nuggets=nuggets,covmodel ="matern")
- #       return(-loglik_u)
- #     }
 
       
 ################################################################################################                     
@@ -1014,6 +948,9 @@ if(model==1||model==20){  ## gaussian case
  }
  ############################################################################
 ############################################################################
+
+
+
 hessian=FALSE
  if(model==20){   ## SAS case
      lname <- 'loglik_sh'

@@ -214,29 +214,42 @@ LIM2=15 # after this limit then kummer_Matern is a matern approx..
         }
       }else{
         
-
+        # Set up future plan
         future::plan(future::multisession, workers = ncores)
-       # progressr::handlers(global = TRUE)
-       # progressr::handlers("txtprogressbar")
-       # pb <- progressr::progressor(along = 1:Chunks)
-        k=1
-        simu <- foreach::foreach(k = 1:Chunks, .combine = c, .options.future = list(seed = TRUE, packages = "GeoModels")) %dofuture% {
-          indexes <- (low_limits[k]+1):upp_limits[k]
+        
+        # Create chunk indices list for future_lapply
+        chunk_list <- lapply(1:Chunks, function(k) {
+          list(
+            indexes = (low_limits[k]+1):upp_limits[k],
+            chunk_id = k
+          )
+        })
+        
+        # Use future_lapply instead of foreach+dofuture
+        chunk_results <- future.apply::future_lapply(chunk_list, function(chunk_info) {
+          indexes <- chunk_info$indexes
           Ninner <- length(indexes)
-          result=dotCall64::.C64("TBD1d",
-                                 SIGNATURE = c("double","double", "double","double",
-                                               "double","integer","integer","double"),
-                                 ux = c(u[,1]), uy = c(u[,2]), 
-                                 sx = c(coord[indexes, 1]), 
-                                 sy = c(coord[indexes, 2]), 
-                                 phi = phi, L = as.integer(L), n = as.integer(Ninner), result = dotCall64::vector_dc("double",Ninner), 
-                                 INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
-                                 PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
+          result <- dotCall64::.C64("TBD1d",
+                                   SIGNATURE = c("double","double", "double","double",
+                                                 "double","integer","integer","double"),
+                                   ux = c(u[,1]), uy = c(u[,2]), 
+                                   sx = c(coord[indexes, 1]), 
+                                   sy = c(coord[indexes, 2]), 
+                                   phi = phi, L = as.integer(L), n = as.integer(Ninner), 
+                                   result = dotCall64::vector_dc("double",Ninner), 
+                                   INTENT = c("r", "r", "r", "r", "r","r","r","rw"),
+                                   PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$result
           
           result <- sqrt(CC)*result/sqrt(2*L)
-          return(result)
+          return(list(indexes = indexes, result = result))
+        }, future.seed = TRUE, future.packages = "GeoModels")
+        
+        # Combine results
+        for(chunk_result in chunk_results) {
+          simu[chunk_result$indexes, 1] <- chunk_result$result
         }
-       future::plan(sequential)
+        
+        future::plan(sequential)
       }
     }else{
       result=dotCall64::.C64("TBD1d",

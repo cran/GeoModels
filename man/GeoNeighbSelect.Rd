@@ -17,7 +17,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
     neighb=c(1,2,3,4,5),maxtime=Inf, memdist=TRUE,model='Gaussian',
     n=1, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
     bivariate=FALSE,radius=1, start=NULL,type='Pairwise', upper=NULL, 
-    weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL)
+    weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL,progress=TRUE)
 }
 \arguments{
   \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on 
@@ -116,6 +116,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
    \item{spobj}{An object of class sp or spacetime}
    \item{spdata}{Character:The name of data in the sp or spacetime object}
    \item{vario}{An object of the class GeoVariogram obtained using the \link{GeoVariogram} function }
+    \item{progress}{Logic; If TRUE then a progress bar is shown.}
 }
 \details{
  The procedure performs different pairwise composite likelihood estimation using 

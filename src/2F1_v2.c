@@ -9,6 +9,7 @@ static double hyp2f1_half_integer_smooth(double a, double b, double c, double x)
 static double hyp2f1_series_extended(double a, double b, double c, double x);
 double hypergeom_2f1(double a, double b, double c, double x);
 
+
 static double hyp2f1_series(double a, double b, double c, double x) {
     double sum = 1.0;
     double term = 1.0;
@@ -21,15 +22,12 @@ static double hyp2f1_series(double a, double b, double c, double x) {
         // Calcolo del termine usando le proprietà dei simboli di Pochhammer
         term *= (a_n * b_n * x) / (c_n * n);
         sum += term;
-        
         // Test di convergenza migliorato
         double ratio = fabs(term / sum);
         if (ratio < CONV_TOL) break;
-        
         // Test di stagnazione (se il rapporto non migliora)
         if (n > 50 && ratio >= ratio_old * 0.99) break;
         ratio_old = ratio;
-        
         a_n += 1.0;
         b_n += 1.0;
         c_n += 1.0;
@@ -37,7 +35,6 @@ static double hyp2f1_series(double a, double b, double c, double x) {
     
     return sum;
 }
-
 // Trasformazione per x vicino a 1 usando funzioni R
 static double hyp2f1_near_one(double a, double b, double c, double x) {
     double delta = c - a - b;
@@ -46,42 +43,35 @@ static double hyp2f1_near_one(double a, double b, double c, double x) {
     if (fabs(delta) < MACHEP * 10) {
         return R_pow(1.0 - x, -a);
     }
-    
+
     // Usa la trasformazione standard con funzioni gamma R
     if (delta > ETHRESH) {
         // 2F1(a,b;c;x) = Γ(c)Γ(c-a-b)/[Γ(c-a)Γ(c-b)] * 2F1(a,b;a+b-c+1;1-x)
         //                + Γ(c)Γ(a+b-c)/[Γ(a)Γ(b)] * (1-x)^(c-a-b) * 2F1(c-a,c-b;c-a-b+1;1-x)
         
         double y = 1.0 - x;
-        
         // Primo termine
         double gamma_c = gammafn(c);
         double gamma_delta = gammafn(delta);
         double gamma_c_a = gammafn(c - a);
         double gamma_c_b = gammafn(c - b);
-        
         if (!R_FINITE(gamma_delta) || !R_FINITE(gamma_c_a) || !R_FINITE(gamma_c_b)) {
             return NA_REAL;
         }
-        
         double coeff1 = gamma_c * gamma_delta / (gamma_c_a * gamma_c_b);
         double term1 = coeff1 * hyp2f1_series(a, b, a + b - c + 1.0, y);
-        
         // Secondo termine
         double gamma_neg_delta = gammafn(-delta);
         double gamma_a = gammafn(a);
         double gamma_b = gammafn(b);
-        
         if (!R_FINITE(gamma_neg_delta) || !R_FINITE(gamma_a) || !R_FINITE(gamma_b)) {
             return term1; // Restituisce solo il primo termine
         }
-        
         double coeff2 = gamma_c * gamma_neg_delta / (gamma_a * gamma_b);
         double term2 = coeff2 * R_pow(y, delta) * 
                       hyp2f1_series(c - a, c - b, c - a - b + 1.0, y);
         
         return term1 + term2;
-        
     } else if (delta < -ETHRESH) {
         // Caso delta negativo - usa ricorrenza
         return R_pow(1.0 - x, -a) * hyp2f1_series(a, c - b, c, x / (x - 1.0));
@@ -102,7 +92,6 @@ static double hyp2f1_negative_x(double a, double b, double c, double x) {
 // Gestione di parametri interi negativi (serie termina)
 static double hyp2f1_integer_params(double a, double b, double c, double x) {
     int n_terms;
-
     
     if (a <= 0.0 && a == floor(a)) {
         n_terms = (int)(-a);
@@ -115,18 +104,15 @@ static double hyp2f1_integer_params(double a, double b, double c, double x) {
         b = temp;
     } else {
         return NA_REAL; // Non dovrebbe succedere
-    }
-    
+    }  
     double sum = 1.0;
     double term = 1.0;
     double a_n = a;
     double b_n = b;
     double c_n = c;
-    
     for (int n = 1; n <= n_terms; n++) {
         term *= (a_n * b_n * x) / (c_n * n);
         sum += term;
-        
         a_n += 1.0;
         b_n += 1.0;
         c_n += 1.0;
@@ -146,10 +132,7 @@ static double hyp2f1_half_integer_smooth(double a, double b, double c, double x)
         // Per x molto vicino a 1, usa la trasformazione di Euler
         if (x > 0.9) {
             // 2F1(a,b;c;x) = (1-x)^(c-a-b) * 2F1(c-a,c-b;c;x)
-            // Ma questo può essere instabile, quindi usiamo un approccio alternativo
-            
-            // Usa la relazione: 2F1(a,b;c;x) = 2F1(a,c-b;c;x/(x-1)) * (1-x)^(-a)
-            double z = x / (x - 1.0);
+             double z = x / (x - 1.0);
             
             if (fabs(z) < 0.8) { // Assicurati che z sia nel dominio di convergenza
                 double factor = R_pow(1.0 - x, -a);
@@ -160,8 +143,7 @@ static double hyp2f1_half_integer_smooth(double a, double b, double c, double x)
                     }
                 }
             }
-            
-            // Fallback: usa serie con precisione estesa
+
             return hyp2f1_series_extended(a, b, c, x);
         }
         
@@ -172,7 +154,7 @@ static double hyp2f1_half_integer_smooth(double a, double b, double c, double x)
     return hyp2f1_series(a, b, c, x);
 }
 
-// Serie con precisione estesa per casi difficili
+
 static double hyp2f1_series_extended(double a, double b, double c, double x) {
     double sum = 1.0;
     double term = 1.0;
@@ -228,7 +210,6 @@ double hypergeom_2f1(double a, double b, double c, double x) {
     if (!R_FINITE(a) || !R_FINITE(b) || !R_FINITE(c) || !R_FINITE(x)) {
         return NA_REAL;
     }
-    
     if (fabs(x) > 1.0) {
         return NA_REAL; // Fuori dal dominio supportato
     }
@@ -267,7 +248,6 @@ double hypergeom_2f1(double a, double b, double c, double x) {
     
     // Selezione algoritmo basata su x e parametri (ORIGINALE)
     if (fabs(x) <= 0.7) {
-        // Serie standard per |x| piccolo
         return hyp2f1_series(a, b, c, x);
     } else if (x < 0.0) {
         // Trasformazione per x negativo

@@ -11,12 +11,11 @@ for the Gaussian and non Gaussian case.
 \usage{
 GeoKrig(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, 
 coordx_dyn=NULL, corrmodel,distance="Eucl",
-    grid=FALSE, loc, maxdist=NULL, maxtime=NULL,
+    grid=FALSE, loc, 
     method="cholesky", model="Gaussian", n=1,nloc=NULL,mse=FALSE, 
-    lin_opt=TRUE,  param, anisopars=NULL,radius=1, sparse=FALSE,
-    taper=NULL,tapsep=NULL, time=NULL, type="Standard",type_mse=NULL,
-     type_krig="Simple",weigthed=TRUE,which=1,
-     copula=NULL, X=NULL,Xloc=NULL,Mloc=NULL,spobj=NULL,spdata=NULL)
+     param, anisopars=NULL,radius=1, sparse=FALSE,
+     time=NULL,  type_krig="Simple",weigthed=TRUE,which=1,
+     copula=NULL, X=NULL,Xloc=NULL,Mloc=NULL,spobj=NULL,spdata=NULL,varcov=NULL)
 }
 \arguments{
   \item{estobj}{An object of class Geofit that includes information about data, model and estimates.}
@@ -44,19 +43,13 @@ coordx_dyn=NULL, corrmodel,distance="Eucl",
   \item{grid}{Logical; if \code{FALSE} (the default) the data used for prediction
     are interpreted as spatial or spatial-temporal realisations on a set
     of non-equispaced spatial sites (irregular grid).}
-  \item{lin_opt}{Logical;If TRUE (default) then  optimal (pairwise) linear  kriging is computed. Otherwise  optimal (pairwise) kriging is computed
-  in the mean square sense.}  
   \item{loc}{A numeric (\eqn{n \times 2}{n x 2})-matrix (where
     \code{n} is the number of spatial sites) giving 2-dimensions of spatial coordinates to be predicted.}
-  \item{maxdist}{Numeric; an optional positive value indicating the maximum
-    spatial compact support in the case of covariance tapering kriging.}
-  \item{maxtime}{Numeric; an optional positive value indicating the maximum
-    temporal compact support in the case of covasriance tapering kriging.}
      \item{method}{String; the type of matrix decomposition used in the simulation. Default is \code{cholesky}. 
      The other possible choices is \code{svd}.}
     \item{n}{Numeric; the number of trials in a binomial random fields.
          Default is \eqn{1}.}   
-     \item{nloc}{Numeric; the number of trials  of the locations sites to be predicted in a binomial random fields type II.
+     \item{nloc}{Numeric; the number of trials  of the locations sites to be predicted in a binomial random fields.
          Default is \eqn{1}.} 
     \item{mse}{Logical; if \code{TRUE} (the default) MSE of the kriging predictor  is computed}    
    \item{model}{String; the type of RF and therefore the densities associated to the likelihood
@@ -67,24 +60,15 @@ coordx_dyn=NULL, corrmodel,distance="Eucl",
     \item{radius}{Numeric: the radius of the sphere if coordinates are passed in lon/lat format;Default value is 1.}
      \item{sparse}{Logical; if \code{TRUE} kriging is computed with sparse matrices algorithms 
           using spam package. Default is FALSE. It should be used with compactly supported covariances.}        
-   \item{taper}{String; the name of the taper correlation
-    function, see the Section \bold{Details}.}
-    \item{tapsep}{Numeric; an optional  value indicating the separabe
-      parameter in the space time quasi taper (see \bold{Details}).}
     \item{time}{A numeric (\eqn{m \times 1}{m x 1}) vector (where
     \code{m} is the number of temporal instants) giving the temporal instants to be predicted; the default is \code{NULL}
     then only spatial prediction is performed.}
-   \item{type}{String; if \code{Standard}   then standard kriging is performed;if \code{Tapering}   
-   then  kriging with covariance tapering is performed;if \code{Pairwise} then pairwise
-     kriging is performed}
-    \item{type_mse}{String; if  \code{Theoretical} then theoretical MSE pairwise kriging is computed.
-       If \code{SubSamp} then  an estimation based on subsampling is computed.}  
            \item{type_krig}{String; the type of kriging. If \code{Simple} (the
-    default) then simple kriging is performed. If \code{Optim} then optimal kriging is performed for some non-Gaussian RFs}
+    default) then simple kriging is performed. Otherwise \code{Universal}. }
    \item{weigthed}{Logical; if \code{TRUE} then decreasing weigths coming 
   from a compactly supported correlation function
   with compact support \code{maxdist} (\code{maxtime})are used in the pairwise kriging.}
-      \item{which}{Numeric; In the case of bivariate (tapered) cokriging it indicates which variable to predict.
+      \item{which}{Numeric; In the case of bivariate  cokriging it indicates which variable to predict.
       	   It can be 1 or 2}
     \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
   \item{X}{Numeric; Matrix of spatio(temporal)covariates in the linear mean specification.}
@@ -94,6 +78,7 @@ coordx_dyn=NULL, corrmodel,distance="Eucl",
      associated to predicted locations.}
            \item{spobj}{An object of class sp or spacetime}
    \item{spdata}{Character:The name of data in the sp or spacetime object}
+    \item{varcov}{Inverse of the covariance matrix estimates.}
 }
 
 \details{
@@ -120,13 +105,13 @@ case of simple kriging, the known mean can be specified by the parameter
   \item{coordz}{A \eqn{d}{d}-dimensional vector of spatial coordinates used for prediction;}
   \item{coordt}{A \eqn{t}{t}-dimensional vector of temporal coordinates used for prediction;}
   \item{corrmodel}{String: the correlation model;}
-  \item{covmatrix}{The covariance matrix if \code{type} is \code{Standard}. An object of class spam if \code{type} is \code{Tapering}   }
+  \item{covmatrix}{The covariance matrix.   }
   \item{data}{The vector or matrix or array of data used for prediction}
   \item{distance}{String: the type of spatial distance;}
   \item{grid}{\code{TRUE} if the spatial data used for prediction are observed in a regular grid, otherwise  \code{FALSE};}
   \item{loc}{A (\eqn{n \times 2}{n x 2})-matrix of spatial locations to be predicted.}
   \item{n}{The number of trial for Binomial RFs} 
-  \item{nozero}{In the case of tapered simple kriging the percentage of non zero values in the covariance matrix.
+  \item{nozero}{In the case of sparse simple kriging the percentage of non zero values in the covariance matrix.
   Otherwise is NULL.}
   \item{numcoord}{Numeric:he number \eqn{d}{d} of spatial coordinates used for prediction;}
   \item{numloc}{Numeric: the number \eqn{n}{n} of spatial coordinates to be predicted;}
@@ -138,10 +123,9 @@ case of simple kriging, the known mean can be specified by the parameter
     \item{radius}{Numeric: the radius of the sphere if coordinates are pssed in lon/lat format;}
   \item{spacetime}{\code{TRUE} if spatio-temporal kriging and \code{FALSE} if
   spatial kriging;}
-   \item{tapmod}{String: the taper model if \code{type} is \code{Tapering}. Otherwise is NULL.}
   \item{time}{A \eqn{m}{m}-dimensional vector of temporal coordinates to be predicted;}
-  \item{type}{String:  the type of kriging (Standard or Tapering).}
-  \item{type_krig}{String: the type of kriging.}
+  \item{type}{String:  the type of kriging (Standard).}
+  \item{type_krig}{String: the type of kriging (simple or universal)}
   \item{mse}{A (\eqn{m \times n}{n x m})-matrix of spatio or spatio temporal mean square error kriging prediction;}
 
 }
