@@ -98,6 +98,52 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
+
+void Comp_Cond_SkewLaplace2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis,  int *type_cop, int *cond)
+{
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+        const double skew=nuis[2];
+    
+    if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
+        *res = LOW;
+        return;
+    }
+
+    // Variabili precalcolate
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double max_dist = maxdist[0];
+    const double scale = 1.0 - nugget;
+
+
+    const double sill = nuis[1];
+    double total = 0.0; 
+
+    for(int i = 0; i < n_pairs; i++) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+        
+        if(!ISNAN(d1) && !ISNAN(d2)) {
+            // Calcolo correlazione
+             const double lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+            
+            // Calcolo pesi se necessario
+            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
+            
+            // log bivariate skew laplace mean1[i], mean2[i]
+             const double l2 = one_log_SkewLaplace(d2, mean2[i], sill, skew);
+           const double val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew)-l2;
+            total += weights * val;
+        }
+    }
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
 /*********************************************************/
 void Comp_Cond_T2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,

@@ -323,7 +323,11 @@ if(aniso) anisopars=as.list(c(fitted$par,ff)[namesaniso])
 if(!is.null(coordt)&is.null(coordx_dyn)){ initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
                                           initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
                                         }   
- initparam$coordz=coordz
+ 
+
+ #initparam$coordz=coordz
+if(all(initparam$coordz==0)) initparam$coordz=NULL
+
 
 conf.int=NULL
 pvalues=NULL
@@ -435,6 +439,7 @@ print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
   if(x$model=='Gamma2'){ process <- 'Gamma2'; model <- 'Gamma2'}
   if(x$model=='LogGauss'||x$model=='LogGaussian'){ process <- 'Log Gaussian'; model <- 'LogGaussian'}
   if(x$model=='SkewGauss'||x$model=='SkewGaussian'){ process <- 'Skew Gaussian';model <- 'SkewGaussian'}
+    if(x$model=='SkewLaplace'){ process <- 'Skew Laplace';model <- 'SkewLaplace'}
   if(x$model=='TwoPieceStudentT'){ process <- 'TwoPiece StudentT';model <- 'TwoPieceStudentT'}
   if(x$model=='TwoPieceTukeyh'){ process <- 'TwoPiece Tukeyh';model <- 'TwoPieceTukeyh'}
   if(x$model=='TwoPieceGaussian'||x$model=='TwoPieceGauss'){ process <- 'TwoPiece Gaussian';model <- 'TwoPieceGaussian'}

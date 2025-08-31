@@ -182,7 +182,7 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
 if(initparam$numstart==initparam$numparam)       ### checking if numparam = numstart
 {        
 ###### continuos and discrete models   
-        if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
+        if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','SkewLaplace','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
           'Tukeygh','Tukeyh','Tukeyh2','Kumaraswamy','Kumaraswamy2','Weibull','SkewGaussian','SkewGauss','SinhAsinh','StudentT','SkewStudentT',
           "Gaussian_misp_StudentT","Gaussian_misp_Poisson","Gaussian_misp_Tukeygh",
           "Binomial","Geometric","PoisBin","BinomialNeg","Binary_misp_BinomialNeg","Binomial2","PoisBinNeg","Poisson","BinomialNegZINB","BinomialLogistic","Gaussian_misp_Binomial",

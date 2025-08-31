@@ -287,15 +287,10 @@ if(spacetime_dyn)
  if(is.null(coordz)) coordz=double(length(coordx))
 
 
-    #print(head(coordx))
-    #  print(head(coordy))
-    #   print(head(coordz))
-    #   print(memdist)
-
+  
      if(!memdist)  { 
      fname <- paste(fname,"2",sep="") 
      # Computes the spatial moments
-  
       EV=.C("Binned_Variogram2", bins=bins,  as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(data), 
         lenbins=as.integer(lenbins), moments=as.double(moments), as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
        }

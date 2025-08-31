@@ -54,6 +54,18 @@ lambertW0_custom <- function(x, tol = 1e-12, maxiter = 100) {
   }
   return(w)
 }
+
+one_log_SkewLaplace <- function(z, mu, sill, skew) {
+  
+  sigma <- sqrt(sill)
+  z_std <- (z - mu) / sigma  # vettoriale
+  base <- log(skew * (1 - skew)) - log(sigma)
+  slope <- ifelse(z_std >= 0, -(1 - skew), skew)
+  res <- base + slope * z_std
+  res
+}
+
+
 one_log_tukeyh <- function(data, mm, sill, tail) {
   q <- (data - mm) / sqrt(sill)
   aa <- tail * q * q
@@ -111,12 +123,13 @@ indloglik<- function(fan,data,mm,nuis){
     if(fan=="Ind_Pair_SkewGauss")   {
                                                 sk=nuis[2];sill=nuis[1]
                                                 omega=sk*sk + sill
-                                                #alpha=sk/(sill^0.5)
-                                               #res=sum( sn::dsn((data-mm)/sqrt(omega),xi=0,omega= 1,alpha= alpha,log=TRUE)-0.5*log(omega)) 
                                                 q=data-mm
                                                res=sum(log(2)-0.5*log(omega)+dnorm(q/(sqrt(omega)),log=TRUE)+pnorm( (sk*q)/(sqrt(sill)*sqrt(omega)),log.p=TRUE))
                                    }
-
+    if(fan=="Ind_Pair_SkewLaplace")   {
+                                                skew=nuis[2];sill=nuis[1]
+                                               res=sum(one_log_SkewLaplace(data, mm, sill, skew))
+                                      }
 
    if(fan=="Ind_Pair_SinhGauss")   {           
                                                 skew=nuis[2];sill=nuis[1];tail=nuis[3]
@@ -281,9 +294,10 @@ return(-res)
 lookup <- c(
   Gauss                    =  1,
   BinomGauss               = 11,          # duplicate key: last one wins
-  BinomnegGauss            = c(14, 16),   # both map to the same name
+  BinomnegGauss            = 16,   # both map to the same name
   WrapGauss                = 13,
   SkewGauss                = 10,
+  SkewLaplace              = 59,
   Gamma                    = 21,
   Kumaraswamy2             = 42,
   Beta2                    = 50,
@@ -317,7 +331,7 @@ model2name <- setNames(rep(names(lookup), lengths(lookup)),
                        unlist(lookup, use.names = FALSE))
 fname <- paste0("Ind_Pair_", model2name[ as.character(model) ])
 if (is.na(fname)) stop("Unknown model: ", model)
-   
+
 ########################################################################                                            
     if(sensitivity) hessian=TRUE
     

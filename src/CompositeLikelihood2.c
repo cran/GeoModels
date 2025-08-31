@@ -188,6 +188,49 @@ void Comp_Pair_SinhGauss2mem(int *cormod, double *data1, double *data2, int *N1,
     *res = R_FINITE(total) ? total : LOW;
 }
 
+
+void Comp_Pair_SkewLaplace2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis,  int *type_cop, int *cond)
+{
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+      const double skew=nuis[2];
+
+    
+    if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
+        *res = LOW;
+        return;
+    }
+
+    // Variabili precalcolate
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double max_dist = maxdist[0];
+    const double scale = 1.0 - nugget;
+  
+    const double sill = nuis[1];
+    double total = 0.0; double val =0.0;
+
+
+
+    for(int i = 0; i < n_pairs; i++) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+        
+        if(!ISNAN(d1) && !ISNAN(d2)) {
+            // Calcolo correlazione
+            const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+            const double weights = weighted ? CorFunBohman(lags[i], max_dist) : 1.0;
+         val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew);
+   
+            total += weights * val;
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
 /******************************************************************************************/
 void Comp_Pair_SkewGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
@@ -580,8 +623,6 @@ void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int 
                 const int uu = (int)data1[i];
                 const int vv = (int)data2[i];
                 const double weights = CorFunBohman(lag, max_dist);  // Calcolo peso
-
-               // Rprintf("%d %d %d %f %f %f %f \n",N,uu,vv,scale,ai,aj,corr);
 
                 // Calcolo verosimiglianza e accumulo
                 const double binomneg_val = biv_binomneg(N, uu, vv, p1, p2, p11);
@@ -1269,7 +1310,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     // if(fabs(corr)>1|| !R_FINITE(corr)) {*res=LOW; return;}
                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                       uu=(int) data1[i];  ww=(int) data2[i];
-                      //Rprintf("%f %f \n",mui,muj);
                       bl=biv_PoissonZIP(corr,uu,ww,mui, muj,mup,nugget1,nugget2);
                       *res+= log(bl)*weights;
                     }}
@@ -1362,15 +1402,12 @@ void Comp_Pair_Gauss_misp_PoisZIP2mem(int *cormod, double *data1,double *data2,i
     double mup=nuis[2];
 
       if(nugget1<0||nugget1>=1||nugget2<0||nugget2>=1){*res=LOW; return;}
-
-  // Rprintf("%d   \n",npairs[0]);
       for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     mui=exp(mean1[i]);muj=exp(mean2[i]);
                      corr=CorFct(cormod,lags[i],0,par,0,0);
                       if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                       bl=biv_Mis_PoissonZIP(corr,data1[i],data2[i],mui, muj,mup,nugget1,nugget2);
-                  //    Rprintf("%f %f\n",bl,mup);
                       *res+= log(bl)*weights;
                     }}
 
@@ -1702,7 +1739,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                     /********************************************************/
     bl=biv_two_pieceT(corr,zi,zj,sill,df,eta,p11,mean1[i],mean2[i],nugget);
-  //Rprintf("%f- %f- %f %f %f %f %f %f %f %f %f  \n",lags[i],corr,eta,sill,zi,zj,df,eta,p11,mean1[i],mean2[i]);
                     /********************************************************/
                            *res+= weights*log(bl);
                 }}
@@ -1780,7 +1816,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                     /********************************************************/
                    bl=biv_two_piece_bimodal((1-nugget)*corr,zi,zj,sill,df,delta,eta,p11,mean1[i],mean2[i]);
-          // Rprintf("%f %f  --%f  %f %f %f %f  -%f %f \n",bl,lags[i],df,delta,eta,sill,corr,par[0],par[1]);
                     /********************************************************/
                            *res+= weights*log(bl);
                 }}}
@@ -2826,6 +2861,51 @@ void Comp_Pair_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1
     if(!R_FINITE(*res))*res = LOW;
     return;
 }
+
+
+void Comp_Pair_SkewLaplace_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis,  int *type_cop, int *cond)
+{
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+      const double skew=nuis[2];
+
+    
+    if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
+        *res = LOW;
+        return;
+    }
+
+    // Variabili precalcolate
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double max_dist = maxdist[0];
+    const double scale = 1.0 - nugget;
+
+  
+    const double sill = nuis[1];
+    double total = 0.0; 
+
+    for(int i = 0; i < n_pairs; i++) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+        
+        if(!ISNAN(d1) && !ISNAN(d2)) {
+            // Calcolo correlazione
+            const double corr = CorFct(cormod,lags[i], lagt[i], par, 0, 0);
+            // Calcolo pesi se necessario
+            const double weights = weighted ? (CorFunBohman(lags[i], max_dist)*CorFunBohman(lagt[i],maxtime[0])) : 1.0;
+ 
+           const double val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew);
+            total += weights * val;
+        }
+    }
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
+
 /******************************************************************************************/
 void Comp_Pair_SinhGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,

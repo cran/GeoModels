@@ -28,6 +28,17 @@ extern void DeleteGlobalVar2(void);
 
 extern void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius);
 
+
+/* for sim cond  */
+extern void skew_gaussian_gibbs_sampler(double *data_obs, int *n, double *coords, 
+                                        int *n_coords, double *Sigma_mat_inv, 
+                                        double *eta, int *n_iter, double *data_x, 
+                                        double *data_y);
+
+
+
+extern void rnorm_constraint_simple(double *A, double *b, double *mu, 
+                             double *sigma, double *result);
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
@@ -166,6 +177,9 @@ extern void Comp_Pair_SinhGauss2mem(int *cormod, double *data1,double *data2,int
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_SkewGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_SkewLaplace2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_Gamma2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -348,6 +362,9 @@ extern void Comp_Diff_Gauss_st2mem(int *cormod, double *data1,double *data2,int 
 extern void Comp_Pair_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_SkewLaplace_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_SinhGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
@@ -444,6 +461,9 @@ extern void Comp_Cond_WrapGauss2mem(int *cormod, double *data1,double *data2,int
  double *nuis, int *type_cop, int *cond);
 
 extern void Comp_Cond_SkewGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+                             double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_SkewLaplace2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                              double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_T2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -563,6 +583,9 @@ extern void Comp_Cond_Tukeyhh_st2mem(int *cormod, double *data1,double *data2,in
 extern void Comp_Cond_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                 double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_SkewLaplace_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+                                double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_SinhGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                 double *nuis, int *type_cop, int *cond);
@@ -661,6 +684,9 @@ extern void Comp_Pair_SinhGauss2mem_aniso(int *cormod, double *coord1,double *co
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                    double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_SkewGauss2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+                                   double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_SkewLaplace2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                    double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_Gamma2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
@@ -796,6 +822,9 @@ extern void Comp_Cond_Tukeyhh2mem_aniso(int *cormod, double *coord1, double *coo
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_SkewGauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_SkewLaplace2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_T2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
@@ -951,7 +980,7 @@ static const R_CMethodDef CEntries[] = {
     {"Binned_Variogram2new",        (DL_FUNC) &Binned_Variogram2new,         9},
      {"Binned_Variogram_biv2new",   (DL_FUNC) &Binned_Variogram_biv2new,    15},
     {"Binned_Variogram_biv2",       (DL_FUNC) &Binned_Variogram_biv2,       13},
-    {"Binned_Variogram_st2",        (DL_FUNC) &Binned_Variogram_st2,        17},
+    {"Binned_Variogram_st2",        (DL_FUNC) &Binned_Variogram_st2,        17}, 
     {"Binned_Variogram_st2_dyn",    (DL_FUNC) &Binned_Variogram_st2_dyn,    17},
     {"Cloud_Variogram2",            (DL_FUNC) &Cloud_Variogram2,             9},
     {"LeastSquare_G",               (DL_FUNC) &LeastSquare_G,               10},
@@ -969,6 +998,8 @@ static const R_CMethodDef CEntries[] = {
     {"pairs",                       (DL_FUNC) &pairs,                       13},
     {"SetGlobalVar2",               (DL_FUNC) &SetGlobalVar2,               12},
     {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,                 31},
+    {"skew_gaussian_gibbs_sampler", (DL_FUNC) &skew_gaussian_gibbs_sampler, 9},
+  {"rnorm_constraint_simple", (DL_FUNC) &rnorm_constraint_simple, 5},
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
 
 /* for Turning band */
@@ -1000,6 +1031,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Tukeyh2mem",         (DL_FUNC) &Comp_Pair_Tukeyh2mem,         13},
     {"Comp_Pair_Tukeyhh2mem",         (DL_FUNC) &Comp_Pair_Tukeyhh2mem,         13},
     {"Comp_Pair_SkewGauss2mem",         (DL_FUNC) &Comp_Pair_SkewGauss2mem,         13},
+    {"Comp_Pair_SkewLaplace2mem",         (DL_FUNC) &Comp_Pair_SkewLaplace2mem,         13},
     {"Comp_Pair_WrapGauss2mem",         (DL_FUNC) &Comp_Pair_WrapGauss2mem,         13},
     {"Comp_Pair_T2mem",         (DL_FUNC) &Comp_Pair_T2mem,         13},
     {"Comp_Pair_Gauss_misp_T2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_T2mem,         13},
@@ -1038,6 +1070,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Tukeyh_st2mem",         (DL_FUNC) &Comp_Pair_Tukeyh_st2mem,         13},
     {"Comp_Pair_Tukeyhh_st2mem",         (DL_FUNC) &Comp_Pair_Tukeyhh_st2mem,         13},
     {"Comp_Pair_SkewGauss_st2mem",         (DL_FUNC) &Comp_Pair_SkewGauss_st2mem,         13},
+    {"Comp_Pair_SkewLaplace_st2mem",         (DL_FUNC) &Comp_Pair_SkewLaplace_st2mem,         13},
     {"Comp_Pair_SinhGauss_st2mem",         (DL_FUNC) &Comp_Pair_SinhGauss_st2mem,         13},
     {"Comp_Pair_Gamma_st2mem",         (DL_FUNC) &Comp_Pair_Gamma_st2mem,         13},
     {"Comp_Pair_Weibull_st2mem",         (DL_FUNC) &Comp_Pair_Weibull_st2mem,         13},
@@ -1085,6 +1118,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Tukeyh2mem",         (DL_FUNC) &Comp_Cond_Tukeyh2mem,         13},
     {"Comp_Cond_Tukeyhh2mem",         (DL_FUNC) &Comp_Cond_Tukeyhh2mem,         13},
     {"Comp_Cond_SkewGauss2mem",         (DL_FUNC) &Comp_Cond_SkewGauss2mem,         13},
+     {"Comp_Cond_SkewLaplace2mem",         (DL_FUNC) &Comp_Cond_SkewLaplace2mem,         13},
     {"Comp_Cond_WrapGauss2mem",         (DL_FUNC) &Comp_Cond_WrapGauss2mem,         13},
     {"Comp_Cond_T2mem",         (DL_FUNC) &Comp_Cond_T2mem,         13},
     {"Comp_Cond_Gauss_misp_T2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_T2mem,         13},
@@ -1124,6 +1158,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Tukeyh_st2mem",         (DL_FUNC) &Comp_Cond_Tukeyh_st2mem,         13},
     {"Comp_Cond_Tukeyhh_st2mem",         (DL_FUNC) &Comp_Cond_Tukeyhh_st2mem,         13},
     {"Comp_Cond_SkewGauss_st2mem",         (DL_FUNC) &Comp_Cond_SkewGauss_st2mem,         13},
+     {"Comp_Cond_SkewLaplace_st2mem",         (DL_FUNC) &Comp_Cond_SkewLaplace_st2mem,         13},
     {"Comp_Cond_SinhGauss_st2mem",         (DL_FUNC) &Comp_Cond_SinhGauss_st2mem,         13},
     {"Comp_Cond_Gamma_st2mem",         (DL_FUNC) &Comp_Cond_Gamma_st2mem,         13},
     {"Comp_Cond_Weibull_st2mem",         (DL_FUNC) &Comp_Cond_Weibull_st2mem,         13},
@@ -1159,6 +1194,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_WrapGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_WrapGauss2mem_aniso,         15},
     {"Comp_Pair_SinhGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_SinhGauss2mem_aniso,         15},
     {"Comp_Pair_SkewGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_SkewGauss2mem_aniso,         15},
+      {"Comp_Pair_SkewLaplace2mem_aniso",         (DL_FUNC) &Comp_Pair_SkewLaplace2mem_aniso,         15},
     {"Comp_Pair_Gamma2mem_aniso",         (DL_FUNC) &Comp_Pair_Gamma2mem_aniso,         15},
     {"Comp_Pair_Weibull2mem_aniso",         (DL_FUNC) &Comp_Pair_Weibull2mem_aniso,         15},
     {"Comp_Pair_Kumaraswamy22mem_aniso",         (DL_FUNC) &Comp_Pair_Kumaraswamy22mem_aniso,         15},
@@ -1200,6 +1236,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Gauss2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss2mem_aniso,         15},
     {"Comp_Cond_Tukeyhh2mem_aniso",         (DL_FUNC) &Comp_Cond_Tukeyhh2mem_aniso,         15},
     {"Comp_Cond_SkewGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_SkewGauss2mem_aniso,         15},
+    {"Comp_Cond_SkewLaplace2mem_aniso",         (DL_FUNC) &Comp_Cond_SkewLaplace2mem_aniso,         15},
     {"Comp_Cond_T2mem_aniso",         (DL_FUNC) &Comp_Cond_T2mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_T2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_T2mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_SkewT2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_SkewT2mem_aniso,         15},

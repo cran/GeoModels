@@ -184,12 +184,23 @@ double Dist_chordal(double loni, double lati, double lonj, double latj, double r
 double dist(int type_dist, double coordx, double locx, double coordy, double locy, double coordz, double locz, double radius) {
     double lags = 0.0;
     switch(type_dist) {
-        case 0: // Euclidean distance
+
+          case 0: // Euclidean distance
+    if (fabs(coordz) < EPS1 && fabs(locz) < EPS1) {
+        // 2D case
+        lags = hypot(coordx - locx, coordy - locy);
+    } else {
+        // 3D case
+        lags = hypot3d(coordx - locx, coordy - locy, coordz - locz);
+    }
+    break;
+
+     /*   case 0: 
             lags = hypot(coordx - locx, coordy - locy);
             if (fabs(coordz - locz) < EPS1) {
                 lags = hypot3d(coordx - locx, coordy - locy, coordz - locz);
             }
-            break;
+            break;*/
         case 1: // Chordal distance
             lags = Dist_chordal(coordx, coordy, locx, locy, radius);
             break;

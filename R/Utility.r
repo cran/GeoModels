@@ -2,6 +2,7 @@
 ### File name: Utility.r
 ####################################################
 
+
 # Check if the correlation is bivariate
 CheckBiv <- function(numbermodel)
 {
@@ -652,6 +653,7 @@ CkModel <- function(model)
                          Gamma2=23,
                          LogLogistic=24,
                          Logistic=25,
+                          SkewLaplace=59,
                          Weibull=26,
                          TwoPieceStudentT=27,
                          Beta=28,
@@ -684,7 +686,7 @@ CkModel <- function(model)
                          Binary_misp_BinomialNeg=54,
                          BinomialNegZINB1=56,
                          PoissonGammaZIP=57,
-                         PoissonGammaZIP1=58,
+                         PoissonGammaZIP1=58
                          )
     return(CkModel)
   }
@@ -841,7 +843,7 @@ NuisParam2 <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = N
 
     # Lista modelli con parametri specifici
     model_list <- list(
-      simple = c("Gaussian", "Gauss", "Binomial", "Gaussian_misp_Binomial",
+      simple = c("Gaussian", "Gauss", "Binomial", "Gaussian_misp_Binomial","Gaussian_misp_BinomialNeg",
                  "BinomialLogistic", "Binomial2", "BinomialNeg", "Bernoulli",
                  "Poisson", "Gaussian_misp_Poisson", "Geom", "Geometric", "Wrapped",
                  "PoisBin", "PoisBinNeg", "LogGaussian", "LogGauss", "Logistic"),
@@ -859,7 +861,7 @@ NuisParam2 <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = N
       beta_like = c("Beta2", "Kumaraswamy2"),
       beta_full = c("Beta", "Kumaraswamy"),
       
-      skew = c("SkewGaussian", "SkewGauss", "TwoPieceGaussian", "TwoPieceGauss",
+      skew = c("SkewGaussian", "SkewGauss", "TwoPieceGaussian", "TwoPieceGauss",  "SkewLaplace",
                "Binomial_TwoPieceGaussian", "Binomial_TwoPieceGauss",
                "BinomialNeg_TwoPieceGaussian", "BinomialNeg_TwoPieceGauss"),
       
@@ -960,7 +962,7 @@ NuisParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NU
   models_no_sill <- c(
     "Weibull", "Poisson", "Binomial", "Gamma", "LogLogistic",
     "BinomialNeg", "Bernoulli", "Geometric", "Gaussian_misp_Poisson",
-    "PoissonGammaZIP", "PoissonGamma", "PoissonGammaZIP1", "Binary_misp_BinomialNeg",
+    "PoissonGammaZIP", "PoissonGamma", "PoissonGammaZIP1", "Gaussian_misp_BinomialNeg","Gaussian_misp_Binomial",
     "PoissonZIP", "Gaussian_misp_PoissonZIP", "BinomialNegZINB",
     "PoissonZIP1", "Gaussian_misp_PoissonZIP1", "BinomialNegZINB1",
     "Beta2", "Kumaraswamy2", "Beta", "Kumaraswamy"
@@ -1170,7 +1172,7 @@ if(method1=="euclidean")
         type <- CkType(type)
      if((!bivariate&&num_betas==1)||(bivariate&all(num_betas==c(1,1))))
      {
-          if(model %in% c(1,10,12,18,9,20,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50))   ### continous model 
+          if(model %in% c(1,10,12,18,9,20,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,59))   ### continous model 
           {
            if(!bivariate) {
                            mu <- mean(unlist(data))
@@ -1180,7 +1182,7 @@ if(method1=="euclidean")
                            nuisance <- c(mu, 0, var(c(unlist(data))))
 
                            if(likelihood==2 && (CkType(typereal)==5 || CkType(typereal)==7) ) tapering <- 1
-                           if(model %in% c(10,29,31,32))         nuisance <- c(nuisance,0)
+                           if(model %in% c(10,29,31,32,59))         nuisance <- c(nuisance,0)
                            if(model %in% c(18,20,27,37,38,40,41))      nuisance <- c(0,nuisance,0)
                             if(model %in% c(39))      nuisance <- c(0,0,nuisance,0)
                            if(model %in% c(21,24,12,26,34,35,46,47,48))   nuisance <- c(0,nuisance)
@@ -1196,7 +1198,7 @@ if(method1=="euclidean")
                            else               {fixed <- list(mean_1=mu1,mean_2=mu2)  }
                                                          }
                            nuisance <- c(mu1,mu2)
-                           if(model %in% c(10,29,31,32))  {nuisance <- c(nuisance,0.1,0.2)}
+                           if(model %in% c(10,29,31,32,59))  {nuisance <- c(nuisance,0.1,0.2)}
                            if(model %in% c(26,46,47,48,42,50))  {nuisance <- c(nuisance,0.1,0.2)}
                            if(model %in% c(21))  {nuisance <- c(nuisance,0.1)}
                           
@@ -1228,7 +1230,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
  if((!bivariate&&num_betas>1)||(bivariate&&num_betas[1]>1&&num_betas[2]>1) )
  {
 
-   if(model %in% c(1,10,12,18,9,20,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50))  ### continous models
+   if(model %in% c(1,10,12,18,9,20,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,59))  ### continous models
 {
     if(!bivariate)
     {
@@ -1240,7 +1242,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             else               {mu <- mean(unlist(data));fixed <- list(mean=mu)}
             for(i in 1:num_betas) nuisance=c(nuisance,1);
             nuisance=c(nuisance,0,var(c(unlist(data))))
-             if(model %in% c(10,29,31,32))        nuisance=c(nuisance,1)  
+             if(model %in% c(10,29,31,32,59))        nuisance=c(nuisance,1)  
              if(model %in% c(21,24,12,26,34,35,46,47,48))  nuisance=c(nuisance,1) 
              if(model %in% c(18,20,27,37,38,40,41))     nuisance=c(1,nuisance,1) 
              if(model %in% c(39))     nuisance=c(1,1,nuisance,1) 
@@ -1272,7 +1274,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             for(i in 1:num_betas[1]) nuisance1=c(nuisance1,1);
             for(i in 1:num_betas[2]) nuisance2=c(nuisance2,1);
             nuisance=c(nuisance1,nuisance2 )
-             if(model %in% c(10,29,31,32))        nuisance=c(nuisance,1,1)  
+             if(model %in% c(10,29,31,32,59))        nuisance=c(nuisance,1,1)  
              if(model %in% c(21,24,12,26,34,35,46,47,48,42,50))  nuisance=c(nuisance,1,1) 
              if(model %in% c(18,20,27,37,38,40,41))     nuisance=c(1,nuisance,1) 
               if(model %in% c(39))     nuisance=c(1,1,nuisance,1) 
@@ -1342,7 +1344,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 
                 if(!bivariate) {   # univariate case
                        if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58,59)))
                        if(any(namesstart == 'mean'))  start <- start[!namesstart == 'mean']
                        if(num_betas>1)
                        for(i in 1:(num_betas-1)) 
@@ -1350,7 +1352,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
                          if(any(namesstart == paste("mean",i,sep="")))  {
                               namesstart <- names(start) 
                               if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
-                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58)))
+                        11,14,15,16,19,17,30,45,49,51,52,54,53,56,58,59)))
                                                  start <- start[!namesstart == paste("mean",i,sep="")]
                             }
                        }
@@ -1361,11 +1363,11 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
                       
                        if(num_betas[1]>1)
                        for(i in 1:(num_betas[1]-1)) {  if(any(namesstart == paste("mean_1",i,sep="")))  {namesstart <- names(start) ; 
-                       if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50)))
+                       if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,59)))
                                                  start <- start[!namesstart == paste("mean_1",i,sep="")]}}            
                        if(num_betas[2]>1)
                        for(i in 1:(num_betas[2]-1)) {  if(any(namesstart == paste("mean_2",i,sep="")))  {namesstart <- names(start) ; 
-                       if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50)))
+                       if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,59)))
                                                  start <- start[!namesstart == paste("mean_2",i,sep="")]}}  
                                   }
                 }

@@ -19,7 +19,7 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NU
 ############### computing correlation #############################################
 ###################################################################################
 
-if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42))
+if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42,59))
 {
 
   if(type=="Standard") {
@@ -297,10 +297,20 @@ if(model==10)  {  ##  skew Gaussian case
      }
       if(bivariate){}
 }
+if(model==59)  {  ##  skewLaplace case
+
+          if(!bivariate){
+              corr=cr$corr*(1-as.numeric(nuisance['nugget']))
+              sk=as.numeric(nuisance['skew'])
+              corr=cr$corr^2; 
+              vv=as.numeric(nuisance['sill'])*(1/sk^2 + 1/(1-sk)^2)
+     }
+      if(bivariate){}
+}
 #################################################################################
 ################ covariance matrix for models defined on the real line ##########
 #################################################################################
-if(model %in% c(1,9,34,12,20,18,39,27,38,29,10,40)){
+if(model %in% c(1,9,34,12,20,18,39,27,38,29,10,40,59)){
 if(!bivariate)
 {
  if(type=="Standard"){
@@ -671,6 +681,22 @@ else  { coordx=estobj$coordx;
 if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
  if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 
+
+ compact_models <- c(
+  "GenWend_Matern","GenWend_Matern2","Wend0", "wend0","Wend1", "wend1","Wend2", "wend2","Genwend", "GenWend",
+  "Hypergeometric2","Hypergeometric","Hypergeometric_Matern","Hypergeometric_Matern2","GenWend_Hole", "GenWend_hole",
+  "GenWend_Matern_Hole", "GenWend_Matern_hole","Wen0_space", "wen0_space","Wen0_time",  "wen0_time",
+  "Wen1_space", "wen1_space","Wen1_time",  "wen1_time","Wen2_space", "wen2_space","Wen2_time",  "wen2_time",
+  "Gneiting_wen_S", "gneiting_wen_S", "Gneiting_Wen_S","Gneiting_wen_T", "gneiting_wen_T","Genwend_Genwend_nosep",
+  "Wend0_Wend0","Wend0_Wend1","Wend0_Wend2","Wend1_Wend0","Wend1_Wend1","Wend1_Wend2","Wend2_Wend0","Wend2_Wend1","Wend2_Wend2",
+  "GenWend_GenWend","Bi_wend0_sep", "Bi_Wend0_contr","Bi_wend0","Bi_wend1_sep","Bi_Wend1_contr","Bi_wend1",
+  "Bi_wend2_sep","Bi_wend2","Bi_Wend2_contr","Bi_GenWend_sep", "Bi_genWend_sep","Bi_GenWend_contr", "Bi_genWend_contr", "Bi_GenWend", "Bi_genWend"
+)
+
+if (sparse && !(corrmodel %in% compact_models)) {
+  stop("Sparse option should be used only for compactly supported covariance models\n")
+}
+
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
@@ -988,6 +1014,7 @@ print.GeoCovmatrix <- function(x, digits = max(3, getOption("digits") - 3), ...)
   if(x$model==23) model <- 'Gamma2'
   if(x$model==22) model <- 'LogGaussian'
   if(x$model==10) model <- 'SkewGaussian'
+  if(x$model==59) model <- 'SkewLaplace'
   if(x$model==27) model <- 'TwoPieceStudentT'
   if(x$model==38) model <- 'TwoPieceTukeyh'
   if(x$model==29) model <- 'TwoPieceGaussian'

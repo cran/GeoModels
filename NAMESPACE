@@ -1,4 +1,5 @@
-export(CheckBiv,CheckDistance,CheckSph,CheckST,	CkCorrModel,CkInput,CkLikelihood,CkModel,	CkType,CompIndLik2,CompLik,CompLik2,	CorrelationPar,	CorrParam, corrsas, GeoAniso,	GeoCorrFct_Cop,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,	GeoNosymindices,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect)
+export(CheckBiv,CheckDistance,CheckSph,CheckST,	CkCorrModel,CkInput,CkLikelihood,CkModel,	CkType,CompIndLik2,CompLik,CompLik2,	CorrelationPar,	CorrParam, corrsas, GeoAniso,
+GeoKrigWeights,GeoKriglocWeights,GeoCorrFct_Cop,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,	GeoNosymindices,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect)
 useDynLib(GeoModels, .registration = TRUE)
 S3method(print,GeoFit) 
 S3method(print,GeoCovmatrix) 
@@ -14,7 +15,7 @@ importFrom("stats", setNames, median, nlminb, dist, fft, quantile, qqnorm, qbino
 pbeta,dt,dlogis,qlnorm,qgamma,qweibull, qbeta,qlogis,lm, rnorm, runif, rgamma, pt,qt,qunif,uniroot, var,cor)
 importFrom("methods","is", "new", "slot<-","as")
 importFrom("utils", "setTxtProgressBar", "txtProgressBar","capture.output")
-importFrom("utils", "head")
+importFrom("utils", "head","object.size")
 importFrom("sp", "coordinates","is.projected")
 importFrom("minqa","bobyqa")
 importFrom("plotrix", "draw.circle")

@@ -171,7 +171,7 @@ scale=0.2;smooth=0;power2=4
 param=list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth,power2=power2)
 
 # Simulation of the spatial Gaussian random field:
-data = GeoSim(coordx=coords, corrmodel=corrmodel,
+data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model,
               param=param)$data
 
 ## estimation with pairwise likelihood
@@ -455,4 +455,4 @@ par(opar)
 
 
 }
-\keyword{Composite}
+\keyword{Kriging}

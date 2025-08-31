@@ -36,118 +36,293 @@ double aprox_reg_1F1(int n, int m, double z) {
 
 
 
-/* ----------------------------------------------------------
-   FUNCTION 1F1– optmized version
- ---------------------------------------------------------- */
 
-/* ---------- cache locale per lgamma -------------------------------- */
-static double lgamma_cache_key = 0.0;
-static double lgamma_cache_val = 0.0;
-static double hy1f1p(double a, double b, double x, double *err);
-static double hy1f1a(double a, double b, double x, double *err);
-static double hyp2f0(double a, double b, double x, int type, double *err);
 
-static inline double cached_lgamma(double x) {
-    if (x == lgamma_cache_key) return lgamma_cache_val;
-    lgamma_cache_key = x;
-    lgamma_cache_val = lgammafn(x);
-    return lgamma_cache_val;
-}
 
-/* ---------- funzione principale 1F1 ------------------------------- */
-double hyperg(double a, double b, double x) {
-    /* casi speciali – risposte immediate */
-    if (fabs(x) < 1e-8) return 1.0 + a * x / b;
-    if (fabs(a) < 1e-15) return 1.0;
-    if (fabs(a - b) < 1e-15) return exp(x);
-
-    int use_asymptotic = fabs(x) > (10.0 + fabs(a) + fabs(b));
-    double err;
-    double res = use_asymptotic ?
-                 hy1f1a(a, b, x, &err) :
-                 hy1f1p(a, b, x, &err);
-
-    if (err > 1e-12 && fabs(b - a) > 0.001 * fabs(a)) {
-        double alt = exp(x) * hyperg(b - a, b, -x);
-        return (err < 1e-6) ? res : alt;
+double hy1f1p(double a, double b, double x, double *err) {
+    // Check precoci invariati
+    if (b == 0) {
+        *err = 1.0;
+        return NPY_INFINITY;
     }
-    return res;
-}
-
-
-/* ---------- serie di potenze 1F1 ---------------------------------- */
-static double hy1f1p(double a, double b, double x, double *err) {
-    if (b == 0.0)           { *err = 1.0; return R_PosInf; }
-    if (a == 0.0)           { *err = 0.0; return 1.0; }
-
-    double sum  = 1.0;
+    
+    if (a == 0) {
+        *err = 0;
+        return 1.0;
+    }
+    
+    double sum = 1.0;
+    double c = 0.0;  // Correzione Kahan
     double term = 1.0;
-    double n    = 1.0;
-    double maxn = 200.0 + 2.0 * fabs(a) + 2.0 * fabs(b);
-
-    while (n <= maxn && fabs(term) > 1e-16) {
-        term *= x * (a + n - 1.0) / ((b + n - 1.0) * n);
-        sum  += term;
-        n    += 1.0;
-    }
-    *err = fabs(term / (sum != 0.0 ? sum : 1.0));
-    return sum;
-}
-
-/* ---------- espansione asintotica 1F1 ----------------------------- */
-static double hy1f1a(double a, double b, double x, double *err) {
-    if (x == 0.0) { *err = 1.0; return R_PosInf; }
-
-    double lgb  = cached_lgamma(b);
-    double lgba = cached_lgamma(b - a);
-    double lga  = (a <= 0.0) ? 0.0 : lgammafn(a);
-
-    double t = x + log(fabs(x)) * (a - b) + lgb;
-    double u = -log(fabs(x)) * a + lgb;
-
-    double err1, err2;
-    double h1 = hyp2f0(a, a - b + 1.0, -1.0 / x, 1, &err1);
-    h1 *= exp(u - lgba);
-    err1 *= exp(u - lgba);
-
-    double h2 = hyp2f0(b - a, 1.0 - a, 1.0 / x, 2, &err2);
-    h2 *= exp(t - lga);
-    err2 *= exp(t - lga);
-
-    double res = (x < 0.0) ? h1 : h2;
-    *err = fabs(err1) + fabs(err2);
-    return res;
-}
-/* ---------- 2F0 (serie asintotica ausiliaria) ---------------------- */
-static double hyp2f0(double a, double b, double x, int type, double *err) {
+    double max_term = 1.0;
+    
+    // Pre-calcolo per evitare divisioni ripetute nel loop
+    const double x_val = x;
+    const double abs_a = fabs(a);
+    const double abs_b = fabs(b);
+    const int maxn = (int)(200.0 + 2 * abs_a + 2 * abs_b);
+    
+    // Parametri del loop ottimizzati
     double an = a;
     double bn = b;
-    double a0 = 1.0;
-    double sum = 0.0;
-    double n = 1.0;
-    const int MAX_ITER = 200;
-    *err = 1.0;
-
-    do {
-        if (an == 0.0 || bn == 0.0) {
-            sum += a0;
-            *err = 0.0;
+    
+    for (int n = 1; n <= maxn; n++) {
+        // Calcolo ottimizzato del fattore moltiplicativo
+        const double factor = (an * x_val) / (bn * n);
+        term *= factor;
+        
+        // Check overflow anticipato
+        const double abs_term = fabs(term);
+        if (abs_term > DBL_MAX * 0.1) {
+            *err = 1.0;
             return sum;
         }
-        a0 *= an * bn * x / n;
-        if (fabs(a0) > 1e200) break;     /* evita overflow */
-        sum += a0;
+        
+        // Aggiornamento max_term
+        if (abs_term > max_term) {
+            max_term = abs_term;
+        }
+        
+        // Kahan summation
+        const double y = term - c;
+        const double temp_sum = sum + y;
+        c = (temp_sum - sum) - y;
+        sum = temp_sum;
+        
+        // Test di convergenza ottimizzato
+        if (abs_term <= MACHEP) {
+            break;
+        }
+        
+        // Incremento dei parametri
         an += 1.0;
         bn += 1.0;
-        n  += 1.0;
-    } while (n <= MAX_ITER && fabs(a0) > 1e-16);
-
-    *err = fabs(a0);
+    }
+    
+    // Stima errore
+    *err = (sum != 0.0) ? fabs(c / sum) : fabs(c);
+    if (*err != *err) {
+        *err = 1.0;
+    }
+    
     return sum;
 }
 
+double hyp2f0(double a, double b, double x, int type, double *err) {
+    double an = a;
+    double bn = b;
+    double sum = 1.0;  // Inizializza con il primo termine
+    double term = 1.0;
+    double prev_abs_term = 1e9;
+    double max_term = 1.0;
+    
+    const int MAX_ITER = 200;
+    const double overflow_limit = DBL_MAX * 0.1;
+    
+    for (int n = 1; n <= MAX_ITER; n++) {
+        // Check terminazione anticipata
+        if (an == 0 || bn == 0) {
+            goto pdone;
+        }
+        
+        // Calcolo del fattore ottimizzato
+        const double factor = (an * bn * x) / n;
+        term *= factor;
+        
+        const double abs_term = fabs(term);
+        
+        // Check overflow
+        if (abs_term > overflow_limit) {
+            goto error;
+        }
+        
+        // Test divergenza
+        if (abs_term > prev_abs_term) {
+            goto ndone;
+        }
+        
+        prev_abs_term = abs_term;
+        sum += term;
+        
+        if (abs_term > max_term) {
+            max_term = abs_term;
+        }
+        
+        // Test convergenza
+        if (abs_term <= MACHEP) {
+            break;
+        }
+        
+        an += 1.0;
+        bn += 1.0;
+    }
+    
+pdone:  // Serie convergente
+    *err = fabs(MACHEP * max_term);
+    return sum;
+    
+ndone:  // Serie non convergente
+    {
+        const double inv_x = 1.0 / x;
+        const double n_val = an - a;  // Numero di iterazioni effettuate
+        
+        // Fattori di convergenza ottimizzati
+        switch (type) {
+            case 1:
+                term *= (0.5 + (0.125 + 0.25 * b - 0.5 * a + 0.25 * x - 0.25 * n_val) * inv_x);
+                break;
+            case 2:
+                term *= (2.0/3.0 - b + 2.0 * a + x - n_val);
+                break;
+        }
+        
+        sum += term;
+        *err = MACHEP * max_term + fabs(term);
+        return sum;
+    }
+    
+error:  // Overflow
+    *err = NPY_INFINITY;
+    return sum;
+}
 
+double hy1f1a(double a, double b, double x, double *err) {
+    // Caso speciale
+    if (x == 0) {
+        *err = 1.0;
+        return NPY_INFINITY;
+    }
+    
+    // Pre-calcoli ottimizzati
+    const double abs_x = fabs(x);
+    const double log_abs_x = log(abs_x);
+    const double inv_x = 1.0 / x;
+    
+    // Primo termine: exp(u) / Γ(b-a) * 2F0(a, a-b+1, -1/x)
+    double u = -log_abs_x * a;
+    if (b > 0) {
+        u += lgammafn(b);
+    }
+    u += x + log_abs_x * (a - b);
+    
+    double err1, err2;
+    double h1 = hyp2f0(a, a - b + 1, -inv_x, 1, &err1);
+    
+    // Gestione dei casi di underflow/overflow
+    double temp1;
+    if (b - a > 0) {
+        temp1 = exp(u - lgammafn(b - a));
+    } else {
+        temp1 = exp(u) / gammafn(b - a);
+    }
+    
+    h1 *= temp1;
+    err1 *= fabs(temp1);
+    
+    // Secondo termine: exp(t) / Γ(a) * 2F0(b-a, 1-a, 1/x)
+    double t = x + log_abs_x * (a - b);
+    if (b > 0) {
+        t += lgammafn(b);
+    }
+    
+    double h2 = hyp2f0(b - a, 1.0 - a, inv_x, 2, &err2);
+    
+    double temp2;
+    if (a > 0) {
+        temp2 = exp(t - lgammafn(a));
+    } else {
+        temp2 = exp(t) / gammafn(a);
+    }
+    
+    h2 *= temp2;
+    err2 *= fabs(temp2);
+    
+    // Selezione del termine dominante
+    double asum = (x < 0.0) ? h1 : h2;
+    double acanc = fabs(err1) + fabs(err2);
+    
+    // Aggiustamento per b < 0
+    if (b < 0) {
+        const double gamma_b = gammafn(b);
+        asum *= gamma_b;
+        acanc *= fabs(gamma_b);
+    }
+    
+    // Normalizzazione errore
+    if (asum != 0.0) {
+        acanc /= fabs(asum);
+    }
+    if (acanc != acanc) {
+        acanc = 1.0;  // NaN
+    }
+    
+    if (asum == NPY_INFINITY || asum == -NPY_INFINITY) {
+        acanc = 0;
+    }
+    
+    *err = acanc * 30.0;
+    return asum;
+}
 
+double hyperg(double a, double b, double x) {
+    // Ottimizzazione per parametri molto grandi
+    const double alpha = (b - a - 1) / x;
+    
+    if (alpha > 0 && b > 1000000 && x > 1000000) {
+        // Calcoli ottimizzati per grandi parametri
+        const double log_b = lgammafn(b);
+        const double log_diff = lgammafn(b - a);
+        
+        if (b < x + a + 1) {
+            // Approssimazione asintotica ottimizzata
+            const double log_alpha = log(alpha);
+            const double one_minus_alpha = 1.0 - alpha;
+            
+            const double aux1 = log_b + x + (a - 1) * log1p(-alpha) - lgammafn(a) - log_diff;
+            const double aux2 = alpha * x * (log_alpha - 1) + 0.5 * (log(2 * alpha * M_PI) - log(x));
+            const double aux3 = ((2 - a * alpha) * (1 - a)) / (2 * one_minus_alpha * one_minus_alpha) + 1.0 / (12 * alpha);
+            
+            return exp(aux1 + aux2) * (1 + aux3 / x);
+        } else {
+            const double denom = b - a - x - 1;
+            const double inv_denom_pow_a = exp(-a * log(denom));
+            const double aux1 = exp(log_b - log_diff) * inv_denom_pow_a;
+            const double aux2 = 1.0 - (a * (a + 1) * (a + 1 - b)) / (2 * denom * denom);
+            
+            return aux1 * aux2;
+        }
+    }
+
+    // Trasformazione di Kummer ottimizzata
+    const double temp = b - a;
+    if (fabs(temp) < 0.001 * fabs(a)) {
+        return exp(x) * hyperg(temp, b, -x);
+    }
+    
+    // Strategia di calcolo ottimizzata
+    const double abs_x = fabs(x);
+    const double abs_a = fabs(a);
+    const double abs_b = fabs(b);
+    const bool use_power_series = abs_x < (10 + abs_a + abs_b);
+    
+    double psum, asum, pcanc, acanc;
+    
+    if (use_power_series) {
+        psum = hy1f1p(a, b, x, &pcanc);
+        if (pcanc < 1.0e-15) {
+            return psum;
+        }
+        asum = hy1f1a(a, b, x, &acanc);
+    } else {
+        asum = hy1f1a(a, b, x, &acanc);
+        if (acanc < 1.0e-15) {
+            return asum;
+        }
+        psum = hy1f1p(a, b, x, &pcanc);
+    }
+    
+    return (acanc < pcanc) ? asum : psum;
+}
 
 void  hyperg_call(double *a,double *b,double *x,double *res)
 {

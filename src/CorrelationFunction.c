@@ -3063,8 +3063,10 @@ for(j=0;j<(*nloc);j++){
                      corr=CorFct(cormod,dis,0,par,0,0);
                      ll=(1-nuis[0])*corr;
 
+
+
        /*****************************************************************/
-      if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45||*model==30||*model==36)
+      if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)
                 {
                         ai=mean[i];aj=mean[j];
                         psj=pbnorm22(ai,aj,ll);
@@ -3088,19 +3090,26 @@ for(j=0;j<(*nloc);j++){
                              if(*cop==0) cc[h]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
                              if(*cop==1){ cc[h]=ll;}
                                     }
-                   if(*model==30||*model==36)   //poisson
+             
+           }     
+
+
+                 if(*model==30||*model==36)   //poisson
                                {
                          ai=exp(mean[i]);
                          aj=exp(mean[j]);
                          if(*cop==0) cc[h]=sqrt(ai*aj)*corr_pois(ll,ai, aj);
                          if(*cop==1) cc[h]=ll;//cc[h]=calculate_covariance((1-nuis[0])*corr, *model,n[i],n[j],ai,aj);}
-                               }
+                               }               
                 if(*model==46||*model==47)   //poisson gamma
                         {
-                        bi=exp(mean[i]);bj=exp(mean[j]);
+                        bi=exp(mean[i]); bj=exp(mean[j]);
                         ai= bi*(1+bi/nuis[1]); aj= bj*(1+bj/nuis[1]);
+
+
                         if(*cop==0){cc[h]=sqrt(ai*aj)*corr_pois_gen(ll,bi, bj, nuis[1]); }
                         if(*cop==1){ cc[h]=ll;} 
+
                        }
 
                  if(*model==43||*model==44) // poisson zip 
@@ -3113,8 +3122,9 @@ for(j=0;j<(*nloc);j++){
                  p1=1-2*p+psj;
                  cc[h]=p1*dd +  ai*aj*(p1-(1-p)*(1-p));
              }
-        if(*cop==1){ cc[h]=ll;}} 
-       }
+        if(*cop==1){ cc[h]=ll;}
+      } 
+       
                /*****************************************************************/
                     h++;
         }}
@@ -3132,7 +3142,7 @@ if(*spt) { // spacetime
                     corr=CorFct(cormod,dis,dit,par,t,v);
                        ll=(1-nuis[0])*corr;
           /*****************************************************************/
-                 if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45||*model==30||*model==36)
+                 if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)
                 {
                              ai=mean[j+*nloc * v];
                              aj=mean[i+*nloc * t];

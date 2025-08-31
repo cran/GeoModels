@@ -4,6 +4,8 @@
 \description{
   Simulates spatial (spatio-temporal) Gaussian and non-Gaussian random fields 
   conditioned on observed data using specified correlation models.
+  For large conditioning datasets approximation methods like turning band can be used.
+  For large locations  to simlate local kriging can be used.
 }
 \usage{
 GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
@@ -12,7 +14,7 @@ GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = N
            n = 1, nrep = 1, local = FALSE, L = 1000, neighb = NULL,
            param, anisopars = NULL, radius = 1, sparse = FALSE, time = NULL,
            copula = NULL, X = NULL, Xloc = NULL, Mloc = NULL,
-           parallel=TRUE, ncores = NULL)
+           parallel=FALSE, ncores = NULL, progress=FALSE)
 }
 \arguments{
   \item{estobj}{Object of class \code{Geofit} containing model information}
@@ -46,6 +48,7 @@ GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = N
   \item{Mloc}{Optional vector of estimated means for prediction locations}
   \item{parallel}{If TRUE the the computation is parallelized}
   \item{ncores}{Numbers of cores involved in the parallelization}
+  \item{progress}{If TRUE then a progress bar is shown.}
 
 }
 \details{
@@ -124,12 +127,15 @@ xx=seq(0,1,0.025)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5,parallel=FALSE)$condsim
-sim_result <- do.call(rbind, sim_result)
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=50)
 
-par(mfrow=c(1,2))
+cond_mean=sim_result$cond_mean  # conditional mean
+cond_var =sim_result$cond_var    # conditional var
+
+par(mfrow=c(1,3))
 quilt.plot(coords, data)
-quilt.plot(loc_to_sim, colMeans(sim_result))
+quilt.plot(loc_to_sim, cond_mean)
+quilt.plot(loc_to_sim, cond_var)
 par(mfrow=c(1,1))
 
 ##############################################
@@ -138,8 +144,8 @@ par(mfrow=c(1,1))
 model="LogGaussian"
 set.seed(79)
 ### conditioning locations
-x = runif(250, 0, 1)
-y = runif(250, 0, 1)
+x = runif(500, 0, 1)
+y = runif(500, 0, 1)
 coords=cbind(x,y)
 
 # Set the exponential cov parameters:
@@ -170,12 +176,15 @@ xx=seq(0,1,0.025)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=5,parallel=FALSE)$condsim
-sim_result <- do.call(rbind, sim_result)
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=50)
 
-par(mfrow=c(1,2))
+cond_mean=sim_result$cond_mean  # conditional mean
+cond_var =sim_result$cond_var    # conditional var
+
+par(mfrow=c(1,3))
 quilt.plot(coords, data)
-quilt.plot(loc_to_sim, colMeans(sim_result))
+quilt.plot(loc_to_sim,cond_mean)
+quilt.plot(loc_to_sim,cond_var)
 par(mfrow=c(1,1))
 
 }

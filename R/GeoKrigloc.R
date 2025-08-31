@@ -1,3 +1,8 @@
+####################################################
+### File name: GeoKrigloc.r
+####################################################
+
+
 GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=NULL,
                       corrmodel, distance="Eucl", grid=FALSE, loc, neighb=NULL,
                       maxdist=NULL, maxtime=NULL, method="cholesky", model="Gaussian",
@@ -59,7 +64,7 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
   }
 
   ###########################################################################
-  ##  1.  original body (unchanged)                                        ##
+  ##  START
   ###########################################################################
   call = match.call()
 
@@ -142,6 +147,7 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
                             neighb = neighb, maxdist = maxdist, X = X, M = M,
                             parallel = FALSE, ncores = ncores)
 
+   
     res1 = numeric(Nloc)
     res2 = if(mse) numeric(Nloc) else NULL
     total_tasks = Nloc
@@ -210,7 +216,7 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
                             coordx_dyn = coordx_dyn, loc = loc, time = time,
                             maxdist = maxdist, maxtime = maxtime, X = X, M = M,
                             parallel = FALSE, ncores = ncores)
-
+   #print(neigh)
     total_tasks = Nloc * Tloc
     res1 = res2 = double(total_tasks)
 
@@ -220,17 +226,18 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
       pb <- progressr::progressor(along = 1:total_tasks)
     } else pb <- function(...) {}
 
-    if(!parallel){
-      k = 1
-      for(i in 1:Nloc){
-        for(j in 1:Tloc){
-          pb(sprintf("k=%d", k))
-          if(!is.null(M)) param$mean = neigh$M[[k]]
-          pr = GeoKrig(data = neigh$data[[k]], coordx = neigh$coordx[[k]],
-                       coordt = neigh$coordt[[k]], loc = loc[i, ],
-                       time = time[j], X = neigh$X[[k]],
-                       Mloc = Mloc[i + Nloc*(j-1)],
-                       Xloc = Xloc[i + Nloc*(j-1), ], type_krig = type_krig,
+  if(!parallel){
+  k = 1
+  for(i in 1:Nloc){
+    for(j in 1:Tloc){
+      pb(sprintf("k=%d", k))
+      if(!is.null(M)) param$mean = neigh$M[[k]]
+      pr = GeoKrig(data = neigh$data[[k]], coordx = neigh$coordx[[k]],
+                   coordt = neigh$coordt[[k]], loc = loc[i, ],
+                   time = time[j], X = neigh$X[[k]],
+                   Mloc = Mloc[k],        
+                   Xloc = Xloc[k, ],       
+                       type_krig = type_krig,
                        sparse = sparse, corrmodel = corrmodel,
                        distance = distance, model = model, param = param,
                        anisopars = anisopars, radius = radius, mse = mse,
@@ -306,8 +313,9 @@ res = future.apply::future_lapply(seq_len(total_tasks), function(i){
           if(!is.null(M)) param$mean = neigh$M[[k]]
           pr = GeoKrig(data = neigh$data[[k]], coordx = neigh$coordx[[k]],
                        loc = loc[i, ], X = neigh$X[[k]],
-                       Mloc = Mloc[i + Nloc*(j-1)],
-                       Xloc = Xloc[i + Nloc*(j-1), ], type_krig = type_krig,
+                       Mloc = Mloc[k],        
+                       Xloc = Xloc[k, ],
+                        type_krig = type_krig,
                        sparse = sparse, corrmodel = corrmodel,
                        distance = distance, model = model, param = param,varcov=varcov,
                        anisopars = anisopars, radius = radius, mse = mse,

@@ -25,6 +25,10 @@
 #include <R_ext/Linpack.h>
 #include <R_ext/Applic.h>
 
+#include <R_ext/Memory.h>
+#include <float.h>
+
+
 
 
 #define LOW -1.0e15
@@ -441,6 +445,8 @@ double owens_t(double h, double a);
 double psn(double x,  double omega, double alpha, double tau);
 double dsn(double x, double omega, double alpha, double tau);
 double qsn(double p, double omega, double alpha, double tau, double tol);
+
+double one_log_SkewLaplace(double x, double m, double sill, double skew);
 double one_log_wrapped(double alfa,double u,double mi,double sill);
 double one_log_T(double z,double m, double sill, double df);
 double one_log_tukeyh(double z,double m, double sill, double tail);
@@ -504,7 +510,7 @@ double biv_two_piece_bimodal(double rho,double zi,double zj,double sill,double n
 double cor_pois(double rho,double mi,double mj);
 double e_n(int k,double x);
 double biv_skew(double corr,double zi,double zj,double mi,double mj,double vari,double skew,double nugget);
-
+double log_biv_skewlaplace(double rho,double z1,double z2,double m1,double m2,double sill,double p);
 double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,double tail,double vari);
 //bivariate skew gaussian bivariate  distribution
 double biv_skew2(double corr,double zi,double zj,double vari1,double vari2,double rho ,

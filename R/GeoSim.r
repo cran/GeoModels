@@ -132,7 +132,7 @@ if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
     if(model %in% c("SkewGaussian","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',#"Binomial","BinomialNeg","BinomialNegZINB",
                     "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
                      "TwoPieceBimodal", "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
-                    "Gamma","Weibull","LogLogistic","Logistic","BinomialLogistic"))
+                    "Gamma","Weibull","LogLogistic","Logistic","SkewLaplace","BinomialLogistic"))
        {
            if(spacetime_dyn){env <- new.env();if(is.list(X))  X=do.call(rbind,args=c(X),envir = env)}
 
@@ -143,7 +143,7 @@ if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
            param$mean=0;
            if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
 
-        if((model %in% c("SkewGaussian","TwoPieceGaussian","Logistic",
+        if((model %in% c("SkewGaussian","TwoPieceGaussian","Logistic","SkewLaplace",
           "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
                     "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))  
@@ -294,7 +294,7 @@ for( L in 1:nrep){
 ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian","TwoPieceGaussian","TwoPieceTukeyh")) k=1
     if(model %in% c("Weibull","Wrapped")) k=2
-    if(model %in% c("LogLogistic","Logistic")) k=4
+    if(model %in% c("LogLogistic","Logistic","SkewLaplace")) k=4
     if(model %in% c("Binomial"))   k=max(round(n))
     if(model %in% c("BinomialLogistic"))   k=2*max(round(n))
     if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB"))
@@ -362,7 +362,7 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     ####################################
     if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonGammaZIP","PoissonWeibull","PoissonZIP","Beta","Kumaraswamy","Kumaraswamy2",
               "LogGaussian","TwoPieceTukeyh",
-                "Gamma","LogLogistic","Logistic","StudentT",
+                "Gamma","LogLogistic","Logistic","SkewLaplace","StudentT",
                 "SkewStudentT","TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","TwoPieceBimodal")) {
         dd[,,i]=t(sim)
 
@@ -568,7 +568,7 @@ if(model %in% c("TwoPieceStudentT"))   {
 #########################################################################################################
 #### simulation for continuos random field  (on the positive real line) based on indipendent copies  of GRF ######
 #########################################################################################################
-if(model %in% c("LogLogistic","Logistic"))   {
+if(model %in% c("LogLogistic","Logistic","SkewLaplace"))   {
       sim1=sim2=NULL
     for(i in 1:2)  sim1=cbind(sim1,dd[,,i]^2)
     for(i in 3:4)  sim2=cbind(sim2,dd[,,i]^2)
@@ -581,6 +581,11 @@ if(model %in% c("LogLogistic","Logistic"))   {
        {
       sim=mm+log(sim1/sim2)      *(vv)^(0.5)
       #sim=mm+log(exp(sim2)-1)*(vv)^(0.5)
+     }
+    
+     if(model %in% c("SkewLaplace"))  
+     {
+        sim=mm+(sim1/param$skew-sim2/(1-param$skew))*(vv)^(0.5)
      }
 
   if(!grid)  {
@@ -808,7 +813,7 @@ else {
     ################################# how many random fields ################
     if(model %in% c("SkewGaussian","LogGaussian")) k=1
     if(model %in% c("Weibull","Wrapped")) k=2
-    if(model %in% c("LogLogistic","Logistic")) k=4
+    if(model %in% c("LogLogistic","Logistic","SkewLaplace")) k=4
     if(model %in% c("Binomial"))   k=max(round(n))
     if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB")){ k=99999;
                                                  if(model %in% c("Geometric")) {model="BinomialNeg";n=1}

@@ -139,6 +139,57 @@ void Comp_Cond_Tukeyhh2mem(int *cormod, double *data1, double *data2, int *N1, i
     *res = R_FINITE(total) ? total : LOW;
 }
 
+
+
+void Comp_Cond_SkewLaplace2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis,  int *type_cop, int *cond)
+{
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+       const double skew=nuis[2];
+    
+      if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
+        *res = LOW;
+        return;
+    }
+
+    // Variabili precalcolate
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double max_dist = maxdist[0];
+    const double scale = 1.0 - nugget;
+
+    const double sill = nuis[1];
+    double total = 0.0; 
+
+
+//Rprintf("%d %f \n",n_pairs,skew);
+    for(int i = 0; i < n_pairs; i++) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+        
+        if(!ISNAN(d1) && !ISNAN(d2)) {
+            // Calcolo correlazione
+            const double lag = lags[i];
+            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+            
+            // Calcolo pesi se necessario
+            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
+            
+            // log bivariate skew laplace mean1[i], mean2[i]
+           const double val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew);
+            const double l2 = one_log_SkewLaplace(d2 ,mean2[i], sill, skew);
+            total += (val - l2) * weights;
+
+
+        }
+    }
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
+
 /******************************************************************************************/
 void Comp_Cond_SkewGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
@@ -329,7 +380,7 @@ if(!ISNAN(zi)&&!ISNAN(zj) ){
 
                     corr=(1-nugget)*CorFct(cormod,lags[i],0,par,0,0);
                     corr2=corr_tukeygh(corr,eta,tail);
-                 //   if(corr2<0) Rprintf("%f %f %f \n",corr2,par[0],par[1]);
+
                     if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
                 bl=log_biv_Norm(corr2,zi,zj,mean1[i]+sqrt(sill)*mu,
                                             mean2[i]+sqrt(sill)*mu, sill*vv,0);
@@ -1540,6 +1591,51 @@ void Comp_Cond_SkewGauss_st2mem(int *cormod, double *data1, double *data2, int *
         *res = LOW;
     }
 }
+
+void Comp_Cond_SkewLaplace_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                              double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                              double *nuis,  int *type_cop, int *cond)
+{
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+       const double skew=nuis[2];
+    
+      if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
+        *res = LOW;
+        return;
+    }
+
+    // Variabili precalcolate
+    const int weighted = *weigthed;
+    const int n_pairs = npairs[0];
+    const double scale = 1.0 - nugget;
+
+    const double sill = nuis[1];
+    double total = 0.0; 
+
+    for(int i = 0; i < n_pairs; i++) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+        
+        if(!ISNAN(d1) && !ISNAN(d2)) {
+            // Calcolo correlazione
+            const double corr = CorFct(cormod, lags[i], lagt[i], par, 0, 0);
+            
+            // Calcolo pesi se necessario
+            const double weights = weighted ? (CorFunBohman(lags[i], maxdist[0])*CorFunBohman(lagt[i], maxtime[0])) : 1.0;
+            
+            // log bivariate skew laplace mean1[i], mean2[i]
+           const double val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew);
+                   const double l2 = one_log_SkewLaplace(d2, mean2[i], sill, skew);
+            total += (val - l2) * weights;
+
+
+        }
+    }
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
 /******************************************************************************************/
 void Comp_Cond_SinhGauss_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,

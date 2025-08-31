@@ -629,6 +629,8 @@ void CBessel(double *xxx, double *nuu, int *expscale,double *res, int *tipo)
 }}
 
 
+
+
 double biv_chisqu2(double corr,double zi,double zj, double shape)
 {
 double KK1,KK2,KK3,rr;
@@ -2285,6 +2287,186 @@ double biv_tukey_hh(double corr, double data_i, double data_j, double mui, doubl
 }
 
 
+/****************************************************/
+/*** bivariate skew laplace ****/
+/****************************************************/
+
+#define LOG_TOL   (-18.0)
+#define EXP_CUTOFF (-700.0)
+#define MAX_STREAK 4
+#define MAX_TERMS 8192
+#define KMAX_DEFAULT 60
+#define KMAX_MAX 60
+#define CONV_TOL 1e-7
+#define CONV_STREAK_MIN 2
+
+static inline double logsumexp_r_style(const double *log_terms, int n) {
+    if (n <= 0) return R_NegInf;
+
+    double m = R_NegInf;
+    for (int i = 0; i < n; i++) {
+        if (R_FINITE(log_terms[i]) && log_terms[i] > m) {
+            m = log_terms[i];
+        }
+    }
+    if (!R_FINITE(m)) return R_NegInf;
+
+    double sum_exp = 0.0;
+    for (int i = 0; i < n; i++) {
+        if (R_FINITE(log_terms[i])) {
+            double diff = log_terms[i] - m;
+            if (diff > EXP_CUTOFF) {
+                sum_exp += exp(diff);
+            }
+        }
+    }
+    return (sum_exp > 0.0) ? m + log(sum_exp) : R_NegInf;
+}
+
+static inline double lchoose_fast_local(int n, int k, const double *lfact) {
+    if (k < 0 || k > n) return R_NegInf;
+    if (k == 0 || k == n) return 0.0;
+    return lfact[n] - lfact[k] - lfact[n - k];
+}
+
+static double Ikell_log_r_style_local(int k, int ell, double z, double alpha,
+                                      double log_alpha, const double *lfact) {
+    int max_terms = (z <= 0.0) ? (ell + 1) : (k + 1);
+    double *terms_log = (double*) R_alloc(max_terms, sizeof(double));
+    
+    for (int i = 0; i < max_terms; i++) terms_log[i] = R_NegInf;
+
+    if (z <= 0.0) {
+        double abs_z = fabs(z);
+        for (int m = 0; m <= ell; m++) {
+            if (abs_z == 0.0 && (ell - m) > 0) continue;
+
+            double log_binom = lchoose_fast_local(ell, m, lfact);
+            double log_pow = (abs_z == 0.0 && (ell - m) == 0) ? 0.0 :
+                              (ell - m) * log(abs_z);
+            double log_gamma = lfact[k + m];
+            double log_alpha_term = -(k + m + 1.0) * log_alpha;
+
+            terms_log[m] = log_binom + log_pow + log_gamma + log_alpha_term;
+        }
+        return logsumexp_r_style(terms_log, ell + 1);
+    } else {
+        for (int m = 0; m <= k; m++) {
+            if (z == 0.0 && (k - m) > 0) continue;
+
+            double log_binom = lchoose_fast_local(k, m, lfact);
+            double log_pow = (z == 0.0 && (k - m) == 0) ? 0.0 :
+                              (k - m) * log(z);
+            double log_gamma = lfact[ell + m];
+            double log_alpha_term = -(ell + m + 1.0) * log_alpha;
+
+            terms_log[m] = log_binom + log_pow + log_gamma + log_alpha_term;
+        }
+        double log_sum = logsumexp_r_style(terms_log, k + 1);
+        return -alpha * z + log_sum;
+    }
+}
+
+double biv_skewlaplace_kmax(double z1, double z2, double p, double rho, int Kmax) {
+    if (p <= 0.0 || p >= 1.0 || fabs(rho) >= 1.0) return R_NegInf;
+    if (!R_FINITE(z1) || !R_FINITE(z2)) return R_NegInf;
+    if (Kmax < 0) Kmax = KMAX_DEFAULT;
+
+    double Delta = 1.0 - rho * rho;
+    if (Delta <= DBL_EPSILON) return R_NegInf;
+
+    double alpha = 1.0 / Delta;
+    double log_p = log(p);
+    double log_1mp = log1p(-p);
+    double log_Delta = log(Delta);
+    double log_abs_rho = log(fabs(rho));
+    double log_alpha = log(alpha);
+
+    double log_pref = 2.0 * log_p + 2.0 * log_1mp - 2.0 * log_Delta +
+                      ((1.0 - p) * (z1 + z2)) / Delta;
+    if (!R_FINITE(log_pref)) return R_NegInf;
+
+    // Cache locale dei fattoriali - calcolata una sola volta per chiamata
+    int max_fact_needed = 2 * Kmax + 2;
+    double *lfact = (double*) R_alloc(max_fact_needed + 1, sizeof(double));
+    for (int i = 0; i <= max_fact_needed; i++) {
+        lfact[i] = lgammafn(i + 1.0);
+    }
+
+    // Buffer per i termini totali
+    int max_possible_terms = (Kmax + 1) * (Kmax + 1);
+    double *log_terms_total = (double*) R_alloc(max_possible_terms, sizeof(double));
+    int nterms = 0;
+
+    for (int k = 0; k <= Kmax; k++) {
+        for (int ell = 0; ell <= Kmax; ell++) {
+            double log_coef = -2.0 * lfact[k] - 2.0 * lfact[ell] +
+                              k * (2.0 * log_abs_rho + 2.0 * log_p - 2.0 * log_Delta) +
+                              ell * (2.0 * log_abs_rho + 2.0 * log_1mp - 2.0 * log_Delta);
+
+            double log_I1 = Ikell_log_r_style_local(k, ell, z1, alpha, log_alpha, lfact);
+            double log_I2 = Ikell_log_r_style_local(k, ell, z2, alpha, log_alpha, lfact);
+
+            if (R_FINITE(log_I1) && R_FINITE(log_I2)) {
+                double total_term = log_coef + log_I1 + log_I2;
+                if (R_FINITE(total_term)) {
+                    log_terms_total[nterms++] = total_term;
+                }
+            }
+        }
+    }
+    
+    double log_density = (nterms > 0)
+                         ? log_pref + logsumexp_r_style(log_terms_total, nterms)
+                         : R_NegInf;
+    return R_FINITE(log_density) ? log_density : R_NegInf;
+}
+
+
+
+double log_biv_skewlaplace(double rho,double z1,double z2,double m1,double m2,double sill,double p){
+
+
+
+    if(rho<DBL_EPSILON)
+    {
+
+        return (one_log_SkewLaplace(z1, m1, sill, p)+one_log_SkewLaplace(z2, m2, sill, p));
+    }
+else{
+       z1=(z1-m1)/sqrt(sill);  z2=(z2-m2)/sqrt(sill);
+
+    if (p <= 0.0 || p >= 1.0 || fabs(rho) >= 1.0) return R_NegInf;
+    if (!R_FINITE(z1) || !R_FINITE(z2)) return R_NegInf;
+    double log_density_prev = R_NegInf;
+    double log_density_curr = R_NegInf;
+    int convergence_streak = 0;
+
+    for (int Kmax = 10; Kmax <= KMAX_MAX; Kmax += 10) {
+        log_density_curr = biv_skewlaplace_kmax(z1, z2, p, rho, Kmax);
+
+        if (Kmax > 10 && R_FINITE(log_density_prev) && R_FINITE(log_density_curr)) {
+            double abs_diff = fabs(log_density_curr - log_density_prev);
+            double rel_diff = abs_diff / (1.0 + fabs(log_density_curr));
+            if (rel_diff < CONV_TOL) {
+                convergence_streak++;
+                if (convergence_streak >= CONV_STREAK_MIN) {
+                    return (log_density_curr-log(sill));
+                }
+            } else {
+                convergence_streak = 0;
+            }
+        }
+        log_density_prev = log_density_curr;
+    }
+    return (log_density_curr-log(sill));
+ }
+}
+
+
+/**********************************************************************/
+/**********************************************************************/
+
 
 
 
@@ -3605,6 +3787,7 @@ void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *mean_j,d
 /*******************************************************************************/
 
 /*******************************************************************************/
+
 
 // Log-sum-exp numericamente stabile (invariato)
 static inline double log_sum_exp(double a, double b) {
@@ -5544,6 +5727,20 @@ double one_log_SkewGauss(double z, double m, double vari, double skew)
 }
 
 
+
+
+
+
+double one_log_SkewLaplace(double z, double mu, double sill, double skew) {
+    double sigma = sqrt(sill);
+    double z_std = (z - mu) / sigma; // Standardizzazione
+    
+    if (z_std >= 0) {
+        return log(skew * (1 - skew)) - log(sigma) - (1 - skew) * z_std;
+    } else {
+        return log(skew * (1 - skew)) - log(sigma) + skew * z_std;
+    }
+}
 
 
 double one_log_tukeyh(double z, double m, double sill, double tail)
