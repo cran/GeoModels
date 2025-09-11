@@ -1106,85 +1106,227 @@ void DeleteGlobalVar(void)
 }
 /*#######################################################################*/
 
-void SetGlobalVar2 (int *nsite, int *times,//2
-                    double *h,int *nn, double  *maxh,//5
-                    double *u,int *tt,  double *maxu,//8
-                    int *st,int *biv,int *one,int *two)//12
+void SetGlobalVar2(int *nsite, int *times,          // 2
+                   double *h, int *nn, double *maxh,    // 5  
+                   double *u, int *tt, double *maxu,    // 8
+                   int *st, int *biv, int *one, int *two) // 12
 {
-
-
-   int i=0;
-    ncoord=(int *)R_Calloc(1,int);//number of total spatial coordinates
-  ncoord[0]=*nsite;
-    ntime=(int *)R_Calloc(1,int);//number of times
-  ntime[0]=*times;
-
-    maxdist=(double *)R_Calloc(1,   double);
-  maxdist[0]=*maxh;
-
-   maxtime=( double *)R_Calloc(1,   double);
-  maxtime[0]=*maxu;
+    int i = 0;
     
-    npairs=(int *)R_Calloc(1,int);  // number of pairs involved
-  npairs[0]=nn[0];
-   
-    isbiv=(int *)R_Calloc(1,int);//is a bivariate random field?
-    isbiv[0]=biv[0];
-    isst=(int *)R_Calloc(1,int);//is a spatio-temporal random field?
-    isst[0]=st[0];
-/*########*/
-if(!isst[0]&&!isbiv[0]) {  /// spatial case
-       lags=(double *)R_Calloc(npairs[0],   double);
-        for (i=0;i<*npairs;i++) {lags[i]=h[i];}
+    // Input validation
+    if (!nsite || !times || !h || !nn || !maxh || !u || !maxu || 
+        !st || !biv || !one || !two) {
+        error("Invalid NULL pointer passed to SetGlobalVar2");
+        return;
     }
-else{
-    if(isst[0]) {  /// spatio teemporal case
-        lags=(double *)R_Calloc(npairs[0],   double);
-        lagt=(double *)R_Calloc(npairs[0],   double);
-
-        for (i=0;i<*npairs;i++) {lags[i]=h[i];lagt[i]=u[i];
-      // Rprintf("%f %f  %d\n",h[i],u[i],npairs[0]);
-}
-    }
- 
     
- if(isbiv[0]) {  // spatial bivariate  case
-  
-    lags_1=(double *)R_Calloc(npairs[0],   double);
-    second_1 =(int *)R_Calloc(npairs[0],int);
-     first_1= (int *)R_Calloc(npairs[0],int);
-         for (i=0;i<*npairs;i++) {
-            lags_1[i]=h[i];
-            first_1[i]=one[i];
-            second_1[i]=two[i];
+    if (*nsite <= 0 || *times <= 0 || *nn <= 0) {
+        error("Invalid negative or zero values for nsite, times, or nn");
+        return;
+    }
+    
+    // Clean up any previously allocated global variables if needed
+    // DeleteGlobalVar2(); // uncomment if you want auto-cleanup
+    
+    // Allocate basic global variables
+    ncoord = (int *)R_Calloc(1, int);
+    if (!ncoord) {
+        error("Memory allocation failed for ncoord");
+        return;
+    }
+    ncoord[0] = *nsite;
+    
+    ntime = (int *)R_Calloc(1, int);
+    if (!ntime) {
+        R_Free(ncoord);
+        error("Memory allocation failed for ntime");
+        return;
+    }
+    ntime[0] = *times;
+    
+    maxdist = (double *)R_Calloc(1, double);
+    if (!maxdist) {
+        R_Free(ncoord);
+        R_Free(ntime);
+        error("Memory allocation failed for maxdist");
+        return;
+    }
+    maxdist[0] = *maxh;
+    
+    maxtime = (double *)R_Calloc(1, double);
+    if (!maxtime) {
+        R_Free(ncoord);
+        R_Free(ntime);
+        R_Free(maxdist);
+        error("Memory allocation failed for maxtime");
+        return;
+    }
+    maxtime[0] = *maxu;
+    
+    npairs = (int *)R_Calloc(1, int);
+    if (!npairs) {
+        R_Free(ncoord);
+        R_Free(ntime);
+        R_Free(maxdist);
+        R_Free(maxtime);
+        error("Memory allocation failed for npairs");
+        return;
+    }
+    npairs[0] = *nn;
+    
+    isbiv = (int *)R_Calloc(1, int);
+    if (!isbiv) {
+        R_Free(ncoord);
+        R_Free(ntime);
+        R_Free(maxdist);
+        R_Free(maxtime);
+        R_Free(npairs);
+        error("Memory allocation failed for isbiv");
+        return;
+    }
+    isbiv[0] = *biv;
+    
+    isst = (int *)R_Calloc(1, int);
+    if (!isst) {
+        R_Free(ncoord);
+        R_Free(ntime);
+        R_Free(maxdist);
+        R_Free(maxtime);
+        R_Free(npairs);
+        R_Free(isbiv);
+        error("Memory allocation failed for isst");
+        return;
+    }
+    isst[0] = *st;
+
+    // Process arrays based on model type
+    // Note: bivariate and spatio-temporal are mutually exclusive
+    if (!isst[0] && !isbiv[0]) {  
+        // Pure spatial case
+        lags = (double *)R_Calloc(npairs[0], double);
+        if (!lags) {
+            // Clean up basic globals on error
+            R_Free(ncoord); R_Free(ntime); R_Free(maxdist);
+            R_Free(maxtime); R_Free(npairs); R_Free(isbiv); R_Free(isst);
+            error("Memory allocation failed for spatial lags");
+            return;
         }
-      }
-   }
+        
+        for (i = 0; i < npairs[0]; i++) {
+            lags[i] = h[i];
+        }
+    }
+    else if (isst[0]) {  
+        // Spatio-temporal case (isbiv[0] must be 0)
+        lags = (double *)R_Calloc(npairs[0], double);
+        lagt = (double *)R_Calloc(npairs[0], double);
+        
+        if (!lags || !lagt) {
+            if (lags) R_Free(lags);
+            if (lagt) R_Free(lagt);
+            // Clean up basic globals
+            R_Free(ncoord); R_Free(ntime); R_Free(maxdist);
+            R_Free(maxtime); R_Free(npairs); R_Free(isbiv); R_Free(isst);
+            error("Memory allocation failed for spatio-temporal lags");
+            return;
+        }
+        
+        for (i = 0; i < npairs[0]; i++) {
+            lags[i] = h[i];
+            lagt[i] = u[i];
+        }
+    }
+    else if (isbiv[0]) {  
+        // Spatial bivariate case (isst[0] must be 0)
+        lags_1 = (double *)R_Calloc(npairs[0], double);
+        second_1 = (int *)R_Calloc(npairs[0], int);
+        first_1 = (int *)R_Calloc(npairs[0], int);
+        
+        if (!lags_1 || !second_1 || !first_1) {
+            if (lags_1) R_Free(lags_1);
+            if (second_1) R_Free(second_1);
+            if (first_1) R_Free(first_1);
+            // Clean up basic globals
+            R_Free(ncoord); R_Free(ntime); R_Free(maxdist);
+            R_Free(maxtime); R_Free(npairs); R_Free(isbiv); R_Free(isst);
+            error("Memory allocation failed for bivariate arrays");
+            return;
+        }
+        
+        for (i = 0; i < npairs[0]; i++) {
+            lags_1[i] = h[i];
+            first_1[i] = one[i];
+            second_1[i] = two[i];
+        }
+    }
+    
     return;
 }
 
-
 /*#######################################################################*/
-
+/* Versione migliorata di DeleteGlobalVar2 con controlli di sicurezza */
+/*#######################################################################*/
 void DeleteGlobalVar2(void)
 {
-  R_Free(ncoord);  R_Free(ntime);
-  R_Free(maxdist);R_Free(maxtime);
-
-  if(!isst[0]&&!isbiv[0]) { R_Free(lags);}
-  else {
-  if(isst[0]) {R_Free(lags);R_Free(lagt);}
-  if(isbiv[0]){
+    // Free basic global variables (sempre allocate)
+    if (ncoord) { R_Free(ncoord); ncoord = NULL; }
+    if (ntime) { R_Free(ntime); ntime = NULL; }
+    if (maxdist) { R_Free(maxdist); maxdist = NULL; }
+    if (maxtime) { R_Free(maxtime); maxtime = NULL; }
+    if (npairs) { R_Free(npairs); npairs = NULL; }
     
-    R_Free(lags_1);R_Free(first_1);R_Free(second_1);}
-  }
-  R_Free(isbiv);
-  R_Free(isst);
-  R_Free(npairs);
-  return;
+    // Free model-specific arrays based on flags
+    if (isbiv && isst) {
+        if (!isst[0] && !isbiv[0]) { 
+            // Pure spatial case
+            if (lags) { R_Free(lags); lags = NULL; }
+        }
+        else if (isst[0]) {
+            // Spatio-temporal case
+            if (lags) { R_Free(lags); lags = NULL; }
+            if (lagt) { R_Free(lagt); lagt = NULL; }
+        }
+        else if (isbiv[0]) {
+            // Bivariate case
+            if (lags_1) { R_Free(lags_1); lags_1 = NULL; }
+            if (first_1) { R_Free(first_1); first_1 = NULL; }
+            if (second_1) { R_Free(second_1); second_1 = NULL; }
+        }
+    }
+    
+    // Free flags last
+    if (isbiv) { R_Free(isbiv); isbiv = NULL; }
+    if (isst) { R_Free(isst); isst = NULL; }
+    
+    return;
 }
 
+/*#######################################################################*/
+/* Funzione helper per controllo stato delle variabili globali */
+/*#######################################################################*/
+int CheckGlobalVarsInitialized(void)
+{
+    return (ncoord != NULL && ntime != NULL && maxdist != NULL && 
+            maxtime != NULL && npairs != NULL && isbiv != NULL && isst != NULL);
+}
 
+/*#######################################################################*/
+/* Funzione helper per ottenere info sullo stato corrente */
+/*#######################################################################*/
+void GetGlobalVarsInfo(int *n_coords, int *n_times, int *n_pairs, 
+                       int *is_spatiotemporal, int *is_bivariate)
+{
+    if (!CheckGlobalVarsInitialized()) {
+        *n_coords = *n_times = *n_pairs = *is_spatiotemporal = *is_bivariate = -1;
+        return;
+    }
+    
+    *n_coords = ncoord[0];
+    *n_times = ntime[0];
+    *n_pairs = npairs[0];
+    *is_spatiotemporal = isst[0];
+    *is_bivariate = isbiv[0];
+}
 
 
 void Rep(double *coordt,int *ns, double *res)

@@ -38,7 +38,8 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     X <- Xloc <- NULL
     tempX <- NULL
   }
-  mae <- rmse <- lscore <- crps <- mad <- brie <- NULL
+  # Inizializzazione di tutte le metriche
+  mae <- rmse <- lscore <- crps <- mad <- brie <- pit <- intscore <- coverage <- NULL
   space_dyn <- FALSE
   if (is.null(optimizer)) {
     optimizer <- fit$optimizer
@@ -126,14 +127,16 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                    neighb = neighb, maxdist = maxdist, progress = FALSE)
       }
 
+      # Calcola TUTTE le metriche disponibili
       pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
-                      score = c("brie", "crps", "lscore", "pe"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps)
+                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
+      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps, 
+        mean(pp$pit), pp$intscore, pp$coverage)
     }
 
     ## ---- esecuzione effettiva ---------------------------------
     if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- double(K)
+      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
       if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
       if (isTRUE(progress)) {
         pb <- txtProgressBar(min = 0, max = K, style = 3)
@@ -143,6 +146,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         res <- cv_iteration(i)
         rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
         lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
+        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
         if (isTRUE(progress)) setTxtProgressBar(pb, i)
       }
     } else {
@@ -170,6 +174,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       res <- do.call(rbind, res)
       rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
       lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
+      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
     }
   }
 
@@ -288,14 +293,16 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         pr_mse[[j]] <- pr$mse
       }
 
+      # Calcola TUTTE le metriche disponibili per spazio-tempo
       pp <- GeoScores(data_pred[, 4], pred = unlist(pr_st), mse = unlist(pr_mse),
-                      score = c("brie", "crps", "lscore", "pe"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps)
+                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
+      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
+        mean(pp$pit), pp$intscore, pp$coverage)
     }
 
     ## ---- esecuzione effettiva ---------------------------------
     if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- double(K)
+      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
       if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
       if (isTRUE(progress)) {
         pb <- txtProgressBar(min = 0, max = K, style = 3)
@@ -305,6 +312,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         res <- cv_iteration_st(i)
         rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
         lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
+        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
         if (isTRUE(progress)) setTxtProgressBar(pb, i)
       }
     } else {
@@ -332,6 +340,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       res <- do.call(rbind, res)
       rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
       lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
+      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
     }
   }
 
@@ -432,14 +441,16 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                    progress = FALSE)
       }
 
+      # Calcola TUTTE le metriche disponibili per caso bivariato
       pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
-                      score = c("brie", "crps", "lscore", "pe"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps)
+                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
+      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
+        mean(pp$pit), pp$intscore, pp$coverage)
     }
 
     ## ---- esecuzione effettiva ---------------------------------
     if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- double(K)
+      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
       if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
       if (isTRUE(progress)) {
         pb <- txtProgressBar(min = 0, max = K, style = 3)
@@ -449,6 +460,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         res <- cv_iteration_biv(i)
         rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
         lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
+        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
         if (isTRUE(progress)) setTxtProgressBar(pb, i)
       }
     } else {
@@ -476,8 +488,11 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       res <- do.call(rbind, res)
       rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
       lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
+      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
     }
   }
 
-  list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps, lscore = lscore)
+  # Output esteso con tutte le metriche
+  list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps, 
+       lscore = lscore, pit = pit, intscore = intscore, coverage = coverage)
 }

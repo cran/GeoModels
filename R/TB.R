@@ -78,8 +78,7 @@ result=dotCall64::.C64("for_c",
                          d,c(a),c(nu1), c(CC), c(parameters$nu2),P,N,L,CkCorrModel(corrmodel),
                          c(u),a0,nu0,c(A),c(B),c(sequen),length(sequen),n,coord,phi,vtype,m,
                          simu1=dotCall64::vector_dc("double",length(simu11)),L,
-         INTENT =    c("r","r","r","r","r","r","r","r","r", "r",
-                       "r","r","r","r","r","r","r","r","r", "r",
+         INTENT =    c(rep("r",20),
                        "r", "rw","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
   simu =  matrix(result,n,P)

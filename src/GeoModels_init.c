@@ -30,15 +30,16 @@ extern void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double 
 
 
 /* for sim cond  */
-extern void skew_gaussian_gibbs_sampler(double *data_obs, int *n, double *coords, 
-                                        int *n_coords, double *Sigma_mat_inv, 
-                                        double *eta, int *n_iter, double *data_x, 
-                                        double *data_y);
 
+extern void skew_gaussian_gibbs_sampler(double *data_obs, int *n, double *Sigma_mat_inv, double *eta, 
+                                        int *n_iter, double *data_x, double *data_y);
 
+extern void gamma_gibbs_sampler(double *SigmaInv,double *y,int *n,int *v,double *U,int *nIte,int *nRep);
 
 extern void rnorm_constraint_simple(double *A, double *b, double *mu, 
                              double *sigma, double *result);
+
+
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
@@ -998,8 +999,9 @@ static const R_CMethodDef CEntries[] = {
     {"pairs",                       (DL_FUNC) &pairs,                       13},
     {"SetGlobalVar2",               (DL_FUNC) &SetGlobalVar2,               12},
     {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,                 31},
-    {"skew_gaussian_gibbs_sampler", (DL_FUNC) &skew_gaussian_gibbs_sampler, 9},
-  {"rnorm_constraint_simple", (DL_FUNC) &rnorm_constraint_simple, 5},
+    {"skew_gaussian_gibbs_sampler", (DL_FUNC) &skew_gaussian_gibbs_sampler, 7},
+	{"gamma_gibbs_sampler", (DL_FUNC) &gamma_gibbs_sampler, 7},
+    {"rnorm_constraint_simple", (DL_FUNC) &rnorm_constraint_simple, 5},
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
 
 /* for Turning band */

@@ -19,6 +19,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
   eta         <- param$skew
   keep        <- CorrParam(corrmodel)
   corr_param  <- param[keep]
+  
   cat("Computing Kriging weights ...\n")
   
   if(!local)
@@ -28,19 +29,29 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
       param    = c(sill = 1, corr_param))
   else stop("Local option cannot be used for gibbs sampling ...\n")
 
+  # Pre-calcoli per ottimizzazione
   Sigma.mat.inv <- MatInv(mtx = GeoW$covmatrix)
-  
   M0 <- nrow(coord_obs)
   N0 <- nrow(loc)
+  Wglob <- GeoW$weights
+  mm_loc <- mm
+  s_sqrt <- sigma_sqrt
   
-  # All Gaussian simulations needed
+  # Pre-calcoli costanti per evitare ricalcoli
+  sign_eta <- sign(eta)
+  abs_eta <- abs(eta)
+  eta_over_s_sqrt <- eta / s_sqrt
+  sqrt_param_sill <- sqrt(param$sill)
+  Z_trans_factor <- sign_eta * sigma_sqrt  # Pre-calcolo per Z.trans
+  
+  # Gaussian simulations
   if (method == "TB" || method == "CE") {
     Gauss.all <- GeoSimapprox(
       coordx   = rbind(coord_obs, loc),
       corrmodel = corrmodel, method = method, model = "Gaussian",
       param    = c(corr_param, mean = 0, nugget = 0), L=L,
       nrep     = 2 * nrep, progress = FALSE,
-      parallel = FALSE  # Evita parallelismo innestato
+      parallel = FALSE
     )
   } else {
     Gauss.all <- GeoSim(
@@ -52,31 +63,90 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
   }
   
   pair_idx <- split(seq_len(2 * nrep), ceiling(seq_len(2 * nrep) / 2))
-  Wglob    <- GeoW$weights
-  mm_loc   <- mm
-  s_sqrt   <- sigma_sqrt
-  
-  ####### INI VAL SAMPLER FUNCTION #######
-  Ini.val.fun <- function(x, A){
+
+  ####### OTTIMIZZAZIONE: INI VAL SAMPLER FUNCTION VETTORIZZATA #######
+  Ini.val.fun.vectorized <- function(x_vec, A) {
     if(length(A) != 2) stop("A deve essere un vettore di lunghezza 2")
-    if(length(x) != 1) stop("x deve essere scalare")
     
-    vvv <- dotCall64::.C64("rnorm_constraint_simple",
-                           SIGNATURE = c("double", "double", "double", "double", "double"), 
-                           A = as.double(A),
-                           b = as.double(x),
-                           mu = as.double(c(0,0)),
-                           sigma = as.double(1),
-                           result = double(2),
-                           INTENT = c("r", "r", "r", "r", "w"))$result
-    return(vvv)
+    n <- length(x_vec)
+    result_matrix <- matrix(0, nrow = 2, ncol = n)
+    
+    # Chiamata vettorizzata più efficiente
+    for(i in seq_len(n)) {
+      vvv <- dotCall64::.C64("rnorm_constraint_simple",
+                             SIGNATURE = c("double", "double", "double", "double", "double"), 
+                             A = as.double(A),
+                             b = as.double(x_vec[i]),
+                             mu = as.double(c(0,0)),
+                             sigma = as.double(1),
+                             result = double(2),
+                             INTENT = c("r", "r", "r", "r", "w"))$result
+      result_matrix[, i] <- vvv
+    }
+    return(result_matrix)
   }
   ####### END INI VAL SAMPLER FUNCTION #######
+  
+  # Funzione helper per Gibbs sampling - evita duplicazione
+  run_skew_gibbs_sampler <- function(Z_trans, M0, Sigma.mat.inv, sigma_sqrt, abs_eta, sqrt_param_sill, eta) {
+    # Genera valori iniziali in modo ottimizzato
+    A_vec <- c(sqrt_param_sill, eta)
+    ini.vals <- Ini.val.fun.vectorized(Z_trans, A_vec)
+    
+    if(!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
+      stop("Errore nella generazione dei valori iniziali")
+    }
+    
+    # Gibbs sampler
+    gibbs.result <- dotCall64::.C64(
+      "skew_gaussian_gibbs_sampler",
+      SIGNATURE = c("double", "integer", "double", "double", "integer", "double", "double"), 
+      data_obs     = as.double(Z_trans),
+      n            = as.integer(M0),
+      Sigma_mat_inv= as.double(Sigma.mat.inv),
+      eta          = as.double(c(sigma_sqrt, abs_eta)),
+      n_iter       = as.integer(1000),
+      data_x       = as.double(ini.vals[1,]),
+      data_y       = as.double(ini.vals[2,]),
+      INTENT = c("r", "r", "r", "r", "r", "rw", "rw"), 
+      VERBOSE = 0, 
+      NAOK = TRUE, 
+      PACKAGE = "GeoModels"
+    )
+    
+    if(is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
+      return(NULL)
+    }
+    
+    return(list(data_x = gibbs.result$data_x, data_y = gibbs.result$data_y))
+  }
+  
+  # Funzione helper per processamento simulazione ottimizzata
+  process_skew_simulation <- function(gibbs_result, idx_xy, Gauss_data, M0, N0, Wglob, 
+                                      sign_eta, eta_over_s_sqrt, mm_loc) {
+    simX <- Gauss_data[[idx_xy[1]]]
+    simY <- Gauss_data[[idx_xy[2]]]
+    
+    # Processamento X
+    sim.train.x <- simX[seq_len(M0)]
+    sim.valid.x <- simX[(M0 + 1):(N0 + M0)]
+    sk.pred.x <- as.numeric(crossprod(Wglob, gibbs_result$data_x - sim.train.x))
+    geosim.x <- sim.valid.x + sk.pred.x
+    
+    # Processamento Y
+    sim.train.y <- simY[seq_len(M0)]
+    sim.valid.y <- simY[(M0 + 1):(N0 + M0)]
+    sk.pred.y <- as.numeric(crossprod(Wglob, gibbs_result$data_y - sim.train.y))
+    geosim.y <- sim.valid.y + sk.pred.y
+    
+    # Calcolo finale ottimizzato - operazioni vettorizzate
+    res_i <- sign_eta * geosim.x + eta_over_s_sqrt * abs(geosim.y)
+    return(mm_loc + res_i)
+  }
   
   if (!parallel) {
     cat("Performing", nrep, "conditional simulations ...\n")
     
-    # Setup progress bar if requested
     if (progress) {
       progressr::handlers(global = TRUE)
       progressr::handlers("txtprogressbar")
@@ -84,58 +154,25 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
     }
     
     res <- vector("list", nrep)
+    
+    # Pre-calcolo Z.trans una volta sola per tutte le simulazioni
+    Z_trans <- Z_trans_factor * data
+    
     for (i in seq_len(nrep)) {
-      ######## INI VAL SAMPLER CALL ##########
-      Z.trans <- sign(eta) * sigma_sqrt * data
-      ini.vals.list <- sapply(Z.trans, Ini.val.fun, A = c(sqrt(param$sill), eta), simplify = FALSE)
-      ini.vals <- matrix(unlist(ini.vals.list), nrow = 2, ncol = M0)
+      # Gibbs sampling usando funzione helper
+      gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
+                                             sigma_sqrt, abs_eta, sqrt_param_sill, eta)
       
-      if(!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
-        stop("Errore nella generazione dei valori iniziali")
-      }
-      ######## END VAL SAMPLER CALL ##########
-      
-      ######## INI GIBBS SAMPLER CALL ##########
-      gibbs.result <- dotCall64::.C64(
-        "skew_gaussian_gibbs_sampler",
-        SIGNATURE = c("double", "integer", "double", "double", "integer", "double", "double"), 
-        data_obs     = as.double(Z.trans),
-        n            = as.integer(M0),
-        Sigma_mat_inv= as.double(Sigma.mat.inv),
-        eta          = as.double(c(sigma_sqrt, abs(eta))),
-        n_iter       = as.integer(1000),
-        data_x       = as.double(ini.vals[1,]),
-        data_y       = as.double(ini.vals[2,]),
-        INTENT = c("r", "r", "r", "r", "r", "rw", "rw"), 
-        VERBOSE = 0, 
-        NAOK = TRUE, 
-        PACKAGE = "GeoModels"
-      )
-      ######## END GIBBS SAMPLER CALL ##########
-      
-      if(is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
+      if(is.null(gibbs_result)) {
         warning(paste("Gibbs sampler fallito alla simulazione", i))
         next
       }
       
+      # Processamento usando funzione helper ottimizzata
       idx_xy <- pair_idx[[i]]
-      simX   <- Gauss.all$data[[idx_xy[1]]]
-      simY   <- Gauss.all$data[[idx_xy[2]]]
+      res[[i]] <- process_skew_simulation(gibbs_result, idx_xy, Gauss.all$data, 
+                                          M0, N0, Wglob, sign_eta, eta_over_s_sqrt, mm_loc)
       
-      sim.train.x <- simX[1:M0]
-      sim.valid.x <- simX[(M0 + 1):(N0 + M0)]
-      sk.pred.x   <- as.numeric(crossprod(Wglob, (gibbs.result$data_x - sim.train.x)))
-      geosim.x    <- sim.valid.x + sk.pred.x
-      
-      sim.train.y <- simY[1:M0]
-      sim.valid.y <- simY[(M0 + 1):(N0 + M0)]
-      sk.pred.y   <- as.numeric(crossprod(Wglob, (gibbs.result$data_y - sim.train.y)))
-      geosim.y    <- sim.valid.y + sk.pred.y
-      
-      res_i <- sign(eta)*geosim.x + (eta / s_sqrt)*abs(geosim.y)
-      res[[i]] <- mm_loc + res_i
-      
-      # Update progress bar if enabled
       if (progress) {
         pb(sprintf("Simulation %d/%d completed", i, nrep))
       }
@@ -144,103 +181,71 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
   } else {
     cat("Performing", nrep, "conditional simulations using", ncores, "cores ...\n")
     
-    # Setup progress bar if requested
     if (progress) {
       progressr::handlers(global = TRUE)
       progressr::handlers("txtprogressbar")
       pb <- progressr::progressor(along = seq_len(nrep))
     }
     
-    # OTTIMIZZAZIONE 1: Aumenta il limite per grandi dataset
-    old_limit <- options(future.globals.maxSize = 2000 * 1024^2)  # 2 GB
+    # Ottimizzazione memoria: limite più conservativo
+    old_limit <- options(future.globals.maxSize = 1500 * 1024^2)  # 1.5 GB
     on.exit(options(old_limit), add = TRUE)
     
-    # OTTIMIZZAZIONE 2: Estrai solo le variabili essenziali
+    # Variabili essenziali ottimizzate - solo pre-calcoli
     essential_vars <- list(
       eta = eta,
+      abs_eta = abs_eta,
+      sign_eta = sign_eta,
+      eta_over_s_sqrt = eta_over_s_sqrt,
       sigma_sqrt = sigma_sqrt,
-      data = data,
-      param_sill = param$sill,
+      sqrt_param_sill = sqrt_param_sill,
+      Z_trans = Z_trans_factor * data,  # Pre-calcolato
       M0 = M0,
       N0 = N0,
       Sigma.mat.inv = Sigma.mat.inv,
       Wglob = Wglob,
       mm_loc = mm_loc,
-      s_sqrt = s_sqrt,
       pair_idx = pair_idx,
       Gauss_data = Gauss.all$data
     )
     
-    # OTTIMIZZAZIONE 3: Worker function 
+    # Worker function ottimizzata
     run_simulation_worker <- function(i, vars) {
-      # Estrai variabili dalla lista
+      # Estrai variabili pre-calcolate
       eta <- vars$eta
+      abs_eta <- vars$abs_eta
+      sign_eta <- vars$sign_eta
+      eta_over_s_sqrt <- vars$eta_over_s_sqrt
       sigma_sqrt <- vars$sigma_sqrt
-      data <- vars$data
+      sqrt_param_sill <- vars$sqrt_param_sill
+      Z_trans <- vars$Z_trans
       M0 <- vars$M0
       N0 <- vars$N0
       Sigma.mat.inv <- vars$Sigma.mat.inv
       Wglob <- vars$Wglob
       mm_loc <- vars$mm_loc
-      s_sqrt <- vars$s_sqrt
       pair_idx <- vars$pair_idx
       Gauss_data <- vars$Gauss_data
       
-      ######## INI VAL SAMPLER CALL ##########
-      Z.trans <- sign(eta) * sigma_sqrt * data
-      ini.vals.list <- sapply(Z.trans, Ini.val.fun, A = c(sqrt(vars$param_sill), eta), simplify = FALSE)
-      ini.vals <- matrix(unlist(ini.vals.list), nrow = 2, ncol = M0)
+      # Gibbs sampling
+      gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
+                                             sigma_sqrt, abs_eta, sqrt_param_sill, eta)
       
-      if(!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
-        stop("Errore nella generazione dei valori iniziali")
-      }
-      ######## END VAL SAMPLER CALL ##########
-      
-      ######## INI GIBBS SAMPLER CALL ##########
-      gibbs.result <- dotCall64::.C64(
-        "skew_gaussian_gibbs_sampler",
-        SIGNATURE = c("double", "integer", "double", "double", "integer", "double", "double"), 
-        data_obs     = as.double(Z.trans),
-        n            = as.integer(M0),
-        Sigma_mat_inv= as.double(Sigma.mat.inv),
-        eta          = as.double(c(sigma_sqrt, abs(eta))),
-        n_iter       = as.integer(1000),
-        data_x       = as.double(ini.vals[1,]),
-        data_y       = as.double(ini.vals[2,]),
-        INTENT = c("r", "r", "r", "r", "r", "rw", "rw"), 
-        VERBOSE = 0, 
-        NAOK = TRUE, 
-        PACKAGE = "GeoModels"
-      )
-      ######## END GIBBS SAMPLER CALL ##########
-      
-      if(is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
+      if(is.null(gibbs_result)) {
         warning(paste("Gibbs sampler fallito alla simulazione", i))
         return(NULL)
       }
       
+      # Processamento ottimizzato
       idx_xy <- pair_idx[[i]]
-      simX   <- Gauss_data[[idx_xy[1]]]
-      simY   <- Gauss_data[[idx_xy[2]]]
-      
-      sim.train.x <- simX[1:M0]
-      sim.valid.x <- simX[(M0 + 1):(N0 + M0)]
-      sk.pred.x   <- as.numeric(crossprod(Wglob, (gibbs.result$data_x - sim.train.x)))
-      geosim.x    <- sim.valid.x + sk.pred.x
-      
-      sim.train.y <- simY[1:M0]
-      sim.valid.y <- simY[(M0 + 1):(N0 + M0)]
-      sk.pred.y   <- as.numeric(crossprod(Wglob, (gibbs.result$data_y - sim.train.y)))
-      geosim.y    <- sim.valid.y + sk.pred.y
-      
-      res_i <- sign(eta)*geosim.x + (eta / s_sqrt)*abs(geosim.y)
-      return(mm_loc + res_i)
+      return(process_skew_simulation(gibbs_result, idx_xy, Gauss_data, 
+                                     M0, N0, Wglob, sign_eta, eta_over_s_sqrt, mm_loc))
     }
     
+    # Parallelizzazione
     future::plan(future::multisession, workers = ncores)
     on.exit(future::plan(future::sequential), add = TRUE)
     
-    # Usa future.seed = TRUE per compatibilità standard
     res <- future.apply::future_lapply(seq_len(nrep), function(i) {
       result <- run_simulation_worker(i, essential_vars)
       if (progress) {
@@ -249,12 +254,212 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
       return(result)
     }, future.seed = TRUE, future.globals = FALSE)
   
+    # Rimuove risultati nulli e avvisa
     res <- res[!sapply(res, is.null)]
+    failed_sims <- nrep - length(res)
+    if (failed_sims > 0) {
+      warning(paste(failed_sims, "simulazioni su", nrep, "sono fallite"))
+    }
+  }
+  
+  return(res)
+} 
+################################################################################# 
+### Helper function for conditional Gamma simulation 
+################################################################################# 
+GammaSimcond <- function(coord_obs, loc, data, param, corrmodel, 
+                         nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, 
+                         L = NULL, parallel = FALSE, ncores = 1, progress = FALSE) {
+  mm <- param$mean
+  shape <- round(param$shape)
+  keep <- CorrParam(corrmodel)
+  corr_param <- param[keep]
+  
+  cat("Computing Kriging weights ...\n")
+  if (!local) 
+    GeoW <- GeoKrigWeights(coordx = coord_obs, corrmodel = corrmodel, 
+                           loc = loc, model = "Gaussian", param = c(sill = 1, 
+                                                                    corr_param))
+  else stop("Local option cannot be used for gibbs sampling ...\n")
+  
+  # Pre-calcoli per ottimizzazione
+  Sigma.mat.inv <- MatInv(mtx = GeoW$covmatrix)
+  M0 <- nrow(coord_obs)
+  N0 <- nrow(loc)
+  Wglob <- GeoW$weights
+  mm_loc <- mm
+  data_transformed <- exp(-mm_loc) * data  # Pre-calcolo
+  sqrt_factor <- sqrt(2 / shape)  # Pre-calcolo costante
+  exp_mm_half <- exp(mm_loc) * 0.5  # Pre-calcolo per output finale
+
+  # Generazione simulazioni Gaussiane
+  if (method == "TB" || method == "CE") {
+    Gauss.all <- GeoSimapprox(coordx = rbind(coord_obs, loc), 
+                              corrmodel = corrmodel, method = method, 
+                              model = "Gaussian", param = c(corr_param, mean = 0, 
+                                                            nugget = 0, sill = 1), 
+                              L = L, nrep = shape * nrep, progress = FALSE, parallel = FALSE)
+  } else {
+    Gauss.all <- GeoSim(coordx = rbind(coord_obs, loc), 
+                        corrmodel = corrmodel, model = "Gaussian", 
+                        param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
+                        nrep = shape * nrep, progress = FALSE)
+  }
+  
+  pair_idx <- split(seq_len(shape * nrep), ceiling(seq_len(shape * nrep)/shape))
+  
+  # Funzione helper per Gibbs sampler - evita duplicazione codice
+  run_gibbs_sampler <- function(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor) {
+    # Genera segni casuali e valori iniziali
+    random_sign <- matrix(ifelse(runif(M0 * shape) <= 0.5, 1, -1), nrow = M0, ncol = shape)
+    ini_vals <- random_sign * matrix(rep(sqrt(data_transformed), shape) * sqrt_factor, 
+                                     nrow = M0, ncol = shape)
+  gibbs.result <- dotCall64::.C64("gamma_gibbs_sampler",
+                                      SIGNATURE = c("double","double","int","int","double","int","int"),
+                                      SigmaInv = as.double(Sigma.mat.inv),
+                                      y        = as.double(data_transformed),
+                                      n        = as.integer(M0),
+                                      v        = as.integer(shape),
+                                      U        = as.double(ini_vals),
+                                      nIte     = as.integer(1000),
+                                      nRep     = as.integer(150),  # Unificato a 150
+                                      INTENT   = c("r","r","r","r","rw","r","r"), 
+                                      VERBOSE = 0, 
+                                      NAOK = FALSE, 
+                                      PACKAGE = "GeoModels")
+    
+    if (is.null(gibbs.result$U)) return(NULL)
+    
+    return(matrix(gibbs.result$U, nrow = M0, ncol = shape))
+  }
+  
+  # Funzione helper per processamento vettorizzato
+  process_simulation_vectorized <- function(gibbs_U, idx_xy, Gauss_data, M0, N0, shape, Wglob) {
+    # Pre-alloca matrice risultato
+    res_i <- matrix(0, nrow = N0, ncol = shape)
+    gauss_matrices <- lapply(idx_xy, function(k) Gauss_data[[k]])
+    for (kk in seq_len(shape)) {
+      simX <- gauss_matrices[[kk]]
+      sim_train_x <- simX[seq_len(M0)]
+      sim_valid_x <- simX[(M0 + 1):(N0 + M0)]
+      sk_pred_x <- as.numeric(crossprod(Wglob, gibbs_U[, kk] - sim_train_x))
+      res_i[, kk] <- sim_valid_x + sk_pred_x
+    }
+    
+    return(res_i)
+  }
+  
+  if (!parallel) {
+    cat("Performing", nrep, "conditional simulations ...\n")
+    if (progress) {
+      progressr::handlers(global = TRUE)
+      progressr::handlers("txtprogressbar")
+      pb <- progressr::progressor(along = seq_len(nrep))
+    }
+    
+    res <- vector("list", nrep)
+    
+    for (i in seq_len(nrep)) {
+      # Gibbs sampling
+      gibbs_U <- run_gibbs_sampler(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor)
+      
+      if (is.null(gibbs_U)) {
+        warning(paste("Gibbs sampler failed at simulation", i))
+        next
+      }
+      
+      # Processamento vettorizzato
+      idx_xy <- pair_idx[[i]]
+      res_i <- process_simulation_vectorized(gibbs_U, idx_xy, Gauss.all$data, 
+                                             M0, N0, shape, Wglob)
+      
+      # Calcolo finale ottimizzato
+      res[[i]] <- exp_mm_half * rowSums(res_i^2)
+      
+      if (progress) {
+        pb(sprintf("Simulation %d/%d completed", i, nrep))
+      }
+    }
+  } else {
+    cat("Performing", nrep, "conditional simulations using", ncores, "cores ...\n")
+    if (progress) {
+      progressr::handlers(global = TRUE)
+      progressr::handlers("txtprogressbar")
+      pb <- progressr::progressor(along = seq_len(nrep))
+    }
+    
+    # Ottimizzazione memoria: reduce global size limit più conservativo
+    old_limit <- options(future.globals.maxSize = 1000 * 1024^2)  # Ridotto a 1GB
+    on.exit(options(old_limit), add = TRUE)
+    
+    # Variabili essenziali ottimizzate - solo quello che serve
+    essential_vars <- list(
+      shape = shape,
+      data_transformed = data_transformed,
+      M0 = M0,
+      N0 = N0,
+      Sigma.mat.inv = Sigma.mat.inv,
+      Wglob = Wglob,
+      exp_mm_half = exp_mm_half,
+      sqrt_factor = sqrt_factor,
+      pair_idx = pair_idx,
+      Gauss_data = Gauss.all$data
+    )
+    
+    # Worker function ottimizzata
+    run_simulation_worker <- function(i, vars) {
+      # Estrae variabili
+      shape <- vars$shape
+      data_transformed <- vars$data_transformed
+      M0 <- vars$M0
+      N0 <- vars$N0
+      Sigma.mat.inv <- vars$Sigma.mat.inv
+      Wglob <- vars$Wglob
+      exp_mm_half <- vars$exp_mm_half
+      sqrt_factor <- vars$sqrt_factor
+      pair_idx <- vars$pair_idx
+      Gauss_data <- vars$Gauss_data
+      
+      # Gibbs sampling usando la funzione helper
+      gibbs_U <- run_gibbs_sampler(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor)
+      
+      if (is.null(gibbs_U)) {
+        warning(paste("Gibbs sampler failed at simulation ", i))
+        return(NULL)
+      }
+      
+      # Processamento vettorizzato
+      idx_xy <- pair_idx[[i]]
+      res_i <- process_simulation_vectorized(gibbs_U, idx_xy, Gauss_data, 
+                                             M0, N0, shape, Wglob)
+      
+      # Risultato finale
+      return(exp_mm_half * rowSums(res_i^2))
+    }
+    
+    # Parallelizzazione
+    future::plan(future::multisession, workers = ncores)
+    on.exit(future::plan(future::sequential), add = TRUE)
+    
+    res <- future.apply::future_lapply(seq_len(nrep), 
+                                       function(i) {
+                                         result <- run_simulation_worker(i, essential_vars)
+                                         if (progress) {
+                                           pb(sprintf("Parallel simulation %d/%d completed", i, nrep))
+                                         }
+                                         return(result)
+                                       }, 
+                                       future.seed = TRUE, 
+                                       future.globals = FALSE)
+    
+    # Rimuove risultati nulli
+    res <- res[!sapply(res, is.null)]
+    
+
   }
   
   return(res)
 }
-
 
 
 ################################################################################# 
@@ -456,6 +661,9 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   }
   return(sim_cond)
 }
+###############################################################
+############### end helper functions ##########################
+###############################################################
 
 ###############################################################
 ############################ MAIN FUNCTION ####################
@@ -662,10 +870,25 @@ if (is.null(copula)) {
   }
 
 ##################################################################################################
-  if (model == "Gamma")        { stop("Gamma  not implemented..") }
-  if (model == "Weibull")      { stop("Weibull  not implemented..") }
+  if (model == "Gamma")        { 
+    #Made by David Rivas
+    res <- GammaSimcond(coord_obs, loc, data, param, corrmodel,local=local,neighb=neighb,L=L,
+                       nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+  }
+  if (model == "Weibull")      {
+    #Made by David Rivas
+    mm <- param$mean
+    param.weibull <- param
+    param.weibull$shape <- 2
+    param.weibull$mean <- 0
+    ck <- gamma( (param$shape + 1)/param$shape )
+    data.t <- (exp(-mm)*data*ck)^param$shape
+    res <- GammaSimcond(coord_obs, loc, data.t, param.weibull, corrmodel,local=local,neighb=neighb,L=L,
+                        nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+    res <- lapply(res, function(x) exp(mm)*(x^(1/param$shape))/ck )
+  }
   if (model == "Poisson")      { stop("Poisson  not implemented...") }
-  if (model == "Binomial")     { stop("Poisson  not implemented...") }
+  if (model == "Binomial")     { stop("Binomial  not implemented...") }
 
 } else { 
 ###########################################################################
@@ -812,7 +1035,7 @@ if (copula == "SkewGaussian") {
     ss <- param$shape
     datanorm1 <- pweibull(data, shape = ss, scale = mm/(gamma(1 + 1/ss))) 
     param$mean <- 0; param$sill <- 1; param$shape <- NULL
-   # print(param)
+
     omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
     alpha=as.numeric(param$nu/param$sill^0.5)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
@@ -952,7 +1175,7 @@ if (copula == "SkewGaussian") {
 
 sim_result <- do.call(rbind, res)
 cond_mean=colMeans(sim_result)  # conditional mean
-cond_var =apply(sim_result,2, var)
+cond_var =apply(sim_result,2, var) # conditional var
 ############################################################################
 ############################################################################
 ############################ OUTPUT ########################################

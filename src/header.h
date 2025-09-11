@@ -24,7 +24,7 @@
 #include <R_ext/Print.h>
 #include <R_ext/Linpack.h>
 #include <R_ext/Applic.h>
-
+#include <math.h>
 #include <R_ext/Memory.h>
 #include <float.h>
 

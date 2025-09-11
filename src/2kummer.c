@@ -19,7 +19,7 @@ static int cache_initialized = 0;
 static uint32_t global_timestamp = 0;
 static uint32_t cache_hits = 0, cache_misses = 0;
 
-// Hash function veloce
+/*
 static inline uint64_t fast_hash_v2(double a, double b, double c) {
     uint64_t ia = *(uint64_t*)&a;
     uint64_t ib = *(uint64_t*)&b; 
@@ -33,10 +33,30 @@ static inline uint64_t fast_hash_v2(double a, double b, double c) {
     hash ^= ic + 0x9E3779B97F4A7C15ULL + (hash << 6) + (hash >> 2);
     
     return hash;
+}*/
+
+
+
+// Hash function veloce
+static inline uint64_t fast_hash_v2(double a, double b, double c) {
+    uint64_t ia, ib, ic;
+
+    memcpy(&ia, &a, sizeof(uint64_t));
+    memcpy(&ib, &b, sizeof(uint64_t));
+    memcpy(&ic, &c, sizeof(uint64_t));
+
+    ia &= 0x7FFFFFFFFFFFFFFFULL;
+    ic &= 0x7FFFFFFFFFFFFFFFULL;
+
+    uint64_t hash = ia * 0x9E3779B97F4A7C15ULL;
+    hash ^= ib + 0x9E3779B97F4A7C15ULL + (hash << 6) + (hash >> 2);
+    hash ^= ic + 0x9E3779B97F4A7C15ULL + (hash << 6) + (hash >> 2);
+
+    return hash;
 }
 
 // Inizializzazione cache veloce
-static inline void init_cache_optimized() {
+static inline void init_cache_optimized(void) {
     if (!cache_initialized) {
         memset(cache, 0, sizeof(cache));
         cache_initialized = 1;
