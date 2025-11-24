@@ -5,13 +5,14 @@
 \description{
    Based on a GeoFit object, the procedure  plots  a quantile-quantile plot or compares the fitted  density with the histogram of the data. It is useful as diagnostic tool.
 }
-\usage{GeoQQ(fit,type="Q",add=FALSE,ylim=c(0,1),breaks=10,\dots)}
+\usage{GeoQQ(fit,type="Q",add=FALSE,ylim=c(0,1),xlim=NULL,breaks=10,\dots)}
 
 \arguments{
   \item{fit}{A GeoFit object possibly obtained from \code{\link{GeoResiduals}}.}
 \item{type}{The type of plot. If Q then a qq-plot (default) is performed. If D then  a comparison between histrogram and the estimated marginal density is performed}
 \item{add}{Logical; if TRUE the the estimated density ia added over an existing one} 
 \item{ylim}{Numeric; a vector of length 2 used for the ylab parameter of the histogram plot.} 
+\item{xlim}{Numeric; a vector of length 2 used for the xlab parameter of the histogram plot.} 
 \item{breaks}{Numeric; an integer number specifyng  the number of cells ofthe histogram plot if the option type=D is chosen.} 
 \item{\dots}{Optional parameters passed to the plot function.}
 }

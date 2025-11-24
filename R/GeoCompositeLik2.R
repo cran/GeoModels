@@ -69,6 +69,7 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
         
     } else {
         # Chiamata C senza anisotropia
+
         result <- dotCall64::.C64(
             as.character(fan),
             SIGNATURE = c("integer", "double", "double", "integer", "integer", 
@@ -290,7 +291,6 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
 #}
 
 lname="comploglik2"
-
 
  
 coords=cbind(coordx,coordy,coordz)

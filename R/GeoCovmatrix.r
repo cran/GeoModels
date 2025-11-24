@@ -611,7 +611,7 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
   if(model %in% c(46))  
    { mm=exp(mu); vv=mm*(1+mm/as.numeric(param$shape)); diag(varcov)=vv } ## poissongamma
 
-  if(model %in% c(43))   { mm=exp(mu); pg=pnorm(param$pmu)
+    if(model %in% c(43))   { mm=exp(mu); pg=pnorm(param$pmu)
                            vv=(1-pg)*mm*(1+pg*mm)
                            diag(varcov)=vv }
 
@@ -622,9 +622,9 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
                             diag(varcov)=vv 
                         }
 
-  if(model %in% c(57))   { mm=exp(mu); vv=mm*(1+mm/as.numeric(param$shape))
+  if(model %in% c(57))   { mm=exp(mu); kk=as.numeric(param$shape);
                             pg=pnorm(param$pmu)
-                           vv=(1-pg)*vv*(1+pg*vv)
+                           vv=(1-pg)*mm*(1+pg*mm+(mm/kk))
                            diag(varcov)=vv }
 }
 

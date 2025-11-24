@@ -502,7 +502,6 @@ LogNormDenStand_Tukey2H <- function(const, cova, dimat, mdecomp, nuisance, sill,
        is.na(log_jacobian) || is.infinite(log_jacobian)) {
         return(llik)
     }
-     print(logdetvarcov);
     llik <- 0.5 * (const + dimat * log(sill) + logdetvarcov + quad_form) - log_jacobian
     
     return(llik)
@@ -912,7 +911,7 @@ loglik <- function(param, const, coordx, coordy, coordz, coordt, corr, corrmat, 
  ######################################################################### 
 if(model==1||model==20){  ## gaussian case
     lname <- 'loglik'
-    if(!is.null(neighb))  lname <-'loglikvecchia'
+   # if(!is.null(neighb))  lname <-'loglikvecchia'
     if(bivariate)  {lname <- 'loglik_biv'}
   
     # detects the type of likelihood:

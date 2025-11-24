@@ -18,6 +18,8 @@ extern void SetGlobalVar2 (int *nsite, int *times,
                            double *u,int *tt,  double *maxu,
                            int *st,int *biv,int *one, int *two);
 
+
+
 extern void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *coordt,int *grid,int *ia,
       int *idx,int *ismal,int *ja,int *mem, int *nsite,int *nsitex,int *nsitey,int *nsitez,
       int *npair,double *radius,double *srange, double *sep,int *st, int *times,double *trange,
@@ -39,6 +41,10 @@ extern void gamma_gibbs_sampler(double *SigmaInv,double *y,int *n,int *v,double 
 extern void rnorm_constraint_simple(double *A, double *b, double *mu, 
                              double *sigma, double *result);
 
+
+
+extern void geo_distances(double *coords, int *ncoords, int *p, int *type_dist, double *radius,
+                     double *out) ;
 
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
@@ -63,7 +69,7 @@ extern void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2
            double *a0, double *nu0, double *A, double *B,
            int *sequen, int *largo_sequen, int *n,
            double *coord, double *phi, int *vtype, int *m1, double *simu1, double *L1, double *params_other);
-extern void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result);
+//extern void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result);
 /*****/
 
 extern void pairs(int *ncoords,double *data,double *coordx,double *coordy,double *coordz,double *numbins,
@@ -96,7 +102,6 @@ extern void LeastSquare_G(double *bins, double *bint, int *cormod, double *lbins
 extern void WLeastSquare_G(double *bins, double *bint, int *cormod, double *lbins, double *moms,
            int *nbins, int *nbint, double *nuis, double *par, double *res);
 
-extern void Binned_Variogram_22(double *bins, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, double *moms, int *nbins);
 
 /********************** for distribution computations  ****************************************************/
 
@@ -433,7 +438,9 @@ extern void Comp_Pair_WeibullCop2mem(int *cormod, double *data1,double *data2,in
 extern void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop,int *cond);
-
+extern void Comp_Pair_SkewLaplaceCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis,  int *type_cop, int *cond);
 extern void Comp_Pair_PoisCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop,int *cond);
@@ -986,7 +993,6 @@ static const R_CMethodDef CEntries[] = {
     {"Cloud_Variogram2",            (DL_FUNC) &Cloud_Variogram2,             9},
     {"LeastSquare_G",               (DL_FUNC) &LeastSquare_G,               10},
     {"WLeastSquare_G",              (DL_FUNC) &WLeastSquare_G,              10},
-    {"Binned_Variogram_22",         (DL_FUNC) &Binned_Variogram_22,          9},
     {"biv_unif_CopulaClayton_call", (DL_FUNC) &biv_unif_CopulaClayton_call,  5},
     {"biv_unif_CopulaGauss_call",   (DL_FUNC) &biv_unif_CopulaGauss_call,    4},
     {"Corr_c",                      (DL_FUNC) &Corr_c,                      23},
@@ -998,7 +1004,8 @@ static const R_CMethodDef CEntries[] = {
     {"Maxima_Minima_dist",          (DL_FUNC) &Maxima_Minima_dist,           7},
     {"pairs",                       (DL_FUNC) &pairs,                       13},
     {"SetGlobalVar2",               (DL_FUNC) &SetGlobalVar2,               12},
-    {"SetGlobalVar",               (DL_FUNC) &SetGlobalVar,                 31},
+    {"SetGlobalVar",                (DL_FUNC) &SetGlobalVar,                 31},
+     {"geo_distances",            (DL_FUNC) &geo_distances,                 6},
     {"skew_gaussian_gibbs_sampler", (DL_FUNC) &skew_gaussian_gibbs_sampler, 7},
 	{"gamma_gibbs_sampler", (DL_FUNC) &gamma_gibbs_sampler, 7},
     {"rnorm_constraint_simple", (DL_FUNC) &rnorm_constraint_simple, 5},
@@ -1008,7 +1015,7 @@ static const R_CMethodDef CEntries[] = {
 
     {"TBD1d",                       (DL_FUNC) &TBD1d,                      8},
     {"spectraldensityC",            (DL_FUNC) &spectraldensityC,          10},
-    {"spectral_density_1d",         (DL_FUNC) &spectral_density_1d,        7},
+   // {"spectral_density_1d",         (DL_FUNC) &spectral_density_1d,        7},
     {"extraer",                     (DL_FUNC) &extraer,                    6},
     {"rellenar_indice",             (DL_FUNC) &rellenar_indice,            4},
     {"u_index_extraer",             (DL_FUNC) &u_index_extraer,            6},
@@ -1104,6 +1111,7 @@ static const R_CMethodDef CEntries[] = {
   /*********************** for copula ***************************************************/
     {"Comp_Pair_GaussCop2mem",         (DL_FUNC) &Comp_Pair_GaussCop2mem,         12},
     {"Comp_Pair_LogGaussCop2mem",         (DL_FUNC) &Comp_Pair_LogGaussCop2mem,         12},
+     {"Comp_Pair_SkewLaplaceCop2mem",         (DL_FUNC) &Comp_Pair_SkewLaplaceCop2mem,         12},
     {"Comp_Pair_LogisticCop2mem",         (DL_FUNC) &Comp_Pair_LogisticCop2mem,         12},
     {"Comp_Pair_PoisCop2mem",         (DL_FUNC) &Comp_Pair_PoisCop2mem,         12},
     {"Comp_Pair_WeibullCop2mem",         (DL_FUNC) &Comp_Pair_WeibullCop2mem,         12},

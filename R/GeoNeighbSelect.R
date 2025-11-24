@@ -3,72 +3,89 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal', 
   lower=NULL, neighb=c(1,2,3,4,5),
   maxtime=Inf, memdist=TRUE, model='Gaussian', n=1, ncores=NULL,
-  optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE,radius=1, start=NULL, type='Pairwise', upper=NULL, weighted=FALSE,
+  optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE, radius=1, start=NULL, 
+  type='Pairwise', upper=NULL, weighted=FALSE,
   X=NULL, nosym=FALSE, spobj=NULL, spdata=NULL, vario=NULL, progress=TRUE)
 {
-
-  if(!is.numeric(neighb))  stop("neighb must be a numeric vector")
-  if(sum(neighb-floor(neighb))) stop("neighb must be a positive integer numeric vector")
+  # Input validation for neighb parameter
+  if(!is.numeric(neighb)) stop("neighb must be a numeric vector")
+  if(sum(neighb - floor(neighb))) stop("neighb must be a positive integer numeric vector")
 
   estimates = best_T = best_K = NULL
 
-  # Pre-calcolo validazioni
-  corrmodel_valid <- CkCorrModel(corrmodel)
-  if(!is.null(try(corrmodel_valid, TRUE))) {
-    bivariate <- CheckBiv(corrmodel_valid)
-    spacetime <- CheckST(corrmodel_valid)
-    space <- !spacetime && !bivariate
-  } else { stop("correlation model is not valid\n") }
+  # Validate correlation model
+  corrmodel_valid <- try(CkCorrModel(corrmodel), silent = TRUE)
+  if(inherits(corrmodel_valid, "try-error")) {
+    stop("correlation model is not valid\n")
+  }
+  
+  bivariate <- CheckBiv(corrmodel_valid)
+  spacetime <- CheckST(corrmodel_valid)
+  space <- !spacetime && !bivariate
 
+  # Validate variogram object
   if(!is.null(vario)) {
-    if(!inherits(vario,"GeoVariogram"))  stop("A GeoVariogram object is needed as input for vario\n")
-    if( !((vario$bivariate&&bivariate)||(!is.null(vario$bint)&&spacetime)||(is.null(vario$bint)&&!bivariate)) )
+    if(!inherits(vario, "GeoVariogram")) {
+      stop("A GeoVariogram object is needed as input for vario\n")
+    }
+    if(!((vario$bivariate && bivariate) || (!is.null(vario$bint) && spacetime) || 
+         (is.null(vario$bint) && !bivariate))) {
       stop("The GeoVariogram object is not of the same type of the correlation model\n")
+    }
     semiv <- vario
-  } else stop("A GeoVariogram object is needed as input for vario\n")
+  } else {
+    stop("A GeoVariogram object is needed as input for vario\n")
+  }
 
-  # Pre-calcolo valori comuni
+  # Validate start parameter
+  if(is.null(start) || length(start) == 0) {
+    stop("start parameter must be provided\n")
+  }
+
+  # Pre-compute common values
   coremax <- parallel::detectCores()
-  if(is.na(coremax)||coremax==1) parallel <- FALSE
+  if(is.na(coremax) || coremax == 1) parallel <- FALSE
   K <- length(neighb)
   P <- NULL
   
-  # Pre-allocazione ottimizzata
-  if(spacetime){
-    if(!is.numeric(maxtime))  stop("maxtime must be a numeric vector")
+  # Optimized pre-allocation
+  if(spacetime) {
+    if(!is.numeric(maxtime)) stop("maxtime must be a numeric vector")
     P <- length(maxtime)
-    estimates <- matrix(NA_real_, nrow=K*P, ncol=length(start))
-    res <- rep(NA_real_, K*P)
+    estimates <- matrix(NA_real_, nrow = K * P, ncol = length(start))
+    res <- rep(NA_real_, K * P)
   } else {
-    estimates <- matrix(NA_real_, nrow=K, ncol=length(start))
+    estimates <- matrix(NA_real_, nrow = K, ncol = length(start))
     res <- rep(NA_real_, K)
   }
 
-  # Pre-calcolo parametri fissi comuni
+  # Pre-compute common fixed parameters
   common_params <- list(
-    data=data, coordx=coordx, coordy=coordy, coordz=coordz, coordt=coordt, 
-    coordx_dyn=coordx_dyn, copula=copula, corrmodel=corrmodel, distance=distance,
-    fixed=fixed, anisopars=anisopars, est.aniso=est.aniso, grid=grid, 
-    likelihood=likelihood, lower=lower, memdist=memdist, model=model, n=n, 
-    optimizer=optimizer, radius=radius, start=start, type=type, upper=upper, 
-    weighted=weighted, X=X, nosym=nosym, spobj=spobj, spdata=spdata
+    data = data, coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt, 
+    coordx_dyn = coordx_dyn, copula = copula, corrmodel = corrmodel, distance = distance,
+    fixed = fixed, anisopars = anisopars, est.aniso = est.aniso, grid = grid, 
+    likelihood = likelihood, lower = lower, memdist = memdist, model = model, n = n, 
+    optimizer = optimizer, radius = radius, start = start, type = type, upper = upper, 
+    weighted = weighted, X = X, nosym = nosym, spobj = spobj, spdata = spdata
   )
 
-  # Funzione interna ottimizzata per il calcolo
+  # Core fitting function - computes fit for given neighb and maxtime values
   compute_fit <- function(neighb_val, maxtime_val = Inf) {
     params <- common_params
     params$neighb <- neighb_val
     params$maxtime <- maxtime_val
     
+    # Fit the model
     aa <- suppressWarnings(do.call(GeoFit, params))
     estimates_val <- unlist(aa$param)
     
-    if(aa$convergence == "Successful") {
+    # Compute residuals if fit is valid
+    if(!(aa$logCompLik == 0 || aa$logCompLik > 1e+13)) {
       cc <- suppressWarnings(
-        GeoCorrFct(semiv$centers, t=semiv$centert, corrmodel=corrmodel, 
-                   model=model, distance=distance, 
-                   param=c(aa$param, aa$fixed), radius=radius, n=n, 
-                   covariance=TRUE, variogram=TRUE)$corr
+        GeoCorrFct(semiv$centers, t = semiv$centert, corrmodel = corrmodel, 
+                   model = model, distance = distance, 
+                   param = c(aa$param, aa$fixed), radius = radius, n = n, 
+                   covariance = TRUE, variogram = TRUE)$corr
       )
       res_val <- sum((cc - semiv$variograms)^2)
     } else {
@@ -78,9 +95,10 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     list(estimates = estimates_val, res = res_val)
   }
 
-  #################### SPATIAL ####################
+  #################### SPATIAL CASE ####################
   if(space || bivariate) {
     if(!parallel) {
+      # Sequential processing with progress bar
       if(progress) {
         progressr::handlers(global = TRUE)
         progressr::handlers("txtprogressbar")
@@ -95,12 +113,13 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         res[M] <- result$res
       }
     } else {
-      # Configurazione parallela ottimizzata
+      # Optimized parallel configuration
       n.cores <- if(is.null(ncores)) {
-        min(coremax - 1L, K)  # Non usare più core del necessario
+        min(coremax - 1L, K)  # Don't use more cores than necessary
       } else {
-        if(!is.numeric(ncores) || ncores > coremax || ncores < 1) 
+        if(!is.numeric(ncores) || ncores > coremax || ncores < 1) {
           stop("number of cores not valid\n")
+        }
         min(ncores, K)
       }
       
@@ -113,18 +132,22 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         pb <- progressr::progressor(along = 1:K)
       }
       
-      # Funzione parallela ottimizzata
+      # Single fit function for parallel execution
       single_fit <- function(M) {
         result <- compute_fit(neighb[M])
         if(progress) pb(sprintf("k=%g", M))
         c(result$estimates, res = result$res)
       }
       
-      results <- future.apply::future_lapply(seq_len(K), single_fit, 
-                                           future.seed = TRUE, future.stdout = FALSE,
-                                           future.conditions = "none")
+      # Execute parallel computations
+      results <- future.apply::future_lapply(
+        seq_len(K), single_fit, 
+        future.seed = TRUE, 
+        future.stdout = FALSE,
+        future.conditions = "none"
+      )
       
-      # Conversione ottimizzata dei risultati
+      # Optimized results conversion
       n_params <- length(start)
       estimates_list <- lapply(results, function(x) x[seq_len(n_params)])
       estimates <- do.call(rbind, estimates_list)
@@ -134,11 +157,12 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     }
   }
 
-  #################### SPAZIO-TEMPORALE ####################
+  #################### SPATIO-TEMPORAL CASE ####################
   if(spacetime) {
     total_iter <- K * P
     
     if(!parallel) {
+      # Sequential processing with progress bar
       if(progress) {
         progressr::handlers(global = TRUE)
         progressr::handlers("txtprogressbar")
@@ -157,11 +181,13 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         }
       }
     } else {
+      # Optimized parallel configuration
       n.cores <- if(is.null(ncores)) {
         min(coremax - 1L, total_iter)
       } else {
-        if(!is.numeric(ncores) || ncores > coremax || ncores < 1) 
+        if(!is.numeric(ncores) || ncores > coremax || ncores < 1) {
           stop("number of cores not valid\n")
+        }
         min(ncores, total_iter)
       }
       
@@ -174,10 +200,10 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         pb <- progressr::progressor(along = 1:total_iter)
       }
       
-      # Pre-calcolo combinazioni
+      # Pre-compute combinations for parallel execution
       combinations <- expand.grid(L = seq_len(P), M = seq_len(K))
       
-      # Funzione parallela spazio-temporale ottimizzata
+      # Optimized spatio-temporal parallel function
       single_fit_st <- function(i) {
         L <- combinations$L[i]
         M <- combinations$M[i]
@@ -187,11 +213,15 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         c(result$estimates, res = result$res)
       }
       
-      results <- future.apply::future_lapply(seq_len(nrow(combinations)), single_fit_st, 
-                                           future.seed = TRUE, future.stdout = FALSE,
-                                           future.conditions = "none")
+      # Execute parallel computations
+      results <- future.apply::future_lapply(
+        seq_len(nrow(combinations)), single_fit_st, 
+        future.seed = TRUE, 
+        future.stdout = FALSE,
+        future.conditions = "none"
+      )
       
-      # Conversione ottimizzata dei risultati
+      # Optimized results conversion
       n_params <- length(start)
       estimates_list <- lapply(results, function(x) x[seq_len(n_params)])
       estimates <- do.call(rbind, estimates_list)
@@ -201,7 +231,7 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     }
   }
 
-  # Calcolo risultati finali ottimizzato
+  # Optimized final results computation
   indexmin <- which.min(res)
   
   if(space || bivariate) {
@@ -214,7 +244,7 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     best_T <- grid_result[indexmin, 2L]
   }
 
-  # Calcolo suggerimenti ottimizzato
+  # Compute optimized suggestions
   sugg_neighb <- if(bestK <= 20) {
     bestK
   } else {
@@ -233,6 +263,7 @@ GeoNeighbSelect <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
     }
   } else NULL
 
+  # Return results list
   list(
     best_neighb = as.numeric(bestK),
     best_maxtime = best_T,

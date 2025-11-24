@@ -1,5 +1,5 @@
 export(CheckBiv,CheckDistance,CheckSph,CheckST,	CkCorrModel,CkInput,CkLikelihood,CkModel,	CkType,CompIndLik2,CompLik,CompLik2,	CorrelationPar,	CorrParam, corrsas, GeoAniso,
-GeoKrigWeights,GeoKriglocWeights,GeoCorrFct_Cop,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,	GeoNosymindices,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect)
+GeoKrigWeights,GeoKriglocWeights,GeoCorrFct_Cop,GeoDistances,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,GeoTestIsotropy,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,	GeoNosymindices,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect,GeoTestsupp_space)
 useDynLib(GeoModels, .registration = TRUE)
 S3method(print,GeoFit) 
 S3method(print,GeoCovmatrix) 
@@ -11,8 +11,8 @@ importFrom("grDevices", dev.cur,gray.colors)
 importFrom("graphics", abline, lines, par, persp,plot,points,image,plot.default,box,
 axis,plot.new,plot.window,title)
 importFrom("graphics", "hist","legend")
-importFrom("stats", setNames, median, nlminb, dist, fft, quantile, qqnorm, qbinom,qpois,qnbinom,  pweibull, pgamma, plnorm, nlm, optim, optimize, integrate,approxfun,pchisq,pnorm,rt,qnorm,dnorm,dpois,dbeta,dnbinom,dbinom,dweibull,dgamma,dlnorm,pbinom, plogis, pnbinom, ppois,rbinom,
-pbeta,dt,dlogis,qlnorm,qgamma,qweibull, qbeta,qlogis,lm, rnorm, runif, rgamma, pt,qt,qunif,uniroot, var,cor)
+importFrom("stats", setNames, median, nlminb, dist, fft, quantile, qqnorm, qbinom,qpois,qnbinom,  pweibull, pgamma, plnorm, nlm, optim, optimize, integrate,approxfun,pchisq,pnorm,rt,qnorm,dnorm,dpois,rbeta,dbeta,dnbinom,dbinom,dweibull,dgamma,dlnorm,pbinom, plogis, pnbinom, ppois,rbinom,sd,
+pbeta,dt,dlogis,qlnorm,qgamma,qweibull, qbeta,qlogis,lm, rnorm, runif, rgamma,rf,pt,qt,qunif,uniroot, var,cor)
 importFrom("methods","is", "new", "slot<-","as")
 importFrom("utils", "setTxtProgressBar", "txtProgressBar","capture.output")
 importFrom("utils", "head","object.size")

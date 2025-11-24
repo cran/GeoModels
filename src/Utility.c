@@ -212,6 +212,38 @@ double dist(int type_dist, double coordx, double locx, double coordy, double loc
 }
 
 
+
+// ---- wrapper che costruisce matrice distanze ----
+void geo_distances(double *coords, int *ncoords, int *p, int *type_dist, double *radius,
+                     double *out) {
+    int n = *ncoords;
+    int dim = *p;   // 2 o 3
+    int td = *type_dist;
+    double R = *radius;
+
+    for (int i = 0; i < n; i++) {
+        for (int j = i; j < n; j++) {
+            double d;
+            if (dim == 2) {
+                d = dist(td,
+                         coords[i], coords[j],
+                         coords[i + n], coords[j + n],
+                         0.0, 0.0,
+                         R);
+            } else {
+                d = dist(td,
+                         coords[i], coords[j],
+                         coords[i + n], coords[j + n],
+                         coords[i + 2*n], coords[j + 2*n],
+                         R);
+            }
+            out[i + j*n] = d;
+            out[j + i*n] = d; // simmetria
+        }
+    }
+}
+
+
 void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius)
 {
   double res1=0.0,res2=-LOW,lags=0.0;

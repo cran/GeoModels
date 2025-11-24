@@ -33,9 +33,9 @@ GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dy
      if(is.null(coordt)) {if(is.null(neighb)&&is.null(maxdist)) stop("neighb or maxdist must be fixed\n")}
      else                {if((is.null(neighb)||is.null(maxdist))&&is.null(maxtime)) stop("neighb or maxdist and maxtime must be fixed\n")}
      }
-     if(type=='Standard'){
-        if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
-        stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
+     #if(type=='Standard'){
+     #   if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
+     #   stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
 
 
     if((likelihood=='Marginal'&&type=="Independence")) {anisopars=NULL;est.aniso=c(FALSE,FALSE)}
@@ -115,7 +115,7 @@ if(!bivariate)
 if(!bivariate){
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
         "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson","Binary_misp_BinomialNeg",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',
+        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',"BinomNeg",
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Gaussian_misp_PoissonGamma',
         "PoissonGamma","PoissonGammaZIP","PoissonGammaZIP1",
@@ -125,6 +125,8 @@ if(is.null(fixed$sill)) fixed$sill=1
 else                    fixed$sill=1
 }
 }
+
+
 
 ##### all parameters are estimated
 allest=FALSE 
@@ -380,7 +382,7 @@ if(likelihood=="Full"&&type=="Standard")
 {
 
   if(varest){
-   alpha=0.05 
+   alpha=0.95
    conf.int=pvalues=NULL
    if(is.numeric(fitted$stderr))
    { aa=qnorm(1-(1-alpha)/2)*fitted$stderr

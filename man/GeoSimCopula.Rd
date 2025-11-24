@@ -14,7 +14,7 @@ GeoSimCopula(coordx, coordy=NULL,coordz=NULL, coordt=NULL,
 coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, 
       method="cholesky", model='Gaussian', n=1, param,
       anisopars=NULL,radius=1, sparse=FALSE,
-      copula="Gaussian",seed=NULL, X=NULL,spobj=NULL,nrep=1)
+      copula="Gaussian",X=NULL,spobj=NULL,nrep=1)
 }
 \arguments{
    \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
@@ -53,7 +53,6 @@ coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE,
   using sparse matrices algorithms (spam packake). It should be used
   with compactly supported covariance models.\code{FALSE} is the default.}
   \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
-  \item{seed}{Numeric; an integer used in set.seed function to reproduce the simulation.}
   \item{X}{Numeric; Matrix of space-time covariates.}
     \item{spobj}{An object of class sp or spacetime}
     \item{nrep}{Numeric; Numbers of indipendent replicates.}

@@ -10,7 +10,7 @@ MatDecomp <- function(mtx, method) {
   if (!is.matrix(mtx) || anyNA(mtx) || any(!is.finite(mtx))) return(FALSE)
   
   if (method == "cholesky") {
-    if (!isSymmetric(mtx)) return(FALSE)
+    if (!isSymmetric(mtx, tol = 1e-8)) return(FALSE)
     mat.decomp <- tryCatch(
       FastGP::rcppeigen_get_chol(mtx),
       error = function(e) FALSE
@@ -35,7 +35,7 @@ MatSqrt <- function(mat.decomp, method) {
   if (method == "cholesky") return(mat.decomp)
   if (method == "svd") {
     d_sqrt <- sqrt(mat.decomp$d)
-    return(t(mat.decomp$v * rep(d_sqrt, each = nrow(mat.decomp$v))))
+    return(t(t(mat.decomp$v) * d_sqrt))
   }
   stop("Invalid method")
 }
@@ -93,10 +93,27 @@ getInvC <- function(covmatrix, CC, mse = TRUE) {
 ######################################################################################################
 ######################################################################################################
 ######################################################################################################
-
 corrsas <- function(corr, skew, tail, max_coeff = NULL) {
-     d <- tail
-     e <- skew
+    d <- tail
+    e <- skew
+    # ========================================================================
+    if (!is.numeric(skew) || !is.numeric(tail)) {
+        stop("skew and tail must be numeric")
+    }
+    if (length(skew) != 1 || length(tail) != 1) {
+        stop("skew and tail must be scalars")
+    }
+    if (tail <= 0) {
+        stop("tail must be positive")
+    }
+    if (!is.numeric(corr)) {
+        stop("corr must be numeric")
+    }
+    if (length(corr) == 0) {
+        return(numeric(0))
+    }
+    
+    # Determinazione automatica max_coeff
     if (is.null(max_coeff)) {
         stability_indicator <- abs(e/d) + abs(d - 1) + max(abs(corr))
         is_stable <- stability_indicator < 2.0
@@ -120,31 +137,55 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
     sqrt_2pi <- sqrt(2 * pi)
     exp_0.25 <- exp(0.25)
     
-    # Calcolo funzioni di Bessel con fallback
-    tryCatch({
-        besselK_1 <- besselK(0.25, (d + 1)/(2*d))
-        besselK_2 <- besselK(0.25, (1 - d)/(2*d))
-        besselK_3 <- besselK(0.25, (d + 2)/(2*d))
-        besselK_4 <- besselK(0.25, (2 - d)/(2*d))
-    }, error = function(e) {
-        return(rep(NA, length(corr)))
-    })
+    # ========================================================================
+    # ========================================================================
+    compute_bessel_terms <- function(d) {
+        tryCatch({
+            k1 <- besselK(0.25, (d + 1)/(2*d))
+            k2 <- besselK(0.25, (1 - d)/(2*d))
+            k3 <- besselK(0.25, (d + 2)/(2*d))
+            k4 <- besselK(0.25, (2 - d)/(2*d))
+            if (any(!is.finite(c(k1, k2, k3, k4)))) {return(NULL)}
+            list(k1 = k1, k2 = k2, k3 = k3, k4 = k4)
+        }, error = function(e) {
+            warning("Bessel function computation failed: ", e$message)
+            NULL
+        })
+    }
+
+    bessel_vals <- compute_bessel_terms(d)
+    if (is.null(bessel_vals)) {
+        return(rep(NA_real_, length(corr)))
+    }
     
-    # Calcolo mm e vv
-    sinh_e_d <- sinh(e/d)
-    cosh_2e_d <- cosh(2*e/d)
+    #
+    besselK_1 <- bessel_vals$k1
+    besselK_2 <- bessel_vals$k2
+    besselK_3 <- bessel_vals$k3
+    besselK_4 <- bessel_vals$k4
+    
+    # 
+    if (abs(e/d) < 0.01) {
+        # Per valori molto piccoli, usa serie di Taylor
+        x <- e/d
+        sinh_e_d <- x * (1 + x^2/6)
+        cosh_2e_d <- 1 + 2*x^2 * (1 + x^2/3)
+    } else {
+        sinh_e_d <- sinh(e/d)
+        cosh_2e_d <- cosh(2*e/d)
+    }
+    
     mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
     vv <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
     
-    if (abs(vv) < .Machine$double.eps) {
-        return(rep(NA, length(corr)))
+    if (!is.finite(vv) || abs(vv) < .Machine$double.eps) {
+        return(rep(NA_real_, length(corr)))
     }
     
-    # Pre-calcolo di j_vec e gamma terms (evita ricalcoli)
+    # Pre-calcolo di j_vec e gamma terms
     j_vec <- 1:max_coeff
-    gamma_j_plus_1 <- gamma(j_vec + 1)  # Pre-calcolato
-    
-    # Funzione integranda semplificata
+    gamma_j_plus_1 <- gamma(j_vec + 1)
+    # ========================================================================
     integrand <- function(z, alpha, kappa, j, r) {
         z_sq <- z^2
         if (j - 2*r == 0) {
@@ -156,36 +197,67 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
         exp_term <- exp(-z_sq/2 + alpha/kappa)
         exp_term * z_pow * (aa^(1/kappa) - exp(-2*alpha/kappa) * aa^(-1/kappa))
     }
-    
-    # Cache globale per evitare ricreazione
-   # if (!exists("II_global_cache", envir = .GlobalEnv)) {
-   #     assign("II_global_cache", new.env(hash = TRUE), envir = .GlobalEnv)
-   # }
-   # II_cache <- get("II_global_cache", envir = .GlobalEnv)
-
+    # ========================================================================
+    # ========================================================================
     II_cache <- .GeoModels_env$II_global_cache
+    MAX_CACHE_SIZE <- 5000
+    # 
+    cache_size <- length(names(II_cache))
+    if (cache_size >= MAX_CACHE_SIZE) {
+        # Rimuovi metà degli elementi (strategia semplice)
+        keys_to_remove <- sample(names(II_cache), floor(MAX_CACHE_SIZE / 2))
+        rm(list = keys_to_remove, envir = II_cache)
+    }
     
-    # Funzione II ottimizzata 
+    # =======================================================================
+    # ========================================================================
     II <- function(alpha, kappa, j, r) {
         key <- paste(round(alpha, 8), round(kappa, 8), j, r, sep = "_")
         if (exists(key, envir = II_cache)) {
             return(get(key, envir = II_cache))
         }
-        
         val <- tryCatch({
-            integrate(integrand, lower = -Inf, upper = Inf, 
-                     alpha = alpha, kappa = kappa, j = j, r = r,
-                     rel.tol = 1e-6, # Leggermente meno rigoroso ma più veloce
-                     subdivisions = 100)$value
-        }, error = function(e) 0)
+            # Limiti finiti: l'integranda decade come exp(-z²/2)
+            # Oltre ±6 il contributo è trascurabile (< 1e-9)
+            integrate(integrand, 
+                     lower = -6, 
+                     upper = 6, 
+                     alpha = alpha, 
+                     kappa = kappa, 
+                     j = j, 
+                     r = r,
+                     rel.tol = 1e-7,
+                     abs.tol = 1e-9,
+                     subdivisions = 150,
+                     stop.on.error = FALSE)$value
+        }, error = function(e) {
+            warning("Integration failed for key ", key, ": ", e$message, call. = FALSE)
+            0
+        })
+        # 
+        if (is.finite(val)) {
+            assign(key, val, envir = II_cache)
+        } else {
+            val <- 0
+        }
         
-        assign(key, val, envir = II_cache)
         val
     }
-    
-    # Calcolo coefficienti ottimizzato
+    kahan_sum <- function(x) {
+        if (length(x) == 0) return(0)
+        s <- 0
+        c <- 0
+        for (xi in x) {
+            y <- xi - c
+            t <- s + y
+            c <- (t - s) - y
+            s <- t
+        }
+        s
+    }
+    # ========================================================================
+    # ========================================================================
     coeffs <- numeric(max_coeff)
-    
     for (j in j_vec) {
         max_r <- floor(j/2)
         if (max_r < 0) {
@@ -193,64 +265,67 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
             next
         }
         
-        # Vettorizzazione del loop interno
         rr <- 0:max_r
         II_vals <- sapply(rr, function(r_val) II(e, d, j, r_val))
-        
-        # Calcolo gamma terms vettorizzato
         gamma_r_plus_1 <- gamma(rr + 1)
         gamma_j_minus_2r_plus_1 <- gamma(j - 2*rr + 1)
-        
-        # Controllo validità
         valid_gamma <- is.finite(gamma_r_plus_1) & is.finite(gamma_j_minus_2r_plus_1) & 
                       gamma_r_plus_1 > 0 & gamma_j_minus_2r_plus_1 > 0
-        
         if (any(valid_gamma)) {
             terms <- II_vals[valid_gamma] * (-1)^rr[valid_gamma] / 
-                    (2^(rr[valid_gamma] + 1) * gamma_r_plus_1[valid_gamma] * gamma_j_minus_2r_plus_1[valid_gamma])
+                    (2^(rr[valid_gamma] + 1) * gamma_r_plus_1[valid_gamma] * 
+                     gamma_j_minus_2r_plus_1[valid_gamma])
             
             if (is.finite(gamma_j_plus_1[j]) && gamma_j_plus_1[j] > 0) {
-                coeffs[j] <- gamma_j_plus_1[j] * sum(terms) / sqrt_2pi
+                coeffs[j] <- gamma_j_plus_1[j] * kahan_sum(terms) / sqrt_2pi
             }
         }
     }
-    
-    # Filtra coefficienti validi
     valid_idx <- is.finite(coeffs) & !is.na(coeffs) & coeffs != 0
     if (!any(valid_idx)) {
-        return(rep(NA, length(corr)))
+        return(rep(NA_real_, length(corr)))
     }
-    
     coeffs <- coeffs[valid_idx]
     j_vec_valid <- j_vec[valid_idx]
     gamma_terms_valid <- gamma_j_plus_1[valid_idx]
-    coeffs_sq <- coeffs^2  # Pre-calcolo
+    coeffs_sq <- coeffs^2
     
-    # Funzione interna vettorizzata e ottimizzata
+    # ========================================================================
+    # ========================================================================
     corrsas_inner <- function(rho) {
-        if (!is.finite(rho) || is.na(rho)) return(NA)
+        if (!is.finite(rho) || is.na(rho)) return(NA_real_)
         if (rho == 0) return(0)
         
-        # Calcolo diretto senza tryCatch per velocità
-        rho_powers <- rho^j_vec_valid
-        if (any(is.infinite(rho_powers))) return(NA)
-        
-        numerator <- sum(coeffs_sq * rho_powers / gamma_terms_valid)
+        # Gestione overflow con log-scale per correlazioni alte
+        max_j <- max(j_vec_valid)
+        if (abs(rho) > 0.99 && max_j > 50) {
+            log_rho <- log(abs(rho))
+            if (max_j * abs(log_rho) > 700) return(NA_real_)
+            
+            # Calcolo in log-scale
+            log_terms <- 2*log(abs(coeffs)) + j_vec_valid * log_rho - log(gamma_terms_valid)
+            max_log <- max(log_terms[is.finite(log_terms)])
+            if (!is.finite(max_log)) return(NA_real_)
+            
+            terms_scaled <- exp(log_terms - max_log)
+            numerator <- exp(max_log) * kahan_sum(terms_scaled)
+        } else {
+            rho_powers <- rho^j_vec_valid
+            if (any(is.infinite(rho_powers))) return(NA_real_) 
+            numerator <- kahan_sum(coeffs_sq * rho_powers / gamma_terms_valid)
+        }
         result <- numerator / vv
-        
-        if (is.finite(result)) result else NA
+        if (is.finite(result)) result else NA_real_
     }
     
-    # Applicazione vettorizzata ottimizzata
+    # ========================================================================
+    # ========================================================================
     if (length(corr) == 1) {
         return(corrsas_inner(corr))
     } else {
-        # Per vettori lunghi, usa vapply che è più veloce
         return(vapply(corr, corrsas_inner, numeric(1)))
     }
 }
-
-
 
 
 ######################################################################################################
@@ -275,7 +350,6 @@ variance_disp <- function(model_type, params) {
     stop(paste("Model not supported:", model_type))
   )
 }
-
 # quantiles
 quantile_disp <- function(p, model_type, params) {
   switch(as.character(model_type),
@@ -298,8 +372,7 @@ quantile_disp <- function(p, model_type, params) {
 #####################################################################
 # coefficients a_k in copula gaussian covariance 
 ####################################################################
-
-  hermite_single <- function(k, t) {
+hermite_single <- function(k, t) {
     if (k == 0) return(rep(1, length(t)))
     if (k == 1) return(t)
     H_prev <- rep(1, length(t))
@@ -316,8 +389,6 @@ quantile_disp <- function(p, model_type, params) {
 compute_ak_vectorized <- function(M, model_type, params) {
   ak <- numeric(M)
   failed_integrations <- c()
-
-
   for (k in 1:M) {
     integrand <- function(t) {
       p <- pnorm(t)
@@ -345,13 +416,6 @@ compute_ak_vectorized <- function(M, model_type, params) {
                   subdivisions = 1000L)$value
       }, error = function(e) NA, warning = function(w) NA)
     }
-    # Tentativo 3: Integrazione adattiva con quadratura di Gauss-Hermite
-  #  if (is.na(result)) {
-  #    result <- tryCatch({
-  #      integrate_gauss_hermite(integrand, k)
-  #    }, error = function(e) NA)
-  #  }
-    # Tentativo 4: Approssimazione per k elevati
     if (is.na(result)) {
       if (k > 20) {
         # Per k elevati, i coefficienti tendono rapidamente a zero
@@ -385,13 +449,12 @@ compute_ak_vectorized <- function(M, model_type, params) {
 
 
 # Funzione principale migliorata
-gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE, 
+gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE, 
                                      auto_reduce_M = TRUE, verbose = FALSE) {
   
 
   # Cache management
   cache_key <- paste(model_type, paste(nuisance, collapse = "_"), M, sep = "_")
-  
   ak_cache <- .GeoModels_env$ak_cache
   if (cache_ak && cache_key %in% names(ak_cache)) {
     ak_coeffs <- ak_cache[[cache_key]]
@@ -432,29 +495,18 @@ gaussian_copula_cov_fast <- function(rho, model_type, nuisance, M=30, cache_ak =
      # warning("Series may not converge well - consider reducing M")
     #}
   }
-  
   # Calcolo covarianze
   M_eff <- length(ak_coeffs)
   k_vec <- 1:M_eff
   fact_k <- factorial(k_vec)
   outer_term <- (ak_coeffs^2) / fact_k
-  
   covariances <- sapply(rho, function(r) {
     if (abs(r) < 1e-12) return(0)  # Correlazione quasi zero → Covarianza zero
-    
-    # Calcolo della serie con controllo overflow
     terms <- outer_term * r^k_vec
-    
-    # Controlla per overflow/underflow
     valid_terms <- is.finite(terms) & abs(terms) > .Machine$double.eps
     
     result <- sum(terms[valid_terms])
-    
-    if (!is.finite(result)) {
-      #warning(paste("Non-finite result for rho =", r))
-      return(0)
-    }
-    
+    if (!is.finite(result)) {return(0)}
     return(result)
   })
   
@@ -515,7 +567,12 @@ cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","doub
 corr=cr$corr*(1-as.numeric(nuisance['nugget'])) 
 if(model==11||model==16)  nuisance["n"]=n
 
-cova=gaussian_copula_cov_fast(corr, model,nuisance  )
+
+
+print(nuisance)
+print(model)
+print(head(corr))
+cova=gaussian_copula_cov(corr, model,nuisance  )
 vv=variance_disp(model,nuisance)
 
   if(!bivariate)

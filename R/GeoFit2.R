@@ -41,9 +41,9 @@ GeoFit2 <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_d
     if(!is.character(optimizer)) stop("invalid optimizer\n")
      if(!is.character(distance)) stop("invalid distance\n")
 
-    if(type=='Standard'){
-        if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
-    stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
+    #if(type=='Standard'){
+    #    if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
+    #stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
 
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
@@ -333,7 +333,7 @@ conf.int=NULL
 pvalues=NULL
 if(likelihood=="Full"&&type=="Standard") 
 {if(varest){
-   alpha=0.05 
+   alpha=0.95
    aa=qnorm(1-(1-alpha)/2)*fitted$stderr
    pp=as.numeric(fitted$par)
    low=pp-aa; upp=pp+aa

@@ -23,6 +23,8 @@ double CheckCor(int *cormod, double *par)
     //case 6:// Gaussian correlation function
     case 10:// skarofsky
     case 16://wave correlation function
+        case 31://gaussian 
+            case 32:// spherical correlation function
       scale=par[0];
       if(scale<=0) rho=-2;
       break;
@@ -84,8 +86,7 @@ double CheckCor(int *cormod, double *par)
        //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
             if(scale<=0 ||smooth<0.0 ) rho=-2;
       break;
-    case 6:
-    case 31:    
+    case 6:   
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
@@ -529,9 +530,19 @@ double CorFct(int *cormod, double h, double u, double *par, int c11, int c22)
        rho=exp(-h/scale)*(1+h/scale+R_pow(h/scale,2)/3);
       break;
     case 4:// Exponential correlation function
-      R_power=1;
+      R_power=1.0;
       scale=par[0];
       rho=CorFunStable(h, R_power, scale);
+      break;
+      case 31:// gaussian  correlation function
+      R_power=2.0;
+      scale=par[0];
+      rho=CorFunStable(h, R_power, scale);
+      break;
+    case 32:// spherical correlation function
+      R_power=1;
+      scale=par[0];
+      rho=spherical(h, scale);
       break;
     case 5: // Dagum
     R_power1=par[0];
@@ -870,19 +881,20 @@ case 23: // hyperg correlation  parameter with matern my version
       scale_t=par[1];
       smooth_s=par[2];
        smooth_t=par[3];
-       sep=par[4];
-     rho=Matern_Matern_nosep(h,u,scale_s,scale_t,smooth_s,smooth_t,sep);
-       break;
-
+        sep=par[4];
+                  // Rprintf("%f %f %f %f  %f \n",scale_s,scale_t,smooth_s,smooth_t,sep);
+      rho=CorFunWitMat(h*R_pow(1+u,-sep), scale_s,smooth_s)*CorFunWitMat(u, scale_t, smooth_t);
+      break;
           case 85:
-      scale_s=par[0];
-      scale_t=par[1];
-      R_power_s=par[2];
-      R_power_t=par[3];
-      smooth_s=par[4];
-       smooth_t=par[5];
-       sep=par[6];
-     rho=GenWend_GenWend_nosep(h,u,scale_s,scale_t, R_power_s,R_power_t,smooth_s,smooth_t,sep);
+         scale_s=par[0];
+            scale_t=par[1];
+            smooth_s=par[4];
+            smooth_t=par[5];
+            R_power_s=par[2];
+            R_power_t=par[3];
+            sep=par[6];
+
+          rho=CorFunW_gen(h*R_pow(1+u,sep), R_power_s, smooth_s, scale_s)*CorFunW_gen(u, R_power_t, smooth_t, scale_t);
        break;
 
 
@@ -1843,6 +1855,15 @@ return(C*B);
 
 
 
+double spherical (double lag, double scale)
+{
+
+      double rho=0.0,x=0;
+  x=lag/scale;
+  if(x<=1) rho=1-1.5*x+0.5*R_pow(x,3);
+  return rho;
+}
+
 // Stable class of correlation models:
 double CorFunStable(double lag, double R_power, double scale)
 {
@@ -1900,7 +1921,7 @@ double CorFunSmoke(double lag, double scale, double smooth)
 }
 
 
-// Whittle=matern class of correlation models:
+/*
 double CorFunWitMat(double lag, double scale, double smooth)
 {
   
@@ -1917,47 +1938,58 @@ double CorFunWitMat(double lag, double scale, double smooth)
     double log_den = (smooth - 1.0) * log(2.0) + lgammafn(smooth);
 
     return exp(log_num - log_den);
-}
+}*/
 
 
+// Whittle–Matérn correlation function (ibrida)
 
-double Matern_Matern_nosep(double h, double u,
-                           double scale_s, double scale_t,
-                           double smooth_s, double smooth_t,
-                           double sep)
+
+double CorFunWitMat(double lag, double scale, double smooth)
 {
+    if (lag <= 0.0)
+        return 1.0;
 
-    double C_s = CorFunWitMat(h, scale_s, smooth_s);
-    double C_t = CorFunWitMat(u, scale_t, smooth_t);
+    double a = lag / scale;
 
-    if (sep <= 0.0)            /* caso separabile */
-        return C_s * C_t;
+    // ---------------------------------------------------------
+    // Controlla se smooth è semintero (ν = k + 1/2)
+    // ---------------------------------------------------------
+    double k_real = smooth - 0.5;
+    double intpart;
+    int is_half_integer = (fabs(modf(k_real, &intpart)) < 1e-10);
+    int k = (int)(k_real + 0.5);
 
-    /* fattore di interazione non-separabile */
-    double denom = 1.0 + sep * h * h * u * u/(1+sep);
-    return C_s * C_t / denom;
+    // ---------------------------------------------------------
+    // 1️⃣ Casi piccoli hard-coded (super veloci)
+    // ---------------------------------------------------------
+    if (is_half_integer)
+    {
+        if (k == 0)
+            return exp(-a);
+        if (k == 1)
+            return exp(-a) * (1.0 + a);
+        if (k == 2)
+            return exp(-a) * (1.0 + a + (a * a) / 3.0);
+        if (k == 3)
+            return exp(-a) * (1.0 + a + 0.4 * a * a + (a * a * a) / 15.0);
+    }
+
+    // ---------------------------------------------------------
+    // 3️⃣ Caso generale: formula con Bessel Kν
+    // ---------------------------------------------------------
+    // M_ν(a) = (2^{1−ν} / Γ(ν)) * a^ν * K_ν(a)
+    double log_besselk = log(bessel_k(a, smooth, 2));  // scaling interno esponenziale
+    double log_num = smooth * log(a) + log_besselk - a;
+    double log_den = (smooth - 1.0) * log(2.0) + log(gammafn(smooth));
+
+    return exp(log_num - log_den);
 }
 
 
 
 
-double GenWend_GenWend_nosep(double h, double u,
-                           double scale_s, double scale_t,
-                            double power_s, double power_t,
-                           double smooth_s, double smooth_t,
-                           double sep)
-{
 
-    double C_s = CorFunW_gen(h, scale_s, power_s, smooth_s);
-    double C_t = CorFunW_gen(u, scale_t, power_t, smooth_t);
 
-    if (sep <= 0.0)            /* caso separabile */
-        return C_s * C_t;
-
-    /* fattore di interazione non-separabile */
-    double denom = 1.0 + sep * h * h * u * u/(1+sep);
-    return C_s * C_t / denom;
-}
 
 
 
@@ -1982,9 +2014,11 @@ double CorFunWitMat1(double lag, double scale, double smooth)
   else  rho=(R_pow(2,smooth+1)*R_pow(bb,-smooth)*bessel_k(bb,smooth,1))/(gammafn(-smooth));
   return rho;
 }
+
 double CorFunBohman(double lag,double scale)
 {
   double rho=0.0,x=0;
+
   x=lag/scale;
   if(x<=1) {
        if (x>0) rho=(1-x)*(sin(2*M_PI*x)/(2*M_PI*x))+(1-cos(2*M_PI*x))/(2*M_PI*M_PI*x);
@@ -1992,6 +2026,8 @@ double CorFunBohman(double lag,double scale)
   else rho=0;
   return rho;
 }
+
+
 
 /* wendland function alpha=0*/
 double CorFunW0(double lag, double scale, double smoo)
@@ -2091,6 +2127,97 @@ double CorFunHyperg(double lag, double R_power, double smooth, double scale)
 /* generalized wendland function*/
 
 
+
+
+
+
+
+double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
+{
+    double x = lag / scale;
+
+    if (fabs(x) < DBL_EPSILON)
+        return 1.0;
+    if (x >= 1.0)
+        return 0.0;
+
+    double intpart;
+    int is_integer = (fabs(modf(smooth, &intpart)) < 1e-10);
+    int k = (int)(smooth + 0.5);
+
+    // 1) Casi piccoli hard-coded
+    if (is_integer)
+    {
+        if (k == 0)
+            return R_pow(1.0 - x, R_power1);
+
+        if (k == 1)
+            return R_pow(1.0 - x, R_power1 + 1.0) *
+                   (1.0 + x * (R_power1 + 1.0));
+
+        if (k == 2)
+            return R_pow(1.0 - x, R_power1 + 2.0) *
+                   (1.0 + x * (R_power1 + 2.0) +
+                    x * x * (R_power1 * R_power1 + 4.0 * R_power1 + 3.0) / 3.0);
+
+        if (k == 3)
+        {
+            double x2 = x * x;
+            double x3 = x2 * x;
+            return R_pow(1.0 - x, R_power1 + 3.0) *
+                   (1.0 +
+                    x * (R_power1 + 3.0) +
+                    x2 * (2.0 * R_power1 * R_power1 + 12.0 * R_power1 + 15.0) / 5.0 +
+                    x3 * (R_power1 * R_power1 * R_power1 +
+                          9.0 * R_power1 * R_power1 +
+                          23.0 * R_power1 + 15.0) / 15.0);
+        }
+    }
+
+    // 2) Caso intero generale (k >= 4): polinomio P_k con ricorrenza corretta
+    if (is_integer)
+    {
+        double mu = R_power1;
+        double t = x;
+
+        // L_k = 2^k * k! / (2k)!
+        double logLk = k * M_LN2 + lgammafn(k + 1.0) - lgammafn(2.0 * k + 1.0);
+        double Lk = exp(logLk);
+
+        // c_{0,k}(mu) = Γ(2k+μ+1) / Γ(k+μ+1)
+        double logcj = lgammafn(2.0 * k + mu + 1.0) - lgammafn(k + mu + 1.0);
+        double cj = exp(logcj);
+
+        double sum = cj * R_pow(t, k); // j=0
+
+        for (int j = 1; j <= k; j++)
+        {
+            // *** FIX QUI ***
+            // ratio = ((k + j)*(k - j + 1)) / (2*j*(k + j + mu))
+            double ratio = ((k + j) * (k - j + 1.0)) / (2.0 * j * (k + j + mu));
+            cj *= ratio;
+
+            double term = R_pow(t, k - j) * R_pow(1.0 - t, j);
+            sum += cj * term;
+        }
+
+        double Pk = Lk * sum;
+        return R_pow(1.0 - x, R_power1 + k) * Pk;
+    }
+
+    // 3) Caso non intero: formula generale ipergeometrica
+    return exp(lgammafn(smooth) + lgammafn(2.0 * smooth + R_power1 + 1.0)
+             - lgammafn(2.0 * smooth)
+             - lgammafn(smooth + R_power1 + 1.0))
+         * R_pow(2.0, -R_power1 - 1.0)
+         * R_pow(1.0 - x * x, smooth + R_power1)
+         * hypergeo2(R_power1 / 2.0, (R_power1 + 1.0) / 2.0,
+                     smooth + R_power1 + 1.0, 1.0 - x * x);
+}
+
+
+
+/*
 double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
 {
 
@@ -2134,7 +2261,7 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
            hypergeo2(R_power1 / 2.0, (R_power1 + 1.0) / 2.0,
                      smooth + R_power1 + 1.0, 1.0 - x * x);
 }
-
+*/
 
 /* kummer function*/
 double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
@@ -2567,22 +2694,23 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
        }
 
 
+        
          if(*model==57) // poissongamma inflado 2 nuggets
        {
-         //  Rprintf("%f %f %f %f  %f \n",nuis[0],nuis[1],nuis[2],nuis[3],nuis[4]);
+          
            mui=exp(mean[i]);muj=exp(mean[j]);
            ai=mui*(1+mui/nuis[4]);aj=muj*(1+muj/nuis[4]);
            dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[1])*corr,mui, muj, nuis[4]); // it's the pem  covariance
            p=pnorm(nuis[3],0,1,1,0);
            psj=pbnorm22(nuis[3],nuis[3],(1-nuis[2])*corr);
            p1=1-2*p+psj;
-           rho[h]=p1*dd +  ai*aj*(p1-R_pow((1-p),2));
+           rho[h]=p1*dd +  R_pow((1-p),2)*mui*muj*(p1-R_pow((1-p),2));
       
        }
 
            if(*model==58) // poissongamma inflado 1 nugget
        {
-       // Rprintf("%f %f %f %f   \n",nuis[0],nuis[1],nuis[2],nuis[3]);
+
            mui=exp(mean[i]);muj=exp(mean[j]);
            ai=mui*(1+mui/nuis[2]);aj=muj*(1+muj/nuis[2]);
            dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[2]); // it's the pem  covariance
@@ -3125,6 +3253,22 @@ for(j=0;j<(*nloc);j++){
         if(*cop==1){ cc[h]=ll;}
       } 
        
+            if(*model==57||*model==58) // poisson gamma zip 
+       {
+            double mui=exp(mean[i]);double muj=exp(mean[j]);
+            // Rprintf("%f %f %f %f  %f \n",nuis[0],nuis[1],nuis[2],nuis[3],nuis[4]);
+              if(*cop==0){
+                 ai=mui*(1+mui/nuis[3]);aj=muj*(1+muj/nuis[3]);
+                 dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[3]); // it's the pem  covariance
+                 p=pnorm(nuis[2],0,1,1,0);
+                 psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
+                 p1=1-2*p+psj;
+                 cc[h]=p1*dd +  R_pow((1-p),2)*mui*muj*(p1-R_pow((1-p),2));
+             }
+        if(*cop==1){ cc[h]=ll;}
+    } 
+       
+
                /*****************************************************************/
                     h++;
         }}

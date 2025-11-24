@@ -4,15 +4,13 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
                        model = "Gaussian", n = 1, nrep = 1, local = FALSE, L = 1000,
                        neighb = NULL, param, anisopars = NULL, radius = 1, sparse = FALSE,
                        time = NULL, copula = NULL, X = NULL, Xloc = NULL, Mloc = NULL,
-                       parallel = FALSE, ncores = NULL, progress=FALSE) {
-
-
+                       parallel = FALSE, ncores = NULL, progress = FALSE) {
 
 ################################################################################# 
 ### Helper function for conditional skew gaussian simulation 
 ################################################################################# 
 SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
-                                nrep = 1, method = "Cholesky", local=FALSE, neighb=NULL, L=NULL, 
+                                nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, L = NULL, 
                                 parallel = FALSE, ncores = 1, progress = FALSE) {
   mm          <- param$mean
   sigma_sqrt  <- sqrt(param$sill)
@@ -22,8 +20,8 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
   
   cat("Computing Kriging weights ...\n")
   
-  if(!local)
-    GeoW        <- GeoKrigWeights(
+  if (!local)
+    GeoW <- GeoKrigWeights(
       coordx   = coord_obs, corrmodel = corrmodel,
       loc      = loc, model = "Gaussian",
       param    = c(sill = 1, corr_param))
@@ -49,7 +47,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
     Gauss.all <- GeoSimapprox(
       coordx   = rbind(coord_obs, loc),
       corrmodel = corrmodel, method = method, model = "Gaussian",
-      param    = c(corr_param, mean = 0, nugget = 0), L=L,
+      param    = c(corr_param, mean = 0, nugget = 0), L = L,
       nrep     = 2 * nrep, progress = FALSE,
       parallel = FALSE
     )
@@ -66,18 +64,18 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
 
   ####### OTTIMIZZAZIONE: INI VAL SAMPLER FUNCTION VETTORIZZATA #######
   Ini.val.fun.vectorized <- function(x_vec, A) {
-    if(length(A) != 2) stop("A deve essere un vettore di lunghezza 2")
+    if (length(A) != 2) stop("A deve essere un vettore di lunghezza 2")
     
     n <- length(x_vec)
     result_matrix <- matrix(0, nrow = 2, ncol = n)
     
     # Chiamata vettorizzata più efficiente
-    for(i in seq_len(n)) {
+    for (i in seq_len(n)) {
       vvv <- dotCall64::.C64("rnorm_constraint_simple",
                              SIGNATURE = c("double", "double", "double", "double", "double"), 
                              A = as.double(A),
                              b = as.double(x_vec[i]),
-                             mu = as.double(c(0,0)),
+                             mu = as.double(c(0, 0)),
                              sigma = as.double(1),
                              result = double(2),
                              INTENT = c("r", "r", "r", "r", "w"))$result
@@ -93,7 +91,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
     A_vec <- c(sqrt_param_sill, eta)
     ini.vals <- Ini.val.fun.vectorized(Z_trans, A_vec)
     
-    if(!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
+    if (!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
       stop("Errore nella generazione dei valori iniziali")
     }
     
@@ -103,18 +101,18 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
       SIGNATURE = c("double", "integer", "double", "double", "integer", "double", "double"), 
       data_obs     = as.double(Z_trans),
       n            = as.integer(M0),
-      Sigma_mat_inv= as.double(Sigma.mat.inv),
+      Sigma_mat_inv = as.double(Sigma.mat.inv),
       eta          = as.double(c(sigma_sqrt, abs_eta)),
       n_iter       = as.integer(1000),
-      data_x       = as.double(ini.vals[1,]),
-      data_y       = as.double(ini.vals[2,]),
+      data_x       = as.double(ini.vals[1, ]),
+      data_y       = as.double(ini.vals[2, ]),
       INTENT = c("r", "r", "r", "r", "r", "rw", "rw"), 
       VERBOSE = 0, 
       NAOK = TRUE, 
       PACKAGE = "GeoModels"
     )
     
-    if(is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
+    if (is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
       return(NULL)
     }
     
@@ -163,7 +161,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
       gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
                                              sigma_sqrt, abs_eta, sqrt_param_sill, eta)
       
-      if(is.null(gibbs_result)) {
+      if (is.null(gibbs_result)) {
         warning(paste("Gibbs sampler fallito alla simulazione", i))
         next
       }
@@ -231,7 +229,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
       gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
                                              sigma_sqrt, abs_eta, sqrt_param_sill, eta)
       
-      if(is.null(gibbs_result)) {
+      if (is.null(gibbs_result)) {
         warning(paste("Gibbs sampler fallito alla simulazione", i))
         return(NULL)
       }
@@ -264,8 +262,15 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
   
   return(res)
 } 
+
 ################################################################################# 
 ### Helper function for conditional Gamma simulation 
+################################################################################# 
+################################################################################# 
+### Helper function for conditional Gamma simulation - VERSIONE CORRETTA
+################################################################################# 
+################################################################################# 
+### Helper function for conditional Gamma simulation - VERSIONE MEMORY-EFFICIENT
 ################################################################################# 
 GammaSimcond <- function(coord_obs, loc, data, param, corrmodel, 
                          nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, 
@@ -288,68 +293,205 @@ GammaSimcond <- function(coord_obs, loc, data, param, corrmodel,
   N0 <- nrow(loc)
   Wglob <- GeoW$weights
   mm_loc <- mm
-  data_transformed <- exp(-mm_loc) * data  # Pre-calcolo
-  sqrt_factor <- sqrt(2 / shape)  # Pre-calcolo costante
-  exp_mm_half <- exp(mm_loc) * 0.5  # Pre-calcolo per output finale
+  data_transformed <- exp(-mm_loc) * data
+  sqrt_factor <- sqrt(2 / shape)
+  exp_mm_half <- exp(mm_loc) * 0.5
 
-  # Generazione simulazioni Gaussiane
-  if (method == "TB" || method == "CE") {
-    Gauss.all <- GeoSimapprox(coordx = rbind(coord_obs, loc), 
-                              corrmodel = corrmodel, method = method, 
-                              model = "Gaussian", param = c(corr_param, mean = 0, 
-                                                            nugget = 0, sill = 1), 
-                              L = L, nrep = shape * nrep, progress = FALSE, parallel = FALSE)
-  } else {
-    Gauss.all <- GeoSim(coordx = rbind(coord_obs, loc), 
-                        corrmodel = corrmodel, model = "Gaussian", 
-                        param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
-                        nrep = shape * nrep, progress = FALSE)
-  }
-  
-  pair_idx <- split(seq_len(shape * nrep), ceiling(seq_len(shape * nrep)/shape))
-  
-  # Funzione helper per Gibbs sampler - evita duplicazione codice
-  run_gibbs_sampler <- function(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor) {
-    # Genera segni casuali e valori iniziali
-    random_sign <- matrix(ifelse(runif(M0 * shape) <= 0.5, 1, -1), nrow = M0, ncol = shape)
-    ini_vals <- random_sign * matrix(rep(sqrt(data_transformed), shape) * sqrt_factor, 
-                                     nrow = M0, ncol = shape)
-  gibbs.result <- dotCall64::.C64("gamma_gibbs_sampler",
-                                      SIGNATURE = c("double","double","int","int","double","int","int"),
-                                      SigmaInv = as.double(Sigma.mat.inv),
-                                      y        = as.double(data_transformed),
-                                      n        = as.integer(M0),
-                                      v        = as.integer(shape),
-                                      U        = as.double(ini_vals),
-                                      nIte     = as.integer(1000),
-                                      nRep     = as.integer(150),  # Unificato a 150
-                                      INTENT   = c("r","r","r","r","rw","r","r"), 
-                                      VERBOSE = 0, 
-                                      NAOK = FALSE, 
-                                      PACKAGE = "GeoModels")
+  # STRATEGIA MEMORY-EFFICIENT: Genera simulazioni in batch
+  if (parallel && nrep > 1) {
     
-    if (is.null(gibbs.result$U)) return(NULL)
+    # Calcola memoria necessaria per un batch
+    coord_sim <- rbind(coord_obs, loc)
+    n_total <- nrow(coord_sim)
     
-    return(matrix(gibbs.result$U, nrow = M0, ncol = shape))
-  }
-  
-  # Funzione helper per processamento vettorizzato
-  process_simulation_vectorized <- function(gibbs_U, idx_xy, Gauss_data, M0, N0, shape, Wglob) {
-    # Pre-alloca matrice risultato
-    res_i <- matrix(0, nrow = N0, ncol = shape)
-    gauss_matrices <- lapply(idx_xy, function(k) Gauss_data[[k]])
-    for (kk in seq_len(shape)) {
-      simX <- gauss_matrices[[kk]]
-      sim_train_x <- simX[seq_len(M0)]
-      sim_valid_x <- simX[(M0 + 1):(N0 + M0)]
-      sk_pred_x <- as.numeric(crossprod(Wglob, gibbs_U[, kk] - sim_train_x))
-      res_i[, kk] <- sim_valid_x + sk_pred_x
+    # Stima: ogni simulazione ~ 8 bytes * n_total
+    memory_per_sim_mb <- (8 * n_total) / (1024^2)
+    memory_per_batch_mb <- memory_per_sim_mb * shape
+    
+    # Determina batch size: massimo 200 MB per batch
+    max_batch_memory_mb <- 200
+    sims_per_batch <- max(1, floor(max_batch_memory_mb / memory_per_batch_mb))
+    
+    #cat(sprintf("Memory-efficient mode: processing %d simulations per batch\n", sims_per_batch))
+    #cat(sprintf("Total batches needed: %d\n", ceiling(nrep / sims_per_batch)))
+    
+    # Setup progress
+    if (progress) {
+      progressr::handlers(global = TRUE)
+      progressr::handlers("txtprogressbar")
+      pb <- progressr::progressor(along = seq_len(nrep))
     }
     
-    return(res_i)
-  }
-  
-  if (!parallel) {
+    # Parallelizzazione per batch
+    res <- vector("list", nrep)
+    n_batches <- ceiling(nrep / sims_per_batch)
+    
+    for (batch_idx in seq_len(n_batches)) {
+      start_idx <- (batch_idx - 1) * sims_per_batch + 1
+      end_idx <- min(batch_idx * sims_per_batch, nrep)
+      batch_nrep <- end_idx - start_idx + 1
+      
+      cat(sprintf("\n=== Batch %d/%d: simulations %d to %d ===\n", 
+                  batch_idx, n_batches, start_idx, end_idx))
+      
+      # Genera simulazioni Gaussiane SOLO per questo batch
+      if (method == "TB" || method == "CE") {
+        Gauss_batch <- GeoSimapprox(
+          coordx = coord_sim, 
+          corrmodel = corrmodel, 
+          method = method, 
+          model = "Gaussian", 
+          param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
+          L = L, 
+          nrep = shape * batch_nrep, 
+          progress = FALSE, 
+          parallel = FALSE
+        )
+      } else {
+        Gauss_batch <- GeoSim(
+          coordx = coord_sim, 
+          corrmodel = corrmodel, 
+          model = "Gaussian", 
+          param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
+          nrep = shape * batch_nrep, 
+          progress = FALSE
+        )
+      }
+      
+      pair_idx_batch <- split(seq_len(shape * batch_nrep), 
+                             ceiling(seq_len(shape * batch_nrep) / shape))
+      
+      # Estrai solo i dati necessari
+      Gauss_data_batch <- Gauss_batch$data
+      
+      # Variabili essenziali per questo batch
+      essential_vars <- list(
+        shape = shape,
+        data_transformed = data_transformed,
+        M0 = M0,
+        N0 = N0,
+        Sigma.mat.inv = Sigma.mat.inv,
+        Wglob = Wglob,
+        exp_mm_half = exp_mm_half,
+        sqrt_factor = sqrt_factor,
+        pair_idx = pair_idx_batch
+      )
+      
+      # Worker function ottimizzata
+      run_simulation_worker <- function(local_i, vars, Gauss_data) {
+        shape <- vars$shape
+        data_transformed <- vars$data_transformed
+        M0 <- vars$M0
+        N0 <- vars$N0
+        Sigma.mat.inv <- vars$Sigma.mat.inv
+        Wglob <- vars$Wglob
+        exp_mm_half <- vars$exp_mm_half
+        sqrt_factor <- vars$sqrt_factor
+        pair_idx <- vars$pair_idx
+        
+        # Gibbs sampling
+        random_sign <- matrix(ifelse(runif(M0 * shape) <= 0.5, 1, -1), 
+                             nrow = M0, ncol = shape)
+        ini_vals <- random_sign * matrix(rep(sqrt(data_transformed), shape) * sqrt_factor, 
+                                         nrow = M0, ncol = shape)
+        
+        gibbs.result <- tryCatch({
+          dotCall64::.C64("gamma_gibbs_sampler",
+                          SIGNATURE = c("double", "double", "int", "int", 
+                                       "double", "int", "int"),
+                          SigmaInv = as.double(Sigma.mat.inv),
+                          y        = as.double(data_transformed),
+                          n        = as.integer(M0),
+                          v        = as.integer(shape),
+                          U        = as.double(ini_vals),
+                          nIte     = as.integer(1000),
+                          nRep     = as.integer(150),
+                          INTENT   = c("r", "r", "r", "r", "rw", "r", "r"), 
+                          VERBOSE = 0, 
+                          NAOK = FALSE, 
+                          PACKAGE = "GeoModels")
+        }, error = function(e) {
+          return(list(U = NULL))
+        })
+        
+        if (is.null(gibbs.result$U)) return(NULL)
+        
+        gibbs_U <- matrix(gibbs.result$U, nrow = M0, ncol = shape)
+        
+        # Processamento
+        idx_xy <- pair_idx[[local_i]]
+        res_i <- matrix(0, nrow = N0, ncol = shape)
+        
+        for (kk in seq_len(shape)) {
+          simX <- Gauss_data[[idx_xy[kk]]]
+          sim_train_x <- simX[seq_len(M0)]
+          sim_valid_x <- simX[(M0 + 1):(N0 + M0)]
+          sk_pred_x <- as.numeric(crossprod(Wglob, gibbs_U[, kk] - sim_train_x))
+          res_i[, kk] <- sim_valid_x + sk_pred_x
+        }
+        
+        return(exp_mm_half * rowSums(res_i^2))
+      }
+      
+      # Parallelizzazione del batch corrente
+      old_limit <- options(future.globals.maxSize = 2000 * 1024^2)
+      on.exit(options(old_limit), add = TRUE)
+      
+      future::plan(future::multisession, workers = ncores)
+      
+      batch_results <- future.apply::future_lapply(
+        seq_len(batch_nrep),
+        function(local_i) {
+          result <- run_simulation_worker(local_i, essential_vars, Gauss_data_batch)
+          return(result)
+        },
+        future.seed = TRUE,
+        future.packages = c("dotCall64", "GeoModels"),
+        future.globals = structure(TRUE, add = c("essential_vars", "Gauss_data_batch"))
+      )
+      
+      # Salva risultati del batch
+      for (local_i in seq_len(batch_nrep)) {
+        res[[start_idx + local_i - 1]] <- batch_results[[local_i]]
+        if (progress) {
+          pb(sprintf("Simulation %d/%d completed", start_idx + local_i - 1, nrep))
+        }
+      }
+      
+      # Pulizia memoria dopo ogni batch
+      rm(Gauss_batch, Gauss_data_batch, batch_results, essential_vars)
+      gc()
+      
+      future::plan(future::sequential)
+    }
+    
+  } else {
+    # Modalità sequenziale (codice originale)
+    if (method == "TB" || method == "CE") {
+      Gauss.all <- GeoSimapprox(
+        coordx = rbind(coord_obs, loc), 
+        corrmodel = corrmodel, 
+        method = method, 
+        model = "Gaussian", 
+        param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
+        L = L, 
+        nrep = shape * nrep, 
+        progress = FALSE, 
+        parallel = FALSE
+      )
+    } else {
+      Gauss.all <- GeoSim(
+        coordx = rbind(coord_obs, loc), 
+        corrmodel = corrmodel, 
+        model = "Gaussian", 
+        param = c(corr_param, mean = 0, nugget = 0, sill = 1), 
+        nrep = shape * nrep, 
+        progress = FALSE
+      )
+    }
+    
+    pair_idx <- split(seq_len(shape * nrep), ceiling(seq_len(shape * nrep) / shape))
+    
     cat("Performing", nrep, "conditional simulations ...\n")
     if (progress) {
       progressr::handlers(global = TRUE)
@@ -360,108 +502,61 @@ GammaSimcond <- function(coord_obs, loc, data, param, corrmodel,
     res <- vector("list", nrep)
     
     for (i in seq_len(nrep)) {
-      # Gibbs sampling
-      gibbs_U <- run_gibbs_sampler(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor)
+      random_sign <- matrix(ifelse(runif(M0 * shape) <= 0.5, 1, -1), 
+                           nrow = M0, ncol = shape)
+      ini_vals <- random_sign * matrix(rep(sqrt(data_transformed), shape) * sqrt_factor, 
+                                       nrow = M0, ncol = shape)
       
-      if (is.null(gibbs_U)) {
+      gibbs.result <- dotCall64::.C64("gamma_gibbs_sampler",
+                                      SIGNATURE = c("double", "double", "int", "int", 
+                                                   "double", "int", "int"),
+                                      SigmaInv = as.double(Sigma.mat.inv),
+                                      y        = as.double(data_transformed),
+                                      n        = as.integer(M0),
+                                      v        = as.integer(shape),
+                                      U        = as.double(ini_vals),
+                                      nIte     = as.integer(1000),
+                                      nRep     = as.integer(150),
+                                      INTENT   = c("r", "r", "r", "r", "rw", "r", "r"), 
+                                      VERBOSE = 0, 
+                                      NAOK = FALSE, 
+                                      PACKAGE = "GeoModels")
+      
+      if (is.null(gibbs.result$U)) {
         warning(paste("Gibbs sampler failed at simulation", i))
         next
       }
       
-      # Processamento vettorizzato
-      idx_xy <- pair_idx[[i]]
-      res_i <- process_simulation_vectorized(gibbs_U, idx_xy, Gauss.all$data, 
-                                             M0, N0, shape, Wglob)
+      gibbs_U <- matrix(gibbs.result$U, nrow = M0, ncol = shape)
       
-      # Calcolo finale ottimizzato
+      idx_xy <- pair_idx[[i]]
+      res_i <- matrix(0, nrow = N0, ncol = shape)
+      
+      for (kk in seq_len(shape)) {
+        simX <- Gauss.all$data[[idx_xy[kk]]]
+        sim_train_x <- simX[seq_len(M0)]
+        sim_valid_x <- simX[(M0 + 1):(N0 + M0)]
+        sk_pred_x <- as.numeric(crossprod(Wglob, gibbs_U[, kk] - sim_train_x))
+        res_i[, kk] <- sim_valid_x + sk_pred_x
+      }
+      
       res[[i]] <- exp_mm_half * rowSums(res_i^2)
       
       if (progress) {
         pb(sprintf("Simulation %d/%d completed", i, nrep))
       }
     }
-  } else {
-    cat("Performing", nrep, "conditional simulations using", ncores, "cores ...\n")
-    if (progress) {
-      progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
-      pb <- progressr::progressor(along = seq_len(nrep))
-    }
-    
-    # Ottimizzazione memoria: reduce global size limit più conservativo
-    old_limit <- options(future.globals.maxSize = 1000 * 1024^2)  # Ridotto a 1GB
-    on.exit(options(old_limit), add = TRUE)
-    
-    # Variabili essenziali ottimizzate - solo quello che serve
-    essential_vars <- list(
-      shape = shape,
-      data_transformed = data_transformed,
-      M0 = M0,
-      N0 = N0,
-      Sigma.mat.inv = Sigma.mat.inv,
-      Wglob = Wglob,
-      exp_mm_half = exp_mm_half,
-      sqrt_factor = sqrt_factor,
-      pair_idx = pair_idx,
-      Gauss_data = Gauss.all$data
-    )
-    
-    # Worker function ottimizzata
-    run_simulation_worker <- function(i, vars) {
-      # Estrae variabili
-      shape <- vars$shape
-      data_transformed <- vars$data_transformed
-      M0 <- vars$M0
-      N0 <- vars$N0
-      Sigma.mat.inv <- vars$Sigma.mat.inv
-      Wglob <- vars$Wglob
-      exp_mm_half <- vars$exp_mm_half
-      sqrt_factor <- vars$sqrt_factor
-      pair_idx <- vars$pair_idx
-      Gauss_data <- vars$Gauss_data
-      
-      # Gibbs sampling usando la funzione helper
-      gibbs_U <- run_gibbs_sampler(data_transformed, M0, shape, Sigma.mat.inv, sqrt_factor)
-      
-      if (is.null(gibbs_U)) {
-        warning(paste("Gibbs sampler failed at simulation ", i))
-        return(NULL)
-      }
-      
-      # Processamento vettorizzato
-      idx_xy <- pair_idx[[i]]
-      res_i <- process_simulation_vectorized(gibbs_U, idx_xy, Gauss_data, 
-                                             M0, N0, shape, Wglob)
-      
-      # Risultato finale
-      return(exp_mm_half * rowSums(res_i^2))
-    }
-    
-    # Parallelizzazione
-    future::plan(future::multisession, workers = ncores)
-    on.exit(future::plan(future::sequential), add = TRUE)
-    
-    res <- future.apply::future_lapply(seq_len(nrep), 
-                                       function(i) {
-                                         result <- run_simulation_worker(i, essential_vars)
-                                         if (progress) {
-                                           pb(sprintf("Parallel simulation %d/%d completed", i, nrep))
-                                         }
-                                         return(result)
-                                       }, 
-                                       future.seed = TRUE, 
-                                       future.globals = FALSE)
-    
-    # Rimuove risultati nulli
-    res <- res[!sapply(res, is.null)]
-    
-
+  }
+  
+  # Rimuove risultati nulli
+  res <- res[!sapply(res, is.null)]
+  failed_sims <- nrep - length(res)
+  if (failed_sims > 0) {
+    warning(paste(failed_sims, "simulazioni su", nrep, "sono fallite"))
   }
   
   return(res)
 }
-
-
 ################################################################################# 
 ### internal function: conditional simulation of Gaussian RF 
 ################################################################################# 
@@ -470,6 +565,7 @@ compute_cond_sim <- function(i, sim_data_list, krig_pred_vec, local_flag,
   sim_i <- sim_data_list[[i]]
   sim_nc_obs_data <- sim_i[1L:n_obs]
   sim_nc_loc_data <- sim_i[(n_obs + 1L):(n_obs + n_loc)]
+  
   if (local_flag) {
     sim_nc_obs_pred <- numeric(n_loc)
     
@@ -507,6 +603,17 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
                      coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
                      local, neighb, maxdist, maxtime,
                      space, spacetime, bivariate, parallel, ncores, progress) {
+  
+  #############################################
+  # Validazione input
+  #############################################
+  if (is.null(loc) || nrow(loc) == 0) {
+    stop("loc must be a non-empty matrix")
+  }
+  if (nrep < 1) {
+    stop("nrep must be at least 1")
+  }
+  
   #############################################
   # Build combined coordinates
   #############################################
@@ -515,7 +622,7 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   X_sim     <- rbind(X, Xloc)
   n_obs <- nrow(coord_obs)
   n_loc <- nrow(loc)
-
+  
   # Unconditional simulations
   cat("Performing", nrep, "unconditional simulations ...\n")
   if (method == "Cholesky") {
@@ -554,8 +661,9 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   #############################################
   # Pre-compute kriging weights
   #############################################
-  if(!local) cat("Computing kriging weights ...\n")
-   else  cat("Computing local kriging weights ...\n")
+  if (!local) cat("Computing kriging weights ...\n")
+  else cat("Computing local kriging weights ...\n")
+  
   weights_args <- list(coordx = coord_obs, coordt = coordt_use,
                        corrmodel = corrmodel, loc = loc, 
                        X = X, Xloc = Xloc, Mloc = Mloc, time = time,
@@ -566,7 +674,7 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
     if (!is.null(neighb))   weights_args$neighb  <- neighb
     if (!is.null(maxdist))  weights_args$maxdist <- maxdist
     if (!is.null(maxtime))  weights_args$maxtime <- maxtime
-    if(parallel) weights_args$parallel <- parallel
+    if (parallel) weights_args$parallel <- parallel
     krig_weights_obj <- do.call(GeoKriglocWeights, weights_args)
     weights_list <- krig_weights_obj$weights
   } else {
@@ -591,7 +699,7 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   if (space) {
     if (parallel && !is.null(ncores) && nrep > 1) {
       memory_needed <- object.size(sim_nc$data) + 
-                       object.size(if(local) weights_list else W) + 
+                       object.size(if (local) weights_list else W) + 
                        object.size(krig_sim$pred)
       memory_gb <- as.numeric(memory_needed) / 1024^3
       
@@ -604,25 +712,26 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
         for (chunk_idx in seq_along(chunks)) {
           chunk_indices <- chunks[[chunk_idx]]
           cl <- parallel::makeCluster(min(ncores, length(chunk_indices)))
+          on.exit(parallel::stopCluster(cl), add = TRUE)
           parallel::clusterExport(cl, c("compute_cond_sim"), envir = environment())
 
           chunk_sim_data_only <- sim_nc$data[chunk_indices]
           krig_pred_only <- krig_sim$pred
-          weights_only <- if(local) weights_list else W
+          weights_only <- if (local) weights_list else W
 
           chunk_results <- parallel::parLapply(cl, seq_along(chunk_indices), function(local_i) {
             res <- compute_cond_sim(local_i, chunk_sim_data_only, krig_pred_only, local,
                                     weights_only, n_obs, n_loc)
-            p()  # progress update
             res
           })
           parallel::stopCluster(cl)
 
           for (local_i in seq_along(chunk_indices)) {
             sim_cond[[chunk_indices[local_i]]] <- chunk_results[[local_i]]
+            p()  # Progress update
           }
           rm(chunk_sim_data_only, krig_pred_only, weights_only, chunk_results)
-          gc()
+          if (chunk_idx %% 5 == 0) gc()  # gc() solo ogni 5 chunk
         }
         
       } else {
@@ -638,29 +747,46 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
 
         sim_data_list <- sim_nc$data
         krig_pred_vec <- krig_sim$pred
-        weights_obj <- if(local) weights_list else W
+        weights_obj <- if (local) weights_list else W
 
         sim_cond <- parallel::parLapply(cl, seq_len(nrep), function(i) {
           res <- compute_cond_sim(i, sim_data_list, krig_pred_vec, local,
                                   weights_obj, n_obs, n_loc)
-          p()  # progress update
           res
         })
+        
+        # Progress update dopo il completamento parallelo
+        for (i in seq_len(nrep)) {
+          p()
+        }
       }
     } else {
       # Sequential
       sim_cond <- vector("list", nrep)
       for (i in seq_len(nrep)) {
-        sim_cond[[i]] <- compute_cond_sim(i, sim_nc$data, krig_sim$pred, local,
-                                         if(local) weights_list else W, n_obs, n_loc)
-        p()  # progress update
+        sim_cond[[i]] <- tryCatch({
+          compute_cond_sim(i, sim_nc$data, krig_sim$pred, local,
+                          if (local) weights_list else W, n_obs, n_loc)
+        }, error = function(e) {
+          warning(paste("Simulation", i, "failed:", e$message))
+          return(NULL)
+        })
+        p()  # Progress update
+      }
+      
+      # Rimuove risultati nulli
+      sim_cond <- sim_cond[!sapply(sim_cond, is.null)]
+      failed_sims <- nrep - length(sim_cond)
+      if (failed_sims > 0) {
+        warning(paste(failed_sims, "simulazioni su", nrep, "sono fallite"))
       }
     }
   } else {
-    stop("Gauss_cd currently not implemented for spacetime models ")
+    stop("Gauss_cd currently not implemented for spacetime models")
   }
   return(sim_cond)
 }
+
 ###############################################################
 ############### end helper functions ##########################
 ###############################################################
@@ -775,7 +901,7 @@ if (is.null(copula)) {
                     param,
                     coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
   }
 
   ################################################################################
@@ -789,7 +915,7 @@ if (is.null(copula)) {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) mm * exp(sqrt(vv) * r - vv/2)) # back-transformation
   }
 
@@ -806,10 +932,10 @@ if (is.null(copula)) {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) mm + sqrt(vv) * r * exp(tail * r^2/2))
   }
-##################################################################################################
+
   if (model == "Tukeyh2") {
     inverse_lamb <- function(x, tail) {
       value <- sqrt(VGAM::lambertW(tail * x * x)/tail)
@@ -834,7 +960,7 @@ if (is.null(copula)) {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     ff <- function(r, mm, vv, tail1, tail2) {
       aa <- 1:length(r)
       sel1 <- I(r >= 0) * aa
@@ -847,48 +973,51 @@ if (is.null(copula)) {
     }
     res <- lapply(res, ff, mm = mm, vv = vv, tail1 = tail1, tail2 = tail2)
   }
-##################################################################################################
+
   if (model == "SinhAsinh") {
-    mm <-param$mean
+    mm <- param$mean
     vv <- param$sill
     skew <- param$skew
     tail <- param$tail
-  datanorm <- sinh((asinh((data - mm)/sqrt(vv)) / tail) - skew)
+    datanorm <- sinh((asinh((data - mm)/sqrt(vv)) / tail) - skew)
     param$mean <- 0; param$sill <- 1; param$skew <- NULL; param$tail <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) mm + sqrt(vv) * sinh(tail * (asinh(r) + skew)))
   }
+  
   ################################################################################
-  ############### non monotone transformations of more thhan one Gaussian RF #####
+  ############### non monotone transformations of more than one Gaussian RF ######
   ################################################################################
-  if(model=="SkewGaussian") 
-  {    res <- SkewGaussianSimcond(coord_obs, loc, data, param, corrmodel,local=local,neighb=neighb,L=L,
-                       nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+  if (model == "SkewGaussian") {    
+    res <- SkewGaussianSimcond(coord_obs, loc, data, param, corrmodel, local = local, 
+                               neighb = neighb, L = L, nrep = nrep, method = method, 
+                               parallel = parallel, ncores = ncores, progress = progress)
   }
 
-##################################################################################################
-  if (model == "Gamma")        { 
-    #Made by David Rivas
-    res <- GammaSimcond(coord_obs, loc, data, param, corrmodel,local=local,neighb=neighb,L=L,
-                       nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+  if (model == "Gamma") { 
+    res <- GammaSimcond(coord_obs, loc, data, param, corrmodel, local = local, 
+                        neighb = neighb, L = L, nrep = nrep, method = method, 
+                        parallel = parallel, ncores = ncores, progress = progress)
   }
-  if (model == "Weibull")      {
-    #Made by David Rivas
+  
+  if (model == "Weibull") {
     mm <- param$mean
     param.weibull <- param
     param.weibull$shape <- 2
     param.weibull$mean <- 0
-    ck <- gamma( (param$shape + 1)/param$shape )
-    data.t <- (exp(-mm)*data*ck)^param$shape
-    res <- GammaSimcond(coord_obs, loc, data.t, param.weibull, corrmodel,local=local,neighb=neighb,L=L,
-                        nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
-    res <- lapply(res, function(x) exp(mm)*(x^(1/param$shape))/ck )
+    ck <- gamma((param$shape + 1)/param$shape)
+    data.t <- (exp(-mm) * data * ck)^param$shape
+    res <- GammaSimcond(coord_obs, loc, data.t, param.weibull, corrmodel, local = local, 
+                        neighb = neighb, L = L, nrep = nrep, method = method, 
+                        parallel = parallel, ncores = ncores, progress = progress)
+    res <- lapply(res, function(x) exp(mm) * (x^(1/param$shape))/ck)
   }
-  if (model == "Poisson")      { stop("Poisson  not implemented...") }
-  if (model == "Binomial")     { stop("Binomial  not implemented...") }
+  
+  if (model == "Poisson")  { stop("Poisson not implemented...") }
+  if (model == "Binomial") { stop("Binomial not implemented...") }
 
 } else { 
 ###########################################################################
@@ -907,7 +1036,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qweibull(r, shape = ss, scale = mm/(gamma(1 + 1/ss))))
   }
@@ -921,7 +1050,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qlnorm(r, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE))
   }
@@ -935,9 +1064,44 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qgamma(r, shape = ss/2, rate = ss/(2 * mm)))
+  }
+
+  if (model == "SkewLaplace") {
+    pSkewLaplace <- function(x, sk, mm, vv) {
+      s <- sqrt(vv)
+      F <- numeric(length(x))
+      sel1 <- x < mm
+      F[sel1] <- sk * exp((1 - sk) * (x[sel1] - mm) / s)
+      sel2 <- !sel1
+      F[sel2] <- 1 - (1 - sk) * exp(-sk * (x[sel2] - mm) / s)
+      return(F)
+    }
+
+    qtpSkewLaplace22 <- function(u, sk, mm, vv) {
+      s  <- sqrt(vv)
+      res <- rep(NA_real_, length(u))
+      hi <- u >= sk
+      lo <- u <  sk
+      res[hi] <- mm - (s / sk) * (log1p(-u[hi]) - log1p(-sk))
+      res[lo] <- mm + (s / (1 - sk)) * (log(u[lo]) - log(sk))
+      res
+    }
+    
+    mm <- param$mean
+    skew <- param$skew
+    vv <- param$sill
+    datanorm1 <- pSkewLaplace(data, skew, mm, vv)
+    datanorm  <- qnorm(datanorm1)
+    param$mean <- 0; param$sill <- 1; param$skew <- NULL
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    local, neighb, maxdist, maxtime,
+                    space, spacetime, bivariate, parallel, ncores, progress)
+    res <- lapply(res, function(r) pnorm(r))
+    res <- lapply(res, function(r) qtpSkewLaplace22(r, skew, mm, vv))
   }
 
   if (model == "Beta2") {
@@ -951,7 +1115,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) pmin + (pmax - pmin) * qbeta(r, shape1 = mm * ss, shape2 = (1 - mm) * ss))
   }
@@ -966,7 +1130,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) mm + sqrt(vv) * qt(r, df = 1/df))
   }
@@ -980,7 +1144,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qnorm(r, mm, sqrt(vv)))
   }
@@ -993,7 +1157,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qbinom(p = r, size = n, prob = prob))
   }
@@ -1006,7 +1170,7 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qnbinom(p = r, size = size, prob = prob))
   }
@@ -1019,12 +1183,12 @@ if (copula == "Gaussian") {
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
-                    space, spacetime, bivariate, parallel, ncores,progress)
+                    space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
     res <- lapply(res, function(r) qpois(r, lambda = mu))
   }
-
 }
+
 ####################### skewgaussian copula ####################################################
 if (copula == "SkewGaussian") {
 

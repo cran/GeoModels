@@ -446,6 +446,8 @@ double psn(double x,  double omega, double alpha, double tau);
 double dsn(double x, double omega, double alpha, double tau);
 double qsn(double p, double omega, double alpha, double tau, double tol);
 
+double pSkewLaplace(double x, double sk, double mm, double vv);
+double dSkewLaplace(double x, double sk, double mm, double vv);
 double one_log_SkewLaplace(double x, double m, double sill, double skew);
 double one_log_wrapped(double alfa,double u,double mi,double sill);
 double one_log_T(double z,double m, double sill, double df);
@@ -608,6 +610,7 @@ double CorFunWendhole(double lag,double scale);
 double CorFunWend0_tap(double lag,double scale,double smoo);
 double CorFunWend1_tap(double lag,double scale,double smoo);
 double CorFunWend2_tap(double lag,double scale,double smoo);
+double spherical (double lag, double scale);
 double Matern_Matern_nosep(double h, double u,
                            double scale_s, double scale_t,
                            double smooth_s, double smooth_t,

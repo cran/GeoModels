@@ -399,41 +399,54 @@ if(!ISNAN(zi)&&!ISNAN(zj) ){
 void Comp_Cond_SinhGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
                             double *nuis,  int *type_cop, int *cond)
+
 {
-    const double nugget = nuis[0];
-    const double sill = nuis[1];
-    const double param2 = nuis[2];
-    const double param3 = nuis[3];
-    if(nugget < 0 || nugget >= 1 || sill <= 0 || param3 < 0) {
-        *res = LOW;
-        return;
-    }
+    const double nuis0 = nuis[0];
+    const double nuis1 = nuis[1];
+    const double nuis2 = nuis[2];
+    const double nuis3 = nuis[3];
+
+    if (nuis3 < 0 || nuis1 < 0 || nuis0 < 0 || nuis0 >= 1) {*res = LOW;return;}
 
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
-    const double scale = 1.0 - nugget;
-    const double inv_sqrt_sill = 1.0/sqrt(sill);
-    const double inv_sill = 1.0/sill;
+    const double scale = 1.0 - nuis0;
     double total = 0.0;
 
-    for(int i = 0; i < n_pairs; i++) {
-        const double d1 = data1[i];
-        const double d2 = data2[i];
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            const double lag = lags[i];
-            const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-            const double weights = weighted ? CorFunBohman(lag, max_dist) : 1.0;
-            const double std_d1 = (d1 - mean1[i]) * inv_sqrt_sill;
-            const double std_d2 = (d2 - mean2[i]) * inv_sqrt_sill;
-            const double biv = biv_sinh(scale * corr, std_d1, std_d2, 0, 0, param2, param3, 1) * inv_sill;
-            const double cond = one_log_sas(d2, mean2[i], param2, param3, sill);
-            total += weights * (log(biv) - cond);
+    if (weighted) {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double sinh_val = biv_sinh(scale * corr, d1, d2, mean1[i], mean2[i], nuis2, nuis3, nuis1);
+                const double weights = CorFunBohman(lag, max_dist);
+                const double l2 =one_log_sas(d2, mean2[i],nuis2, nuis3, nuis1);
+                total += weights * (log(sinh_val)-l2);
+            }
+        }
+    } else {
+        for (int i = 0; i < n_pairs; i++) {
+            const double d1 = data1[i];
+            const double d2 = data2[i];
+
+            if (!ISNAN(d1) && !ISNAN(d2)) {
+                const double lag = lags[i];
+                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                const double sinh_val = biv_sinh(scale * corr, d1, d2, mean1[i], mean2[i], nuis2, nuis3, nuis1);
+                const double l2 =one_log_sas(d2, mean2[i],nuis2, nuis3, nuis1);
+                total += log(sinh_val)-l2;
+            }
         }
     }
 
     *res = R_FINITE(total) ? total : LOW;
 }
+
+
 /*********************************************************/
 void Comp_Cond_Gamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                         double *par, int *weigthed, double *res, double *mean1, double *mean2,
@@ -820,32 +833,101 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /******************************************************************************************/
-void Comp_Cond_BinomGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis, int *type_cop, int *cond)
 {
-    int i=0, uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double p1=0.0,p2=0.0;//probability of marginal success
-    double p11=0.0;//probability of joint success
-    double nugget=nuis[0];
-    if( nugget>=1 || nugget<0){*res=LOW; return;}
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                 ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],0,par,0,0);
-    p11=pbnorm22(ai,aj,(1-nugget)*corr);
-                p1=pnorm(ai,0,1,1,0);
-                p2=pnorm(aj,0,1,1,0);
-                u=data1[i];v=data2[i];
-                        if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                          uu=(int) u; vv=(int) v;
-                          l2=dbinom(vv,N1[0],p2,1);
-                        bl=log(biv_binom (N1[0],uu,vv,p1,p2,p11))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
+    int i = 0, uu = 0, vv = 0;
+    double u, v, bl = 0.0, weights = 1.0, ai = 0.0, aj = 0.0, corr = 0.0, l2 = 0.0;
+    double p1 = 0.0, p2 = 0.0;  // probability of marginal success
+    double p11 = 0.0;           // probability of joint success
+    
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+    if (nugget >= 1 || nugget < 0) {
+        *res = LOW;
+        return;
+    }
+    
+    const double scale = 1.0 - nugget;
+    const int N = N1[0];
+    
+    // Inizializza res a 0
+    *res = 0.0;
+    
+    for (i = 0; i < npairs[0]; i++) {
+        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+            ai = mean1[i];
+            aj = mean2[i];
+            
+            // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
+            const double ai_safe = fmax(-5.0, fmin(5.0, ai));
+            const double aj_safe = fmax(-5.0, fmin(5.0, aj));
+            
+            // Calcolo correlazione con clipping per stabilità numerica
+            corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+            corr = fmax(-0.999, fmin(0.999, corr));  // CLIPPING DELLA CORRELAZIONE
+            const double scaled_corr = scale * corr;
+            
+            // Calcolo probabilità congiunta e marginali con parametri sicuri
+            p11 = pbnorm22(ai_safe, aj_safe, scaled_corr);
+            p1 = pnorm(ai_safe, 0, 1, 1, 0);
+            p2 = pnorm(aj_safe, 0, 1, 1, 0);
+            
+            // CLIPPING DELLE PROBABILITÀ per evitare valori estremi
+            const double p1_safe = fmax(1e-15, fmin(1-1e-15, p1));
+            const double p2_safe = fmax(1e-15, fmin(1-1e-15, p2));
+            const double p11_safe = fmax(1e-15, fmin(fmin(p1_safe, p2_safe), p11));
+            
+            u = data1[i];
+            v = data2[i];
+            
+            // Calcolo pesi se richiesto
+            if (*weigthed) {
+                weights = CorFunBohman(lags[i], maxdist[0]);
+            } else {
+                weights = 1.0;
+            }
+            
+            uu = (int)u;
+            vv = (int)v;
+            
+            // Calcolo della densità marginale con controllo di validità
+            l2 = dbinom(vv, N, p2_safe, 1);
+            
+            // Controllo per evitare log(0) o valori non finiti
+            if (!R_FINITE(l2) || l2 <= 1e-300) {
+                l2 = -700.0;  // Valore molto negativo invece di -Inf
+            }
+            
+            // Calcolo della densità bivariata con controllo di validità
+            const double binom_joint = biv_binom(N, uu, vv, p1_safe, p2_safe, p11_safe);
+            double log_binom_joint;
+            
+            if (binom_joint > 1e-300 && R_FINITE(binom_joint)) {
+                log_binom_joint = log(binom_joint);
+            } else {
+                log_binom_joint = -700.0;  // Valore molto negativo invece di -Inf
+            }
+            
+            // Calcolo della likelihood condizionale: log(P(X,Y)) - log(P(Y))
+            bl = log_binom_joint - l2;
+            
+            // Controllo finale per valori finiti
+            if (R_FINITE(bl)) {
+                *res += weights * bl;
+            } else {
+                // Se bl non è finito, aggiungi un valore penalizzante
+                *res += weights * (-700.0);
+            }
+        }
+    }
+    
+    // Controllo finale del risultato
+    if (!R_FINITE(*res)) {
+        *res = LOW;
+    }
+    
     return;
 }
 /******************************************************************************************/
@@ -934,32 +1016,102 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /*********************************************************/
-void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                                  double *nuis, int *type_cop, int *cond)
 {
-    int i=0,  uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double p1=0.0,p2=0.0;//probability of marginal success
-    double p11=0.0;//probability of joint success
-    double nugget=nuis[0];
-       if( nugget>=1 || nugget<0){*res=LOW; return;}
-    //compute the composite log-likelihood:
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                  ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],0,par,0,0);
-                    p11=pbnorm22(ai,aj,(1-nugget)*corr);
-                p1=pnorm(ai,0,1,1,0);p2=pnorm(aj,0,1,1,0);
-                    u=data1[i];v=data2[i];
-                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                          uu=(int) u;vv=(int) v;
-                         l2=one_log_negbinom_marg(vv,N1[0],p2);
-                         bl=log(biv_binomneg(N1[0],uu,vv,p1,p2,p11))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
+    int i = 0, uu = 0, vv = 0;
+    double u, v, bl = 0.0, weights = 1.0, ai = 0.0, aj = 0.0, corr = 0.0, l2 = 0.0;
+    double p1 = 0.0, p2 = 0.0;  // probability of marginal success
+    double p11 = 0.0;           // probability of joint success
+    
+    // Controllo precoce dei parametri
+    const double nugget = nuis[0];
+    if (nugget >= 1 || nugget < 0) {
+        *res = LOW;
+        return;
+    }
+    
+    const double scale = 1.0 - nugget;
+    const int N = N1[0];
+    
+    // Inizializza res a 0
+    *res = 0.0;
+    
+    // Calcolo della composite log-likelihood
+    for (i = 0; i < npairs[0]; i++) {
+        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+            ai = mean1[i];
+            aj = mean2[i];
+            
+            // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
+            const double ai_safe = fmax(-5.0, fmin(5.0, ai));
+            const double aj_safe = fmax(-5.0, fmin(5.0, aj));
+            
+            // Calcolo correlazione con clipping per stabilità numerica
+            corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+            corr = fmax(-0.999, fmin(0.999, corr));  // CLIPPING DELLA CORRELAZIONE
+            const double scaled_corr = scale * corr;
+            
+            // Calcolo probabilità congiunta e marginali con parametri sicuri
+            p11 = pbnorm22(ai_safe, aj_safe, scaled_corr);
+            p1 = pnorm(ai_safe, 0, 1, 1, 0);
+            p2 = pnorm(aj_safe, 0, 1, 1, 0);
+            
+            // CLIPPING DELLE PROBABILITÀ per evitare valori estremi
+            const double p1_safe = fmax(1e-15, fmin(1-1e-15, p1));
+            const double p2_safe = fmax(1e-15, fmin(1-1e-15, p2));
+            const double p11_safe = fmax(1e-15, fmin(fmin(p1_safe, p2_safe), p11));
+            
+            u = data1[i];
+            v = data2[i];
+            
+            // Calcolo pesi se richiesto
+            if (*weigthed) {
+                weights = CorFunBohman(lags[i], maxdist[0]);
+            } else {
+                weights = 1.0;
+            }
+            
+            uu = (int)u;
+            vv = (int)v;
+            
+            // Calcolo della densità marginale con controllo di validità
+            l2 = one_log_negbinom_marg(vv, N, p2_safe);
+            
+            // Controllo per evitare valori non finiti nella densità marginale
+            if (!R_FINITE(l2)) {
+                l2 = -700.0;  // Valore molto negativo invece di -Inf
+            }
+            
+            // Calcolo della densità bivariata con controllo di validità
+            const double binomneg_joint = biv_binomneg(N, uu, vv, p1_safe, p2_safe, p11_safe);
+            double log_binomneg_joint;
+            
+            if (binomneg_joint > 1e-300 && R_FINITE(binomneg_joint)) {
+                log_binomneg_joint = log(binomneg_joint);
+            } else {
+                log_binomneg_joint = -700.0;  // Valore molto negativo invece di -Inf
+            }
+            
+            // Calcolo della likelihood condizionale: log(P(X,Y)) - log(P(Y))
+            bl = log_binomneg_joint - l2;
+            
+            // Controllo finale per valori finiti
+            if (R_FINITE(bl)) {
+                *res += weights * bl;
+            } else {
+                // Se bl non è finito, aggiungi un valore penalizzante
+                *res += weights * (-700.0);
+            }
+        }
+    }
+    
+    // Controllo finale del risultato
+    if (!R_FINITE(*res)) {
+        *res = LOW;
+    }
+    
     return;
 }
 

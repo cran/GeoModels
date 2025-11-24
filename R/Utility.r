@@ -70,6 +70,8 @@ CkCorrModel <- function(corrmodel)
                              Matern_Hole=27,Matern_hole=27,
                              Schoenberg=28,schoenberg=28,
                              GenWend_Matern_Hole=29,GenWend_Matern_hole=29,
+                             Gaussian=31,
+                             Spherical=32,
              # spatial-temporal non-separable models
                              gneiting=42,Gneiting=42,  #ok
                              iacocesare=44,Iacocesare=44, #ok
@@ -137,11 +139,11 @@ CkCorrModel <- function(corrmodel)
             ########Tapers
                    ##spatial
                              Bohman=28,
-                             Wendland0=30,wendland0=30,
-                             Wendland1=32,wendland1=32,
-                             Wendland2=34, wendland2=34,
+                            # Wendland0=30,wendland0=30,
+                            # Wendland1=32,wendland1=32,
+                            # Wendland2=34, wendland2=34,
                              unit_matrix=36,
-                             Spherical=38, spherical=38,
+                            
                    ##bivariate
                              Bi_Wendland1=140,Bi_wendland1=140,
                              Bi_Wendland2=142,Bi_wendland2=142,
@@ -206,7 +208,7 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
         if(!is.na(param['power2_1'])) if(param['power2_1'] <= 0) return(FALSE)
         if(!is.na(param['power2_12'])) if(param['power2_12'] <= 0) return(FALSE)
         if(!is.na(param['power2_2'])) if(param['power2_2'] <= 0) return(FALSE)
-        if(!is.na(param['sep'])) if(param['sep'] < 0 || param['sep'] > 1) return(FALSE)
+        #if(!is.na(param['sep'])) if(param['sep'] < 0 || param['sep'] > 1) return(FALSE)
         if(!is.na(param['scale'])) if(param['scale'] <= 0) return(FALSE)
         if(!is.na(param['scale_s'])) if(param['scale_s'] <= 0) return(FALSE)
         if(!is.na(param['scale_t'])) if(param['scale_t'] <= 0) return(FALSE)
@@ -708,12 +710,26 @@ CkType <- function(type)
   }
 
 #####  names of the correlation models ###############
+#CorrParam <- function(corrmodel)
+#{
+#  val <- CorrelationPar(CkCorrModel(corrmodel))
+#  if (is.null(val)) warning("Unrecognized correlation model ")
+#  return(val)
+#}
+
 CorrParam <- function(corrmodel)
 {
-  val <- CorrelationPar(CkCorrModel(corrmodel))
-  if (is.null(val)) warning("Unrecognized correlation model ")
+  val_code <- CkCorrModel(corrmodel)
+  if (is.null(val_code) || length(val_code) == 0)
+    stop("Unrecognized correlation model")
+
+  val <- CorrelationPar(val_code)
+  if (is.null(val))
+    stop("Parameters not defined for this correlation code")
+
   return(val)
 }
+
 
 #####  names of the correlation models ###############
 CorrelationPar <- function(corrmodel) {
@@ -747,6 +763,8 @@ CorrelationPar <- function(corrmodel) {
     "28" = c("scale"),
     "29" = c("power1", "power2", "scale", "smooth"),
     "30" = c("power2", "scale", "smooth"),
+    "31" = c("scale"),
+    "32" = c("scale"),
     "42" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),
     "44" = c("power2", "power_s", "power_t", "scale_s", "scale_t"),
     "46" = c("power_s", "power_t", "scale_s", "scale_t", "sep"),

@@ -117,35 +117,6 @@ void Binned_Variogram2new(double *bins, int *np, double *data1, double *data2,
         lbins[bin_idx]++;
     }
 }
-/***********************************************************************************************************************************/
-void Binned_Variogram_22(double *bins, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, double *moms, int *nbins)
-{
-  int h=0, i=0, j=0, n=0,p=0;
-  double x,y,step=0.0,*mm;
-  //Set the binnes step:
-  mm=(double *) R_alloc(2, sizeof(double));
-  Maxima_Minima_dist(mm, coordx, coordy,coordz, ncoord,type,REARTH);
-  if(maxdist[0]<mm[1]) mm[1]=maxdist[0];
-  step=(mm[1]-mm[0])/(*nbins-1);
-  bins[0]= mm[0];
-  //define bins:
-  for(h=1;h<*nbins;h++)
-    bins[h]=bins[h-1]+step;
-  //Computes the binned moments:
-  for(i=0;i<(ncoord[0]-1);i++){
-    for(j=(i+1);j<ncoord[0];j++){
-      if(lags[p]<=*maxdist){
-  for(h=0;h<(*nbins-1);h++)
-    if((bins[h]<=lags[p]) && (lags[p]<bins[h+1])){
-            x=data[n+i ]; y=data[n+j ];
-            if(!(ISNAN(x)||ISNAN(y))){
-        moms[h]+=0.5*pow(x-y,2);
-        lbins[h]+=1;}}
-        p++;}}}
-  return;
-}
-
-
 
 
 // binned spatial-temporal variogram:

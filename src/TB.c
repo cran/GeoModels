@@ -2,18 +2,21 @@
 
 
 
+
 void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result){
   int l, j;
   double arg;
-  result[0] = 0;
-  // Iteraciones del for
-  for(l=0;l < L[0];l++){
-    for(j=0;j < N[0];j++){
-      arg = 2*M_PI*(ux[l]*sx[j] + uy[l]*sy[j]) + phi[l];
-      result[j] += 2*cos(arg);
+  int nloc = N[0];
+  int Lfreq = L[0];
+
+  for(l = 0; l < Lfreq; l++){
+    for(j = 0; j < nloc; j++){
+      arg = 2.0 * M_PI * (ux[l] * sx[j] + uy[l] * sy[j]) + phi[l];
+      result[j] += 2.0 * cos(arg);
     }
   }
 }
+
 
 
 
@@ -25,112 +28,51 @@ void hyperg_1F2_e_call( double *a,  double *b,double *c,  double *x, double *val
 
 }
 
-double wen_genasy(double z,double k,double mu, double sc)
-{
 
-double c3,c4,c5,KK,L,res; int d=2;
-double lambda=(d+1)/2+k;
-c3=exp(lgammafn(mu+2*lambda)-lgammafn(mu));
-c4=exp(lgammafn(mu+2*lambda)-((lambda-1)*log(2)+lgammafn(lambda)));
-c5=M_PI*(mu+lambda)/2;
-KK=R_pow(2,-k-1)*R_pow(M_PI,-1)*exp(lgammafn(mu+1)+lgammafn(2*k+2)-(lgammafn(k+1)+gammafn(mu+2*lambda)));
-
-if(k!=0) {L=(KK/R_pow(2,1-k))*exp(lgammafn(k)-(lgammafn(2*k)+lgammafn(mu+1)-lgammafn(2*k+mu+1)));}
-else     {L=KK;}
-res=L*R_pow(sc,d)*(c3*R_pow(z*sc,-2*lambda)+ c4*R_pow(z*sc,-lambda-mu)*(cos(z*sc-c5)));
-return(res);
-}
-
-
-
-double hypergeometric_1F2(double a, double b, double c, double x, double tol){
-
-    int max_terms =2000;
+double hypergeometric_1F2(double a, double b, double c, double x, double tol) {
+    int max_terms = 2000;
     double sum = 1.0;
     double term = 1.0;
-    double max_term = 1.0;
-    int n = 0;
-    if (b <= 0.0 && b == floor(b)) {
-        tol = INFINITY;
-        return R_NaN;
+    int n;
+
+    // --- Parameter validity checks ---
+    if ((b <= 0.0 && b == floor(b)) || 
+        (c <= 0.0 && c == floor(c))) {
+        return R_NaN;  // poles in denominator
     }
-    if (c <= 0.0 && c == floor(c)) {
-        tol = INFINITY;
-        return R_NaN;
-    }
- 
+
+    // --- Case 1: a is a non-positive integer → finite polynomial ---
     if (a <= 0.0 && a == floor(a)) {
         int max_n = (int)(-a);
         for (n = 1; n <= max_n; n++) {
             term *= (a + n - 1) * x / ((b + n - 1) * (c + n - 1) * n);
             sum += term;
-            if (fabs(term) > max_term) max_term = fabs(term);
         }
-        tol = fabs(DBL_EPSILON * max_term / sum);
         return sum;
     }
-    // Calcolo della serie generale
-    while (n < max_terms) {
-        n++;
-        // Metodo 1: calcolo ricorsivo dei termini
-       // term *= (a + n - 1) * x / ((b + n - 1) * (c + n - 1) * n);
-        // Metodo 2: usando i simboli di Pochhammer
-        term = poch(a, n) * R_pow(x, n) / (poch(b, n) * poch(c, n) * gammafn(n + 1));
-        if (fabs(term) > max_term) 
-            max_term = fabs(term);
+
+    // --- Case 2: General infinite series ---
+    for (n = 1; n < max_terms; n++) {
+        term *= (a + n - 1) * x / ((b + n - 1) * (c + n - 1) * n);
+
         if (!R_FINITE(term)) {
-            tol = INFINITY;
-            return sum;  
+            return sum;  // bailout on overflow/NaN
         }
+
         sum += term;
-        if (fabs(term) < DBL_EPSILON * fabs(sum))
+
+        // convergence test: use user-provided tolerance
+        if (fabs(term) < tol * fabs(sum)) {
             break;
+        }
     }
-    if (n >= max_terms) {
-        //fprintf(stderr, "Attenzione: Raggiunto il numero massimo di iterazioni (%d)\n", max_terms);
-    }
-    tol = fabs(DBL_EPSILON * max_term / sum);
+
+    // If we hit max_terms without convergence, user should be warned.
     return sum;
 }
 
 
 
-/*
-
-double hypergeometric_1F2(double a, double b, double c, double x, double tol){
-  double n, a0, sum, t;
-  double an, bn, cn, max, z;
-  static double stop = 1.37e-17;
-  an = a;
-  bn = b;
-  cn = c;
-  a0 = 1.0;
-  sum = 1.0;
-  n = 1.0;
-  t = 1.0;
-  max = 0.0;
-  do{
-    if( (a0 > 1.0e34) || (n > 2500) ){
-      t = stop;
-    }
-    a0 *= (an*x)/(bn*cn*n);
-    sum += a0;
-    an += 1.0;
-    bn += 1.0;
-    cn += 1.0;
-    n += 1.0;
-    z = fabs( a0 );
-    if( z > max )
-      max = z;
-    if( sum != 0 )
-      t = fabs( a0 / sum );
-    else
-      t = z;
-  }
-  while( t > stop );
-  return(sum);
-}
-*/
 
 /*******************************************************************/
 double den_mat(double z,double k,double sc){  
@@ -140,22 +82,6 @@ double res= exp(lgammafn(k+1)+2*log(sc)-(log(M_PI)+lgammafn(k)+(k+1)*log(1+R_pow
 return(res);
 }
 
-/*******************************************************************/
-double den_kum_mat(double z,double k,double sc,double mu){  
-double rep=sqrt(2*(1+mu)); double beta1=sc;
-sc=sc*rep;
-double u=2*M_PI; 
-z=z*u;
-int d=2; double res;
-double half_dim,con,KU;
-
- half_dim = d/2;
- con=R_pow(2*M_PI, half_dim)*R_pow(sc,d)*exp(lgamma(mu+k)+lgammafn(k + half_dim)-(lgamma(mu)+lgamma(k)));
- KU=kummer(k + half_dim,1 - mu+ half_dim, 0.5*R_pow(z*sc,2));
-if(KU!= -1) res=con*KU;
-else res= den_mat(z/u,k,beta1);
-return(res);
-}
 
 
 double ff(double lambda, double mu, double k, double zsc, double sc, double tol, int d) {
@@ -286,12 +212,6 @@ void spectraldensityC(double u, int model, int d, int L, double *f, double *av, 
                 r[i] = den_mat(norm_u, nu1v[i], av[i]);
             }
             break;
-        case 25: // Kummer_matern
-            for (size_t i = 0; i < n; i++) {
-                r[i] = den_kum_mat(norm_u, nu1v[i], av[i], params_other[0]);
-            }
-            break;
-        case 6: // GenWendland_matern
             for (size_t i = 0; i < n; i++) {
                 r[i] = den_wen_gen_mat(norm_u, nu1v[i], av[i], params_other[0], tol);
             }
@@ -454,35 +374,6 @@ void C_mult_mat(Rcomplex *z, Rcomplex *x, int xrows, int xcols, Rcomplex *y, int
 }
 
 
-/**
- * Optimized implementation of spectral simulation function for R
- * 
- * This function performs spectral density calculations and simulations
- * based on spatial coordinates and parameters.
- * 
- * @param d_v         Pointer to dimension value
- * @param a_v         Parameters for spectral density function
- * @param nu1_v       First smoothness parameter
- * @param C_v         Scale parameter
- * @param nu2_v       Second smoothness parameter
- * @param P           Number of components
- * @param N           Number of simulations
- * @param L           Number of locations per simulation
- * @param model       Model type identifier
- * @param u           Input vectors
- * @param a0, nu0     Additional model parameters
- * @param A, B        Output matrices for real and imaginary components
- * @param sequen      Sequence indices
- * @param largo_sequen Length of sequence array
- * @param n           Number of points
- * @param coord       Coordinate matrix
- * @param phi         Phase parameter
- * @param vtype       Variant type
- * @param m1          Output dimension
- * @param simu1       Output simulation matrix
- * @param L1          Additional dimension parameter
- * @param params_other Additional model parameters
- */
 void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v, 
            int *P, int *N, int *L, int *model, double *u,
            double *a0, double *nu0, double *A, double *B,
@@ -829,59 +720,3 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
     R_Free(sub_coord);
   }
 }
-
-void spectral_density_1d(double *norm_u, int *N, double *av, double *params_other, double *nu1v, int *model, double *result) {
-    double nu = nu1v[0];
-    double bbb = av[0];
-    double mu = params_other[0];
-    int mod = model[0];
-    int n = N[0];
-    double tol = 1e-12;  // tol usato solo in alcuni modelli
-
-    switch(mod) {
-        case 14:  // Matern
-            for (int i = 0; i < n; i++) {
-                result[i] = den_mat(norm_u[i], nu, bbb);
-            }
-            break;
-
-        case 6:  // GenWendland_matern
-            for (int i = 0; i < n; i++) {
-                result[i] = den_wen_gen_mat(norm_u[i], nu, bbb, mu, tol);
-            }
-            break;
-
-        case 7:  // GenWendland_matern2
-            for (int i = 0; i < n; i++) {
-                result[i] = den_wen_gen_mat2(norm_u[i], nu, bbb, mu, tol);
-            }
-            break;
-
-        case 23: // Hypergeometric_matern
-            for (int i = 0; i < n; i++) {
-                result[i] = den_hyp_gen_mat(norm_u[i], nu, bbb, mu, tol);
-            }
-            break;
-
-        case 30: // Hypergeometric_matern2
-            for (int i = 0; i < n; i++) {
-                result[i] = den_hyp_gen_mat2(norm_u[i], nu, bbb, mu, tol);
-            }
-            break;
-
-        case 25: // Kummermatern
-            for (int i = 0; i < n; i++) {
-                result[i] = den_kum_mat(norm_u[i], nu, bbb, mu);
-            }
-            break;
-
-        default:
-            // Eventuale gestione di modelli non riconosciuti
-            for (int i = 0; i < n; i++) {
-                result[i] = 0.0; // oppure un valore di default o errore
-            }
-            break;
-    }
-}
-
-

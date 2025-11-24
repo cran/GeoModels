@@ -8,24 +8,53 @@ GeoNeighborhood <- function(data = NULL, coordx = NULL, coordy = NULL, coordz = 
   #################
   # Internal: find spatial neighbors
   #################
-  find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
-    if (is.null(maxdist)) maxdist <- 0
-    if (is.null(neighb)) neighb <- min(100, nrow(coords))
-    
-    if (distance %in% c("Geod", "Chor")) {
-      coords_proj <- mapproj::mapproject(coords[, 1], coords[, 2], projection = "sinusoidal")
-      coords_projected <- radius * cbind(coords_proj$x, coords_proj$y)
-      
-      loc_proj <- mapproj::mapproject(locations[, 1], locations[, 2], projection = "sinusoidal")
-      locations_projected <- radius * cbind(loc_proj$x, loc_proj$y)
-      
-      result <- nabor::knn(coords_projected, locations_projected, k = neighb, radius = maxdist)
-    } else {
-      result <- nabor::knn(coords, locations, k = neighb, radius = maxdist)
-    }
-    return(result)
-  }
+  #find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
+  #  if (is.null(maxdist)) maxdist <- 0
+  #  if (is.null(neighb)) neighb <- min(100, nrow(coords))
+  #  
+  #  if (distance %in% c("Geod", "Chor")) {
+  #    coords_proj <- mapproj::mapproject(coords[, 1], coords[, 2], projection = "sinusoidal")
+  #    coords_projected <- radius * cbind(coords_proj$x, coords_proj$y)
+  #    
+  #    loc_proj <- mapproj::mapproject(locations[, 1], locations[, 2], projection = "sinusoidal")
+  #    locations_projected <- radius * cbind(loc_proj$x, loc_proj$y)
+  #    
+  #    result <- nabor::knn(coords_projected, locations_projected, k = neighb, radius = maxdist)
+  #  } else {
+  #    result <- nabor::knn(coords, locations, k = neighb, radius = maxdist)
+  #  }
+  #  return(result)
+  #}
   
+
+  find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
+  if (is.null(maxdist)) maxdist <- 0
+  if (is.null(neighb)) neighb <- min(100, nrow(coords))
+  
+  if (distance %in% c("Geod", "Chor")) {
+    # ---- Conversione lat/lon in coordinate cartesiane 3D ----
+    to_xyz <- function(mat) {
+      lat <- mat[,2] * pi/180
+      lon <- mat[,1] * pi/180
+      cbind(cos(lat) * cos(lon),
+            cos(lat) * sin(lon),
+            sin(lat)) * radius   # puoi interpretare 'radius' come raggio terrestre
+    }
+    
+    coords_3d <- to_xyz(coords)
+    loc_3d    <- to_xyz(locations)
+    
+    result <- nabor::knn(coords_3d, loc_3d, k = neighb, radius = maxdist)
+    
+  } else {
+    # distanza euclidea classica
+    result <- nabor::knn(coords, locations, k = neighb, radius = maxdist)
+  }
+  return(result)
+}
+
+
+
   #################
   # Input validation
   #################

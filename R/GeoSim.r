@@ -335,6 +335,16 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
       else simDD <- matrix(simD, nrow=ccov1$numtime, ncol=ccov1$numcoord,byrow=TRUE)
 }
 
+  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  # INIT efficient counters for BinomialNeg / BinomialNegZINB (univariate)
+  if(model %in% c("BinomialNeg","BinomialNegZINB")){
+    counts   <- integer(dime)     # successi cumulati
+    finished <- logical(dime)     # chi ha raggiunto n successi
+    nb_vals  <- integer(dime)     # output (tempo al successo n) = iter - n
+    trial    <- 0L                # contatore di tentativi (iterazioni Bernoulli)
+  }
+  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
   while(KK<=npoi) {
   for(i in 1:k) {
 
@@ -368,10 +378,24 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
 
      }
      ####################################
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # REPLACEMENT: efficient accumulation for BinomialNeg / BinomialNegZINB
     if(model %in% c("BinomialNeg","BinomialNegZINB")){
-                 cumu=rbind(cumu,c(t(sim)));
-                 if(sum(colSums(cumu)>=n)==dime) {break;}### ## stopping rule
+                 # vec Bernoulli corrente (ordine identico a c(t(sim)) usato prima)
+                 trial <- trial + 1L
+                 vec <- c(t(sim))
+                 idx <- !finished
+                 if(any(idx)){
+                   counts[idx] <- counts[idx] + vec[idx]
+                   new_finished <- (counts >= n) & !finished
+                   if(any(new_finished)){
+                     nb_vals[new_finished] <- trial - n
+                     finished <- finished | new_finished
+                   }
+                 }
+                 if(all(finished)) {break;}### stopping rule (tutti chiusi)
                }
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
     }
  ####################################
@@ -452,15 +476,14 @@ if(model %in% c("BinomialLogistic"))   {
                   sim=apply(sim,2,sum)
                   byrow=TRUE }
 #######################################
+   # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+   # REPLACEMENT: post-processing for BinomialNeg / BinomialNegZINB
    if(model %in% c("BinomialNeg"))   {
-          sim=NULL
-          for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-
+          sim <- nb_vals
           byrow=TRUE
           }
   if(model %in% c("BinomialNegZINB"))   {
-           sim=NULL
-          for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
+          sim <- nb_vals
       ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
 
       if(sparse)   a=as.numeric((array(rnorm(1*dime),c(1,dime)) %*% R1) [,iord1] )
@@ -471,6 +494,7 @@ if(model %in% c("BinomialLogistic"))   {
           sim=a*sim
           byrow=TRUE
           }
+   # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #############################################
 ############### formatting data #############
 #############################################
@@ -758,8 +782,6 @@ ccov = GeoCovmatrix(coordx=coordx, coordy=coordy,coordz=coordz, coordt=coordt, c
                    distance=distance,grid=grid,model="Gaussian", n=n,
                 param=append(pc,zz), anisopars=anisopars, radius=radius, sparse=sparse,copula=NULL,X=X)
 
-
-
 #######################
 ## matrix decomposition and square root
 #######################
@@ -772,10 +794,8 @@ if(!sparse){
 else {
 
  cholS <- spam::chol(ccov$covmatrix)
- # cholS is the upper triangular part of the permutated matrix Sigma
  iord <- spam::ordering(cholS, inv=TRUE)
  R <- spam::as.spam(cholS)
-
  }
 #######################
 
@@ -837,6 +857,7 @@ else {
     
    }
    else { dime=ddim(coordx,coordy,coordz,coordt)
+           coords=cbind(coordx,coordy,coordz)
 
           if(ncol(coords)==2) ns=c(length(coordx),length(coordx))/2
           if(ncol(coords)==3) ns=c(length(coordx),length(coordx),length(coordz))/3

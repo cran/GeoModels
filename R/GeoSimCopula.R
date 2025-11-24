@@ -6,10 +6,9 @@
 # Simulate spatial and spatio-temporal random felds:
 GeoSimCopula <- function(coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
      method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=1, sparse=FALSE,
-     copula="Gaussian",seed=NULL,X=NULL,spobj=NULL,nrep=1)
+     copula="Gaussian",X=NULL,spobj=NULL,nrep=1)
 {
 
-if(!is.null(seed))  set.seed(seed)
 if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
 
 if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
@@ -64,6 +63,7 @@ sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=
     distance=distance, grid=grid,
  method=method,model='Gaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
 unif=pnorm(sim$data,mean=0,sd=1);
+
 }
 
 ####skewGaussian copula #############################################
@@ -256,6 +256,27 @@ tail1 =as.numeric(param$tail1);tail2 = as.numeric(param$tail2)
 vv=as.numeric(param$sill) 
 simcop =mm+sqrt(vv)*qtpTukeyh22(unif,tail1,tail2)
 }
+
+#######################################  OK
+if(model=="SkewLaplace")
+{  
+
+# Quantile della Skew/Asymmetric Laplace
+qtpSkewLaplace22 <- function(u, sk) {
+  mm=0
+  vv=1
+  s  <- sqrt(vv)
+  res <- rep(NA_real_, length(u))
+  hi <- u >= sk
+  lo <- u <  sk
+  res[hi] <- mm - (s / sk) * (log1p(-u[hi]) - log1p(-sk))
+  res[lo] <- mm + (s / (1 - sk)) * (log(u[lo]) - log(sk))
+  res
+}
+sk=as.numeric(param$skew) 
+vv=as.numeric(param$sill)
+simcop =mm+sqrt(vv)*qtpSkewLaplace22(unif,sk)
+}
 #######################################  OK
 if(model=="Tukeygh")
 {
@@ -281,28 +302,7 @@ skew = as.numeric(param$skew)
 vv=as.numeric(param$sill) 
 simcop =mm+sqrt(vv)*qtpGaussian(unif,skew)
 }
-#######################################  OK
-#if(model %in% c("TwoPieceBimodal"))
-#{
-#ptpbimodal = function(x,skew,delta,df){  
-#  alpha=2*(delta+1)/df
-#  nn=2^(1-alpha/2)
-#  ll=1:length(x)
-#  sel1=I(x<0)*ll
-#  sel2=I(x>=0)*ll
-#  x1=x[sel1];x2=x[sel2];
-#  pp1=(0.5*(1+skew)*as.numeric(zipfR::Igamma(df/2,nn*(-x1)^(alpha)/(2*((1+skew)^(alpha))),lower=FALSE))/(gamma(df/2)))
-#  pp2=(0.5*(skew+1)+(0.5*(1-skew)*as.numeric(zipfR::Igamma(df/2,nn*(x2)^(alpha)/(2*((1-skew)^(alpha))),lower=TRUE))/(gamma(df/2))))
-#  return(c(pp1,pp2))
-#}
-#vv=as.numeric(param$sill) 
-#skew = as.numeric(param$skew)
-#df   = as.numeric(param$df)
-#delta= as.numeric(param$shape)
-#f = function(x) ptpbimodal(x,skew = skew,delta=delta,df=df)
-#f.inv = GoFKernel::inverse(f,lower = -4,upper = 4)
-#simcop = mm+sqrt(vv)*sort(as.numeric(lapply(unif,f.inv)))
-#}
+
 #######################################  
 if(model=="TwoPieceStudentT")
 {
@@ -419,7 +419,6 @@ SIM[[L]]=simcop
     numtime = sim$numtime,
     param = param,
     radius = radius,
-    randseed=.Random.seed,
     spacetime = sim$spacetime,
     sparse=sim$sparse,
     copula=copula,

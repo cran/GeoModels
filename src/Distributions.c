@@ -589,30 +589,41 @@ double d2lognorm(double x, double y, double sill, double nugget, double mux, dou
     return result;
 }
 
+static inline double logcosh(double b){
+  double ab = fabs(b);
+  return ab + log1p(exp(-2.0*ab)) - M_LN2; // log(cosh b)
+}
+
+double biv_log_sas(double corr, double zi, double zj,
+                   double mi, double mj, double skew, double tail, double vari)
+{
+
+  const double sd = sqrt(vari);
+  const double xi = (zi - mi) / sd;
+  const double xj = (zj - mj) / sd;
+  const double b1 = tail * asinh(xi) - skew;
+  const double b2 = tail * asinh(xj) - skew;
+  const double Z1 = sinh(b1);
+  const double Z2 = sinh(b2);
+  if (!isfinite(Z1) || !isfinite(Z2)) return -INFINITY;
+
+  const double one_m_r2 = 1.0 - corr*corr;
+  const double inv_one_m_r2 = 1.0 / one_m_r2;
+  const double quad = Z1*Z1 + Z2*Z2 - 2.0*corr*Z1*Z2;
+  const double exponent = -0.5 * quad * inv_one_m_r2;
+  const double log_phi2 = -log(2.0*M_PI) - 0.5*log(one_m_r2) + exponent;
+  const double log_jac =
+      2.0*log(tail)
+    + logcosh(b1) + logcosh(b2)
+    - 0.5*log1p(xi*xi) - 0.5*log1p(xj*xj)
+    - log(vari);
+
+  return log_phi2 + log_jac;
+}
 
 double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,double tail,double vari){
-
-double xi=(zi-mi)/sqrt(vari);
-double xj=(zj-mj)/sqrt(vari);
-double asinh_xi=asinh(xi);
-double asinh_xj=asinh(xj);
-double b1=tail*asinh_xi-skew;
-double b2=tail*asinh_xj-skew;
-double sinh_b1=sinh(b1);
-double sinh_b2=sinh(b2);
-double cosh_b1=cosh(b1);
-double cosh_b2=cosh(b2);
-double Z1=sinh_b1;
-double Z2=sinh_b2;
-double one_minus_corr2=1.0-corr*corr;
-double xi2p1=xi*xi+1.0;
-double xj2p1=xj*xj+1.0;
-double sqrt_k=sqrt(one_minus_corr2);
-double denom=2.0*M_PI*sqrt_k;
-double A=(cosh_b1*cosh_b2*tail*tail)/(denom*sqrt(xi2p1*xj2p1));
-double exponent=-(Z1*Z1+Z2*Z2-2.0*corr*Z1*Z2)/(2.0*one_minus_corr2);
-double B=exp(exponent);
-return(A*B)/vari;
+  double lp = biv_log_sas(corr, zi, zj, mi, mj, skew, tail, vari);
+  return (lp == -INFINITY) ? 0.0 : exp(lp);
 }
 
 
@@ -2201,20 +2212,81 @@ double inverse_lamb(double x,double tail)
    return(sign*value);
 }
 
+
+
+static inline double inv_tukey_h(double z, double h) {
+    if (h == 0.0) return z;
+    const double arg = h * z * z;          
+    double W = LambertW(arg);                  
+    if (!isfinite(W) || W < 0.0) return NAN;  
+    double u = copysign(sqrt(W / h), z);
+    return u;
+}
+
+/* |du/dz| = exp(-0.5*W(h*z^2)) / (1 + W(h*z^2)),   h=0 -> 1 */
+static inline double jac_tukey_h(double z, double h) {
+    if (h == 0.0) return 1.0;
+    const double arg = h * z * z;
+    double W = LambertW(arg);
+    if (!isfinite(W) || (1.0 + W) <= 0.0) return NAN;  // evita divisione per zero
+    return exp(-0.5 * W) / (1.0 + W);
+}
+
+/* Bivariata Tukey-hh (Tukey-h a tratti: hr per z>=0, hl per z<0) */
+double biv_tukey_hh(double rho,
+                    double yi, double yj,
+                    double mui, double muj,
+                    double sill, double hl, double hr)
+{
+    /* Controlli base */
+    if (!isfinite(rho)||!isfinite(yi)||!isfinite(yj)||
+        !isfinite(mui)||!isfinite(muj)||!isfinite(sill)||
+        !isfinite(hl) ||!isfinite(hr)) return NAN;
+
+    if (sill <= 0.0 || hl < 0.0 || hr < 0.0) return NAN;
+
+    /* Trasformazione y -> z = (y - mu)/sqrt(sill) */
+    const double sqrt_sill = sqrt(sill);
+    const double zi = (yi - mui) / sqrt_sill;
+    const double zj = (yj - muj) / sqrt_sill;
+
+    /* Scegli il parametro h a destra/sinistra */
+    const double hi = (zi >= 0.0 ? hr : hl);
+    const double hj = (zj >= 0.0 ? hr : hl);
+
+    /* Inversa della trasformazione Tukey-h e jacobiani */
+    const double ui = inv_tukey_h(zi, hi);
+    const double uj = inv_tukey_h(zj, hj);
+    if (!isfinite(ui) || !isfinite(uj)) return NAN;
+
+    const double Ji = jac_tukey_h(zi, hi);
+    const double Jj = jac_tukey_h(zj, hj);
+    if (!isfinite(Ji) || !isfinite(Jj)) return NAN;
+
+    /* Salvaguardia correlazione in (-1,1) */
+    if (rho <= -1.0) rho = -1.0 + 1e-12;
+    if (rho >=  1.0) rho =  1.0 - 1e-12;
+
+    /* Densità normale bivariata standard in (ui,uj) con correlazione rho */
+    double phi2 = dbnorm(ui, uj, 0.0, 0.0, 1.0, rho);
+    if (!isfinite(phi2)) return NAN;
+
+    /* Trasformazioni concatenate:
+       f_Z(z_i,z_j) = phi2(ui,uj;r) * |du_i/dz_i| * |du_j/dz_j|
+       f_Y(y_i,y_j) = f_Z(z_i,z_j) * |dz_i/dy_i| * |dz_j/dy_j| = ... / sill
+    */
+    double dens = (phi2 * Ji * Jj) / sill;
+
+    return isfinite(dens) ? dens : NAN;
+}
+
+
+/*
 double biv_tukey_hh(double corr, double data_i, double data_j, double mui, double muj,
                          double sill, double hl, double hr) {
     
-    // Controlli di validità input
-    if (!isfinite(corr) || !isfinite(data_i) || !isfinite(data_j) || 
-        !isfinite(mui) || !isfinite(muj) || !isfinite(sill) || 
-        !isfinite(hl) || !isfinite(hr)) {
-        return NAN;
-    }
-    
-    if (sill <= 0 || hl <= 0 || hr <= 0) {
-        return NAN;
-    }
-    
+
+
     const double sqrt_sill = sqrt(sill);
     const double zi = (data_i - mui) / sqrt_sill;
     const double zj = (data_j - muj) / sqrt_sill;
@@ -2285,12 +2357,13 @@ double biv_tukey_hh(double corr, double data_i, double data_j, double mui, doubl
     
     return res / sill;
 }
-
+*/
 
 /****************************************************/
 /*** bivariate skew laplace ****/
-/****************************************************/
+/*****************************************************/
 
+/*
 #define LOG_TOL   (-18.0)
 #define EXP_CUTOFF (-700.0)
 #define MAX_STREAK 4
@@ -2299,6 +2372,23 @@ double biv_tukey_hh(double corr, double data_i, double data_j, double mui, doubl
 #define KMAX_MAX 60
 #define CONV_TOL 1e-7
 #define CONV_STREAK_MIN 2
+*/
+
+
+#define LOG_TOL   (-16.0)
+#define EXP_CUTOFF (-600.0)
+#define MAX_STREAK 4
+#define MAX_TERMS 8192
+#define KMAX_DEFAULT 50
+#define KMAX_MAX 50
+#define CONV_TOL 1e-6
+#define CONV_STREAK_MIN 1
+
+
+
+
+
+
 
 static inline double logsumexp_r_style(const double *log_terms, int n) {
     if (n <= 0) return R_NegInf;
@@ -2320,9 +2410,10 @@ static inline double logsumexp_r_style(const double *log_terms, int n) {
             }
         }
     }
-    return (sum_exp > 0.0) ? m + log(sum_exp) : R_NegInf;
+    // MIGLIORIA: Check su sum_exp con tolleranza numerica
+    if (sum_exp <= 0.0) return R_NegInf;
+    return m + log(sum_exp);
 }
-
 static inline double lchoose_fast_local(int n, int k, const double *lfact) {
     if (k < 0 || k > n) return R_NegInf;
     if (k == 0 || k == n) return 0.0;
@@ -2336,14 +2427,23 @@ static double Ikell_log_r_style_local(int k, int ell, double z, double alpha,
     
     for (int i = 0; i < max_terms; i++) terms_log[i] = R_NegInf;
 
+    // MIGLIORIA: Gestione più robusta di z == 0
+    double abs_z = fabs(z);
+    const double Z_TOL = 1e-15;  // Tolleranza per considerare z ≈ 0
+
     if (z <= 0.0) {
-        double abs_z = fabs(z);
         for (int m = 0; m <= ell; m++) {
-            if (abs_z == 0.0 && (ell - m) > 0) continue;
+            // Se z è vicino a 0 e ell-m > 0, il termine è trascurabile
+            if (abs_z < Z_TOL && (ell - m) > 0) continue;
 
             double log_binom = lchoose_fast_local(ell, m, lfact);
-            double log_pow = (abs_z == 0.0 && (ell - m) == 0) ? 0.0 :
-                              (ell - m) * log(abs_z);
+            if (!R_FINITE(log_binom)) continue;
+
+            double log_pow = 0.0;
+            if (abs_z >= Z_TOL || (ell - m) == 0) {
+                log_pow = (ell - m) * (abs_z < Z_TOL ? R_NegInf : log(abs_z));
+            }
+            
             double log_gamma = lfact[k + m];
             double log_alpha_term = -(k + m + 1.0) * log_alpha;
 
@@ -2352,17 +2452,23 @@ static double Ikell_log_r_style_local(int k, int ell, double z, double alpha,
         return logsumexp_r_style(terms_log, ell + 1);
     } else {
         for (int m = 0; m <= k; m++) {
-            if (z == 0.0 && (k - m) > 0) continue;
+            if (abs_z < Z_TOL && (k - m) > 0) continue;
 
             double log_binom = lchoose_fast_local(k, m, lfact);
-            double log_pow = (z == 0.0 && (k - m) == 0) ? 0.0 :
-                              (k - m) * log(z);
+            if (!R_FINITE(log_binom)) continue;
+
+            double log_pow = 0.0;
+            if (abs_z >= Z_TOL || (k - m) == 0) {
+                log_pow = (k - m) * (abs_z < Z_TOL ? R_NegInf : log(z));
+            }
+            
             double log_gamma = lfact[ell + m];
             double log_alpha_term = -(ell + m + 1.0) * log_alpha;
 
             terms_log[m] = log_binom + log_pow + log_gamma + log_alpha_term;
         }
         double log_sum = logsumexp_r_style(terms_log, k + 1);
+        if (!R_FINITE(log_sum)) return R_NegInf;
         return -alpha * z + log_sum;
     }
 }
@@ -2371,9 +2477,11 @@ double biv_skewlaplace_kmax(double z1, double z2, double p, double rho, int Kmax
     if (p <= 0.0 || p >= 1.0 || fabs(rho) >= 1.0) return R_NegInf;
     if (!R_FINITE(z1) || !R_FINITE(z2)) return R_NegInf;
     if (Kmax < 0) Kmax = KMAX_DEFAULT;
+    if (Kmax > KMAX_MAX) Kmax = KMAX_MAX;
 
     double Delta = 1.0 - rho * rho;
-    if (Delta <= DBL_EPSILON) return R_NegInf;
+    // MIGLIORIA: Tolleranza più appropriata per Delta
+    if (Delta <= 1e-14) return R_NegInf;
 
     double alpha = 1.0 / Delta;
     double log_p = log(p);
@@ -2386,14 +2494,12 @@ double biv_skewlaplace_kmax(double z1, double z2, double p, double rho, int Kmax
                       ((1.0 - p) * (z1 + z2)) / Delta;
     if (!R_FINITE(log_pref)) return R_NegInf;
 
-    // Cache locale dei fattoriali - calcolata una sola volta per chiamata
     int max_fact_needed = 2 * Kmax + 2;
     double *lfact = (double*) R_alloc(max_fact_needed + 1, sizeof(double));
     for (int i = 0; i <= max_fact_needed; i++) {
         lfact[i] = lgammafn(i + 1.0);
     }
 
-    // Buffer per i termini totali
     int max_possible_terms = (Kmax + 1) * (Kmax + 1);
     double *log_terms_total = (double*) R_alloc(max_possible_terms, sizeof(double));
     int nterms = 0;
@@ -2404,54 +2510,74 @@ double biv_skewlaplace_kmax(double z1, double z2, double p, double rho, int Kmax
                               k * (2.0 * log_abs_rho + 2.0 * log_p - 2.0 * log_Delta) +
                               ell * (2.0 * log_abs_rho + 2.0 * log_1mp - 2.0 * log_Delta);
 
+            // MIGLIORIA: Check di validità prima di calcolare
+            if (!R_FINITE(log_coef)) continue;
+
             double log_I1 = Ikell_log_r_style_local(k, ell, z1, alpha, log_alpha, lfact);
             double log_I2 = Ikell_log_r_style_local(k, ell, z2, alpha, log_alpha, lfact);
 
             if (R_FINITE(log_I1) && R_FINITE(log_I2)) {
                 double total_term = log_coef + log_I1 + log_I2;
-                if (R_FINITE(total_term)) {
+                if (R_FINITE(total_term) && nterms < max_possible_terms) {
                     log_terms_total[nterms++] = total_term;
                 }
             }
         }
     }
     
-    double log_density = (nterms > 0)
-                         ? log_pref + logsumexp_r_style(log_terms_total, nterms)
-                         : R_NegInf;
+    if (nterms == 0) return R_NegInf;
+    
+    double log_density = log_pref + logsumexp_r_style(log_terms_total, nterms);
     return R_FINITE(log_density) ? log_density : R_NegInf;
 }
 
+double log_biv_skewlaplace(double rho, double z1, double z2, double m1, double m2, 
+                           double sill, double p) {
+    // MIGLIORIA: Validazione parametri all'inizio
+    if (sill <= 0.0) return R_NegInf;
+    if (p <= 0.0 || p >= 1.0) return R_NegInf;
+    if (fabs(rho) >= 1.0) return R_NegInf;
+    if (!R_FINITE(z1) || !R_FINITE(z2) || !R_FINITE(m1) || !R_FINITE(m2)) 
+        return R_NegInf;
 
-
-double log_biv_skewlaplace(double rho,double z1,double z2,double m1,double m2,double sill,double p){
-
-
-
-    if(rho<DBL_EPSILON)
-    {
-
-        return (one_log_SkewLaplace(z1, m1, sill, p)+one_log_SkewLaplace(z2, m2, sill, p));
+    // MIGLIORIA: Tolleranza più appropriata per rho ≈ 0
+    const double RHO_TOL = 1e-10;
+    
+    if (fabs(rho) < RHO_TOL) {
+        // Caso indipendente: somma di log-densità univariate
+        return (one_log_SkewLaplace(z1, m1, sill, p) + 
+                one_log_SkewLaplace(z2, m2, sill, p));
     }
-else{
-       z1=(z1-m1)/sqrt(sill);  z2=(z2-m2)/sqrt(sill);
 
-    if (p <= 0.0 || p >= 1.0 || fabs(rho) >= 1.0) return R_NegInf;
-    if (!R_FINITE(z1) || !R_FINITE(z2)) return R_NegInf;
+    // Standardizzazione
+    double sqrt_sill = sqrt(sill);
+    z1 = (z1 - m1) / sqrt_sill;
+    z2 = (z2 - m2) / sqrt_sill;
+
     double log_density_prev = R_NegInf;
     double log_density_curr = R_NegInf;
     int convergence_streak = 0;
 
-    for (int Kmax = 10; Kmax <= KMAX_MAX; Kmax += 10) {
+    // MIGLIORIA: Inizio da Kmax più piccolo per casi semplici
+    int Kmax_start = (fabs(z1) < 2.0 && fabs(z2) < 2.0) ? 5 : 10;
+    int Kmax_step = 5;  // Incrementi più piccoli per convergenza più fine
+
+    for (int Kmax = Kmax_start; Kmax <= KMAX_MAX; Kmax += Kmax_step) {
         log_density_curr = biv_skewlaplace_kmax(z1, z2, p, rho, Kmax);
 
-        if (Kmax > 10 && R_FINITE(log_density_prev) && R_FINITE(log_density_curr)) {
+        if (!R_FINITE(log_density_curr)) {
+            log_density_prev = log_density_curr;
+            continue;
+        }
+
+        if (Kmax > Kmax_start && R_FINITE(log_density_prev)) {
             double abs_diff = fabs(log_density_curr - log_density_prev);
             double rel_diff = abs_diff / (1.0 + fabs(log_density_curr));
+            
             if (rel_diff < CONV_TOL) {
                 convergence_streak++;
                 if (convergence_streak >= CONV_STREAK_MIN) {
-                    return (log_density_curr-log(sill));
+                    return (log_density_curr - log(sill));
                 }
             } else {
                 convergence_streak = 0;
@@ -2459,18 +2585,13 @@ else{
         }
         log_density_prev = log_density_curr;
     }
-    return (log_density_curr-log(sill));
- }
+
+    // MIGLIORIA: Ritorna valore finale anche se non convergente
+    if (R_FINITE(log_density_curr)) {
+        return (log_density_curr - log(sill));
+    }
+    return R_NegInf;
 }
-
-
-/**********************************************************************/
-/**********************************************************************/
-
-
-
-
-
 
 
 
@@ -2652,6 +2773,7 @@ void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *
 {
     *res = biv_binomneg (*NN,*u,*v,*p01, *p10,*p11);
 }
+
 
 
 
@@ -4507,10 +4629,70 @@ return(res);
 
 
 
+static double hyp2F1_trunc_recur(double a1, int m, double c, double z) {
+    if (m < 0) return NA_REAL;
+    // T0 = 1
+    double term = 1.0;
+    double sum  = 1.0;
+    // Kahan compensation para mitigar cancelaciones
+    double comp = 0.0;
 
-/************* POIsson gammma ************/
+    for (int r = 1; r <= m; ++r) {
+        // T_r = T_{r-1} * ((a+r-1)*(-m+r-1))/((c+r-1)*r) * z
+        double num1 = a1 + (r - 1);
+        double num2 = -m + (r - 1);   // alterna signo
+        double den1 = c  + (r - 1);
+        double den2 = (double)r;
+
+        term *= (num1 * num2 / (den1 * den2)) * z;
+
+        // Kahan summation
+        double y = term - comp;
+        double t = sum + y;
+        comp = (t - sum) - y;
+        sum = t;
+
+        if (!R_finite(term)) break;
+        // (opcional) corte por magnitud ínfima:
+        // if (fabs(term) < 1e-300) break;
+    }
+    return sum; // 2F1 estándar (NO dividida por Gamma(c))
+}
+
+
+
+// 2F1(a1, -m; c; z) con m >= 0 entero.
+// Serie truncada con recurrencia:
+// T0=1,  T_r = T_{r-1} * ((a1+r-1)*(-m+r-1))/((c+r-1)*r) * z
+static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z) {
+    if (m < 0) return NA_REAL;
+    double term = 1.0;
+    double sum  = 1.0;
+    double comp = 0.0; // Kahan
+
+    for (int r = 1; r <= m; ++r) {
+        double num1 = a1 + (r - 1);
+        double num2 = -m + (r - 1);
+        double den1 = c  + (r - 1);
+        double den2 = (double)r;
+        term *= (num1 * num2 / (den1 * den2)) * z;
+
+        // Kahan summation
+        double y = term - comp;
+        double t = sum + y;
+        comp = (t - sum) - y;
+        sum = t;
+
+        if (!R_finite(term)) break;
+    }
+    return sum; // estándar (NO dividida por Gamma)
+}
+
+
+// ---------------------------------------------------------------------------
+// Versión optimizada de PG00 con truncamiento si a es entero
 double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    // Pre-calcolo di tutte le costanti
+    // Pre-cálculo de constantes
     const double rho2 = corr * corr;
     const double beta_i = a / mean_i;
     const double beta_j = a / mean_j;
@@ -4518,36 +4700,37 @@ double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double auxi = 1.0 / (1.0 + beta_i);
     const double auxj = 1.0 / (1.0 + beta_j);
     const double auxij = auxi * auxj;
-    
-    // Logaritmi pre-calcolati
+
+    // Logs precomputados
     const double log_beta_ij = log(beta_ij);
     const double log_rho2 = log(rho2);
     const double log_auxij = log(auxij);
     const double log_p1mrho2 = log1p(-rho2);
-    
-    // Costanti per i calcoli logaritmici
+
+    // Parámetros de las 2F1
     const double neg_inv_beta_i = -1.0 / beta_i;
     const double neg_inv_beta_j = -1.0 / beta_j;
     const double log_gamma_a = lgammafn(a);
     const double a_plus_1 = a + 1.0;
-    
-    // Termini costanti nel calcolo finale
+
+    // Términos constantes del resultado
     const double auxi_beta_i_pow_a = R_pow(auxi * beta_i, a);
     const double auxj_beta_j_pow_a = R_pow(auxj * beta_j, a);
-    
-    double sum = 0.0;
-    double prev_sum = 0.0;
-    
+
+    double sum = 0.0, prev_sum = 0.0;
+
     const int iter1 = 600, iter2 = 600;
     const double convergence_threshold = 1e-30;
     const double term_threshold = 1e-30;
-    
+
+    const int a_is_int = is_integer(a);
+
     for (int k = 0; k < iter1; ++k) {
         const int k_plus_2 = k + 2;
         const double log_gamma_k_plus_2 = lgammafn(k_plus_2);
-        
+
         double local_sum = 0.0;
-        
+
         for (int l = 0; l < iter2; ++l) {
             const int l_plus_1 = l + 1;
             const int k_plus_l = k + l;
@@ -4555,51 +4738,74 @@ double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
             const int k_plus_l_plus_a_plus_1 = k_plus_l_plus_a + 1;
             const double l_plus_a = l + a;
             const double l_plus_a_minus_1 = l_plus_a - 1.0;
-            const double one_minus_l_plus_a = 1.0 - l_plus_a;
-            
-            // Calcolo ottimizzato del termine logaritmico
-            const double log_aa = l_plus_a_minus_1 * log_beta_ij + 
-                                k_plus_l * log_rho2 +
-                                k_plus_l_plus_a * log_auxij + 
-                                a_plus_1 * log_p1mrho2;
-            
-            // Calcolo ottimizzato di bb
-            const double bb = 2.0 * lgammafn(k_plus_l_plus_a_plus_1) - 
-                            2.0 * log_gamma_k_plus_2 -
-                            lgammafn(l_plus_1) - 
-                            log_gamma_a - 
-                            lgammafn(l_plus_a);
-            
-            // Calcolo delle funzioni ipergeometriche
-            const double hg1 = hypergeo(1, one_minus_l_plus_a, k_plus_2, neg_inv_beta_i);
-            const double hg2 = hypergeo(1, one_minus_l_plus_a, k_plus_2, neg_inv_beta_j);
-            
-            // Controllo di validità più efficiente
-            if (!R_finite(hg1) || !R_finite(hg2)) continue;
-            
-            const double term = exp(log_aa + bb) * hg1 * hg2;
-            
-            // Controllo convergenza anticipata
-            if (!R_finite(term) || fabs(term) < term_threshold) {
-                break;
+            const double one_minus_l_plus_a = 1.0 - l_plus_a; // = -m si a es entero
+
+            // Parte logarítmica común
+            const double log_aa = l_plus_a_minus_1 * log_beta_ij +
+                                  k_plus_l * log_rho2 +
+                                  k_plus_l_plus_a * log_auxij +
+                                  a_plus_1 * log_p1mrho2;
+
+            // bb ya incluye el factor 1/Gamma(k+2)^2 (dos hipergeométricas)
+            const double bb = 2.0 * lgammafn(k_plus_l_plus_a_plus_1) -
+                              2.0 * log_gamma_k_plus_2 -
+                              lgammafn(l_plus_1) -
+                              log_gamma_a -
+                              lgammafn(l_plus_a);
+
+            // Evaluación de las 2F1
+            double hg1, hg2;
+            if (a_is_int) {
+                // b = 1 - (l+a) = -m  con m = l + a - 1
+                int m = (int)llround(l + a - 1.0);
+                if (m < 0) continue;
+                // Usamos la 2F1 estándar truncada por recurrencia (más estable)
+                hg1 = hyp2F1_trunc_recur(1.0, m, (double)k_plus_2, neg_inv_beta_i);
+                hg2 = hyp2F1_trunc_recur(1.0, m, (double)k_plus_2, neg_inv_beta_j);
+            } else {
+                // Caso general: 2F1 estándar de tu implementación
+                hg1 = hypergeo(1.0, one_minus_l_plus_a, k_plus_2, neg_inv_beta_i);
+                hg2 = hypergeo(1.0, one_minus_l_plus_a, k_plus_2, neg_inv_beta_j);
             }
-            
+
+            if (!R_finite(hg1) || !R_finite(hg2)) continue;
+
+            const double term = exp(log_aa + bb) * hg1 * hg2;
+
+            if (!R_finite(term) || fabs(term) < term_threshold) break;
+
             local_sum += term;
         }
-        
+
         sum += local_sum;
-        
-        // Controllo convergenza del loop esterno
+
         if (fabs(sum - prev_sum) < convergence_threshold) break;
         prev_sum = sum;
     }
-    
-    // Calcolo finale ottimizzato
+
     const double p00 = -1.0 + auxi_beta_i_pow_a + auxj_beta_j_pow_a + sum;
-    
-    // Clamp del risultato
     return (p00 < 1e-320) ? 1e-320 : p00;
 }
+
+// Helpers (ponlos una sola vez en tu .c si aún no están)
+// ------------------------------------------------------
+// #include <Rmath.h>
+// static inline int is_integer(double x){ return fabs(x - round(x)) < 1e-12; }
+// static double hyp2F1_trunc_recur(double a1, int m, double c, double z){
+//     if (m < 0) return NA_REAL;
+//     double term = 1.0, sum = 1.0, comp = 0.0; // Kahan
+//     for (int r = 1; r <= m; ++r) {
+//         double num1 = a1 + (r - 1);
+//         double num2 = -m + (r - 1);
+//         double den1 = c  + (r - 1);
+//         double den2 = (double)r;
+//         term *= (num1 * num2 / (den1 * den2)) * z;
+//         double y = term - comp, t = sum + y; comp = (t - sum) - y; sum = t;
+//         if (!R_finite(term)) break;
+//     }
+//     return sum;
+// }
+// ------------------------------------------------------
 
 double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     // Pre-calcolo di tutte le costanti
@@ -4623,7 +4829,7 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double log_beta_ij = log(beta_ij);
     const double log_auxij = log(auxij);
     const double log1mrho2 = log1p(-rho2);
-    const double r2br = -rho2 / bri;
+    const double r2br  = -rho2 / bri;
     const double r2brj = -rho2 / brj;
     
     // Costanti per i calcoli logaritmici
@@ -4641,6 +4847,10 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     
     double sum = 0.0, sum1 = 0.0, sum2 = 0.0;
     double prev_sum1 = 0.0, prev_sum2 = 0.0;
+
+    // Activamos truncamiento sólo si a es entero
+    const int a_is_int = is_integer(a);
+    const int a_int    = a_is_int ? (int)llround(a) : 0;
     
     for (int k = 0; k < iter1; ++k) {
         const int mm = r + k + 1;
@@ -4651,7 +4861,8 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
         double local_sum = 0.0, local_sum1 = 0.0, local_sum2 = 0.0;
         
         for (int l1 = 0; l1 < iter2; ++l1) {
-            const double ff = 1.0 - l1 - a;
+            const double ff = 1.0 - l1 - a;           // = -m si a entero
+            const int    mpoly = a_is_int ? (l1 + a_int - 1) : -1;
             const int kl1 = k + l1;
             const int l1_plus_1 = l1 + 1;
             const double l1_plus_a = l1 + a;
@@ -4665,26 +4876,32 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
             // Calcolo del loop più interno (sum)
             double inner_sum = 0.0;
             for (int l = 0; l < iter3; ++l) {
-                const int mml1 = mm + l + 1;
+                const int mml1 = mm + l + 1;      // "c" de 2F1 nel blocco interno
                 const int kll1 = k + l + l1;
                 const int r_plus_l = r + l;
                 
                 const double log_aa = l1_plus_a_minus_1 * log_beta_ij + 
-                                    kll1 * log_rho2 + 
-                                    (ra + kll1) * log_auxij + 
-                                    ra_plus_1 * log1mrho2;
+                                      kll1 * log_rho2 + 
+                                      (ra + kll1) * log_auxij + 
+                                      ra_plus_1 * log1mrho2;
                 
                 const double bb = lgammafn(r_plus_l) + 2.0 * lgammafn(mm + l + l1 + a) - 
-                                2.0 * lgammafn(mml1) - lgammafn(l + 1) - log_gamma_l1_plus_1 - 
-                                log_gamma_r - log_gamma_a - log_gamma_l1_plus_a;
+                                  2.0 * lgammafn(mml1) - lgammafn(l + 1) - log_gamma_l1_plus_1 - 
+                                  log_gamma_r - log_gamma_a - log_gamma_l1_plus_a;
                 
-                const double hg1 = hypergeo(1, one_minus_l1_plus_a, mml1, bmi);
-                const double hg2 = hypergeo(1, ff, mml1, bmj);
+                double hg1, hg2;
+                if (a_is_int && mpoly >= 0) {
+                    // 2F1(1, -m; mml1; z) estándar (NO regularizada)
+                    hg1 = hyp2F1_trunc_recur(1.0, mpoly, (double)mml1, bmi);
+                    hg2 = hyp2F1_trunc_recur(1.0, mpoly, (double)mml1, bmj);
+                } else {
+                    hg1 = hypergeo(1.0, one_minus_l1_plus_a, mml1, bmi);
+                    hg2 = hypergeo(1.0, ff,                 mml1, bmj);
+                }
                 
                 if (!R_finite(hg1) || !R_finite(hg2)) break;
                 
                 const double term = exp(log_aa + bb) * hg1 * hg2;
-                
                 if (fabs(term) < term_threshold || !R_finite(term)) break;
                 inner_sum += term;
             }
@@ -4692,19 +4909,28 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
             
             // Calcolo dei termini per sum1 e sum2
             const double log_aa1 = l1_plus_a * log_beta_ij + 
-                                  kl1 * log_rho2 + 
-                                  (ra + kl1) * log_auxij + 
-                                  ra * log1mrho2;
+                                   kl1 * log_rho2 + 
+                                   (ra + kl1) * log_auxij + 
+                                   ra * log1mrho2;
             
             const double bb1_log = log_gamma_r_plus_k + 2.0 * lgammafn(ra + kl1) - 
-                                  2.0 * log_gamma_mm - lgammafn(k + 1) - 
-                                  log_gamma_l1_plus_1 - log_gamma_r - 
-                                  log_gamma_a - log_gamma_l1_plus_a;
+                                   2.0 * log_gamma_mm - lgammafn(k + 1) - 
+                                   log_gamma_l1_plus_1 - log_gamma_r - 
+                                   log_gamma_a - log_gamma_l1_plus_a;
             
-            const double h1 = hypergeo(1, ff, mm, bmi);
-            const double h2 = hypergeo(1, ff, mm, bmj);
-            const double h3 = hypergeo(1, ff, mm, r2br);
-            const double h4 = hypergeo(1, ff, mm, r2brj);
+            double h1, h2, h3, h4;
+            if (a_is_int && mpoly >= 0) {
+                // Todas aquí son 2F1(1, -m; mm; z)
+                h1 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, bmi);
+                h2 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, bmj);
+                h3 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, r2br);
+                h4 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, r2brj);
+            } else {
+                h1 = hypergeo(1.0, ff, mm, bmi);
+                h2 = hypergeo(1.0, ff, mm, bmj);
+                h3 = hypergeo(1.0, ff, mm, r2br);
+                h4 = hypergeo(1.0, ff, mm, r2brj);
+            }
             
             if (!R_finite(h1) || !R_finite(h2) || !R_finite(h3) || !R_finite(h4)) break;
             
@@ -4721,7 +4947,7 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
             local_sum2 += term2 + term3;
         }
         
-        sum += local_sum;
+        sum  += local_sum;
         sum1 += local_sum1;
         sum2 += local_sum2;
         
@@ -4736,6 +4962,9 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double prr = -sum1 + sum2 + sum;
     return (prr < 1e-320) ? 1e-320 : prr;
 }
+
+
+
 double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double beta_i = a / mean_i;
@@ -4745,13 +4974,13 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double auxij = auxi * auxj;
     const double brho = beta_i - rho2;
 
-
     const int n = r - t;
     const double an = a + n;
     const double rb = -rho2 / (1.0 + brho);
     const double ib = -1.0 / beta_j;
+
     const double beta_i_pow_a = R_pow(beta_i, a);
-    const double auxi_pow_na = R_pow(auxi, n + a);
+    const double auxi_pow_na  = R_pow(auxi, n + a);
     const double aux1 = beta_i_pow_a * auxi_pow_na *
                         exp(lgammafn(n + a) - lgammafn(n + 1) - lgammafn(a));
 
@@ -4759,18 +4988,21 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const int iter1 = 700;
     const int iter2 = 500;
 
+    const int a_is_int = is_integer(a);
+    const int a_int    = a_is_int ? (int)llround(a) : 0;
+
     for (int l = 0; l < iter1; l++) {
-        const int q = l + 1;
+        const int q  = l + 1;
         const int nq = n + q;
 
         for (int l1 = 0; l1 < iter2; l1++) {
-            const int ii = l + l1;
+            const int ii  = l + l1;
             const double l1a = l1 + a;
-            const int cc = ii + (int)a;
+            const int cc  = ii + (int)a;
 
-            const double beta_i_l1a = R_pow(beta_i, l1a);
+            const double beta_i_l1a   = R_pow(beta_i, l1a);
             const double beta_j_l1a_1 = R_pow(beta_j, l1a - 1.0);
-            const double rho2_pow_ii = R_pow(rho2, ii);
+            const double rho2_pow_ii  = R_pow(rho2, ii);
             const double auxij_pow_cc = R_pow(auxij, cc);
 
             const double aa = beta_i_l1a * beta_j_l1a_1 * rho2_pow_ii *
@@ -4780,10 +5012,24 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
                               lgammafn(nq) - lgammafn(q + 1) -
                               lgammafn(l1 + 1) - lgammafn(a) - lgammafn(l1a);
 
-            double hg1 = hypergeo(n, 1.0 - l1a, nq, rb);
-            double hg2 = hypergeo(1.0, 1.0 - l1a, q + 1, ib);
+            double hg1, hg2;
+            if (a_is_int) {
+                // b = 1 - l1a = -m  -> m = l1 + a - 1
+                const int m = l1 + a_int - 1;
+                if (m < 0) continue;
 
-            double term1 = aa * hg1 * hg2 * exp(bb);
+                // Ambas 2F1 son truncadas (2F1 estándar)
+                // hg1: 2F1(n, 1-l1a; nq; rb) = 2F1(n, -m; nq; rb)
+                hg1 = hyp2F1_trunc_recur_general((double)n, m, (double)nq, rb);
+                // hg2: 2F1(1, 1-l1a; q+1; ib) = 2F1(1, -m; q+1; ib)
+                hg2 = hyp2F1_trunc_recur_general(1.0,       m, (double)(q + 1), ib);
+            } else {
+                // Caso general: usa hypergeo estándar
+                hg1 = hypergeo((double)n, 1.0 - l1a, (double)nq, rb);
+                hg2 = hypergeo(1.0,        1.0 - l1a, (double)(q + 1), ib);
+            }
+
+            const double term1 = aa * hg1 * hg2 * exp(bb);
             if (fabs(term1) < 1e-30 || !R_finite(term1))
                 break;
 
@@ -4795,6 +5041,8 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     if (pr0 < 1e-320) pr0 = 1e-320;
     return pr0;
 }
+
+
 
 double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a) {
     // Pre-calcolo delle costanti (invarianti)
@@ -5244,7 +5492,7 @@ double biv_unif_CopulaGauss(double dat1, double dat2, double rho)
 double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho, double alpha)
 {
     if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
-    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.998;
+    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.999;
     
     const double small = 1e-8;
     const double omega = sqrt(alpha * alpha + 1);
@@ -5338,7 +5586,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dt(b2,1/nuis[0],0)/sqrt(nuis[2]); //marginal 2
    break;
 /******* models on the  positive real line ****************/
-     case 24: // lognormal
+     case 22: // lognormal
       rho1=(1-nuis[0])*rho; 
       b1=mu1-nuis[1]/2; b2=mu2-nuis[1]/2;
       a1=plnorm(z1,b1, sqrt(nuis[1]),1,0);
@@ -5346,33 +5594,33 @@ switch(model) // Correlation functions are in alphabetical order
       g1=dlnorm(z1,b1, sqrt(nuis[1]),0);
       g2=dlnorm(z2,b2, sqrt(nuis[1]),0);
   break;
-     case 22: // loglogistic
-      rho1=(1-nuis[0])*rho; 
-      b1=1;
-      b2=1;
-      a1=1;
-      a2=1;
-      g1=1;
-      g2=1;
-  break;
    case 21: // gamma
       rho1=(1-nuis[0])*rho;
       b1=1;
       b2=1;
-      a1=pgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),1,0);  //revisar
-      a2=pgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),1,0);  //revisar
-      g1=dgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),0);  //revisar
-      g2=dgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),0);  //revisar
+      a1=pgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),1,0);  
+      a2=pgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),1,0);  
+      g1=dgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),0);  
+      g2=dgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),0); 
    break;
      case 26: // weibull
       rho1=(1-nuis[0])*rho;      
       b1=1;
       b2=1;
-      //Rprintf("%f\n",nuis[2]);
       a1=pweibull(z1,nuis[2],exp(mu1)/(gammafn(1+1/nuis[2])),1,0);
       a2=pweibull(z2,nuis[2],exp(mu2)/(gammafn(1+1/nuis[2])),1,0);
       g1=dweibull(z1,nuis[2],exp(mu1)/(gammafn(1+1/nuis[2])),0);
       g2=dweibull(z2,nuis[2],exp(mu2)/(gammafn(1+1/nuis[2])),0);
+   break;
+     case 59: // skewlaplace
+      rho1=(1-nuis[0])*rho;      
+      b1=1;
+      b2=1;
+      a1=pSkewLaplace(z1,nuis[2],mu1,nuis[1]);
+      a2=pSkewLaplace(z2,nuis[2],mu2,nuis[1]);
+      g1=dSkewLaplace(z1,nuis[2],mu1,nuis[1]);
+      g2=dSkewLaplace(z2,nuis[2],mu2,nuis[1]);
+      //Rprintf("%f %f %f %f ",a1,a2,g1,g2);
    break;
 /******* models on the a bounded support ****************/
    case 28: //Beta
@@ -5484,11 +5732,17 @@ case 30: // Poisson
 /*********************** end cases ***************/
 /******************copula gaussiana*************************/
 if(type_cop==1)  { 
-   if(!(model==16||model==11||model==30))   //continous  models
-     dens=log(biv_unif_CopulaGauss(a1,a2,rho1)) + log(g1) + log(g2);
-    else                            // discrete                  
-     dens= log( pbnorm22(a1,g1,rho1) -   pbnorm22(a2,g1,rho1)  - pbnorm22(a1,g2,rho1) + pbnorm22(a2,g2,rho1) );
+   if(!(model==16 || model==11 || model==30)) {   // continui
+
+       dens = log(biv_unif_CopulaGauss(a1, a2, rho1)) 
+            + log(g1) + log(g2);
+   } else {                                      // discreti
+       double prob = pbnorm22(a1, g1, rho1) - pbnorm22(a2, g1, rho1) - pbnorm22(a1, g2, rho1) + pbnorm22(a2, g2, rho1);
+       prob = fmax(DBL_MIN, prob);
+       dens = log(prob);
+   }
 }
+
 /******************copula clayton and skew *************************/             
 if(type_cop==2) 
 {
@@ -5514,10 +5768,16 @@ if(type_cop==3)
      else { Rf_error("not implemented."); } //   discrete   models
 }
 
-if(cond)  {
-               if(!(model==16||model==11||model==30))     dens=dens-log(g2);
-               else  dens=dens-log(b2);
-          }
+if(cond) {
+   if(!(model==16 || model==11 || model==30)) {   // continui
+       dens = dens - log(fmax(DBL_MIN, g2));
+   } else {                                      // discreti
+       dens = dens - log(fmax(DBL_MIN, b2));
+   }
+}
+
+
+
 return(dens);
 }
 
@@ -5526,6 +5786,37 @@ return(dens);
 /******* some marginals (log)pdf  *****************/
 /***********************/
 /***********************/
+
+
+
+static inline int params_ok(double sk, double vv) {
+    return (sk > 0.0 && sk < 1.0 && vv > 0.0);
+}
+
+/* cdf skewlaplace */
+double pSkewLaplace(double x, double sk, double mm, double vv) {
+    double s = sqrt(vv);
+    if (x >= mm) {
+        return sk + (1.0 - sk) * (1.0 - exp(-sk * (x - mm) / s));
+    } else {
+        return sk * exp((1.0 - sk) * (x - mm) / s);
+    }
+}
+/* pdf skewlaplace */
+double dSkewLaplace(double x, double sk, double mm, double vv) {
+
+
+    double s = sqrt(vv);
+    double c = (sk * (1.0 - sk)) / s;
+
+    if (x < mm) {
+        return c * exp((1.0 - sk) * (x - mm) / s);
+    } else {
+        return c * exp(-sk * (x - mm) / s);
+    }
+}
+
+/*******************************************************/
 
 static const double GL_x[20] = {
     -0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188,
@@ -5545,6 +5836,7 @@ static const double GL_w[20] = {
 
 // Costante precomputata
 static const double INV_2PI = 1.0 / (2.0 * M_PI);
+
 
 /* Owen's T function ottimizzata */
 double owens_t_optimized(double h, double a) {
@@ -5776,7 +6068,7 @@ double one_log_T(double z,double m, double sill, double df)
     res=lgammafn(0.5*(df+1))-(0.5*(df+1))*log1p(q*q/df)-log(sqrt(M_PI*df))-lgammafn(df/2)-0.5*log(sill);
   return(res);
 }
-
+/*
 double one_log_sas(double z,double m, double skew, double tail,  double vari)
 {
   double  res=0.0,S,b;
@@ -5785,7 +6077,22 @@ double one_log_sas(double z,double m, double skew, double tail,  double vari)
     S=sinh(b);
        res= tail*sqrt(1+S*S)*dnorm(S,0,1,0)/(sqrt(1+x*x)*sqrt(vari));
   return(log(res));
+}*/
+
+
+double one_log_sas(double z, double m, double skew, double tail, double vari)
+{
+  
+  const double sigma = sqrt(vari);
+  const double x = (z - m) / sigma;
+  const double b = tail * asinh(x) - skew;
+  const double S = sinh(b);
+  const double logphi = dnorm(S, 0.0, 1.0, /*give_log=*/1);
+  const double log_num = log(tail) + 0.5 * log1p(S*S) + logphi;
+  const double log_den = 0.5 * log1p(x*x) + log(sigma);
+  return log_num - log_den;
 }
+
 
 double one_log_beta(double z, double shape1,double shape2,double min,double  max)
 {
@@ -5895,18 +6202,63 @@ double one_log_bomidal(double z,double m, double sill,double nu,double delta, do
          }
   return(res);
 }
-double one_log_BinomnegZIP(int z,double n, double mu, double mup)
+double one_log_BinomnegZIP(int z, double n, double mu, double mup)
 {
-  double  res=0.0;
-  double  p=pnorm(mup,0,1,1,0);
-  double  pp=pnorm(mu,0,1,1,0);
- if(z==0){
-    res=log(p+(1-p)*dnbinom(0,n,pp,0));    
-          }
-  if(z>0){
-   res=log1p(-p)+ dnbinom(z,n,pp,1);
-         }
-  return(res);
+    // Controlli di validità sui parametri
+    if (z < 0 || n <= 0) {
+        return -700.0;  // Parametri non validi
+    }
+    
+    // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
+    const double mu_safe = fmax(-12.0, fmin(12.0, mu));
+    const double mup_safe = fmax(-12.0, fmin(12.0, mup));
+    
+    // Calcolo delle probabilità con clipping
+    double p = pnorm(mup_safe, 0, 1, 1, 0);    // Probabilità di zero inflation
+    double pp = pnorm(mu_safe, 0, 1, 1, 0);    // Parametro della binomiale negativa
+    
+    // CLIPPING DELLE PROBABILITÀ per stabilità numerica
+    p = fmax(DBL_EPSILON, fmin(1- DBL_EPSILON , p));
+    pp = fmax(DBL_EPSILON, fmin(1- DBL_EPSILON , pp));
+    
+    double res = 0.0;
+    
+    if (z == 0) {
+        // Caso z = 0: P(Z=0) = p + (1-p) * P(NB=0)
+        
+        // Calcola P(NB=0) usando dnbinom per robustezza
+        const double nb_zero = dnbinom(0, n, pp, 0);  // 0 = give_log=FALSE
+        
+        // Controllo per valori non finiti
+        if (!R_FINITE(nb_zero) || nb_zero < 0) {
+            return -700.0;
+        }
+        const double prob_zero = p + (1 - p) * nb_zero;
+        if (prob_zero <= 1e-300) {
+            return -700.0;
+        }
+        res = log(prob_zero);
+        
+    } else { // z > 0
+        // Caso z > 0: P(Z=z) = (1-p) * P(NB=z)
+        
+        // Calcola log P(NB=z) direttamente
+        const double log_nb_z = dnbinom(z, n, pp, 1);  // 1 = give_log=TRUE
+
+        if (!R_FINITE(log_nb_z)) {
+            return -700.0;
+        }
+        const double log_one_minus_p = log1p(-p);
+        
+        res = log_one_minus_p + log_nb_z;
+    }
+    
+    // Controllo finale per valori non finiti
+    if (!R_FINITE(res)) {
+        return -700.0;
+    }
+    
+    return res;
 }
 double one_log_PoisZIP(int z,double lambda, double mup)
 {
@@ -5944,11 +6296,19 @@ double one_log_dpoisgamma(int z,double lambda, double a)
 }
 
 
-double one_log_negbinom_marg(int u,int N, double p)
+double one_log_negbinom_marg(int u, int N, double p)
 {
-  double  res;
-    res=lgammafn(u+N)-(lgammafn(u+1)+lgammafn(N))+N*log(p)+u*log1p(-p);
-  return(res);
+ 
+    const double p_safe = fmax(DBL_EPSILON, fmin(1-DBL_EPSILON, p));
+    if (u < 0 || N <= 0) {
+        return -700.0;
+    }
+    const double result = dnbinom(u, N, p_safe, 1);  // 1 = give_log=TRUE
+    if (!R_FINITE(result)) {
+        return -700.0;
+    }
+    
+    return result;
 }
 
 
@@ -5977,7 +6337,6 @@ double one_log_logistic(double z,double m, double sill)
 /*#########################################################################################*/
 /*#####################   bivariate gaussian probabilities      ###########################*/
 /*#########################################################################################*/
-
 
 // Costanti per controllo numerico - IDENTICHE al tuo codice
 #define MIN_LOG_VALUE -700.0  

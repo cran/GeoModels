@@ -90,7 +90,7 @@ if(show.range)  {
 
     
     if(!isvario) stop("an object vario is needed\n")
-    if(!is.null(fitted$copula)) stop("copula models are not supported \n")
+
 
 if (fitted$model %in% c("Weibull", "Poisson","PoissonGamma", "Binomial", "Gamma", 
         "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric", 
@@ -266,8 +266,8 @@ else                                     nui['nugget']=nuisance['nugget']
         #correlation <- CorrelationFct(bivariate,corrmodel, lags_m, lagt_m, numlags_m, numlagt_m,mu,
          #                            CkModel(fitted$model), nui,param,fitted$n)
 
-
-
+iscopula=FALSE
+if(!is.null(fitted$copula)&&fitted$copula=="Gaussian") iscopula=TRUE
 ##########################################
 ########### starting cases ###############
 ##########################################
@@ -293,16 +293,25 @@ else                                     nui['nugget']=nuisance['nugget']
  if(skewgausssian) {    
             if(bivariate) {}
               else {
+        if(!iscopula){
               correlation1=(1-as.numeric(nuisance['nugget']) )*correlation  
               vv=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew']);sk2=sk^2;corr2=correlation^2;  
               cc=(2*sk2)*(sqrt(1-corr2) + correlation*asin(correlation)-1)/(pi*vv+sk2*(pi-2)) + (correlation1*vv)/(vv+sk2*(1-2/pi))
               vs=(vv+sk2*(1-2/pi))
-          
               covariance=vs*cc;variogram=vs*(1-cc) }
-                   }
+              else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+              }
+          }
+    }
 ##########################################
    if(twopieceT)        { if(bivariate) {}
                         else {
+                        if(!iscopula){
                               correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))
                               nu=1/as.numeric(nuisance['df']); sk=as.numeric(nuisance['skew']);sill=as.numeric(nuisance['sill'])
                               sk2=sk^2
@@ -316,11 +325,22 @@ else                                     nui['nugget']=nuisance['nugget']
                                   KK=( nu*(nu-2)*gamma((nu-1)/2)^2) / (nu*pi*gamma(nu/2)^2*(3*sk2+1)-4*sk2*nu*(nu-2)*gamma((nu-1)/2)^2 )
                                   cc= KK*(a1*a2*a3-4*sk2);
                               ##
-                              covariance=vs*cc;variogram=vs*(1-cc)  }
+                              covariance=vs*cc;variogram=vs*(1-cc)  
+                          }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+              }
+
+                          }
                   } 
   ##########################################
    if(twopieceTukeyh)        { if(bivariate) {}
                         else {
+                          if(!iscopula){     
                               correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))
                               tail=as.numeric(nuisance['tail']); sk=as.numeric(nuisance['skew']);
                               sill=as.numeric(nuisance['sill'])
@@ -337,12 +357,22 @@ else                                     nui['nugget']=nuisance['nugget']
                               cc=  (M*A*a3-mm)/( ff- mm)
                               vs=sill*(ff- mm) 
                               covariance=vs*cc;variogram=vs*(1-cc) 
-                               }
-                  }  
+                                  }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                   }
+
+                          }
+                  } 
 ##########################################
    if(twopieceGauss)        { 
                         if(bivariate) {}
-                        else {        
+                        else {     
+             if(!iscopula){     
                         correlation1=correlation*(1-as.numeric(nuisance['nugget']))
                         corr2=sqrt(1-correlation1^(2))
                         sk=as.numeric(nuisance['skew']); sk2=sk^2
@@ -352,11 +382,20 @@ else                                     nui['nugget']=nuisance['nugget']
                         cc=(2*((corr2 + correlation1*asin(correlation1))*KK)- 8*sk2)/(3*pi*sk2  -  8*sk2   +pi   )
                         vs= as.numeric(nuisance['sill'])*(1+3*sk2-8*sk2/pi)
                         covariance=vs*cc;variogram=vs*(1-cc) 
+                          }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
                         }
                   } 
+              }
 ##########################################
  if(twopiecebimodal)        { if(bivariate) {}
-                        else {                            
+                        else {      
+                            if(!iscopula){                         
                                   correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))
                                   nu=as.numeric(nuisance['df']); sk=as.numeric(nuisance['skew'])
                                   delta=as.numeric(nuisance['shape'])
@@ -372,22 +411,42 @@ else                                     nui['nugget']=nuisance['nugget']
                                   cc= MM*(a1*a3-4*sk2)/vari
                                   vs=as.numeric(nuisance['sill'])*vari/(nn^(2/alpha)*gamma(nu/2)^2)
                                   covariance=vs*cc; variogram=vs*(1-cc)
-                               }
-                            }
+                                         }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
+
    if(studentT)        { if(bivariate) {}
                         else {
+                                if(!iscopula){   
                               correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))
                               nu=1/as.numeric(nuisance['df']);sill=as.numeric(nuisance['sill'])
       
                               vs=sill*(nu)/(nu-2)
                               cc=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,correlation^2))*correlation1)/(2*gamma(nu/2)^2)
                               covariance=vs*cc;variogram=vs*(1-cc) 
-                               }
-                  }
+                                            }
+                                else
+              {
+
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################  
    if(skewstudentT)        { if(bivariate) {}
                         else {
+                                if(!iscopula){   
                                correlation1=correlation*(1-nuisance['nugget'] )
                                nu=as.numeric(1/nuisance['df']); sk=as.numeric(nuisance['skew'])
                                sill=as.numeric(nuisance['sill'])
@@ -398,44 +457,104 @@ else                                     nui['nugget']=nuisance['nugget']
                                mm=sqrt(nu)*gamma(f)*sk/(sqrt(pi)*gamma(l));
                                vs=sill*(nu/(nu-2)-mm*mm);
                                covariance=vs*cc;variogram=vs*(1-cc)
-                               }
-                  }
+                                            }
+                                else
+              {
+               
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
   if(tukeyh)        { if(bivariate) {}
                         else {
+                                if(!iscopula){   
                               correlation=correlation*(1-nuisance['nugget'] )
                               h=as.numeric(nuisance['tail'])
                               sill=as.numeric(nuisance['sill'])
                               vs=  (1-2*h)^(-1.5)     
                               cc=correlation*(1-2*h)^(1.5)/ ((1-h)^2-(h*correlation)^2)^(1.5)
                               covariance=sill*vs*cc;variogram=sill*vs*(1-cc)  
-                             } 
+                                         }
+                                else
+              {
+
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
                   } 
-    if(tukeyh2)        { if(bivariate) {}
-                        else {
-                              correlation=correlation*(1-nuisance['nugget'] )
-                              hr=as.numeric(nuisance['tail1']); hl=as.numeric(nuisance['tail2'])
-                              sill=as.numeric(nuisance['sill'])
-                              corr=correlation
-                              corr[corr>=0.99999999]=0.99999999
-                              x1=1-(1-corr^2)*hr; x2=(1-hr)^2-(corr*hr)^2
-                              y1=1-(1-corr^2)*hl; y2=(1-hl)^2-(corr*hl)^2
-                              g=1-hl-hr+(1-corr^2)*hl*hr
-                              h1=sqrt(1-corr^2/(x1^2))+(corr/x1)*asin(corr/x1);
-                              h2=sqrt(1-corr^2/(y1^2))+(corr/y1)*asin(corr/y1)
-                              
-                              h3=sqrt(1-corr^2/(x1*y1))+sqrt(corr^2/(x1*y1))*asin(sqrt(corr^2/(x1*y1)))
-                              p1=x1*h1/(2*pi*(x2)^(3/2))+corr/(4*(x2)^(3/2)); p2=y1*h2/(2*pi*(y2)^(3/2))+corr/(4*(y2)^(3/2))
-                              p3=-(x1*y1)^(1/2)*h3/(2*pi*(g)^(3/2))+corr/(4*(g)^(3/2))
-                              mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
-                              vs=0.5*((1-2*hl)^(-3/2)+(1-2*hr)^(-3/2)) -(mm)^2
-                              cc=(p1+p2+2*p3-mm^2)/vs
-                          covariance=sill*vs*cc;variogram=sill*vs*(1-cc)  
-                             } 
-                  }   
+              }
+
+if (tukeyh2) { 
+  if (bivariate) {
+    # (bivariato non trattato qui)
+  } else {
+    if (!iscopula) {
+
+      eps     <- 1e-12
+      nugget  <- as.numeric(nuisance['nugget'])        # in [0,1]
+      hr      <- as.numeric(nuisance['tail1'])
+      hl      <- as.numeric(nuisance['tail2'])
+      sill    <- as.numeric(nuisance['sill'])
+      # tail ∈ [0, 0.5)
+      hr <- pmin(pmax(hr, 0), 0.5 - 1e-8)
+      hl <- pmin(pmax(hl, 0), 0.5 - 1e-8)
+      corr <- as.numeric(correlation) * (1 - nugget)
+      corr <- pmin(pmax(corr, -0.99999999), 0.99999999)
+
+      ## --- quantità intermedie robuste ---
+      x1 <- 1 - (1 - corr^2) * hr
+      y1 <- 1 - (1 - corr^2) * hl
+      x2 <- (1 - hr)^2 - (corr * hr)^2
+      y2 <- (1 - hl)^2 - (corr * hl)^2
+      g  <- 1 - hl - hr + (1 - corr^2) * hl * hr
+
+      x2 <- pmax(x2, eps)
+      y2 <- pmax(y2, eps)
+      g  <- pmax(g , eps)
+
+      ax1 <- pmin(pmax(corr / x1, -1), 1)
+      ay1 <- pmin(pmax(corr / y1, -1), 1)
+      axy <- pmin(pmax(corr / sqrt(pmax(x1*y1, eps)), -1), 1)
+
+      h1 <- sqrt(pmax(1 - (corr^2) / (x1^2), 0)) + (corr / x1) * asin(ax1)
+      h2 <- sqrt(pmax(1 - (corr^2) / (y1^2), 0)) + (corr / y1) * asin(ay1)
+      h3 <- sqrt(pmax(1 - (corr^2) / (x1*y1), 0)) + (corr / sqrt(pmax(x1*y1, eps))) * asin(axy)
+
+      p1 <- x1 * h1 / (2 * pi * (x2)^(3/2)) + corr / (4 * (x2)^(3/2))
+      p2 <- y1 * h2 / (2 * pi * (y2)^(3/2)) + corr / (4 * (y2)^(3/2))
+      p3 <- -(x1 * y1)^(1/2) * h3 / (2 * pi * (g)^(3/2)) + corr / (4 * (g)^(3/2))
+
+      mm <- (hr - hl) / (sqrt(2 * pi) * (1 - hl) * (1 - hr))
+      vs <- 0.5 * (1 - 2 * hl)^(-1.5) + 0.5 * (1 - 2 * hr)^(-1.5) - mm^2
+
+      # evita divisioni per ~0 (caso limite quando h→0.5)
+      vs <- pmax(vs, eps)
+
+      cc <- (p1 + p2 + 2 * p3 - mm^2) / vs
+
+      covariance <- sill * vs * cc
+      variogram  <- sill * vs * (1 - cc)
+
+    } else {
+      cova <- gaussian_copula_cov((1 - as.numeric(nuisance['nugget'])) * correlation,
+                                  model, c(mm, nuisance))
+      vv   <- variance_disp(model, nuisance)
+      covariance <- cova
+      variogram  <- vv - cova
+    }
+  }
+}
+
 ##########################################
   if(tukeygh)        { if(bivariate) {}
                         else {
+                     if(!iscopula){   
                               correlation=correlation*(1-nuisance['nugget'] )
                               rho=correlation
                               tail=as.numeric(nuisance['tail'])
@@ -468,79 +587,131 @@ else                                     nui['nugget']=nuisance['nugget']
                             covariance=sill*rho;variogram=sill*(1-rho)
                             }  
                                 
-                      } 
-                  }     
+                     }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
+######################################################
   if(sas) { if(bivariate) {}
                         else {
-         
-  nugget <- as.numeric(nuisance['nugget'])
-  d <- as.numeric(nuisance['tail'])     # deve essere > 0
-  e <- as.numeric(nuisance['skew'])     # può essere qualsiasi valore
-  sill <- as.numeric(nuisance['sill'])
-  correlation=correlation*(1-as.numeric(nuisance['nugget'] ))
+             if(!iscopula){    
+nugget <- as.numeric(nuisance['nugget'])  # in [0,1]
+d      <- as.numeric(nuisance['tail'])
+e      <- as.numeric(nuisance['skew'])
+sill   <- as.numeric(nuisance['sill'])
+cc <- corrsas(correlation, e, d)
+mm <- sinh(e/d) * exp(0.25) *
+      ( besselK(0.25,(d+1)/(2*d)) + besselK(0.25,(1-d)/(2*d)) ) / sqrt(8*pi)
+vv <- cosh(2*e/d) * exp(0.25) *
+      ( besselK(0.25,(d+2)/(2*d)) + besselK(0.25,(2-d)/(2*d)) ) / sqrt(32*pi) -
+      0.5 - mm^2
+vv <- pmax(vv, 0)  
 
-mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-  vv=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
-  corr=corrsas(correlation, e, d)
-covariance=sill*vv*corr;variogram=sill*vv*(1-corr)  
+sigma2_marg <- sill * vv
+covariance <- sigma2_marg * (1 - nugget) * cc
+variogram  <- sigma2_marg * (1 - (1 - nugget) * cc)
+
                         }
-          }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
  if(gamma)        { if(bivariate) {}
                         else {
+                if(!iscopula){ 
                               correlation=correlation*(1-as.numeric(nuisance['nugget'] ))
                               vs=2*exp(mm)^2/as.numeric(nuisance['shape'])
                               cc=correlation^2
-                              covariance=vs*cc;variogram=vs*(1-cc)  }
-                  }
+                              covariance=vs*cc;variogram=vs*(1-cc)  
+                        }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
  if(weibull)        { if(bivariate) {} 
                         else {
+                if(!iscopula){        
                             ssh=as.numeric(nuisance['shape'])
                         correlation=correlation*(1-as.numeric(nuisance['nugget'] ))  
                         vs=exp(mm)^2*(gamma(1+2/ssh)/gamma(1+1/ssh)^2-1)
                         auxcorr= (gamma(1+1/ssh))^2/((gamma(1+2/ssh))-(gamma(1+1/ssh))^2)
                         cc=auxcorr*(Re(hypergeo::hypergeo(-1/ssh, -1/ssh, 1,correlation^2)) -1)
                         covariance=vs*cc;variogram=vs*(1-cc) 
-                      #    print(cc) 
-                    }
-                    }
+                      }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
   if(loglogistic)    { if(bivariate) {}  
                       else { 
+              if(!iscopula){   
                      correlation=correlation*(1-as.numeric(nuisance['nugget'] ))
                      sh=as.numeric(nuisance["shape"])
                      vs=exp(mm)^2*(2*sh*sin(pi/sh)^2/(pi*sin(2*pi/sh))-1)
                      cc=((pi*sin(2*pi/sh))/(2*sh*(sin(pi/sh))^2-pi*sin(2*pi/sh)))*
                                     (Re(hypergeo::hypergeo(-1/sh, -1/sh, 1,correlation^2))*
                                      Re(hypergeo::hypergeo( 1/sh,  1/sh, 1,correlation^2)) -1)
-                      covariance=vs*cc;variogram=vs*(1-cc)   }
-                    }
+                      covariance=vs*cc;variogram=vs*(1-cc)  
+
+                }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 ##########################################
- # if(loggauss)    { if(bivariate) {}  
-  #                    else {    
-   #                 correlation=(1-nuisance['nugget'] )*correlation
-    #                vvar=as.numeric(nuisance["sill"])
-     #               yy=nuisance["sill"]*correlation
-      #              cc<-(exp(yy-1))
-       #             vs<-(exp(vvar)-1)*exp(2*mm)   # ok
-        #            covariance=vs*cc;variogram=vs*(1-cc/((exp(vvar)-1)*exp(2*vvar) ))   
-         #            }
-          #        }
   if(loggauss)    { if(bivariate) {}  
-                      else {    
+                      else {  
+             if(!iscopula){    
                     vvar=as.numeric(nuisance["sill"])
                     yy=vvar*correlation*(1-as.numeric(nuisance["nugget"]))
                     cc<-(exp(yy)-1)/(exp(vvar)-1)
                     vs<-(exp(vvar)-1)
                     covariance=vs*cc;variogram=vs*(1-cc)   
+                    
                      }
-                  }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
    #                   
    if(binary||binomial||binomial2||geom||binomialneg||binomialnegZINB||Gaussian_misp_Binomial||Gaussian_misp_BinomialNeg) {
                     if(bivariate) {}
-                    if(!bivariate) {      
-                            
+                    else {      
+                    if(!iscopula){      
                            pp=pnorm(mu)
                            if(binary||binomial||binomial2) vv=min(fitted$n)*pp*(1-pp)
                            if(geom)             vv=(1-pp)/pp^2;
@@ -552,11 +723,21 @@ covariance=sill*vv*corr;variogram=sill*vv*(1-corr)
                            if(Gaussian_misp_Binomial||Gaussian_misp_BinomialNeg) vv=1                    
                            covariance=vv*correlation
                            variogram=vv*(1-correlation)
-                           }
-    }
+                          }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)  )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
+###########################################################################              
      if(poisson||Gaussian_misp_Poisson) {
                     if(bivariate) {}
-                    if(!bivariate) {   
+                    else {   
+                if(!iscopula){  
                            correlation=(1-as.numeric(nuisance['nugget']))*correlation   
                            corr2=correlation^2    
                            vv=exp(mu);
@@ -564,12 +745,23 @@ covariance=sill*vv*corr;variogram=sill*vv*(1-corr)
                            cc=corr2*(1-(besselI(z,0,expon.scaled = TRUE)+besselI(z,1,expon.scaled = TRUE)))
                            if(Gaussian_misp_Poisson) vv=1   
                            covariance=vv*cc
-                           variogram=vv*(1-cc)}
-                   }
+                           variogram=vv*(1-cc)
+                    }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
+########################################################################### 
    if(poissongamma||Gaussian_misp_PoissonGamma) {
 
                     if(bivariate) {}
-                    if(!bivariate) {
+                    else {
+                             if(!iscopula){  
                        correlation=(1-as.numeric(nuisance['nugget']))*correlation
                        corr2=correlation^2
                        a=as.numeric(nuisance['shape'])
@@ -584,10 +776,20 @@ covariance=sill*vv*corr;variogram=sill*vv*(1-corr)
                        covariance=vv*cc
                        variogram=vv*(1-cc)
                            }
-                   }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
+########################################################################### 
      if(poissonZIP) {
                     if(bivariate) {}
-                    if(!bivariate) {   
+               else {  
+                  if(!iscopula){  
                            p=pnorm(as.numeric(nuisance['pmu']));MM=exp(mu)
                            vv=(1-p)*MM*(1+p*MM) 
                            p1=1-2*p+pbivnorm::pbivnorm(as.numeric(nuisance['pmu']),as.numeric(nuisance['pmu']), rho =
@@ -598,18 +800,50 @@ covariance=sill*vv*corr;variogram=sill*vv*(1-corr)
                            cc1=corr2*(1-(besselI(z,0,expon.scaled = TRUE)+besselI(z,1,expon.scaled = TRUE)))
                            cc=(p1*cc1*MM+MM^2*(p1-(1-p)^2))/vv
                            variogram=vv*(1-cc)
-                      }  
             }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
        if(poissongammaZIP) {
                     if(bivariate) {}
-                    if(!bivariate) {   
-                           p=pnorm(as.numeric(nuisance['pmu']));
-
-                           ##....
-                           cc=1
-                           variogram=vv*(1-cc)
-                      }  
-            }
+                    else {   
+                    if(!iscopula){  
+                       correlation=(1-as.numeric(nuisance['nugget']))*correlation
+                       corr2=correlation^2
+                       a=as.numeric(nuisance['shape'])
+                       b=a/exp(mu);
+                       KK=b*(1-corr2)
+                       KK1=(a+1)/(2+KK)
+                       dd=  exp(log(b)+0.5*log(KK)+a*log(2+KK)-log(1+b)-(a+0.5)*log(4+KK))
+                       aa=hypergeo::hypergeo((1 - a)/2, -a/2, 1, 4/(2+KK)^2)
+                       bb=KK1*hypergeo::hypergeo((2-a)/2, (1-a)/2, 2, 4/(2+KK)^2)
+                       cc=Re(corr2*(1-dd*(aa+bb)))
+                       vv=exp(mu)*(1+1/b)
+                       cov1=vv*cc
+                       p=pnorm(as.numeric(nuisance['pmu']));MM=exp(mu)
+                       p1=1-2*p+pbivnorm::pbivnorm(as.numeric(nuisance['pmu']),as.numeric(nuisance['pmu']), rho =
+                           (1-as.numeric(nuisance['nugget2']))*correlation, recycle = TRUE)
+                       cov2=p1-(1-p)^2
+                       covariance=p1*cov1+MM^2*cov2
+                       vv1=(1-p)*MM*(1+(MM/a)+(p*MM))
+                       cc1=covariance/vv1
+                       variogram=vv1*(1-cc1)
+                 }
+                                else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+                        }
+                  } 
+              }
 
 
 
@@ -823,22 +1057,23 @@ OLS=NULL
             if(poissonZIP){        p=pnorm(nuisance['pmu']); MM=exp(mm['mean']); 
                               vvv=(1-p)*MM*(1+p*MM)}
 
-            if(poissongammaZIP){     p=pnorm(nuisance['pmu']); MM=exp(mm['mean']);      ### to fix 
-                              vvv=(1-p)*MM*(1+p*MM)}
+            if(poissongammaZIP){     p=pnorm(nuisance['pmu']); MM=exp(mm['mean']); kk=as.numeric(nuisance["shape"]);      ### to fix 
+                              vvv=(1-p)*MM*(1+p*MM+(MM/kk))}
 
             if(geom)          vvv= (1-pnorm(mm['mean']))/pnorm(mm['mean'])^2
             if(binomialneg)   vvv= fitted$n*(1-pnorm(mm['mean']))/pnorm(mm['mean'])^2
             if(binomialnegZINB) {
                                   MM=pnorm(mm['mean']);pg=pnorm(nuisance['pmu'])
-                                  vvv=fitted$n*(1-MM)*(1-pg)*(1+fitted$n*pg*(1-MM)) /MM^2
                                 }
             if(skewgausssian) vvv=(nuisance["sill"]+as.numeric(nuisance["skew"]))^2*(1-2/pi)
-            if(studentT)      vvv=as.numeric(nuisance["df"])/(as.numeric(nuisance["df"])-2)
+            if(studentT)      vvv=(1/as.numeric(nuisance["df"]))/((1/as.numeric(nuisance["df"]))-2)
             if(tukeyh)        vvv=(1-2*as.numeric(nuisance["tail"]))^(-1.5)
-            if(sas)           { d=as.numeric(nuisance['tail']); e=as.numeric(nuisance['skew'])
-                                MM=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-                                vvv=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-(MM)^2
-                            }
+            if(sas)           { 
+                              d <- as.numeric(nuisance['tail']); e <- as.numeric(nuisance['skew'])
+                              MM <- sinh(e/d) * exp(0.25) * ( besselK(.25,(d+1)/(2*d)) + besselK(.25,(1-d)/(2*d)) ) / sqrt(8*pi)
+                              vv_std <- cosh(2*e/d) * exp(0.25) * ( besselK(.25,(d+2)/(2*d)) + besselK(.25,(2-d)/(2*d)) ) / sqrt(32*pi) - 0.5 - MM^2
+                              vvv <- as.numeric(nuisance['sill']) * vv_std   # <-- sill*vv
+               }
             if(tukeyh2)  {        hr=as.numeric(nuisance["tail1"]);hl=as.numeric(nuisance["tail2"]);
                                   mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
                                   vvv=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2

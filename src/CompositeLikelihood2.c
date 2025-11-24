@@ -196,6 +196,7 @@ void Comp_Pair_SkewLaplace2mem(int *cormod, double *data1, double *data2, int *N
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
       const double skew=nuis[2];
+      const double sill=nuis[1];
 
     
     if(nugget < 0 || nugget >= 1 || skew < 0 || skew >= 1) {
@@ -209,7 +210,6 @@ void Comp_Pair_SkewLaplace2mem(int *cormod, double *data1, double *data2, int *N
     const double max_dist = maxdist[0];
     const double scale = 1.0 - nugget;
   
-    const double sill = nuis[1];
     double total = 0.0; double val =0.0;
 
 
@@ -217,14 +217,16 @@ void Comp_Pair_SkewLaplace2mem(int *cormod, double *data1, double *data2, int *N
     for(int i = 0; i < n_pairs; i++) {
         const double d1 = data1[i];
         const double d2 = data2[i];
-        
+       // Rprintf("%f %f -%f %f %f \n",mean1[1],mean1[2],par[1],sill,skew);
         if(!ISNAN(d1) && !ISNAN(d2)) {
             // Calcolo correlazione
             const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+            
             const double weights = weighted ? CorFunBohman(lags[i], max_dist) : 1.0;
+
          val=log_biv_skewlaplace(scale*corr,d1,d2,mean1[i],mean2[i],sill, skew);
    
-            total += weights * val;
+            total +=  val*weights;
         }
     }
 
@@ -584,56 +586,75 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 
 /*********************************************************/
+
 void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                  double *nuis,  int *type_cop, int *cond)
+                                  double *nuis, int *type_cop, int *cond)
 {
-    // Controllo precoce dei parametri
     const double nugget = nuis[0];
-    if(nugget >= 1 || nugget < 0) {
+    if (nugget >= 1.0 || nugget < 0.0) {
         *res = LOW;
         return;
     }
-
-    // Variabili precalcolate
-
-    const int n_pairs = npairs[0];
+    
+    const int n_pairs  = npairs[0];
     const double max_dist = maxdist[0];
-    const int N = N1[0];  // Parametro N della Binomiale Negativa
+    const int N = N1[0];
     const double scale = 1.0 - nugget;
-    double total = 0.0;  // Variabile accumulatore
+    const double eps = DBL_EPSILON;
 
+    double weights;     // dichiarata una sola volta qui
+    *res = 0.0;         // inizializza la log-verosimiglianza
 
+    for (int i = 0; i < n_pairs; i++) {
+        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+            const double lag = lags[i];
+            double corr = CorFct(cormod, lag, 0, par, 0, 0);
 
-        // Con pesi
-        for (int i = 0; i < n_pairs; i++) {
-            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
-                // Calcolo correlazione e probabilità
-                const double lag = lags[i];
-                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-                const double ai = mean1[i];
-                const double aj = mean2[i];
+            // Clipping della correlazione
+            corr = fmax(-0.99999, fmin(0.99999, corr));
+            const double scaled_corr = scale * corr;
 
-                // Calcolo probabilità congiunta e marginali
-                const double p11 = pbnorm22(ai, aj, scale * corr);
-                const double p1 = pnorm(ai, 0, 1, 1, 0);
-                const double p2 = pnorm(aj, 0, 1, 1, 0);
+            // Predittori lineari (limitati per stabilità numerica)
+            const double ai = fmax(-8.0, fmin(8.0, mean1[i]));
+            const double aj = fmax(-8.0, fmin(8.0, mean2[i]));
 
-                // Conversione a interi e calcolo pesi
-                const int uu = (int)data1[i];
-                const int vv = (int)data2[i];
-                const double weights = CorFunBohman(lag, max_dist);  // Calcolo peso
+            // Probabilità marginali e congiunta
+            const double p11 = pbnorm22(ai, aj, scaled_corr);
+            const double p1  = pnorm(ai, 0, 1, 1, 0);
+            const double p2  = pnorm(aj, 0, 1, 1, 0);
 
-                // Calcolo verosimiglianza e accumulo
-                const double binomneg_val = biv_binomneg(N, uu, vv, p1, p2, p11);
-                total += weights * log(binomneg_val);
+            // Clipping delle probabilità
+            const double p1_safe = fmax(eps, fmin(1.0 - eps, p1));
+            const double p2_safe = fmax(eps, fmin(1.0 - eps, p2));
+            const double upper   = fmin(p1_safe, p2_safe);
+            const double p11_safe = fmax(eps, fmin(upper - eps, p11));
+
+            // Dati osservati
+            const int uu = (int)data1[i];
+            const int vv = (int)data2[i];
+
+            // Pesi
+            weights = 1.0;
+            if (*weigthed == 1) {
+                weights = CorFunBohman(lag, max_dist);
+            }
+
+            // Calcolo densità
+            const double binomneg_val = biv_binomneg(N, uu, vv, p1_safe, p2_safe, p11_safe);
+
+            if (binomneg_val > eps && R_FINITE(binomneg_val)) {
+                *res += weights * log(binomneg_val);
+            } else {
+                *res += LOW; // penalizza se valore numericamente instabile
             }
         }
+    }
 
-
-    // Assegnazione finale con controllo
-    *res = R_FINITE(total) ? total : LOW;
+    if (!R_FINITE(*res)) *res = LOW;
 }
+
+
 
 /******************************************************/
 void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -748,10 +769,9 @@ void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2, 
     // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
-/******************************************************************************************/
 void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                               double *nuis,  int *type_cop, int *cond)
+                               double *nuis, int *type_cop, int *cond)
 {
     // Controllo precoce dei parametri
     const double nugget = nuis[0];
@@ -759,7 +779,7 @@ void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
         *res = LOW;
         return;
     }
-
+    
     // Variabili precalcolate
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
@@ -767,33 +787,53 @@ void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
     const int N = N1[0];  // Parametro N della Binomiale
     const double scale = 1.0 - nugget;
     double total = 0.0;  // Variabile accumulatore
-
+    
     if (weighted) {
         // Con pesi
         for (int i = 0; i < n_pairs; i++) {
             const double d1 = data1[i];
             const double d2 = data2[i];
-
             if (!ISNAN(d1) && !ISNAN(d2)) {
-                // Calcolo correlazione e probabilità
+                // Calcolo correlazione con clipping per stabilità numerica
                 const double lag = lags[i];
-                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // CLIPPING DELLA CORRELAZIONE per stabilità numerica
+                corr = fmax(-0.999, fmin(0.999, corr));
+                const double scaled_corr = scale * corr;
+                
                 const double ai = mean1[i];
                 const double aj = mean2[i];
-
-                // Calcolo probabilità congiunta e marginali
-                const double p11 = pbnorm22(ai, aj, scale * corr);
-                const double p1 = pnorm(ai, 0, 1, 1, 0);
-                const double p2 = pnorm(aj, 0, 1, 1, 0);
-
+                
+                // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
+                const double ai_safe = fmax(-5.0, fmin(5.0, ai));
+                const double aj_safe = fmax(-5.0, fmin(5.0, aj));
+                
+                // Calcolo probabilità congiunta e marginali con parametri sicuri
+                const double p11 = pbnorm22(ai_safe, aj_safe, scaled_corr);
+                const double p1 = pnorm(ai_safe, 0, 1, 1, 0);
+                const double p2 = pnorm(aj_safe, 0, 1, 1, 0);
+                
+                // CLIPPING DELLE PROBABILITÀ per evitare valori estremi
+                const double p1_safe = fmax(1e-15, fmin(1-1e-15, p1));
+                const double p2_safe = fmax(1e-15, fmin(1-1e-15, p2));
+                const double p11_safe = fmax(1e-15, fmin(fmin(p1_safe, p2_safe), p11));
+                
                 // Conversione a interi e calcolo pesi
                 const int uu = (int)d1;
                 const int vv = (int)d2;
-                const double weights = CorFunBohman(lag, max_dist);  // Calcolo peso
-
-                // Calcolo verosimiglianza e accumulo
-                const double binom_val = biv_binom(N, uu, vv, p1, p2, p11);
-                total += weights * log(binom_val);
+                const double weights = CorFunBohman(lag, max_dist);
+                
+                // Calcolo verosimiglianza con controllo di validità
+                const double binom_val = biv_binom(N, uu, vv, p1_safe, p2_safe, p11_safe);
+                
+                // Controllo valore finito prima del log e accumulo sicuro
+                if (binom_val > 1e-300 && R_FINITE(binom_val)) {
+                    total += weights * log(binom_val);
+                } else {
+                    // Valore molto negativo invece di -Inf per evitare problemi numerici
+                    total += weights * (-700.0);
+                }
             }
         }
     } else {
@@ -801,30 +841,50 @@ void Comp_Pair_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
         for (int i = 0; i < n_pairs; i++) {
             const double d1 = data1[i];
             const double d2 = data2[i];
-
             if (!ISNAN(d1) && !ISNAN(d2)) {
-                // Calcolo correlazione e probabilità
+                // Calcolo correlazione con clipping per stabilità numerica
                 const double lag = lags[i];
-                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                double corr = CorFct(cormod, lag, 0, par, 0, 0);
+                
+                // CLIPPING DELLA CORRELAZIONE per stabilità numerica
+                corr = fmax(-0.999, fmin(0.999, corr));
+                const double scaled_corr = scale * corr;
+                
                 const double ai = mean1[i];
                 const double aj = mean2[i];
-
-                // Calcolo probabilità congiunta e marginali
-                const double p11 = pbnorm22(ai, aj, scale * corr);
-                const double p1 = pnorm(ai, 0, 1, 1, 0);
-                const double p2 = pnorm(aj, 0, 1, 1, 0);
-
-                // Conversione a interi e calcolo verosimiglianza
+                
+                // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
+                const double ai_safe = fmax(-5.0, fmin(5.0, ai));
+                const double aj_safe = fmax(-5.0, fmin(5.0, aj));
+                
+                // Calcolo probabilità congiunta e marginali con parametri sicuri
+                const double p11 = pbnorm22(ai_safe, aj_safe, scaled_corr);
+                const double p1 = pnorm(ai_safe, 0, 1, 1, 0);
+                const double p2 = pnorm(aj_safe, 0, 1, 1, 0);
+                
+                // CLIPPING DELLE PROBABILITÀ per evitare valori estremi
+                const double p1_safe = fmax(1e-15, fmin(1-1e-15, p1));
+                const double p2_safe = fmax(1e-15, fmin(1-1e-15, p2));
+                const double p11_safe = fmax(1e-15, fmin(fmin(p1_safe, p2_safe), p11));
+                
+                // Conversione a interi
                 const int uu = (int)d1;
                 const int vv = (int)d2;
-                const double binom_val = biv_binom(N, uu, vv, p1, p2, p11);
-
-                // Accumulo risultato
-                total += log(binom_val);
+                
+                // Calcolo verosimiglianza con controllo di validità
+                const double binom_val = biv_binom(N, uu, vv, p1_safe, p2_safe, p11_safe);
+                
+                // Controllo valore finito prima del log e accumulo sicuro
+                if (binom_val > 1e-300 && R_FINITE(binom_val)) {
+                    total += log(binom_val);
+                } else {
+                    // Valore molto negativo invece di -Inf per evitare problemi numerici
+                    total += (-700.0);
+                }
             }
         }
     }
-
+    
     // Assegnazione finale con controllo
     *res = R_FINITE(total) ? total : LOW;
 }
@@ -3640,6 +3700,59 @@ void Comp_Pair_LogGaussCop2mem(int *cormod, double *data1, double *data2, int *N
 
     *res = R_FINITE(total) ? total : LOW;
 }
+
+
+
+void Comp_Pair_SkewLaplaceCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                               double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                               double *nuis,  int *type_cop, int *cond)
+{
+    const int model = 59;
+    const double nugget = nuis[0];
+    const int npairs_val = npairs[0];
+    const double maxdist_val = maxdist[0];
+    const int weigthed_val = *weigthed;
+    const int type_cop_val = type_cop[0];
+    const int cond_val = cond[0];
+
+    if (nuis[1] < 0 || nugget < 0 || nugget > 1) {
+        *res = LOW;
+        return;
+    }
+
+    double total = 0.0;
+    double weights = 1.0;
+
+    if (weigthed_val) {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                weights = CorFunBohman(lags[i], maxdist_val);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl * weights;
+            }
+        }
+    } else {
+        for (int i = 0; i < npairs_val; i++) {
+            if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+                const double corr = CorFct(cormod, lags[i], 0, par, 0, 0);
+                const double bl = biv_cop(corr, type_cop_val, cond_val,
+                                          data1[i], data2[i], mean1[i], mean2[i],
+                                          nuis, model, N1[i], N2[i]);
+                total += bl;
+            }
+        }
+    }
+
+    *res = R_FINITE(total) ? total : LOW;
+}
+
+
+
+
+
 
      void Comp_Pair_PoisCop2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
                            double *par, int *weigthed, double *res, double *mean1, double *mean2,

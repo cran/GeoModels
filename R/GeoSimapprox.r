@@ -81,9 +81,11 @@ if(!spacetime){
             param$nugget=0
             param$sill=1
             ##----------###
-         simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate,parallel,ncores)$simu
-         if(is.null(simu)) {print("TB simulation method fails\n");return(simu)}
 
+         simu=tbm2d_uni(coords, coordt, param, corrmodel, L, bivariate,parallel,ncores)$simu
+
+
+         if(is.null(simu)) {print("TB simulation method fails\n");return(simu)}
          simu=sqrt(vvv)*(sqrt(1-tau2)*simu+sqrt(tau2)*rnorm(length(simu)))
         }
            simu=c(simu)
@@ -265,7 +267,7 @@ else   { if(is.null(param$sill_1)) param$sill_1=1
             mm1<-param$mean_1;param$mean_1=0; mm2<-param$mean_2;param$mean_2=0;mm=c(mm1,mm2)
             vv1<-param$sill_1;param$sill_1=1;vv2<-param$sill_2;param$sill_2=1;vv=c(vv1,vv2)
             sk1<-param$skew_1;sk2<-param$skew_2;sk=c(sk1,sk2)
-            tl1<-param$tail_1;tl2<-param$tail_2;sk=c(tl1,tl2)
+            tl1<-param$tail_1;tl2<-param$tail_2;tl=c(tl1,tl2)
         }}
 
     if(model %in% c("Tukeyh"))  {

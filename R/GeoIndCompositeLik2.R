@@ -87,166 +87,279 @@ qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.
   return(result)
 }
 
-indloglik<- function(fan,data,mm,nuis){
+
+indloglik <- function(fan, data, mm, nuis) {
 
 ## gaussian and misspecified gaussian
-    if(fan=="Ind_Pair_Gauss")                  { sill=nuis[1];
-                                                 res=sum(dnorm(data,mean =mm,sd=sqrt(sill), log = TRUE))
-                                               }
+    if(fan == "Ind_Pair_Gauss") {
+        sill = nuis[1]
+        res = sum(dnorm(data, mean = mm, sd = sqrt(sill), log = TRUE))
+    }
 
-    if(fan=="Ind_Pair_Gauss_misp_T")           {    df=1/nuis[1];sill=nuis[2]
-                                                    vv=sill*df/(df-2)
-                                                  res=sum(dnorm(data,mean =mm,sd=sqrt(vv), log = TRUE))
-                                               }
+    if(fan == "Ind_Pair_Gauss_misp_T") {
+        df = 1/nuis[1]; sill = nuis[2]
+        vv = sill * df/(df - 2)
+        res = sum(dnorm(data, mean = mm, sd = sqrt(vv), log = TRUE))
+    }
 
-    if(fan=="Ind_Pair_Gauss_misp_SkewT")        {    df=1/nuis[1];sill=nuis[2];skew=nuis[3]; 
-                                                     kk=gamma(0.5*(df-1))/gamma(0.5*(df)) 
-                                                     me=  sqrt(sill)*sqrt(df/pi)*kk*skew  ;    
-                                                     vv=  sill*(df/(df-2) - me^2)
-                                                    res=sum(dnorm(data,mean=(mm+me),sd=sqrt(vv), log = TRUE)) 
-                                                }
+    if(fan == "Ind_Pair_Gauss_misp_SkewT") {
+        df = 1/nuis[1]; sill = nuis[2]; skew = nuis[3]
+        kk = gamma(0.5*(df - 1))/gamma(0.5*(df))
+        me = sqrt(sill)*sqrt(df/pi)*kk*skew
+        vv = sill*(df/(df - 2) - me^2)
+        res = sum(dnorm(data, mean = (mm + me), sd = sqrt(vv), log = TRUE))
+    }
 
-    if(fan=="Ind_Pair_Gauss_misp_Tukeygh")      {   sill =nuis[1];eta  = nuis[2];tail = nuis[3]; 
-                                                    eta2=eta*eta; u=1-tail;
-                                                    me=sqrt(sill)*(exp(eta2/(2*u))-1)/(eta*sqrt(u));
-                                                    vv=sill*((exp(2*eta2/(1-2*tail))-2*exp(eta2/(2*(1-2*tail)))+1)/(eta2*sqrt(1-2*tail)))-me*me;
-                                                  res=sum(dnorm(data, mean=mm+me,sd=sqrt(vv),  log = TRUE))
-                                                }
+    if(fan == "Ind_Pair_Gauss_misp_Tukeygh") {
+        sill = nuis[1]; eta = nuis[2]; tail = nuis[3]
+        eta2 = eta*eta; u = 1 - tail
+        me = sqrt(sill)*(exp(eta2/(2*u)) - 1)/(eta*sqrt(u))
+        vv = sill*((exp(2*eta2/(1 - 2*tail)) - 2*exp(eta2/(2*(1 - 2*tail))) + 1)/(eta2*sqrt(1 - 2*tail))) - me*me
+        res = sum(dnorm(data, mean = mm + me, sd = sqrt(vv), log = TRUE))
+    }
 
 ## non gaussian over R
-    if(fan=="Ind_Pair_T")                     {  sill=nuis[2]; df=1/nuis[1]
-                                                res=sum(dt((data-mm)/sqrt(sill), df, log = TRUE)-0.5*log(sill))
-                                              }  
-    if(fan=="Ind_Pair_Logistic")              {  sill=nuis[1]; 
-                                                res=sum(dlogis(data,mm, sqrt(sill) ,log = TRUE))
-                                              }  
-    if(fan=="Ind_Pair_SkewGauss")   {
-                                                sk=nuis[2];sill=nuis[1]
-                                                omega=sk*sk + sill
-                                                q=data-mm
-                                               res=sum(log(2)-0.5*log(omega)+dnorm(q/(sqrt(omega)),log=TRUE)+pnorm( (sk*q)/(sqrt(sill)*sqrt(omega)),log.p=TRUE))
-                                   }
-    if(fan=="Ind_Pair_SkewLaplace")   {
-                                                skew=nuis[2];sill=nuis[1]
-                                               res=sum(one_log_SkewLaplace(data, mm, sill, skew))
-                                      }
+    if(fan == "Ind_Pair_T") {
+        sill = nuis[2]; df = 1/nuis[1]
+        res = sum(dt((data - mm)/sqrt(sill), df, log = TRUE) - 0.5*log(sill))
+    }
+    
+    if(fan == "Ind_Pair_Logistic") {
+        sill = nuis[1]
+        res = sum(dlogis(data, mm, sqrt(sill), log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_SkewGauss") {
+        sk = nuis[2]; sill = nuis[1]
+        omega = sk*sk + sill
+        q = data - mm
+        res = sum(log(2) - 0.5*log(omega) + dnorm(q/(sqrt(omega)), log = TRUE) + 
+                 pnorm((sk*q)/(sqrt(sill)*sqrt(omega)), log.p = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_SkewLaplace") {
+        skew = nuis[2]; sill = nuis[1]
+        res = sum(one_log_SkewLaplace(data, mm, sill, skew))
+    }
 
-   if(fan=="Ind_Pair_SinhGauss")   {           
-                                                skew=nuis[2];sill=nuis[1];tail=nuis[3]
-                                                q=(data-mm)/(sqrt(sill));
-                                                b1=tail*asinh(q)-skew;Z1=sinh(b1);
-                                                res=sum(-0.5*log(q^2+1)-0.5*log(2*pi*sill)+log(cosh(b1))+log(tail)-Z1*Z1/2);
-                                       }
+    if(fan == "Ind_Pair_SinhGauss") {
+        skew = nuis[2]; sill = nuis[1]; tail = nuis[3]
+        q = (data - mm)/(sqrt(sill))
+        b1 = tail*asinh(q) - skew; Z1 = sinh(b1)
+        res = sum(-0.5*log(q^2 + 1) - 0.5*log(2*pi*sill) + log(cosh(b1)) + log(tail) - Z1*Z1/2)
+    }
 
-  if(fan=="Ind_Pair_Tukeyh")        { 
-                                           sill=nuis[1];tail=nuis[2]
-                                           res=sum(one_log_tukeyh(data,mm,sill,tail)) 
-                                    }
-   if(fan=="Ind_Pair_Tukeyhh")        { sill=nuis[1];tail1=nuis[3];tail2=nuis[2];
-    res=sum(  log(  exp(one_log_tukeyh(data,mm,sill,tail2))*I(data>=mm) +
-                    exp(one_log_tukeyh(data,mm,sill,tail1))*I(data<mm) )) 
-                                      }
-   if(fan=="Ind_Pair_TWOPIECEGauss") { sill=nuis[1];eta=nuis[2]
-                                        y=(data-mm)/sqrt(sill)
-                    res=sum( log( dnorm(y/(1-eta))*I(y>=0) + dnorm(y/(1+eta))*I(y<0)) -0.5*log(sill))
-                                      }  
-   if(fan=="Ind_Pair_TWOPIECETukeyh") { sill=nuis[1];eta=nuis[2];tail=nuis[3]
-                                        y=(data-mm)/sqrt(sill);
-                    res= sum(  log( exp(one_log_tukeyh(y/(1-eta),0,1,tail))*I(y>=0) + 
-                                    exp(one_log_tukeyh(y/(1+eta),0,1,tail))*I(y<0) )     -0.5*log(sill) )
-                                       }
-   if(fan=="Ind_Pair_TWOPIECET") { sill=nuis[2];eta=nuis[3];tail=1/nuis[1]
-                                  y=(data-mm)/sqrt(sill);
-                    res=sum( log(  dt(y/(1-eta),df=tail)*I(y>=0) + dt(y/(1+eta),df=tail)*I(y<0)) -0.5*log(sill))
-                                       }
+    if(fan == "Ind_Pair_Tukeyh") {
+        sill = nuis[1]; tail = nuis[2]
+        res = sum(one_log_tukeyh(data, mm, sill, tail))
+    }
+    
+    if(fan == "Ind_Pair_Tukeyhh") {
+        sill = nuis[1]; tail1 = nuis[3]; tail2 = nuis[2]
+        res = sum(log(exp(one_log_tukeyh(data, mm, sill, tail2))*I(data >= mm) +
+                     exp(one_log_tukeyh(data, mm, sill, tail1))*I(data < mm)))
+    }
+    
+    if(fan == "Ind_Pair_TWOPIECEGauss") {
+        sill = nuis[1]; eta = nuis[2]
+        y = (data - mm)/sqrt(sill)
+        res = sum(log(dnorm(y/(1 - eta))*I(y >= 0) + dnorm(y/(1 + eta))*I(y < 0)) - 0.5*log(sill))
+    }
+    
+    if(fan == "Ind_Pair_TWOPIECETukeyh") {
+        sill = nuis[1]; eta = nuis[2]; tail = nuis[3]
+        y = (data - mm)/sqrt(sill)
+        res = sum(log(exp(one_log_tukeyh(y/(1 - eta), 0, 1, tail))*I(y >= 0) + 
+                     exp(one_log_tukeyh(y/(1 + eta), 0, 1, tail))*I(y < 0)) - 0.5*log(sill))
+    }
+    
+    if(fan == "Ind_Pair_TWOPIECET") {
+        sill = nuis[2]; eta = nuis[3]; tail = 1/nuis[1]
+        y = (data - mm)/sqrt(sill)
+        res = sum(log(dt(y/(1 - eta), df = tail)*I(y >= 0) + dt(y/(1 + eta), df = tail)*I(y < 0)) - 0.5*log(sill))
+    }
+
 ## non gaussian over R^+
+    if(fan == "Ind_Pair_Gamma") {
+        shape = nuis[2]
+        res = sum(dgamma(data, shape = shape/2, scale = 1/(shape/(2*exp(mm))), log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_Weibull") {
+        shape = nuis[2]
+        res = sum(dweibull(data, shape = shape, scale = exp(mm)/(gamma(1 + 1/shape)), log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_LogGauss") {
+        sill = nuis[1]
+        c1 = mm - sill/2
+        res = sum(dlnorm(data, meanlog = c1, sdlog = sqrt(sill), log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_LogLogistic") {
+        dllogis1 <- function(x, shape, rate = 1, scale = 1/rate, log = FALSE) {
+            z <- x / scale
+            num <- (shape / scale) * z^(shape - 1)
+            denom <- (1 + z^shape)^2
+            dens <- num / denom
+            if (log) dens <- log(dens)
+            return(dens)
+        }
+        shape = nuis[2]
+        ci = gamma(1 + 1/shape)*gamma(1 - 1/shape)
+        res = sum(dllogis1(data, shape, scale = exp(mm)/ci, log = TRUE))
+    }
 
-if(fan== "Ind_Pair_Gamma")                 {
-                                              shape=nuis[2]
-                                         
-                                              res=sum(dgamma(data, shape=shape/2, scale = 1/(shape/(2*exp(mm))), log = TRUE))
-                                            }
-if(fan== "Ind_Pair_Weibull")              {
-
-                                              shape=nuis[2] 
-                                              res=sum(dweibull(data, shape=shape,scale=exp(mm)/(gamma(1+1/shape)) , log = TRUE))
-                                            }
- if(fan== "Ind_Pair_LogGauss")              {
-                                              sill=nuis[1]
-                                              c1=mm-sill/2
-                                              res=sum(dlnorm(data, meanlog =c1, sdlog = sqrt(sill), log = TRUE))
-                                            }
-if(fan== "Ind_Pair_LogLogistic")            {    
-                                             dllogis1 <- function(x, shape, rate = 1, scale = 1/rate, log = FALSE) {
-                                               z <- x / scale
-                                               num <- (shape / scale) * z^(shape - 1)
-                                               denom <- (1 + z^shape)^2
-                                               dens <- num / denom
-                                               if (log) dens <- log(dens)
-                                               return(dens)
-                                             }
-                                              shape=nuis[2]
-                                              ci=gamma(1+1/shape)*gamma(1-1/shape)
-                                              res=sum(dllogis1(data, shape, scale = exp(mm)/ci, log = TRUE))
-                                            }
-## non Gassian bounded support
-  if(fan== "Ind_Pair_Beta2")                {    mmax=nuis[4];mmin=nuis[3]
-                                                 shape=nuis[2]
-                                    
-                                                 me=1/(1+exp(-mm))
-                                                 res=sum(dbeta((data-mmin)/(mmax-mmin), me*shape, (1-me)*shape,log=TRUE)-log(mmax-mmin))
-                                            }
- if(fan== "Ind_Pair_Kumaraswamy2")                {  
-                                             mmax=nuis[4];mmin=nuis[3]
-                                             shape=nuis[2]
-                                             q=(data-mmin)/(mmax-mmin);k=1-q^shape
-                                             m1=1/(1+exp(-mm));
-                                             shapei=log(0.5)/log1p(-m1^shape);
-                                             res=sum(log(shapei)+log(shape)+(shape-1)*log(q)+(shapei-1)*log(k)-log(mmax-mmin))            
-                                             }
+## non Gaussian bounded support
+    if(fan == "Ind_Pair_Beta2") {
+        mmax = nuis[4]; mmin = nuis[3]
+        shape = nuis[2]
+        me = 1/(1 + exp(-mm))
+        res = sum(dbeta((data - mmin)/(mmax - mmin), me*shape, (1 - me)*shape, log = TRUE) - log(mmax - mmin))
+    }
+    
+    if(fan == "Ind_Pair_Kumaraswamy2") {
+        mmax = nuis[4]; mmin = nuis[3]
+        shape = nuis[2]
+        q = (data - mmin)/(mmax - mmin); k = 1 - q^shape
+        m1 = 1/(1 + exp(-mm))
+        shapei = log(0.5)/log1p(-m1^shape)
+        res = sum(log(shapei) + log(shape) + (shape - 1)*log(q) + (shapei - 1)*log(k) - log(mmax - mmin))
+    }
 
 #### discrete
-    if(fan=="Ind_Pair_Pois")              {mm=exp(mm);res=sum(dpois(data, mm, log = TRUE)) }
-    if(fan=="Ind_Pair_Gauss_misp_Pois")   {mm=exp(mm);res=sum(dnorm(data, mean = mm, sd =sqrt(mm), log = TRUE))}
-    if(fan=="Ind_Pair_BinomGauss")        res=sum(dbinom(data, n, pnorm(mm), log = TRUE))
-    if(fan=="Ind_Pair_BinomGauss_misp")   { pp=pnorm(mm); mm=n*pp;vv=mm*(1-pp)
-                                           res=sum(dnorm(data, mean =mm , sd =sqrt(vv), log = TRUE))}
-    if(fan=="Ind_Pair_BinomnegGauss")     res=sum(dnbinom(data, n, pnorm(mm), log = TRUE))
-    if(fan=="Ind_Pair_PoisGamma")         {mm=exp(mm);res=sum(dnbinom(data, nuis[2], mu=mm, log = TRUE))}
+    if(fan == "Ind_Pair_Pois") {
+        mm = exp(mm)
+        res = sum(dpois(data, mm, log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_Gauss_misp_Pois") {
+        mm = exp(mm)
+        res = sum(dnorm(data, mean = mm, sd = sqrt(mm), log = TRUE))
+    }
+    
+      if(fan == "Ind_Pair_BinomGauss") {
+        mm_safe <- pmax(pmin(mm, 20), -20)
+        prob <- pnorm(mm_safe)
+        prob <- pmax(pmin(prob, 1 - .Machine$double.eps), .Machine$double.eps)
+        
+        if(any(!is.finite(prob))) return(1e8)
+        res <- sum(dbinom(data, n, prob, log = TRUE))
+        if(!is.finite(res)) return(1e8)
+    }
+    
+    
+  if(fan == "Ind_Pair_BinomGauss_misp") {
+        mm_safe <- pmax(pmin(mm, 20), -20)
+        prob <- pnorm(mm_safe)
+        prob <- pmax(pmin(prob, 1 - .Machine$double.eps), .Machine$double.eps)
+        
+        if(any(!is.finite(prob))) return(1e8)
+        
+        mm_adj <- n * prob
+        vv <- pmax(mm_adj * (1 - prob), 1e-10)
+        res <- sum(dnorm(data, mean = mm_adj, sd = sqrt(vv), log = TRUE))
+        if(!is.finite(res)) return(1e8)
+    }
 
-    if(fan=="Ind_Pair_PoisGammaZIP")      {mm=exp(mm);pp=pnorm(nuis[3])
-                                           res1=sum(log(pp+(1-pp)*dnbinom(data[data==0], nuis[2],mu=mm[data==0],0)));
-                                           res2=sum(log(1-pp)+dnbinom(data[data!=0],nuis[2],mu=mm[data!=0],1)); res=res1+res2}
+    
+   if(fan == "Ind_Pair_BinomnegGauss") {
+        mm_safe <- pmax(pmin(mm, 20), -20)
+        prob <- pnorm(mm_safe)
+        prob <- pmax(pmin(prob, 1 - .Machine$double.eps), .Machine$double.eps)
+        
+        if(any(!is.finite(prob))) return(1e8)
+        res <- sum(dnbinom(data, n, prob, log = TRUE))
+        if(!is.finite(res)) return(1e8)
+    }
+    
+    if(fan == "Ind_Pair_PoisGamma") {
+        mm = exp(mm)
+        res = sum(dnbinom(data, nuis[2], mu = mm, log = TRUE))
+    }
 
+    if(fan == "Ind_Pair_PoisGammaZIP") {
+        mm = exp(mm)
+        pp = pnorm(nuis[3])
+        pp = pmax(pmin(pp, 1 - 1e-18), 1e-18)
+        res1 = sum(log(pp + (1 - pp)*dnbinom(data[data == 0], nuis[2], mu = mm[data == 0], 0)))
+        res2 = sum(log(1 - pp) + dnbinom(data[data != 0], nuis[2], mu = mm[data != 0], 1))
+        res = res1 + res2
+        
+        if(!is.finite(res)) {
+            return(1e8)
+        }
+    }
 
-    if(fan=="Ind_Pair_Gauss_misp_PoisGamma") {mm=exp(mm);res=sum(dnorm(data, mean = mm, sd =sqrt(mm*(1+mm/nuis[2])), log = TRUE))}
-    if(fan=="Ind_Pair_PoisZIP")           {mm=exp(mm);pp=pnorm(nuis[3])
-                                            res1=sum(log(pp+(1-pp)*dpois(data[data==0],mm[data==0],0)));
-                                            res2=sum(log(1-pp)+dpois(data[data!=0],mm[data!=0],1)); res=res1+res2}
-    if(fan=="Ind_Pair_Gauss_misp_PoisZIP"){mm=exp(mm);pp=pnorm(nuis[3])
-                                            res1=sum(log(pp+(1-pp)*dnorm(data[data==0],mean=mm[data==0],sd =sqrt(mm[data==0]), log = FALSE)));
-                                            res2=sum(log(1-pp)+dnorm(data[data!=0],mean=mm[data!=0], sd =sqrt(mm[data!=0]), log = TRUE)); res=res1+res2}
-    if(fan=="Ind_Pair_BinomnegGaussZINB") {pm=pnorm(mm);pp=pnorm(nuis[3])
-                                            res1=sum(log(pp+(1-pp)*dnbinom(data[data==0],n,pm[data==0],log = FALSE)));
-                                            res2=sum(log(1-pp)+dnbinom(data[data!=0],n, pm[data!=0], log = TRUE)); res=res1+res2}
-### .......
-return(-res)
+    if(fan == "Ind_Pair_Gauss_misp_PoisGamma") {
+        mm = exp(mm)
+        res = sum(dnorm(data, mean = mm, sd = sqrt(mm*(1 + mm/nuis[2])), log = TRUE))
+    }
+    
+    if(fan == "Ind_Pair_PoisZIP") {
+        mm = exp(mm)
+        pp = pnorm(nuis[3])
+        pp = pmax(pmin(pp, 1 - 1e-18), 1e-18)
+        res1 = sum(log(pp + (1 - pp)*dpois(data[data == 0], mm[data == 0], 0)))
+        res2 = sum(log(1 - pp) + dpois(data[data != 0], mm[data != 0], 1))
+        res = res1 + res2
+        
+        if(!is.finite(res)) {
+            return(1e8)
+        }
+    }
+    
+    if(fan == "Ind_Pair_Gauss_misp_PoisZIP") {
+        mm = exp(mm)
+        pp = pnorm(nuis[3])
+        pp = pmax(pmin(pp, 1 - 1e-18), 1e-18)
+        res1 = sum(log(pp + (1 - pp)*dnorm(data[data == 0], mean = mm[data == 0], sd = sqrt(mm[data == 0]), log = FALSE)))
+        res2 = sum(log(1 - pp) + dnorm(data[data != 0], mean = mm[data != 0], sd = sqrt(mm[data != 0]), log = TRUE))
+        res = res1 + res2
+        
+        if(!is.finite(res)) {
+            return(1e8)
+        }
+    }
+    
+  if(fan == "Ind_Pair_BinomnegGaussZINB") {
+        mm_safe <- pmax(pmin(mm, 20), -20)
+        prob <- pnorm(mm_safe)
+        prob <- pmax(pmin(prob, 1 - .Machine$double.eps), .Machine$double.eps)
+        pp <- pnorm(nuis[3])
+        pp <- pmax(pmin(pp, 1 - .Machine$double.eps), .Machine$double.eps)
+        
+        if(any(!is.finite(prob)) || any(!is.finite(pp))) return(1e8)
+        
+        res1 <- if(any(data == 0)) sum(log(pp + (1 - pp) * dnbinom(data[data == 0], n, prob[data == 0], log = FALSE))) else 0
+        res2 <- if(any(data != 0)) sum(log(1 - pp) + dnbinom(data[data != 0], n, prob[data != 0], log = TRUE)) else 0
+        res <- res1 + res2
+        if(!is.finite(res)) return(1e8)
+    }
+
+    return(-res)
 }
 
- compindloglik2 <- function(param,  data,fixed, fan, n, 
-                              namesnuis,namesparam,X,MM)
-      {
-        names(param) <- namesparam
-        param <- c(param, fixed)
-        nuisance <- param[namesnuis]
-        sel=substr(names(nuisance),1,4)=="mean"
-        mm=as.numeric(nuisance[sel])   ## mean paramteres
-        other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)
-        if((is.null(MM))) Mean=c(X%*%mm)
-        else Mean=c(MM)
-        result=indloglik(fan,data,Mean,other_nuis)
-        return(result)
-      }
+compindloglik2 <- function(param, data, fixed, fan, n, namesnuis, namesparam, X, MM) {
+    names(param) <- namesparam
+    param <- c(param, fixed)
+    nuisance <- param[namesnuis]
+    sel <- substr(names(nuisance), 1, 4) == "mean"
+    mm <- as.numeric(nuisance[sel])
+    other_nuis <- as.numeric(nuisance[!sel])
+    
+    # gestione speciale per mm ~ 0
+    if(fan %in% c("Ind_Pair_BinomGauss", "Ind_Pair_BinomGauss_misp", 
+                  "Ind_Pair_BinomnegGauss", "Ind_Pair_BinomnegGaussZINB")) {
+        zero_idx <- which(abs(mm) < 1e-16)
+        if(length(zero_idx) > 0) mm[zero_idx] <- sign(mm[zero_idx] + 1e-12) * 1e-6
+    }
+    
+    Mean <- if(is.null(MM)) c(X %*% mm) else c(MM)
+    result <- indloglik(fan, data, Mean, other_nuis)
+    if(!is.finite(result)) result <- 1e8
+    return(result)
+}
 
  compindloglik_biv2 <- function(param, data1,data2,fixed, fan, n,   ## to do...
                            namesnuis,namesparam,X,MM)
@@ -293,8 +406,8 @@ return(-res)
 #  (keep only the models that are actually used)
 lookup <- c(
   Gauss                    =  1,
-  BinomGauss               = 11,          # duplicate key: last one wins
-  BinomnegGauss            = 16,   # both map to the same name
+  BinomGauss               = 11,         
+  BinomnegGauss            = 16,  
   WrapGauss                = 13,
   SkewGauss                = 10,
   SkewLaplace              = 59,
@@ -422,7 +535,11 @@ param=as.numeric(param)
                                 control = list( iter.max=100000),
                               lower=lower,upper=upper,
                                fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-                                 X=X,MM=MM)                   
+                                 X=X,MM=MM)    
+    if (optimizer == 'bobyqa') 
+             CompLikelihood <- minqa::bobyqa(par = param,fn = compindloglik2,lower = lower,upper = upper,
+            control = list(maxfun = 100000, rhobeg = 0.5, rhoend = 1e-8),data = data,fixed = fixed,fan = fname,n = n,
+             namesnuis = namesnuis,namesparam = namesparam,X = X,MM = MM)               
     }}
 ######################################################################################
 ############################## bivariate  ############################################ 

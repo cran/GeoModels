@@ -84,7 +84,7 @@ if(model %in% c("Gamma","Weibull","LogLogistic","LogGaussian"))
 res1=dd/exp(c(mu))
 }
 ### additive  models  on the real line
-if(model %in% c("Gaussian","SkewGaussian","Logistic", 
+if(model %in% c("Gaussian","SkewGaussian","Logistic", "SkewLaplace",
                "Tukeyh","Tukeyh2","SinhAsinh","Tukeygh","Gaussian_misp_Tukeygh",
                "StudentT",  "Gaussian_misp_StudentT","Gaussian_misp_SkewStudentT","SkewStudentT",
                "TwoPieceGaussian","TwoPieceTukeyh","TwoPieceGauss","TwoPieceStudentT","TwoPieceBimodal"))
@@ -140,6 +140,17 @@ param['mean']=0;
  fit$param['sill']=1
 }
 
+
+if(model %in% c("SkewLaplace"))
+
+{
+param['mean']=0;
+fit$param['sill']=1
+}
+
+
+
+
 if(model %in% c("Gaussian_misp_SkewStudentT","SkewStudentT")) 
 {param['mean']=0;
  fit$param['skew']=as.numeric(param['skew'])
@@ -167,7 +178,7 @@ fit$fixed=fit$fixed[!is.na(fit$fixed)]
 
 
 ###adding mean and variance if missing for some reason
-if(model %in% c("Gaussian","SkewGaussian","Logistic","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
+if(model %in% c("Gaussian","SkewGaussian","SkewLaplace","Logistic","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
  "Gaussian_misp_StudentT","Gaussian_misp_Tukeygh","StudentT","TwoPieceGauss",
  "TwoPieceStudentT","TwoPieceGaussian","TwoPieceTukeyh",
  "TwoPieceBimodal","Gaussian_misp_SkewStudentT","SkewStudentT")){

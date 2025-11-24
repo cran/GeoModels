@@ -367,7 +367,7 @@ else {  ## for each model..
 ################ Gaussian ##################################
 if(covmatrix$model==1)   {  vv=as.numeric(covmatrix$param['sill']); 
           if(is.null(covmatrix$copula)) corri=cc 
-          else {  if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+          else {  if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 } 
 #################### skew gaussian #########################################
 if(covmatrix$model==10) {    
@@ -376,14 +376,14 @@ if(is.null(covmatrix$copula)){
     corr2=rho^2; sk=as.numeric(covmatrix$param['skew']);sk2=sk^2; 
     corri=(2*sk2)*(sqrt(1-corr2) + rho*asin(rho)-1)/(pi*vv+sk2*(pi-2)) + (cc*vv)/(vv+sk2*(1-2/pi))
                         }
-    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 if(covmatrix$model==59) {    
 vv=as.numeric(covmatrix$param['sill'])
 if(is.null(covmatrix$copula)){
     corri=rho^2; sk=as.numeric(covmatrix$param['skew']) 
                         }
-    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ##################### student T ########################################
 if(covmatrix$model==12) 
@@ -394,7 +394,7 @@ if(is.null(covmatrix$copula)){
    corri <- ((nu - 2) * gamma_num * Re(Fvals) * cc) / (2 * gamma_den)
 }
 else {
-      if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)
+      if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)
      }
 }
 ########################## tukeyh ###################################
@@ -402,10 +402,10 @@ if(covmatrix$model==34)
 {   vv=as.numeric(covmatrix$param['sill']); h=as.numeric(covmatrix$param['tail'])
     if(h>0){ 
             if(is.null(covmatrix$copula)){ corri=(cc*(1-2*h)^(1.5))/((1-h)^2-(h*cc)^2)^(1.5) }
-            else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+            else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
             }
     else{ if(is.null(covmatrix$copula))  corri=cc
-          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
         }
 }
 ######################### tukeyh2###################################
@@ -425,7 +425,7 @@ if(covmatrix$model==40) #
                              vv1=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2
                              corri=(p1+p2+2*p3-mm^2)/vv1  # correlation
                            }
-    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ####################### sas ######################################
 if (covmatrix$model == 20) { 
@@ -440,7 +440,7 @@ if (covmatrix$model == 20) {
   vv1=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
   corri=corrsas(cc,e,d)
 }
-      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ######################## skew student T#####################################
 if(covmatrix$model==18) 
@@ -451,7 +451,7 @@ if(covmatrix$model==18)
                   CorSkew=(2*sk2/(pi*w*w+sk2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*cc/(w*w+sk2*(1-2/pi)) ;
                   corri=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(l)^2-sk2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,l,y*y))*((1-2*sk2/pi)*CorSkew+2*sk2/pi)-2*sk2/pi);
               }
-                else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ######################## # two piece StudenT#####################################
          if(covmatrix$model==27) {  
@@ -468,7 +468,7 @@ if(covmatrix$model==18)
              KK=( nu*(nu-2)*gamma((nu-1)/2)^2) / (nu*pi*gamma(nu/2)^2*(3*sk2+1)-4*sk2*nu*(nu-2)*gamma((nu-1)/2)^2 )
              corri= KK*(a1*a2*a3-4*sk2);
          }
-          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+          else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
                       }
 ########################### two piece Tukey h ##################################
          if(covmatrix$model==38) {  
@@ -486,7 +486,7 @@ if(covmatrix$model==18)
                         M=(2*(1-corr2)^(3/2))/(pi*gg2)
                         corri=  (M*A*a3-mm)/( ff- mm)
                     }
-                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
                       }
 ############################################################
          if(covmatrix$model==39) {  # bimodal
@@ -514,7 +514,7 @@ if(covmatrix$model==18)
                           KK=3*sk2+2*sk+ 4*p11 - 1
                           corri=(2*((corr2 + cc*asin(cc))*KK)- 8*sk2)/(3*pi*sk2  -  8*sk2   +pi   )
                       }
-                      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ############################################################
        if(covmatrix$model==28)   ##  beta case
@@ -537,7 +537,7 @@ if(covmatrix$model==18)
          cc[idx]=A; corri=shape1*(cc1 + 1 ) * ((1-corr2)^(cc1) *cc -1)/shape2 ## correlation
          corri[-idx]=0
     }
-       else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+       else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ############################################################    
 
@@ -546,7 +546,7 @@ if(covmatrix$model==21)
 { # gamma
                         sh=as.numeric(covmatrix$param["shape"])
                          if(is.null(covmatrix$copula)){  corri=cc^2 }
-                         else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                         else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 if(covmatrix$model==26) 
 {  # weibull
@@ -557,7 +557,7 @@ if(covmatrix$model==26)
                         cc2 <- cc^2;c2 <- gamma(1 + 1/sh)^2;denom <- gamma(1 + 2/sh) - c2;Fz <- hypergeo::hypergeo(-1/sh, -1/sh, 1, cc2)
                         corri <- (c2 / denom) * (Re(Fz) - 1)
                          }
-                        else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}           
+                        else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}           
 }
 if(covmatrix$model==24) 
 {  # loglogistic
@@ -568,13 +568,13 @@ if(covmatrix$model==24)
                             F2 <- hypergeo::hypergeo( 1/sh,  1/sh, 1, cc2)
                             corri <- factor * (Re(F1) * Re(F2) - 1)
                         }
-                        else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                        else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 if(covmatrix$model==22)
  {  # loggauusian
                         ss=as.numeric(covmatrix$param['sill']);
                                if(is.null(covmatrix$copula)){  corri= (exp(ss*cc)-1)/(exp(ss)-1)}
-                                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov_fast(cc,covmatrix$model, nuisance)}
+                                     else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ############################################################
  }        
@@ -794,7 +794,7 @@ ccorr=dotCall64::.C64('Corr_c_bin',SIGNATURE = c(rep("double",5),
 
 if(cop==1) { 
 nuisance$n=n[1]
-    corri= gaussian_copula_cov_fast(ccorr$corri,covmatrix$model, nuisance)  ##it works in the stationary case..
+    corri= gaussian_copula_cov(ccorr$corri,covmatrix$model, nuisance)  ##it works in the stationary case..
      }
 else {corri=ccorr$corri}
 
@@ -875,7 +875,7 @@ else {corri=ccorr$corri}
             if(mse) vvar=aa/k1   ### variance (possibly no stationary)
           }
             ##########################################################
-            if(covmatrix$model==57||covmatrix$model==58){  ### poisson gamma inflated
+         if(covmatrix$model==57||covmatrix$model==58){  ### poisson gamma inflated
          p=pnorm(covmatrix$param['pmu'])
          p0=exp(mu0); pmu=exp(mu)
          if(!bivariate) { 
@@ -883,8 +883,8 @@ else {corri=ccorr$corri}
                pp = (1-p)*c(p0) + crossprod(datas, krig_weights)
           }  ## simple kriging
         else{} #todo
-        if(mse)  vvar=p0*(1+ (p0*(1+covmatrix$param['shape']*p)/((1-p)*covmatrix$param['shape'])) )  ### variance (possibly no stationary)     
-          }
+        if(mse)  vvar=p0*(1+ (p0*(1+covmatrix$param['shape']*p)/((1-p)*covmatrix$param['shape'])) )  ### variance (possibly no stationary)
+        }
         ##########################################################
         if(covmatrix$model==45){    ###inflated negative binomial
             p0=pnorm(mu0); pmu=pnorm(mu)
