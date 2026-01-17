@@ -109,6 +109,7 @@ CkCorrModel <- function(corrmodel)
                              exp_cauchy=82,Exp_Cauchy=82,
                              exp_exp=84,Exp_Exp=84,
                              Matern_Matern=86, matern_matern=86,  #ok
+                             Matern_Matern_temp=95,
                              stable_stable=94,Stable_Stable=94,
                              prove=96,
               # Bivariate models
@@ -733,6 +734,7 @@ CorrParam <- function(corrmodel)
 
 #####  names of the correlation models ###############
 CorrelationPar <- function(corrmodel) {
+
   param_map <- list(
     "1" = c("power2", "scale"),
     "2" = c("scale"),
@@ -795,6 +797,7 @@ CorrelationPar <- function(corrmodel) {
     "84" = c("scale_s", "scale_t"),
     "85" = c("scale_s", "scale_t", "power2_s", "power2_t", "smooth_s", "smooth_t", "sep"),
     "86" = c("scale_s", "scale_t", "smooth_s", "smooth_t"),
+    "95" = c("scale_s", "scale_t", "smooth_s", "smooth_t","sep"),
     "87" = c("power_t", "power2_s", "power2_t", "scale_s", "scale_t", "sep", "smooth_s"),
     "88" = c("power_s", "power2_s", "power2_t", "scale_s", "scale_t", "sep", "smooth_t"),
     "89" = c("scale_s", "scale_t", "smooth_s", "smooth_t", "sep"),
@@ -990,6 +993,12 @@ NuisParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NU
   }
   return(a)
 }
+# Wrapper MargParam
+MargParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NULL) {
+  a <- NuisParam(model = model, bivariate = bivariate, num_betas = num_betas, copula = copula)
+  a <- a[a != "nugget"]
+  a
+}
 ####################################################################################
 #########################################################################################
 #########################################################################################
@@ -998,7 +1007,7 @@ NuisParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NU
 StartParam <- function(coordx, coordy,coordz ,coordt,coordx_dyn, corrmodel, data, distance, fcall,
                       fixed, grid,likelihood,  maxdist, neighb,maxtime, model, n, 
                       param, parscale,paramrange, radius, start, taper, tapsep, 
-                      type,typereal,  weighted,copula, X,memdist,nosym)
+                      type,typereal,  weighted,copula, X,memdist,nosym,p_neighb,thin_method)
 {
 
 ####################################  
@@ -1579,10 +1588,12 @@ if(space)   #  spatial case
 ##########################################
   
   K=neighb
-  #x=cbind(coordx, coordy)
-   x=cbind(coordx, coordy,coordz)
+  x=cbind(coordx, coordy,coordz)
 
-  sol=GeoNeighIndex(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius)
+  sol=GeoNeighIndex(coordx=x,distance=distance1,
+    maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb,thin_method=thin_method)
+  #sol=GeoNeighIndexRandom(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb)
+
 
  ###    deleting symmetric indexes with associate distances
  if(nosym){
@@ -1637,13 +1648,13 @@ if(spacetime)   #  space time  case
   x=cbind(coordx, coordy,coordz)
  
   sol=GeoNeighIndex(coordx=x[1:numcoord,],
-    coordx_dyn=coordx_dyn,
-    coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
-
-    #sol=GeoNeighIndex(coordx=x,
-    #coordx_dyn=coordx_dyn,
-    #coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
-
+ coordx_dyn=coordx_dyn,
+    coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,
+    p_neighb=p_neighb,thin_method=thin_method)
+   #sol=GeoNeighIndexRandom(coordx=x[1:numcoord,],
+   # coordx_dyn=coordx_dyn,
+#coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
+    
  # ###    deleting symmetric indexes with associate distances #unuseful
   if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
              sol$rowidx=c(aa$xy[,1])
@@ -1680,7 +1691,10 @@ if(bivariate)   # bivariate case
   K=neighb
   x=cbind(coordx, coordy,coordz)
 
-  sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
+  sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE,
+    p_neighb=p_neighb,thin_method=thin_method)
+
+  #sol=GeoNeighIndexRandom(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
   ###    deleting symmetric indexes with associate distances
   if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
              sol$rowidx=c(aa$xy[,1])

@@ -689,7 +689,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                         if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                       uu=(int) data1[i];  ww=(int) data2[i];
                       bl=biv_Poisson((1-nugget)*corr,uu,ww,mui, muj);
-                      *res+= log(bl)*weights;
+                      *res+= bl*weights;
                     }}
 
     if(!R_FINITE(*res))  *res = LOW;

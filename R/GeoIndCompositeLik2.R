@@ -7,7 +7,7 @@
 CompIndLik2 <- function(bivariate, coordx, coordy ,coordz,coordt,coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
                            lower, model, n, namescorr, namesnuis, namesparam,
                            numparam,  optimizer, onlyvar, param, spacetime, type,
-                           upper,namesupper, varest, ns, X,sensitivity,copula,MM)
+                           upper,namesupper, varest, ns, X,sensitivity,copula,MM,score)
   {
 
 ############# utility functions ############
@@ -700,6 +700,23 @@ CompLikelihood$hessian=numDeriv::hessian(func= compindloglik_biv2,x=CompLikeliho
 rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
   }
+
+CompLikelihood$score=NULL
+if(score)
+  {
+if(!bivariate)  
+CompLikelihood$score=numDeriv::grad(func= compindloglik2,x=CompLikelihood$par,method="Richardson",      
+                              data=data, fixed=fixed,fan=fname,n=n,
+                               namesnuis=namesnuis, namesparam=namesparam,
+                                X=X ,MM=MM)
+if(bivariate)  
+CompLikelihood$score=numDeriv::grad(func= compindloglik_biv2,x=CompLikelihood$par,method="Richardson",    
+                          data=data, fixed=fixed,fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
+                                 X=X ,MM=MM)
+names(CompLikelihood$score)=namesparam
+  }
+
+
 
 if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
 

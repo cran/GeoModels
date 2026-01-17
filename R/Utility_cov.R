@@ -461,13 +461,9 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
     if (verbose) message("Coefficients a_k loaded from cache")
   } else {
     if (verbose) message(paste("Computing coefficients a_k for M =", M))
-    
-    # Calcolo coefficienti con gestione automatica di M
     ak_coeffs <- compute_ak_vectorized(M, model_type, nuisance)
     
-    # Riduzione automatica di M se molti coefficienti sono problematici
     if (auto_reduce_M) {
-      # Trova l'ultimo coefficiente significativo
       significant_coeffs <- which(abs(ak_coeffs) > 1e-10)
       if (length(significant_coeffs) > 0) {
         effective_M <- max(significant_coeffs)
@@ -475,7 +471,6 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
           M_new <- min(effective_M + 5, M)  
           ak_coeffs <- ak_coeffs[1:M_new]
           M <- M_new
-          #message(paste("M automatically reduced to", M, "to improve stability"))
         }
       }
     }
@@ -486,7 +481,6 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
     }
   }
   
-  # Controllo convergenza della serie
   if (length(ak_coeffs) >= 10) {
     last_coeffs <- abs(ak_coeffs[(length(ak_coeffs)-4):length(ak_coeffs)])
     if (all(last_coeffs < 1e-8)) {
@@ -568,11 +562,10 @@ corr=cr$corr*(1-as.numeric(nuisance['nugget']))
 if(model==11||model==16)  nuisance["n"]=n
 
 
+if(copula=="Gaussian")    cova=gaussian_copula_cov(corr, model,nuisance  )
+#if(copula=="SkewGaussian")cova=skewgaussian_copula_cov(corr, model,nuisance)
 
-print(nuisance)
-print(model)
-print(head(corr))
-cova=gaussian_copula_cov(corr, model,nuisance  )
+
 vv=variance_disp(model,nuisance)
 
   if(!bivariate)

@@ -6,7 +6,7 @@
 # Simulate spatial and spatio-temporal random felds:
 GeoSimCopula <- function(coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
      method="cholesky",model='Gaussian', n=1, param,anisopars=NULL, radius=1, sparse=FALSE,
-     copula="Gaussian",X=NULL,spobj=NULL,nrep=1)
+     copula="Gaussian",X=NULL,spobj=NULL,nrep=1,progress=FALSE)
 {
 
 if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
@@ -70,7 +70,6 @@ unif=pnorm(sim$data,mean=0,sd=1);
 if(copula=="SkewGaussian")
 {
 param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=param$nu),paramcorr)
-
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
     distance=distance, grid=grid,
      method=method,model='SkewGaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
@@ -79,6 +78,25 @@ alpha=as.numeric(param$nu)
 unif=sn::psn(sim$data,xi=0,omega= omega,alpha= alpha)
 }
 
+
+#if (copula == "SkewGaussian") {
+#  delta <- param$nu  
+#  print("h")
+#  print(delta)
+#  eps   <- 1e-6;
+#  alpha <- delta / sqrt(1 - delta^2)  
+#  print(alpha) 
+#  skew_eta <- alpha
+#  param1 <- c(list(mean   = 0,sill   = 1,nugget = param$nugget,skew   = skew_eta),paramcorr)
+#  sim <- GeoSim(
+#    coordx = coordx, coordy = coordy,coordz = coordz, coordt = coordt,
+#    coordx_dyn = coordx_dyn,corrmodel = corrmodel,distance  = distance, grid = grid,
+#    method = method, model = "SkewGaussian",
+#    n = 1, param = param1,anisopars = anisopars, radius = radius,sparse = sparse, nrep = 1
+#  )
+#  omega <- sqrt(1 + alpha^2)
+#  unif  <- sn::psn(sim$data, xi = 0, omega = omega, alpha = alpha)
+#}
 
 ####beta copula #############################################
 if(copula=="Clayton")

@@ -836,7 +836,7 @@ if(is.null(coordx_dyn)){
     initparam <- StartParam(coords[,1], coords[,2],coordz, coordt,coordx_dyn, corrmodel, NULL, distance, "Simulation",
                            NULL, grid, NULL, maxdist, NULL,maxtime, model, n,
                            param, NULL, NULL, radius, NULL, taper, tapsep,  type, 
-                           type, FALSE,copula,X,FALSE,FALSE)
+                           type, FALSE,copula,X,FALSE)
 
     if(is.null(coordz)) cc=cbind(initparam$coordx,initparam$coordy,0)
     else cc=cbind(initparam$coordx,initparam$coordy,initparam$coordz)
@@ -930,8 +930,6 @@ if(is.null(copula)) {
                         initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
                     }
 else {
-
- if(copula=="Gaussian") 
     covmatrix<- Cmatrix_copula(initparam$bivariate,cc[,1],cc[,2],cc[,3],initparam$coordt,initparam$corrmodel,dime,n,initparam$ns,
                         initparam$NS, initparam$param[initparam$namesnuis],
                         initparam$numpairs,numpairstot,initparam$model,

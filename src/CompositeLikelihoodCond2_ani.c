@@ -605,7 +605,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                      // l1=dpois(uu,mui,1);
                       l2=dpois(ww,muj,1);
                      // bl=2*log(biv_Poisson((1-nugget)*corr,uu,ww,mui, muj)) - (l1+l2);
-                      bl=log(biv_Poisson((1-nugget)*corr,uu,ww,mui, muj)) - l2;
+                      bl=biv_Poisson((1-nugget)*corr,uu,ww,mui, muj) - l2;
                       *res+= bl*weights;
                     }}
     if(!R_FINITE(*res))  *res = LOW;

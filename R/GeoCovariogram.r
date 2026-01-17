@@ -851,13 +851,13 @@ variogram  <- sigma2_marg * (1 - (1 - nugget) * cc)
 ##########################################
 ############ starting graphics############
 ##########################################
-      vario.main <- "Spatial semi-variogram"
-      vario.ylab <- "Semi-Variogram"
+      vario.main <- "Spatial semivariogram"
+      vario.ylab <- "SemiVariogram"
         if(ispatim){
             dim(covariance) <- c(numlags_m, numlagt_m)
             dim(variogram) <- c(numlags_m, numlagt_m)
-            vario.main <- "Space-time semi-variogram"
-            vario.zlab <- "Semi-Variogram" }
+            vario.main <- "Space-time semivariogram"
+            vario.zlab <- "SemiVariogram" }
         # compute the practical range:
         if(show.range || answer.range){
             Range <- uniroot(PracRangeNorm, c(lower, upper), corrmodel=corrmodel,
@@ -950,34 +950,34 @@ OLS=NULL
 ##################################### 
  if(bivariate){
       if(bivariate&&!dyn){
-       plot(vario$centers,vario$variograms[1,], main="First semi-variogram",ylim=c(0,max(vario$variograms[1,])),
+       plot(vario$centers,vario$variograms[1,], main="First semivariogram",ylim=c(0,max(vario$variograms[1,])),
            xlim=c(0,max(vario$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram11, type='l',...)
        if(min(vario$variogramst)>0) {ll1=0;ll=max(vario$variogramst)}
        if(min(vario$variogramst)<0) {ll1=min(vario$variogramst);ll=-min(vario$variogramst)}
-       plot(vario$centers,vario$variogramst, main="Cross semi-variogram",ylim=c(ll1,ll),
+       plot(vario$centers,vario$variogramst, main="Cross semivariogram",ylim=c(ll1,ll),
          xlim=c(0,max(vario$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram12, type='l',...)
        plot(vario$centers,vario$variogramst, main="Cross semivariogram",ylim=c(ll1,ll),
          xlim=c(0,max(vario$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram12, type='l',...)
-       plot(vario$centers,vario$variograms[2,], main="Second semi-variogram",ylim=c(0,max(vario$variograms[2,])),
+       plot(vario$centers,vario$variograms[2,], main="Second semivariogram",ylim=c(0,max(vario$variograms[2,])),
          xlim=c(0,max(vario$centers)),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram22, type='l',...)  
   if(invisible)  OLS= sum( (vario$variograms[2,]-variogram22)^2) + sum((vario$variograms[1,]-variogram11))^2 + sum((vario$variogramst-variogram12))^2
 
    }
  
    if(bivariate&&dyn){
-       plot(vario$centers,vario$variograms[1,], main="First semi-variogram",ylim=c(0,max(vario$variograms[1,])),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+       plot(vario$centers,vario$variograms[1,], main="First semivariogram",ylim=c(0,max(vario$variograms[1,])),
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram11, type='l',...)
-       plot(vario$centers,vario$variograms[2,], main="Second semi-variogram",ylim=c(0,max(vario$variograms[2,])),
-                     xlab="Distance", ylab="Semi-Variogram",...)
+       plot(vario$centers,vario$variograms[2,], main="Second semivariogram",ylim=c(0,max(vario$variograms[2,])),
+                     xlab="Distance", ylab="SemiVariogram",...)
        lines(lags_m, variogram22, type='l',...)  
 
     if(invisible)  OLS= sum( (vario$variograms[2,]-variogram22)^2) + sum((vario$variograms[1,]-variogram11))^2

@@ -81,17 +81,21 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     if (length(fit$fixed$mean) > 1) tempM <- fit$fixed$mean
     if (!is.null(fit$X)) tempX <- fit$X
 
+    # Pre-genera tutti i sample una volta sola
     sel_list <- replicate(K, sample(1:N, round(N * (1 - n.fold))), simplify = FALSE)
 
     cv_iteration <- function(i) {
       sel_data <- sel_list[[i]]
       X <- Xloc <- Mloc <- NULL
+      
+      # Prepara covariate
       if (!is.null(fit$X)) {
         X    <- tempX[sel_data, , drop = FALSE]
         Xloc <- tempX[-sel_data, , drop = FALSE]
       }
+      
+      # Prepara medie fisse
       if (length(fit$fixed$mean) > 1) {
-        fit$fixed$mean <- tempM[sel_data]
         Mloc <- tempM[-sel_data]
       }
 
@@ -101,23 +105,40 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       coords_pred  <- coords[-sel_data, , drop = FALSE]
 
       param <- c(fit$param, fit$fixed)
+      
       if (estimation) {
+        # CORREZIONE: prepara fixed corretto per il subset
+        fixed_for_est <- fit$fixed
+        if (length(fit$fixed$mean) > 1) {
+          fixed_for_est$mean <- tempM[sel_data]
+        }
+        
+        # Con estimation=TRUE, ri-stima i parametri sui dati di training
         fit_s <- suppressWarnings(
           GeoFit(
             data = data_to_est, coordx = coords_est, corrmodel = fit$corrmodel,
             X = X, likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
             copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
             model = model1, radius = fit$radius, n = fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
+            maxdist = fit$maxdist, neighb = fit$neighb,  p_neighb=fit$p_neighb,
+            distance = fit$distance,
             optimizer = optimizer, lower = lower, upper = upper,
-            start = fit$param, fixed = fit$fixed
+            start = fit$param, fixed = fixed_for_est
           )
         )
         param <- c(fit_s$param, fit_s$fixed)
       } else {
+        # Con estimation=FALSE, crea un oggetto fit ridotto
         fit_s <- fit
+        fit_s$data <- data_to_est
+        fit_s$coordx <- coords_est[, 1]
+        if (!is.null(fit$coordy)) fit_s$coordy <- coords_est[, 2]
+        if (!is.null(fit$coordz)) fit_s$coordz <- coords_est[, 3]
+        if (!is.null(X)) fit_s$X <- X
+        if (length(fit$fixed$mean) > 1) fit_s$fixed$mean <- tempM[sel_data]
       }
 
+      # Esegui kriging
       pr <- if (!local) {
         GeoKrig(fit_s, loc = coords_pred, mse = TRUE,
                 param = param, Xloc = Xloc, Mloc = Mloc)
@@ -194,6 +215,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
 
     datos <- if (is.list(fit$data)) do.call(c, fit$data) else fit$data
 
+    # OTTIMIZZAZIONE: Costruisci data_tot una volta sola
     if (!space_dyn) {
       data_tot <- NULL
       for (k in 1:T) {
@@ -213,6 +235,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       data_tot <- cbind(data_tot, tempM)
     }
 
+    # Pre-genera i fold una volta sola
     folds <- split(sample(1:NT), rep(1:K, length.out = NT))
 
     cv_iteration_st <- function(i) {
@@ -232,6 +255,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       coordx_dynnew     <- Xnew <- datanew <- list()
       coordx_dynnew_loc <- Xnew_loc <- Mnew_loc <- list()
 
+      # Prepara dati per prediction locations
       for (k in seq_along(utt_1)) {
         ll <- data_pred_ord[data_pred_ord[, 1] == utt_1[k], , drop = FALSE]
         if (!is.null(fit$coordz)) {
@@ -245,21 +269,31 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         }
       }
 
+      # Prepara dati per training
+      Mnew <- NULL
       for (k in seq_along(utt)) {
         ss <- data_sel_ord[data_sel_ord[, 1] == utt[k], , drop = FALSE]
         if (!is.null(fit$coordz)) {
           coordx_dynnew[[k]] <- matrix(ss[, 2:4], ncol = 3)
           datanew[[k]]       <- as.vector(ss[, 5])
           if (!is.null(X)) Xnew[[k]] <- matrix(ss[, 6:DD], ncol = DD - 5)
+          if (MM) Mnew <- c(Mnew, ss[, 6])
         } else {
           coordx_dynnew[[k]] <- matrix(ss[, 2:3], ncol = 2)
           datanew[[k]]       <- as.vector(ss[, 4])
           if (!is.null(X)) Xnew[[k]] <- matrix(ss[, 5:DD], ncol = DD - 4)
+          if (MM) Mnew <- c(Mnew, ss[, 5])
         }
       }
 
       param <- c(fit$param, fit$fixed)
       if (estimation) {
+        # CORREZIONE: prepara fixed corretto per il subset
+        fixed_for_est <- fit$fixed
+        if (MM) {
+          fixed_for_est$mean <- Mnew
+        }
+        
         fit_s <- suppressWarnings(
           GeoFit(
             data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
@@ -267,17 +301,25 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
             type = fit$type, grid = fit$grid, copula = fit$copula,
             anisopars = fit$anisopars, est.aniso = fit$est.aniso,
             model = model1, radius = fit$radius, n = fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb, maxtime = fit$maxtime,
+            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb=fit$p_neighb,
+            maxtime = fit$maxtime,
             distance = fit$distance, optimizer = optimizer,
             lower = lower, upper = upper,
-            start = fit$param, fixed = fit$fixed
+            start = fit$param, fixed = fixed_for_est
           )
         )
         param <- c(fit_s$param, fit_s$fixed)
       } else {
+        # Crea oggetto fit ridotto per spazio-tempo
         fit_s <- fit
+        fit_s$data <- datanew
+        fit_s$coordx_dyn <- coordx_dynnew
+        fit_s$coordt <- utt
+        if (!is.null(X)) fit_s$X <- Xnew
+        if (MM) fit_s$fixed$mean <- Mnew
       }
 
+      # Esegui kriging per ogni tempo
       pr_st  <- list()
       pr_mse <- list()
       for (j in seq_along(utt_1)) {
@@ -293,7 +335,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         pr_mse[[j]] <- pr$mse
       }
 
-      # Calcola TUTTE le metriche disponibili per spazio-tempo
+      # Calcola metriche
       pp <- GeoScores(data_pred[, 4], pred = unlist(pr_st), mse = unlist(pr_mse),
                       score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
       c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
@@ -374,6 +416,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       }
     }
 
+    # Pre-genera tutti i sample
     samples <- lapply(1:K, function(i) {
       if (which == 1) sample(1:ns[1], round(ns[1] * (1 - n.fold)))
       else sample(1:ns[2], round(ns[2] * (1 - n.fold)))
@@ -413,7 +456,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         }
       }
 
-      param <- if (estimation) {
+      if (estimation) {
         fit_s <- suppressWarnings(
           GeoFit(
             data = data_to_est, coordx = NULL, coordx_dyn = coords_est,
@@ -421,14 +464,20 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
             likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
             model = "Gaussian", radius = fit$radius, n = fit$n,
             copula = fit$copula,
-            maxdist = fit$maxdist, neighb = fit$neighb, distance = fit$distance,
+            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
+            distance = fit$distance,
             optimizer = optimizer, lower = lower, upper = upper,
             start = fit$param, fixed = current_fixed
           )
         )
-        append(fit_s$param, fit_s$fixed)
+        param <- append(fit_s$param, fit_s$fixed)
       } else {
-        append(fit$param, current_fixed)
+        fit_s <- fit
+        fit_s$data <- data_to_est
+        fit_s$coordx_dyn <- coords_est
+        if (!is.null(X_use)) fit_s$X <- X_use
+        fit_s$fixed <- current_fixed
+        param <- append(fit$param, current_fixed)
       }
 
       pr <- if (!local) {
@@ -441,7 +490,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                    progress = FALSE)
       }
 
-      # Calcola TUTTE le metriche disponibili per caso bivariato
+      # Calcola metriche
       pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
                       score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
       c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,

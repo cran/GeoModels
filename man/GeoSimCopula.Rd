@@ -14,7 +14,7 @@ GeoSimCopula(coordx, coordy=NULL,coordz=NULL, coordt=NULL,
 coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, 
       method="cholesky", model='Gaussian', n=1, param,
       anisopars=NULL,radius=1, sparse=FALSE,
-      copula="Gaussian",X=NULL,spobj=NULL,nrep=1)
+      copula="Gaussian",X=NULL,spobj=NULL,nrep=1,progress=FALSE)
 }
 \arguments{
    \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
@@ -56,6 +56,7 @@ coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE,
   \item{X}{Numeric; Matrix of space-time covariates.}
     \item{spobj}{An object of class sp or spacetime}
     \item{nrep}{Numeric; Numbers of indipendent replicates.}
+      \item{progress}{Logic; If TRUE then a progress bar is shown.}
 }
 
 

@@ -6,7 +6,7 @@
 ### Optim call for log-likelihood maximization 
 Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,grid,lower,
                        mdecomp,model,namescorr,namesnuis,namesparam,numcoord,numpairs,numparamcor,numtime,
-                       optimizer,onlyvar,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso)
+                       optimizer,onlyvar,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso,score)
 {
  ######### computing upper trinagular of covariance matrix   
     matr<- function(corrmat,corr,coordx,coordy,coordz,coordt,corrmodel,nuisance,paramcorr,ns,NS,radius)
@@ -1008,13 +1008,11 @@ if(is.null(coordz)) coordz=double(length(coordx))
 
 if(!onlyvar){   # performing optimization
 
- 
-
     maxit=10000
     # Optimize the log-likelihood:
    if(length(param)==1)
         {
-         optimizer="optimize"         
+         optimizer="optimize"        
   Likelihood <- optimize(f=eval(as.name(lname)),const=const,coordx=coordx,coordy=coordy,coordz=coordz, coordt=coordt,corr=corr,corrmat=corrmat,
                           corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,
                           fname=fname,grid=grid,ident=ident,lower=lower,maximum = FALSE,mdecomp=mdecomp,
@@ -1199,15 +1197,20 @@ Likelihood$hessian=numDeriv::hessian(func=eval(as.name(lname)),x=Likelihood$par,
             corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,
             model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
 
+rownames(Likelihood$hessian)=namesparam
+colnames(Likelihood$hessian)=namesparam
+
+}
+#}
+
+Likelihood$score=NULL
+if(score){
 Likelihood$score=numDeriv::grad(func=eval(as.name(lname)),x=Likelihood$par,method="Richardson",  const=const,coordx=coordx,coordy=coordy,coordz=coordz,
             coordt=coordt,corr=corr,corrmat=corrmat,
             corrmodel=corrmodel,data=t(data),dimat=dimat,fixed=fixed,fname=fname,grid=grid,ident=ident,mdecomp=mdecomp,
             model=model,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,radius=radius,setup=setup,X=X,ns=ns,NS=NS,MM=MM,aniso=aniso,namesaniso=namesaniso)
-rownames(Likelihood$hessian)=namesparam
-colnames(Likelihood$hessian)=namesparam
 names(Likelihood$score)=namesparam
 }
-#}
 
 
    if(Likelihood$convergence == 'Successful' || Likelihood$convergence =='None'||Likelihood$convergence =='Optimization may have failed'){  

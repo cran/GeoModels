@@ -7,7 +7,7 @@
 CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis, fixed,grid,
                            likelihood,lower, model, n, namescorr, namesnuis, namesparam,
                            numparam, numparamcorr, optimizer, onlyvar, param, spacetime, type,
-                           upper, varest, weigthed, ns, X,sensitivity,MM,aniso)
+                           upper, varest, weigthed, ns, X,sensitivity,MM,aniso,score)
   {
     ### Define the object function:
     comploglik <- function(param,coords,coordt, corrmodel, data, fixed, fan, n, namescorr, 
@@ -275,25 +275,6 @@ coords=cbind(coordx,coordy,coordz)
                                fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, 
                                weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM)
 
-   #      if(optimizer=='multinlminb'){
-    #   CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=comploglik,
-     #         coords=coords, coordt=coordt,corrmodel=corrmodel, data=data, fixed=fixed,
-      #                         fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, 
-       #                        weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM,
-        #                            lower=lower,upper=upper,method = "nlminb", nbtrials = 500, 
-         #                     control = list( iter.max=100000),
-          #                 typerunif = "sobol")
-           #                    }
-     #if(optimizer=='multiNelder-Mead'){
-      # CompLikelihood <- mcGlobaloptim::multiStartoptim(objectivefn=comploglik,
-       #  coords=coords, coordt=coordt,corrmodel=corrmodel, data=data, fixed=fixed,
-        #                       fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, MM=MM, 
-         #                      weigthed=weigthed,X=X,ns=ns,NS=NS,lower=lower,upper=upper,
-         # method = "Nelder-Mead", nbtrials = 500, 
-          #                    control=list( reltol=1e-14, maxit=100000),
-           #                typerunif = "sobol")
- # }
-
                                    
     }}
      ############################## bivariate  ############################################                           
@@ -456,9 +437,23 @@ rownames(CompLikelihood$hessian)=namesparam
 colnames(CompLikelihood$hessian)=namesparam
   }
 
-
+CompLikelihood$score=NULL
+if(score)
+{
+  if(!bivariate)  
+    CompLikelihood$score=numDeriv::grad(func=comploglik,x=CompLikelihood$par,method="Richardson",  coords=coords, coordt=coordt,corrmodel=corrmodel, 
+                              data=data, fixed=fixed,fan=fname,n=n,
+                              namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso, 
+                              weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM)  
+  
+  if(bivariate)  
+    CompLikelihood$score=numDeriv::grad(func=comploglik_biv,x=CompLikelihood$par,method="Richardson",coords=coords, coordt=coordt,corrmodel=corrmodel, 
+                             data=data, fixed=fixed,fan=fname,n=n,namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso, 
+                               weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM) 
+  
+  names(CompLikelihood$score)=namesparam
+}
 ####################################
-#if( (CompLikelihood$convergence!='Successful')||CompLikelihood$value==-1e+15)  print("Optimization failed: try with other starting values ")
 if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
 
 return(CompLikelihood)

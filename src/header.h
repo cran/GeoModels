@@ -49,6 +49,7 @@
 #define LS2PI  0.91893853320467274178
 #define LOGPI  1.14472988584940017414
 
+#define LOG_FLOOR (-1e6)  // floor morbido per contributi numericamente pessimi (tunable)
 
 
 
@@ -440,7 +441,7 @@ int fmin_int(int u,int v);
 
 double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c);
 double cdf_norm(double lim1,double lim2,double a11,double a12);
-
+double clamp_corr(double x);
 double owens_t(double h, double a);
 double psn(double x,  double omega, double alpha, double tau);
 double dsn(double x, double omega, double alpha, double tau);
@@ -620,7 +621,9 @@ double GenWend_GenWend_nosep(double h, double u,
                             double power_s, double power_t,
                            double smooth_s, double smooth_t,
                            double sep);
-
+double CorFunWitMattemp(double h, double u,double scale_s, double scale_t,
+                                  double smooth_s, double smooth_t,
+                                  double alpha);
 
 
 void GradCorrFct(double rho, int *cormod, double eps, int *flag,

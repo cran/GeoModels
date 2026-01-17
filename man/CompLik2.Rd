@@ -15,7 +15,7 @@ coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis,
          numparam, numparamcorr, optimizer, onlyvar,
           param, spacetime, type,
          upper, varest, weigthed, ns, X,sensitivity,
-         colidx,rowidx,neighb,MM,aniso)
+         colidx,rowidx,neighb,MM,aniso,score)
 }
 \arguments{
   \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
@@ -100,6 +100,7 @@ coordx_dyn,corrmodel, data, distance, flagcorr, flagnuis,
     order of neighborhood location.}
        \item{MM}{Numeric;a non constant fixed mean }
     \item{aniso}{Logical; should anisotropy be considered?}
+    \item{score}{Logical; should score function be computed?}
 }
 
 \value{Return a list from an \code{optim} call.}

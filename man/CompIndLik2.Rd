@@ -15,7 +15,7 @@ coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
               numparam, optimizer, onlyvar, 
               param, spacetime, type,
               upper, namesupper, varest, ns, X,
-              sensitivity,copula,MM)
+              sensitivity,copula,MM,score)
 }
 \arguments{
  \item{bivariate}{Logical; if \code{TRUE} then the data come froma a bivariate random field. 
@@ -77,6 +77,7 @@ coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
   \item{sensitivity}{Logical; if \code{TRUE} then  the sensitivy  matrix is computed}
    \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
           \item{MM}{Numeric;a non constant fixed mean }
+      \item{score}{Logical; should score function be computed?}
 }
 
 \value{Return a list from an \code{optim} call.}

@@ -15,7 +15,7 @@ CompLik(copula, bivariate, coordx, coordy, coordz, coordt,
         numparam, numparamcorr, optimizer, 
         onlyvar,  param,
         spacetime, type, upper, varest,
-        weigthed, ns, X, sensitivity, MM, aniso)
+        weigthed, ns, X, sensitivity, MM, aniso,score)
 }
 \arguments{
   \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian".}
@@ -78,6 +78,7 @@ CompLik(copula, bivariate, coordx, coordy, coordz, coordt,
   \item{sensitivity}{Logical; if \code{TRUE}, the sensitivity matrix is computed.}
   \item{MM}{Numeric; a non-constant fixed mean.}
   \item{aniso}{Logical; whether anisotropy should be considered.}
+    \item{score}{Logical; should score function be computed?}
 }
 \value{
   Returns a list from an \code{optim} call.

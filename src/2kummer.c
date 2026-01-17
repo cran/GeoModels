@@ -655,7 +655,7 @@ void chgu_opt(double a, double b, double x, double *hu, int *md, int *isfer) {
    
     double aa = a - b + 1.0;
    
-    int il1 = 0; // a > 0
+    //int il1 = 0; // a > 0
     int il2 = (aa == floor(aa) && aa <= 0.0);
     int il3 = (fabs(a * aa) / x <= 2.0);
     int bn = (b == floor(b) && b != 0.0);

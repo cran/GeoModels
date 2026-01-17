@@ -15,7 +15,7 @@ coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,
            numpairs,numparamcor,numtime,optimizer,
            onlyvar,param,radius,setup,
            spacetime,sparse,varest,taper,type,
-           upper,ns,X,neighb,MM,aniso)
+           upper,ns,X,neighb,MM,aniso,score)
 }
 \arguments{
   \item{copula}{String; the type of copula. It can be "Beta" or "Gaussian"}
@@ -91,6 +91,7 @@ coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,
   \item{neighb}{Numeric;parameter for vecchia approximation using GPvecchia package}
     \item{MM}{Numeric;a non constant fixed mean }
            \item{aniso}{Logical; should anisotropy be considered?}
+               \item{score}{Logical; should score function be computed?}
 }
 
 \value{Return a list from an \code{optim} call.}

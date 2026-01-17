@@ -14,7 +14,7 @@ for pairwise composite likelihood estimation.}
 GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
     copula=NULL,corrmodel=NULL, distance="Eucl",fixed=NULL,anisopars=NULL,
     est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',lower=NULL,
-    neighb=c(1,2,3,4,5),maxtime=Inf, memdist=TRUE,model='Gaussian',
+    neighb=c(1,2,3,4,5),p_neighb=1,maxtime=Inf, memdist=TRUE,model='Gaussian',
     n=1, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
     bivariate=FALSE,radius=1, start=NULL,type='Pairwise', upper=NULL, 
     weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL,progress=TRUE)
@@ -66,6 +66,12 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
       \item{neighb}{Numeric; a vector of positive integers  indicating the 
     order of neighborhood  in the weight function of  composite likelihood 
     (see Section \bold{Details} in \link{GeoFit}).}
+
+        \item{p_neighb}{ Numeric; a value in \eqn{(0,1]} that specifies the expected fraction 
+    of nearest-neighbor pairs retained through stochastic thinning.
+     If is equal to 1 (default), no thinning is applied and all nearest-neighbor
+     pairs are used. If it is lower than 1, nearest-neighbor pairs are randomly retained using
+independent Bernoulli sampling.}
  
     \item{maxtime}{Numeric; an optional positive integer indicating the 
     order of temporal neighborhood  in the composite likelihood

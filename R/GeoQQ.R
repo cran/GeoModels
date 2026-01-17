@@ -45,8 +45,14 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
 
   # Safe extraction: single-bracket returns NA when name is absent (no error)
   MM <- as.numeric(pp["mean"])
-  VV <- as.numeric(pp["sill"])   # may be NA for models that don't need it
-  if (is.na(MM)) stop("'mean' parameter is required")
+VV <- as.numeric(pp["sill"])
+
+if (!fit$bivariate) {
+
+  needs_mean <- !(model %in% c("Gaussian"))  
+  if (needs_mean && is.na(MM)) stop("'mean' parameter is required")
+}
+
 
   # Which models actually require 'sill' (marginal variance)?
   .requires_VV <- function(m) {
@@ -65,15 +71,25 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
   # Save and restore par settings
   opar <- par(no.readonly = TRUE); on.exit(par(opar))
 
+  # Extract main from ... and remove it to avoid conflicts
+  dots <- list(...)
+  main_title <- if("main" %in% names(dots)) dots$main else NULL
+  if("main" %in% names(dots)) dots <- dots[names(dots) != "main"]
+  
+  # Helper to get main title (use default if main_title is NULL)
+  .get_main <- function(default) {
+    if(is.null(main_title)) default else main_title
+  }
+
   # xlim helpers
   has_xlim <- !is.null(xlim)
-  .XL <- function(def) { if (has_xlim) xlim else def }            # choose axis limits
-  .GRID <- function(def_range, n = 512) {                         # grid across visible x-range
+  .XL <- function(def) { if (has_xlim) xlim else def }
+  .GRID <- function(def_range, n = 512) {
     xr <- if (has_xlim) xlim else def_range
     seq(xr[1], xr[2], length.out = n)
   }
 
-  # Library checks for skew/t families when needed (clear error if missing)
+  # Library checks for skew/t families when needed
   need_sn   <- model %in% c("SkewGaussian","SkewStudentT","Gaussian_misp_SkewStudentT")
   need_VGAM <- model %in% c("Tukeyh","Tukeyh2","TwoPieceTukeyh","Tukeygh","Gaussian_misp_Tukeygh")
   if (need_sn && !requireNamespace("sn", quietly = TRUE))
@@ -89,7 +105,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
     ylab <- "Sample Quantiles"
 
     if(!fit$bivariate){
-      # Unpack data (finite only)
       dd <- if (is.list(fit$coordx_dyn)) unlist(fit$data) else c(t(fit$data))
       dd <- dd[is.finite(dd)]
       if (!length(dd)) stop("empty data")
@@ -100,7 +115,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       q_e  <- quantile(dd, probabilities)
       q_e1 <- quantile(dd, probabilities1)
 
-      # If the model needs VV, enforce presence once (univariate)
       if (.requires_VV(model) && is.na(VV)) {
         stop("'sill' parameter is required for model '", model,
              "' but is missing in 'fit'. Provide 'sill' in fit$param/fixed.")
@@ -112,8 +126,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         pmin <- as.numeric(pp["min"]); pmax <- as.numeric(pp["max"])
         q_t  <- pmin + (pmax-pmin)*qbeta(probabilities,  shape1=mm*sh, shape2=(1-mm)*sh)
         q_t1 <- pmin + (pmax-pmin)*qbeta(probabilities1, shape1=mm*sh, shape2=(1-mm)*sh)
-        plot(q_t,q_e, main="Beta qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Beta qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Kumaraswamy2")){
@@ -122,43 +136,43 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         shape1 <- log(0.5)/log1p(-(mm^sh))
         q_t  <- pmin + (pmax-pmin)*(1 - (1 - (probabilities)^sh)^shape1)
         q_t1 <- pmin + (pmax-pmin)*(1 - (1 - (probabilities1)^sh)^shape1)
-        plot(q_t,q_e, main="Kumaraswamy qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Kumaraswamy qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Gaussian","Gaussian_misp_Binomial","Gaussian_misp_Poisson","Gaussian_misp_BinomialNeg")) {
         q_t  <- qnorm(probabilities,  mean=MM, sd=sqrt(VV))
         q_t1 <- qnorm(probabilities1, mean=MM, sd=sqrt(VV))
-        plot(q_t,q_e, main="Gaussian qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Gaussian qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Binomial")) {
         q_t  <- qbinom(probabilities,  size=fit$n, prob=pnorm(pp["mean"]))
         q_t1 <- qbinom(probabilities1, size=fit$n, prob=pnorm(pp["mean"]))
-        plot(q_t,q_e, main="Binomial qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Binomial qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("BinomialLogistic")) {
         q_t  <- qbinom(probabilities,  size=fit$n, prob=plogis(MM))
         q_t1 <- qbinom(probabilities1, size=fit$n, prob=plogis(MM))
-        plot(q_t,q_e, main="Binomial-Logistic qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Binomial-Logistic qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("BinomialNeg")) {
         q_t  <- qnbinom(probabilities,  size=fit$n, prob=pnorm(pp["mean"]))
         q_t1 <- qnbinom(probabilities1, size=fit$n, prob=pnorm(pp["mean"]))
-        plot(q_t,q_e, main="Binomial Neg qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Binomial Neg qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Poisson")) {
         q_t  <- qpois(probabilities,  lambda=exp(pp["mean"]))
         q_t1 <- qpois(probabilities1, lambda=exp(pp["mean"]))
-        plot(q_t,q_e, main="Poisson qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Poisson qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("PoissonGamma")) {
@@ -166,8 +180,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         sh <- as.numeric(pp["shape"])
         q_t  <- qnbinom(probabilities,  size=sh, prob=sh/(ff+sh))
         q_t1 <- qnbinom(probabilities1, size=sh, prob=sh/(ff+sh))
-        plot(q_t,q_e, main="Poisson qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Poisson qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("SkewGaussian")) {
@@ -175,16 +189,16 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         alpha <- as.numeric(pp["skew"]/sqrt(pp["sill"]))
         q_t  <- MM + sqrt(VV)*sn::qsn(probabilities,  xi=0, omega=omega, alpha=alpha)
         q_t1 <- MM + sqrt(VV)*sn::qsn(probabilities1, xi=0, omega=omega, alpha=alpha)
-        plot(q_t,q_e, main="Skew Gaussian qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Skew Gaussian qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model%in%c("StudentT","Gaussian_misp_StudentT")){
         df <- as.numeric(round(1/pp["df"]))
         q_t  <- MM + sqrt(VV)*qt(probabilities,  df=df)
         q_t1 <- MM + sqrt(VV)*qt(probabilities1, df=df)
-        plot(q_t,q_e, main="t qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("t qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model%in%c("SkewStudentT","Gaussian_misp_SkewStudentT")){
@@ -192,32 +206,31 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         nu    <- as.numeric(round(1/pp["df"]))
         q_t  <- MM + sqrt(VV)*sn::qst(probabilities,  xi=0, omega=1, alpha=alpha, nu=nu)
         q_t1 <- MM + sqrt(VV)*sn::qst(probabilities1, xi=0, omega=1, alpha=alpha, nu=nu)
-        plot(q_t,q_e, main="skewt qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("skewt qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Weibull")){
         shape <- pp["shape"]
         q_t  <- exp(MM)*qweibull(probabilities,  shape=shape, scale=1/(gamma(1+1/shape)))
         q_t1 <- exp(MM)*qweibull(probabilities1, shape=shape, scale=1/(gamma(1+1/shape)))
-        plot(q_t,q_e, main="Weibull qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Weibull qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Gamma")){
         shape <- pp["shape"]
         q_t  <- exp(MM)*qgamma(probabilities,  shape=shape/2, rate=shape/2)
         q_t1 <- exp(MM)*qgamma(probabilities1, shape=shape/2, rate=shape/2)
-        plot(q_t,q_e, main="Gamma qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Gamma qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("LogGaussian")){
-        # Fix: meanlog must be MM - VV/2 to ensure E[Y]=exp(MM)
         q_t  <- qlnorm(probabilities,  meanlog = MM - VV/2, sdlog = sqrt(VV))
         q_t1 <- qlnorm(probabilities1, meanlog = MM - VV/2, sdlog = sqrt(VV))
-        plot(q_t,q_e, main="LogGaussian qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("LogGaussian qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("LogLogistic")){
@@ -225,23 +238,23 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         cc <- gamma(1+1/shape)*gamma(1-1/shape)
         q_t  <- qllogis1(probabilities,  shape=shape, scale=exp(MM)/cc)
         q_t1 <- qllogis1(probabilities1, shape=shape, scale=exp(MM)/cc)
-        plot(q_t,q_e, main="LogLogistic qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("LogLogistic qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Logistic")){
         q_t  <- qlogis(probabilities,  location=MM, scale=sqrt(VV))
         q_t1 <- qlogis(probabilities1, location=MM, scale=sqrt(VV))
-        plot(q_t,q_e, main="Logistic qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Logistic qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("SinhAsinh")){
         tail <- as.numeric(pp["tail"]); skew <- as.numeric(pp["skew"])
         q_t  <- MM + sqrt(VV)*sinh( (asinh(qnorm(probabilities))/tail) + skew/tail )
         q_t1 <- MM + sqrt(VV)*sinh( (asinh(qnorm(probabilities1))/tail) + skew/tail )
-        plot(q_t,q_e, main="Sas qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Sas qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Tukeyh")){
@@ -249,8 +262,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         uu <- qnorm(probabilities); uu1 <- qnorm(probabilities1)
         q_t  <- MM + sqrt(VV)*uu * exp(0.5*tail*uu^2)
         q_t1 <- MM + sqrt(VV)*uu1* exp(0.5*tail*uu1^2)
-        plot(q_t,q_e, main="Tukey-h qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Tukey-h qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Tukeyh2")){
@@ -265,28 +278,24 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         tail1 <- as.numeric(pp["tail1"]); tail2 <- as.numeric(pp["tail2"])
         q_t  <- MM + sqrt(VV)*qtpTukeyh221(probabilities,  tail1,tail2)
         q_t1 <- MM + sqrt(VV)*qtpTukeyh221(probabilities1, tail1,tail2)
-        plot(q_t,q_e, main="Tukey-hh qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Tukey-hh qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
-
 
       if(model %in% c("SkewLaplace")){
-      qtpSkewLaplace22 <- function(u, sk){
-      mm=0
-      vv=1
-      s  <- sqrt(vv)
-      res <- rep(NA_real_, length(u))
-      hi <- u >= sk
-      lo <- u <  sk
-      res[hi] <- mm - (s / sk) * (log1p(-u[hi]) - log1p(-sk))
-      res[lo] <- mm + (s / (1 - sk)) * (log(u[lo]) - log(sk))
-      res
-      }
+        qtpSkewLaplace22 <- function(u, sk){
+          mm=0; vv=1; s <- sqrt(vv)
+          res <- rep(NA_real_, length(u))
+          hi <- u >= sk; lo <- u < sk
+          res[hi] <- mm - (s / sk) * (log1p(-u[hi]) - log1p(-sk))
+          res[lo] <- mm + (s / (1 - sk)) * (log(u[lo]) - log(sk))
+          res
+        }
         skew <- as.numeric(pp["skew"])
         q_t  <- MM + sqrt(VV)*qtpSkewLaplace22(probabilities,skew)
         q_t1 <- MM + sqrt(VV)*qtpSkewLaplace22(probabilities1,skew)
-        plot(q_t,q_e, main="Skew Laplace qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Skew Laplace qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("Tukeygh","Gaussian_misp_Tukeygh")){
@@ -299,8 +308,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
           q_t  <- MM + sqrt(VV) * ((exp(skew*uu)  - 1) * exp(0.5*tail*uu^2)  / skew)
           q_t1 <- MM + sqrt(VV) * ((exp(skew*uu1) - 1) * exp(0.5*tail*uu1^2) / skew)
         }
-        plot(q_t,q_e, main="Tukey-gh qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Tukey-gh qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("TwoPieceGaussian")){
@@ -315,8 +324,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         skew <- as.numeric(pp["skew"])
         q_t  <- MM + sqrt(VV)*qtpGaussian(probabilities,  skew)
         q_t1 <- MM + sqrt(VV)*qtpGaussian(probabilities1, skew)
-        plot(q_t,q_e, main="Two-Piece Gaussian qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Gaussian qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("TwoPieceStudentT")){
@@ -331,8 +340,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         skew <- as.numeric(pp["skew"]); df <- 1/as.numeric(pp["df"])
         q_t  <- MM + sqrt(VV)*qtpt1(probabilities,  skew,df)
         q_t1 <- MM + sqrt(VV)*qtpt1(probabilities1, skew,df)
-        plot(q_t,q_e, main="Two-Piece Student qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Student qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("TwoPieceTukeyh")){
@@ -350,11 +359,10 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         skew <- as.numeric(pp["skew"]); tail <- as.numeric(pp["tail"])
         q_t  <- MM + sqrt(VV)*qtptukey(probabilities,  skew,tail)
         q_t1 <- MM + sqrt(VV)*qtptukey(probabilities1, skew,tail)
-        plot(q_t,q_e, main="Two-Piece Tukey-h qq-plot", xlab=xlab, ylab=ylab,
-             xlim=.XL(range(q_t, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Tukey-h qq-plot"), 
+                             xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
-      # Robust reference line from 25%–75%
       x <- q_t1; y <- q_e1
       slope <- diff(y)/diff(x); int <- y[1L] - slope * x[1L]
       abline(int, slope, pch=20)
@@ -368,11 +376,11 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
 
       if(model %in% c("Gaussian")) {
         if (has_xlim) {
-          qqnorm(dd1,main="First Gaussian qq-plot", xlim=xlim); abline(0,1)
-          qqnorm(dd2,main="Second Gaussian qq-plot", xlim=xlim); abline(0,1)
+          qqnorm(dd1, main=.get_main("First Gaussian qq-plot"), xlim=xlim); abline(0,1)
+          qqnorm(dd2, main=.get_main("Second Gaussian qq-plot"), xlim=xlim); abline(0,1)
         } else {
-          qqnorm(dd1,main="First Gaussian qq-plot"); abline(0,1)
-          qqnorm(dd2,main="Second Gaussian qq-plot"); abline(0,1)
+          qqnorm(dd1, main=.get_main("First Gaussian qq-plot")); abline(0,1)
+          qqnorm(dd2, main=.get_main("Second Gaussian qq-plot")); abline(0,1)
         }
       }
 
@@ -382,8 +390,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         probabilities <- (1:length(dd1))/(length(dd1)+1)
         q_t1 <- sn::qsn(probabilities, xi=0, omega=as.numeric(omega1), alpha=as.numeric(alpha1))
         q_e1 <- quantile(dd1, probabilities)
-        plot(q_t1,q_e1, main="First Skew Gaussian qq-plot",
-             xlim=.XL(range(q_t1, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t1, y=q_e1, main=.get_main("First Skew Gaussian qq-plot"),
+                             xlim=.XL(range(q_t1, finite=TRUE))), dots))
         aa <- lm(q_e1~1+q_t1); abline(as.numeric(aa$coefficients[1]),as.numeric(aa$coefficients[2]))
 
         omega2 <- sqrt((pp["skew_2"]^2 + pp["sill_2"])/pp["sill_2"])
@@ -391,13 +399,12 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         probabilities <- (1:length(dd2))/(length(dd2)+1)
         q_t2 <- sn::qsn(probabilities, xi=0, omega=as.numeric(omega2), alpha=as.numeric(alpha2))
         q_e2 <- quantile(dd2, probabilities)
-        plot(q_t2,q_e2, main="Second Skew Gaussian qq-plot",
-             xlim=.XL(range(q_t2, finite=TRUE)), ...)
+        do.call(plot, c(list(x=q_t2, y=q_e2, main=.get_main("Second Skew Gaussian qq-plot"),
+                             xlim=.XL(range(q_t2, finite=TRUE))), dots))
         aa <- lm(q_e2~1+q_t2); abline(as.numeric(aa$coefficients[1]),as.numeric(aa$coefficients[2]))
       }
     }
-  } # end QQ
-
+  }
 
   ##########################################################
   #### Density / histogram
@@ -409,17 +416,15 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       dd <- dd[is.finite(dd)]
       if (!length(dd)) stop("empty data")
 
-      # If the model needs VV, enforce presence once (univariate)
       if (.requires_VV(model) && is.na(VV)) {
         stop("'sill' parameter is required for model '", model,
              "' but is missing in 'fit'. Provide 'sill' in fit$param/fixed.")
       }
 
-      # Helper: draw histogram once; overlay theoretical curve with lines()
-      .hist_once <- function(main_title, xr_default) {
+      .hist_once <- function(main_title_default, xr_default) {
         if(!add) {
-          hist(dd, freq=FALSE, xlim=.XL(xr_default), ylab="Density", xlab="",
-               main=main_title, ylim=ylim, breaks=breaks, ...)
+          do.call(hist, c(list(x=dd, freq=FALSE, xlim=.XL(xr_default), ylab="Density", xlab="",
+                               main=.get_main(main_title_default), ylim=ylim, breaks=breaks), dots))
         }
       }
 
@@ -468,7 +473,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         .hist_once("Student T Histogram", xr_default = range(dd, finite=TRUE))
-        # Fix: divide by sqrt(VV) inside lines()
         lines(ll, dt((ll - MM)/sqrt(VV), df = df) / sqrt(VV), ...)
       }
 
@@ -500,14 +504,17 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         lines(ll, d_w, ...)
       }
 
-      if(model %in% c("Gamma")){
-        shape <- pp["shape"]
-        xr <- .XL(range(dd, finite=TRUE))
-        ll <- .GRID(xr)
-        d_g <- ifelse(ll>0, dgamma(ll, shape=shape/2, rate=shape/(2*exp(MM))), 0)
-        .hist_once("Gamma Histogram", xr_default = range(dd, finite=TRUE))
-        lines(ll, d_g, ...)
-      }
+     if(model %in% c("Gamma")){
+       shape <- as.numeric(pp["shape"])
+       xr <- .XL(range(dd, finite = TRUE))
+       xr[1] <- max(0, xr[1])
+       ll <- seq(from = max(xr[1], .Machine$double.eps), to = xr[2], length.out = 512)
+       k    <- shape/2; rate <- shape/(2*exp(MM))  # coerente con qq
+       d_g <- dgamma(ll, shape = k, rate = rate)
+       .hist_once("Gamma Histogram", xr_default = xr)
+       lines(ll, d_g, ...)
+}
+
 
       if(model %in% c("LogGaussian")){
         xr <- .XL(range(dd, finite=TRUE))
@@ -530,7 +537,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         cc <- gamma(1+1/shape)*gamma(1-1/shape)
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
-        d_l <- dllogis1(ll, shape = shape, scale = exp(MM)/cc)  # fix
+        d_l <- dllogis1(ll, shape = shape, scale = exp(MM)/cc)
         .hist_once("LogLogistic Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, d_l, ...)
       }
@@ -551,41 +558,23 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         lines(ll, ds, ...)
       }
 
-
-
-    if(model %in% c("SkewLaplace")){
-       skew <- as.numeric(pp["skew"])
+      if(model %in% c("SkewLaplace")){
+        skew <- as.numeric(pp["skew"])
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         dslaplace <- function(x, sk) {
-        if (sk <= 0 || sk >= 1) stop("sk debe estar en (0,1)")
-        f <- numeric(length(x))
-        # Parte izquierda: x < 0
-        sel1 <- x < 0
-        f[sel1] <- sk * (1 - sk) * exp((1 - sk) * x[sel1])
-        # Parte derecha: x >= 0
-        sel2 <- !sel1
-        f[sel2] <- sk * (1 - sk) * exp(-sk * x[sel2])
-        return(f)
+          if (sk <= 0 || sk >= 1) stop("sk debe estar en (0,1)")
+          f <- numeric(length(x))
+          sel1 <- x < 0
+          f[sel1] <- sk * (1 - sk) * exp((1 - sk) * x[sel1])
+          sel2 <- !sel1
+          f[sel2] <- sk * (1 - sk) * exp(-sk * x[sel2])
+          return(f)
         }
-
-
-        #dslaplace <- function(z, skew){
-        #aa=1:length(x)
-        #sel1=I(x>=0)*aa
-        #sel2=I(x<0)*aa
-        #x1=x[sel1]        
-        #x2=x[sel2]
-        #ds1=skew*(1-skew)*exp(-skew*x1)
-        #ds2=skew*(1-skew)*exp((1-skew)*x2)
-        #return(c(ds2,ds1))
-        #}
         ds <- dslaplace((ll-MM)/sqrt(VV), skew)/sqrt(VV)
         .hist_once("Skew Laplace Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
       }
-
-
 
       if(model %in% c("Tukeyh")){
         inverse_lamb <- function(x,tail) {
@@ -633,7 +622,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         skew <- as.numeric(pp["skew"])
         xr <- .XL(range(dd, finite=TRUE)); ll <- .GRID(xr)
         z <- (ll-MM)/sqrt(VV)
-        # Fix: include Jacobian 1/(1±skew)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
         ds[idx1] <- dnorm(z[idx1]/(1-skew),0,1) / (sqrt(VV)*(1-skew))
@@ -646,7 +634,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         skew <- as.numeric(pp["skew"]); df <- 1/as.numeric(pp["df"])
         xr <- .XL(range(dd, finite=TRUE)); ll <- .GRID(xr)
         z <- (ll-MM)/sqrt(VV)
-        # Fix: include Jacobian 1/(1±skew)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
         ds[idx1] <- dt(z[idx1]/(1-skew), df=df) / (sqrt(VV)*(1-skew))
@@ -669,7 +656,6 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         }
         xr <- .XL(range(dd, finite=TRUE)); ll <- .GRID(xr)
         z <- (ll-MM)/sqrt(VV)
-        # Fix: include Jacobian 1/(1±skew)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
         ds[idx1] <- dTukeyh(z[idx1]/(1-skew), tail) / (sqrt(VV)*(1-skew))
@@ -694,8 +680,12 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         y_emp <- sort(unique(as.numeric(dd)))
         ys <- .disc_support()
         ds <- dnbinom(ys, size=fit$n, prob=pnorm(MM))
-        if(!add) plot(y_emp, ll_emp, type="h", col="blue", main="Binomial Negative Histogram",
-                      ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), ylim=ylim, lwd=2, ...)
+        if(!add) {
+          do.call(plot, c(list(x=y_emp, y=ll_emp, type="h", col="blue", 
+                               main=.get_main("Binomial Negative Histogram"),
+                               ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), 
+                               ylim=ylim, lwd=2), dots))
+        }
         points(ys, ds, type="p", lwd=3)
         lines(ys, ds)
       }
@@ -705,8 +695,12 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         y_emp <- sort(unique(as.numeric(dd)))
         ys <- .disc_support()
         ds <- dbinom(ys, size=fit$n, prob=pnorm(MM))
-        if(!add) plot(y_emp, ll_emp, type="h", col="blue", main="Binomial Histogram",
-                      ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), ylim=ylim, lwd=2, ...)
+        if(!add) {
+          do.call(plot, c(list(x=y_emp, y=ll_emp, type="h", col="blue", 
+                               main=.get_main("Binomial Histogram"),
+                               ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), 
+                               ylim=ylim, lwd=2), dots))
+        }
         points(ys, ds, type="p", lwd=3)
         lines(ys, ds)
       }
@@ -716,8 +710,12 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         y_emp <- sort(unique(as.numeric(dd)))
         ys <- .disc_support()
         ds <- dbinom(ys, size=fit$n, prob=plogis(MM))
-        if(!add) plot(y_emp, ll_emp, type="h", col="blue", main="Binomial-Logistic Histogram",
-                      ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), ylim=ylim, lwd=2, ...)
+        if(!add) {
+          do.call(plot, c(list(x=y_emp, y=ll_emp, type="h", col="blue", 
+                               main=.get_main("Binomial-Logistic Histogram"),
+                               ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), 
+                               ylim=ylim, lwd=2), dots))
+        }
         points(ys, ds, type="p", lwd=3)
         lines(ys, ds)
       }
@@ -727,8 +725,12 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         y_emp <- sort(unique(as.numeric(dd)))
         ys <- .disc_support()
         ds <- dpois(ys, lambda=exp(MM))
-        if(!add) plot(y_emp, ll_emp, type="h", col="blue", main="Poisson Histogram",
-                      ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), ylim=ylim, lwd=2, ...)
+        if(!add) {
+          do.call(plot, c(list(x=y_emp, y=ll_emp, type="h", col="blue", 
+                               main=.get_main("Poisson Histogram"),
+                               ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), 
+                               ylim=ylim, lwd=2), dots))
+        }
         points(ys, ds, type="p", lwd=3)
         lines(ys, ds)
       }
@@ -739,13 +741,17 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         ys <- .disc_support()
         ff <- exp(MM); sh <- as.numeric(pp["shape"])
         ds <- dnbinom(ys, size=sh, prob=sh/(ff+sh))
-        if(!add) plot(y_emp, ll_emp, type="h", col="blue", main="Poisson Gamma (NegBin) Histogram",
-                      ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), ylim=ylim, lwd=2, ...)
+        if(!add) {
+          do.call(plot, c(list(x=y_emp, y=ll_emp, type="h", col="blue", 
+                               main=.get_main("Poisson Gamma (NegBin) Histogram"),
+                               ylab="Density", xlab="", xlim=.XL(range(c(y_emp, ys))), 
+                               ylim=ylim, lwd=2), dots))
+        }
         points(ys, ds, type="p", lwd=3)
         lines(ys, ds)
       }
-    } # end univariate
-  } # end D
+    }
+  }
 
   invisible()
 }

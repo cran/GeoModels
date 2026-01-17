@@ -1,12 +1,13 @@
-\name{NuisParam}
-\alias{NuisParam}
+\name{MargParam}
+\alias{MargParam}
 \encoding{UTF-8}
 \title{Lists the Nuisance Parameters of a Random Field}
 \description{
-Internal function handling Nuisance Parameters of a Random Field.
+The procedure returns a list with the nuisance parameters of a given
+  random field model.
 }
 \usage{
-NuisParam(model, bivariate=FALSE,num_betas=c(1,1),copula=NULL)
+MargParam(model, bivariate=FALSE,num_betas=c(1,1),copula=NULL)
 }
 \arguments{
   \item{model}{String; the name of a random field.}
@@ -28,4 +29,25 @@ Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.
 Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
 
+
+\examples{
+library(GeoModels)
+
+MargParam("Gaussian")
+
+MargParam("Binomial")
+
+MargParam("Weibull",num_betas=2)
+
+MargParam("SkewGaussian", num_betas=3)
+
+MargParam("SinhAsinh")
+
+MargParam("Beta2",copula="Clayton")
+
+MargParam("StudentT")
+## note that in the bivariate case sill_1 e sill_2 are considered as correlation parameteres
+MargParam("Gaussian", bivariate=TRUE)
+
+}
 \keyword{Composite}

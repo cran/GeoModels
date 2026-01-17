@@ -1,6 +1,3 @@
-########################################
-##parametric boostrap test for isotropy
-########################################
 GeoTestIsotropy <- function(data, coordx,
                             start, fixed,
                             optimizer = "bobyqa",
@@ -20,7 +17,6 @@ GeoTestIsotropy <- function(data, coordx,
   if (!is.matrix(coordx)) coordx <- as.matrix(coordx)
   if (!is.numeric(data))  data   <- as.numeric(data)
   
-  # Controlli dimensioni e valori
   if (nrow(coordx) != length(data)) 
     stop("coordx rows (", nrow(coordx), ") must match data length (", length(data), ")")
   if (B < 1) 
@@ -28,21 +24,24 @@ GeoTestIsotropy <- function(data, coordx,
   if (neighb < 1) 
     stop("neighb must be positive")
 
-if(is.null(likelihood)||is.null(type)){
-  ## ====== AUTOMATIC LIKELIHOOD SELECTION ======
-  if (NN > 2000) {
-    likelihood <- "Marginal"
-    type <- "Pairwise"
-  } else {
-    likelihood <- "Full"
-    type <- "Standard"
-    neighb <- NULL
-  }
- }
-  
+  ## Numero di punti
   NN <- nrow(coordx)
 
-  # --- Setup progress handlers UNICA VOLTA ---
+  ## ====== AUTOMATIC LIKELIHOOD SELECTION ======
+  if (is.null(likelihood) && is.null(type)) {
+    if (NN > 2000) {
+      likelihood <- "Marginal"
+      type <- "Pairwise"
+    } else {
+      likelihood <- "Full"
+      type <- "Standard"
+      neighb <- NULL
+    }
+  } else if (xor(is.null(likelihood), is.null(type))) {
+    stop("Either specify both 'likelihood' and 'type', or leave both NULL for automatic selection.")
+  }
+
+  ## ====== PROGRESS HANDLERS ======
   if (progress) {
     progressr::handlers(global = TRUE)
     progressr::handlers(progressr::handler_txtprogressbar(clear = TRUE))
@@ -50,11 +49,12 @@ if(is.null(likelihood)||is.null(type)){
     progressr::handlers("void")
   }
 
+  ## Metodo simulazione
   method <- if (NN > 10000) "TB" else "Cholesky"
   corrmodel_used <- corrmodel
   model_used <- model
 
-  ## ====== VALIDAZIONI PARAMETRI ======
+  ## ====== VALIDAZIONE PARAMETRI ======
   corr_names <- CorrParam(corrmodel_used)
   nuis_names <- NuisParam(model_used)
   expected <- sort(unique(c(corr_names, nuis_names)))
@@ -69,7 +69,7 @@ if(is.null(likelihood)||is.null(type)){
          paste(msg, collapse = " | "))
   }
 
-  # Bounds SOLO per 'start'
+  ## Bounds solo per 'start'
   start_names <- sort(names(start))
   norm_bounds <- function(b, which = c("lower","upper")) {
     which <- match.arg(which)
@@ -122,7 +122,6 @@ if(is.null(likelihood)||is.null(type)){
   LL0 <- fit0$logCompLik
   LL1 <- fit1$logCompLik
   
-  # Controllo e warning per LRT negativo
   if (LL1 < LL0) {
     message("Note: H1 log-likelihood (", round(LL1, 3), 
             ") < H0 log-likelihood (", round(LL0, 3), "), LRT set to 0")
@@ -139,8 +138,9 @@ if(is.null(likelihood)||is.null(type)){
                     param = param_H0, model = model_used,
                     nrep = B, anisopars = aniso_H0, progress = FALSE)
     } else if (method == "TB") {
-      sim <- GeoSimapprox(coordx = coordx, corrmodel = corrmodel_used, model = model_used, method = "TB",
-                          param = param_H0, nrep = B, anisopars = aniso_H0, progress=FALSE)
+      sim <- GeoSimapprox(coordx = coordx, corrmodel = corrmodel_used, model = model_used,
+                          method = "TB",
+                          param = param_H0, nrep = B, anisopars = aniso_H0, progress = FALSE)
     } else stop("method must be 'Cholesky' or 'TB'.")
   } else {
     sim <- GeoSimCopula(coordx = coordx, corrmodel = corrmodel_used,
@@ -160,14 +160,10 @@ if(is.null(likelihood)||is.null(type)){
     parallel <- FALSE
     ncores   <- 1
   } else {
-    # Determina ncores ottimale
     if (is.null(ncores)) {
       ncores <- min(coremax - 1, B)
     }
-    # Limita a valori sensati
     ncores <- max(1, min(ncores, B, coremax))
-    
-    # Se ncores = 1, disabilita parallelizzazione
     if (ncores == 1) parallel <- FALSE
   }
 
@@ -177,9 +173,12 @@ if(is.null(likelihood)||is.null(type)){
 
     if (progress) {
       progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
+      progressr::handlers(progressr::handler_txtprogressbar(clear = TRUE))
+    } else {
+      progressr::handlers("void")
     }
-    pb <- progressr::progressor(along = seq_len(B))
+
+    pb <- if (progress) progressr::progressor(along = seq_len(B)) else NULL
 
     LRT_boot <- vector("numeric", B)
     for (b in seq_len(B)) {
@@ -196,7 +195,6 @@ if(is.null(likelihood)||is.null(type)){
         LRT_boot[b] <- max(0, 2 * (f1b$logCompLik - f0b$logCompLik))
       }
     }
-    # Rimuovi solo NA e valori non finiti (max(0,...) già garantisce >= 0)
     LRT_boot <- LRT_boot[is.finite(LRT_boot)]
 
   } else {
@@ -207,8 +205,11 @@ if(is.null(likelihood)||is.null(type)){
 
     if (progress) {
       progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
+      progressr::handlers(progressr::handler_txtprogressbar(clear = TRUE))
       pb <- progressr::progressor(along = seq_len(B))
+    } else {
+      progressr::handlers("void")
+      pb <- NULL
     }
 
     xx <- foreach::foreach(
@@ -221,7 +222,7 @@ if(is.null(likelihood)||is.null(type)){
         conditions = "none"
       )
     ) %dofuture% {
-      if (progress) pb(sprintf("b=%d", b))
+      if (!is.null(pb)) pb(sprintf("b=%d", b))
       
       Zb  <- get_rep(sim, b)
       f0b <- suppressWarnings(try(fit_H0(Zb), silent = TRUE))
@@ -235,11 +236,10 @@ if(is.null(likelihood)||is.null(type)){
       }
     }
 
-    # Rimuovi solo NA e valori non finiti
     LRT_boot <- xx[is.finite(xx)]
   }
 
-  ## ====== RISULTATI CON WARNING INFORMATIVO ======
+  ## ====== RISULTATI ======
   failed <- B - length(LRT_boot)
   if (failed > 0) {
     warning(sprintf("%d/%d bootstrap replications failed (%.1f%%)", 

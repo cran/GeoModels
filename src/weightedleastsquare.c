@@ -38,7 +38,8 @@ void pairs(int *ncoords, double *data, double *coordx, double *coordy, double *c
             double distance = dist(typ[0], xi, coordx[j], yi, coordy[j], zi, coordz[j], *radius);
 
             if (distance <= max_dist) {
-                int bin_idx = find_bin(bins, numbin - 1, distance);
+               // int bin_idx = find_bin(bins, numbin - 1, distance);
+                int bin_idx = find_bin(bins, numbin, distance);
                 if (bin_idx != -1) {
                     v0[k] = bins[bin_idx];
                     v1[k] = di;
@@ -136,8 +137,11 @@ void Binned_Variogram_st2(double *bins, double *bint, double *coordx, double *co
 
   if (maxdist[0] < mm[1]) mm[1] = maxdist[0];
 
-  step = mm[1] / nbins1;
+
+  step = (mm[1] - mm[0]) / nbins1;
+  //step = mm[1] / nbins1;
   bins[0] = mm[0];
+
   for (h = 1; h < *nbins; h++)
     bins[h] = bins[h - 1] + step;
 

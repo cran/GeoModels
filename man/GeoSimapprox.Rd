@@ -4,7 +4,7 @@
 \title{Fast simulation of Gaussian and non Gaussian Random Fields.}
 \description{
   Simulation of Gaussian and some non Gaussian spatial, spatio-temporal and spatial bivariate 
- random fields using two approximate methods of simulation: circulant embeeding and turning band. (see Examples). 
+ random fields using two approximate methods of simulation: circulant embeeding and spectral turning band. (see Examples). 
 }
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordz=NULL,coordt=NULL, 
@@ -98,7 +98,8 @@ T. Gneiting, H. Sevcikova, D. B. Percival, M. Schlather and Y. Jiang (2006)
 Fast and Exact Simulation of Large Gaussian Lattice Systems in R2: Exploring the Limits
 \emph{Journal of Computational and Graphical Statistics} 15 (3)
 
-D. Arroyo, X. Emery (2020) An R Implementation of a Continuous Spectral Algorithm for Simulating Vector Gaussian Random Fields in Euclidean Spaces \emph{ACM Transactions on Mathematical Software}  47(1)
+M. Bevilacqua, X. Emery, F. Cuevas Pacheco (2025) Fast simulation of Gaussian random fields with
+flexible correlation models in Euclidean spaces \emph{arxiv}  
 
 
 }
@@ -133,7 +134,7 @@ fields::image.plot( matrix(data1, length(x), length(y), byrow = TRUE) )
 ###
 ### Example 2. Simulation of a large spatial Tukey-h RF 
 ###            with  GenWend-Matern  covariance model
-###            using Turning band method
+###            using spectral Turning band method
 ###            It works for (ir)regular grid
 ###############################################################
 set.seed(68)
@@ -187,8 +188,8 @@ dim(data)
 ################################################################
 ###
 ### Example 6. Simulation of a large bivariate Gaussian RF
-### with  bivariate Matern correlation model
-###
+### with  bivariate Matern correlation model 
+### using spectral Turning band method
 ###############################################################
 
 # Define the spatial-coordinates of the points:

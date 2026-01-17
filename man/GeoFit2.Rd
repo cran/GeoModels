@@ -3,185 +3,180 @@
 \encoding{UTF-8}
 \title{Max-Likelihood-Based Fitting of Gaussian and non Gaussian RFs.}
 \description{
-  Maximum weighted composite-likelihood fitting for Gaussian  and some Non-Gaussian  
+  Maximum weighted composite-likelihood fitting for Gaussian and some Non-Gaussian
   univariate spatial, spatio-temporal and bivariate spatial RFs.
-  A first preliminary estimation is performed using independence composite-likelihood for the 
-  marginal parameters of the model. The estimates are then used as starting values in the second 
-  final estimation step.
-  The function allows to fix any of the parameters and setting upper/lower bound in the optimization.
+  A first preliminary estimation is performed using independence composite-likelihood for the
+  marginal parameters of the model. The estimates are then used as starting values in the second final estimation step. The function allows fixing any of the parameters and setting upper/lower bounds in the optimization.
 }
 \usage{
-GeoFit2(data, coordx, coordy=NULL, coordz=NULL,coordt=NULL, coordx_dyn=NULL,
-  copula=NULL,corrmodel,distance="Eucl",fixed=NULL,
-     anisopars=NULL,est.aniso=c(FALSE,FALSE),
-     grid=FALSE, likelihood='Marginal',
-     lower=NULL,maxdist=Inf,neighb=NULL,
-      maxtime=Inf, memdist=TRUE,method="cholesky", 
-      model='Gaussian',n=1, onlyvar=FALSE ,
-      optimizer='Nelder-Mead',
-      radius=1,  sensitivity=FALSE,sparse=FALSE,
-       start=NULL, taper=NULL, tapsep=NULL, 
-      type='Pairwise', upper=NULL, varest=FALSE, 
-       weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
+GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
+        coordx_dyn=NULL, copula=NULL, corrmodel, distance="Eucl",
+        fixed=NULL, anisopars=NULL, est.aniso=c(FALSE,FALSE),
+        grid=FALSE, likelihood="Marginal", lower=NULL, maxdist=Inf,
+        neighb=NULL, p_neighb=1, maxtime=Inf, memdist=TRUE,
+        method="cholesky", model="Gaussian", n=1, onlyvar=FALSE,
+        optimizer="Nelder-Mead", radius=1, score=FALSE,
+        sensitivity=FALSE, sparse=FALSE, start=NULL,
+        thin_method="iid", type="Pairwise", upper=NULL,
+        varest=FALSE, weighted=FALSE, X=NULL, nosym=FALSE,
+        spobj=NULL, spdata=NULL)
 }
-
 \arguments{
-  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
-   or a
-   (\eqn{t \times d}{t x d})-matrix (a single spatial-temporal realisation)   or an (\eqn{d \times d \times t \times n }{d x d x t})-array
+  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
+   or a (\eqn{t \times d}{t x d})-matrix (a single spatial-temporal realisation) or an (\eqn{d \times d \times t \times n}{d x d x t x n})-array
    (a single spatial-temporal realisation on regular grid).
    For the description see the Section \bold{Details}.}
-     \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix  or  (\eqn{d \times 3}{d x 3})-matrix 
-     Coordinates on a sphere for a  fixed radius \code{radius} 
-    are passed in lon/lat format expressed in decimal degrees.}
-  \item{coordy}{A numeric vector giving 1-dimension of
-    spatial coordinates; Optional argument, the default is \code{NULL}.}
-      \item{coordz}{A numeric vector giving 1-dimension of
-    spatial coordinates;  Optional argument, the default is \code{NULL}.}  \item{coordt}{A numeric vector assigning 1-dimension of
-    temporal coordinates.  Optional argument, the default is \code{NULL}
-    then a spatial RF is expected.}
-  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
-       containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}}
-  \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
-  \item{corrmodel}{String; the name of a correlation model, for the
-    description see the Section \bold{Details}.}
-  \item{distance}{String; the name of the spatial distance. The default is \code{Eucl}, the euclidean distance.
-    See the Section \bold{Details}.}
-  \item{fixed}{An optional named list giving the values of the parameters that
-    will be considered as known values. The listed parameters for a
-    given correlation function will be not estimated.}
-  \item{anisopars}{ A list of two elements: "angle" and "ratio" i.e. the anisotropy angle and the anisotropy ratio, respectively.}
-  \item{est.aniso}{ A bivariate logical vector  providing which anisotropic parameters must be estimated.}
- 
-  \item{grid}{Logical; if \code{FALSE} (the default) the data
-    are interpreted as spatial or spatial-temporal realisations on a set
-     of non-equispaced spatial sites (irregular grid).}
-  \item{likelihood}{String; the configuration of the composite
-    likelihood. \code{Marginal} is the default, see the Section \bold{Details}.}
-   \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
-    when the optimizer is  \code{L-BFGS-B} or \code{nlminb} or \code{bobyqa}  or \code{optimize}. The 
-    names of the list must be the same of the names in the   \code{start} list.}
-  \item{maxdist}{Numeric; an optional positive value indicating the maximum
-    spatial distance considered in the composite or tapered likelihood
-    computation. See the Section \bold{Details} for more information.}
-      \item{neighb}{Numeric; an optional positive integer indicating the 
-    order of neighborhood  in the composite likelihood
-    computation. See the Section \bold{Details} for more information.}
-  \item{maxtime}{Numeric; an optional positive integer indicating the 
-    order of temporal neighborhood  in the composite likelihood
-    computation.}
-        \item{memdist}{ Logical; if \code{TRUE} then  all  the distances  useful in the  composite likelihood 
-      estimation are computed before  the optimization. \code{FALSE} is deprecated. }
-   \item{method}{String; the type of matrix decomposition used in the simulation. Default is cholesky.
-    The other possible choices is \code{svd}.}   
-  \item{model}{String; the type of RF and therefore the densities associated to the likelihood
-    objects. \code{Gaussian} is the default, see the Section
-    \bold{Details}.}
-    \item{n}{Numeric; number of trials in a binomial RF; number of successes in a negative binomial RF }  
-  \item{onlyvar}{Logical; if \code{TRUE}  (and varest is  \code{TRUE}) only the variance covariance matrix is computed
-  without optimizing. \code{FALSE} is the default.}
-  \item{optimizer}{String; the optimization algorithm
-    (see \code{\link{optim}} for details). \code{Nelder-Mead} is the
-    default. Other possible choices are \code{nlm}, \code{BFGS}, \code{SANN},  \code{L-BFGS-B} and \code{nlminb} and \code{bobyqa}. In these last three cases upper and lower bounds can be passed by the user. In the case
-    of one-dimensional optimization, the function \code{optimize} is used.  }   
-   \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
-  Default value is 1.}
-   \item{sensitivity}{Logical; if \code{TRUE} then  the sensitivy  matrix is computed}
-  \item{sparse}{Logical; if \code{TRUE} then  maximum likelihood is computed
-  using sparse matrices algorithms (spam packake).It should be used
-  with compactly supported covariance models.\code{FALSE} is the default.}
-  \item{start}{An optional named list with the initial values of the
-    parameters that are used by the numerical routines in maximization
-    procedure. \code{NULL} is the default (see \bold{Details}).}
-  \item{taper}{String; the name of the type of covariance matrix.
-     It can be \code{Standard} (the default value) or
-    \code{Tapering} for taperd covariance matrix.}
-   \item{tapsep}{Numeric; an optional  value indicating the separabe parameter in the 
-     space time adaptive taper (see \bold{Details}).}
-  \item{type}{String; the type of the likelihood objects. If \code{Pairwise} (the
-    default) then the marginal composite likelihood is formed by
-    pairwise marginal likelihoods (see \bold{Details}).}
-  \item{upper}{An optional named list giving the values  for the upper bound 
-      of the space parameter when the optimizer is or \code{L-BFGS-B} or  \code{nlminb} or \code{bobyqa} or \code{optimize}. 
-       The names of the list must be the same of the names in the   \code{start} list.}  
-  \item{varest}{Logical; if \code{TRUE} the estimates' variances and
-    standard errors are returned. For composite likelihood estimation it is deprecated.
-    Use sensitivity TRUE and update the object using the function \code{GeoVarestbootstrap}
-    \code{FALSE} is the default.}
-  \item{weighted}{Logical; if \code{TRUE} the likelihood objects are
-    weighted, see the Section \bold{Details}. If \code{FALSE} (the
-    default) the composite likelihood is not weighted.}
-  \item{X}{Numeric; Matrix of spatio(temporal)covariates in the linear mean specification.}
-  \item{nosym}{Logical; if TRUE simmetric weights are not considered. This allows a faster but less efficient CL estimation. }
-      \item{spobj}{An object of class sp or spacetime}
-   \item{spdata}{Character:The name of data in the sp or spacetime object}
-}
 
+  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix.
+    Coordinates on a sphere for a fixed radius \code{radius} are passed in lon/lat format expressed in decimal degrees.}
+
+  \item{coordy}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
+
+  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
+
+  \item{coordt}{A numeric vector assigning 1-dimension of temporal coordinates. Optional argument, default is \code{NULL}:
+    if \code{NULL} then a spatial RF is expected.}
+
+  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d_t x 2})-matrices containing dynamical (in time) spatial coordinates.
+    Optional argument, default is \code{NULL}.}
+
+  \item{copula}{String; the type of copula. It can be \code{"Clayton"} or \code{"Gaussian"}.}
+
+  \item{corrmodel}{String; the name of a correlation model, for the description see the Section \bold{Details}.}
+
+  \item{distance}{String; the name of the spatial distance. Default is \code{"Eucl"} (euclidean distance). See the Section \bold{Details}.}
+
+  \item{fixed}{An optional named list giving the values of the parameters that will be considered as known values.
+    The listed parameters for a given correlation function will not be estimated.}
+
+  \item{anisopars}{A list of two elements: \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively.}
+
+  \item{est.aniso}{A bivariate logical vector providing which anisotropic parameters must be estimated.}
+
+  \item{grid}{Logical; if \code{FALSE} (default) the data are interpreted as spatial or spatial-temporal realisations on a set
+    of non-equispaced spatial sites (irregular grid).}
+
+  \item{likelihood}{String; the configuration of the composite likelihood. \code{"Marginal"} is the default; see the Section \bold{Details}.}
+
+  \item{lower}{An optional named list giving lower bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
+    Names must match those in \code{start}.}
+
+  \item{maxdist}{Numeric; an optional positive value indicating the maximum spatial distance considered in the composite likelihood computation.
+    See the Section \bold{Details} for more information.}
+
+  \item{neighb}{Numeric; an optional positive integer indicating the order of neighborhood in the composite likelihood computation.
+    See the Section \bold{Details} for more information.}
+
+  \item{p_neighb}{Numeric; a value in \eqn{(0,1]} specifying the expected fraction of nearest-neighbor pairs retained through stochastic thinning.
+    If \code{1} (default), no thinning is applied and all nearest-neighbor pairs are used. If \code{<1}, pairs are randomly retained using independent Bernoulli sampling.}
+
+  \item{maxtime}{Numeric; an optional positive integer indicating the order of temporal neighborhood in the composite likelihood computation.}
+
+  \item{memdist}{Logical; if \code{TRUE} then all distances useful in the composite likelihood estimation are computed before the optimization.
+    \code{FALSE} is deprecated.}
+
+  \item{method}{String; the type of matrix decomposition used in the likelihood computation. Default is \code{"cholesky"}.
+    Another possible choice is \code{"svd"} (when available).}
+
+  \item{model}{String; the type of RF and therefore the densities associated to the likelihood objects.
+    \code{"Gaussian"} is the default; see the Section \bold{Details}.}
+
+  \item{n}{Numeric; number of trials in a binomial RF; number of successes in a negative binomial RF.}
+
+  \item{onlyvar}{Logical; if \code{TRUE} (and \code{varest=TRUE}) only the variance-covariance matrix is computed without optimizing.
+    Default is \code{FALSE}.}
+
+  \item{optimizer}{String; the optimization algorithm (see \code{\link{optim}} for details). \code{"Nelder-Mead"} is the default.
+    Other possible choices are \code{"nlm"}, \code{"BFGS"}, \code{"SANN"}, \code{"L-BFGS-B"}, \code{"nlminb"}, \code{"bobyqa"}.
+    In these last three cases upper and lower bounds can be passed by the user. In the one-dimensional case, \code{optimize} is used.}
+
+  \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates. Default value is \code{1}.}
+
+  \item{score}{Logical; should score function be computed? Default is \code{FALSE}.}
+
+  \item{sensitivity}{Logical; if \code{TRUE} then the sensitivity matrix is computed.}
+
+  \item{sparse}{Logical; if \code{TRUE} then maximum likelihood is computed using sparse matrix algorithms (e.g., \pkg{spam}).
+    It should be used with compactly supported covariance models. Default is \code{FALSE}.}
+
+  \item{start}{An optional named list with initial values for parameters used by the numerical routines in the maximization procedure.
+    Default is \code{NULL} (see \bold{Details}).}
+
+  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"iid"} (independent Bernoulli thinning).}
+
+  \item{type}{String; the type of the likelihood objects. If \code{"Pairwise"} (default) then the marginal composite likelihood is formed by pairwise marginal likelihoods (see \bold{Details}).}
+
+  \item{upper}{An optional named list giving upper bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
+    Names must match those in \code{start}.}
+
+  \item{varest}{Logical; if \code{TRUE} the estimates' variances and standard errors are returned. For composite likelihood estimation it is deprecated.
+    Use \code{sensitivity=TRUE} and update the object using \code{GeoVarestbootstrap}. Default is \code{FALSE}.}
+
+  \item{weighted}{Logical; if \code{TRUE} the likelihood objects are weighted; see the Section \bold{Details}. Default is \code{FALSE}.}
+
+  \item{X}{Numeric; matrix of spatio(temporal) covariates in the linear mean specification.}
+
+  \item{nosym}{Logical; if \code{TRUE} symmetric weights are not considered. This allows faster but less efficient CL estimation.}
+
+  \item{spobj}{An object of class \code{sp} or \code{spacetime}.}
+
+  \item{spdata}{Character; the name of data in the \code{sp} or \code{spacetime} object.}
+}
 \details{
-   The function \code{GeoFit2} is similar to the  function \code{GeoFit}.
-   However \code{GeoFit2}  performs a preliminary estimation  using maximum   indenpendence composite likelihood 
-   of the marginal parameters of the model and then use the obtained estimates as starting value in the global
-   weighted composite likelihood estimation (that includes marginal and dependence parameters).
-   This allows to obtain "good" starting values in the optimization algorithm for the marginal parameters.
-}
+  The function \code{GeoFit2} is similar to \code{\link{GeoFit}}.
+  However, \code{GeoFit2} performs a preliminary estimation using maximum independence composite likelihood
+  for the marginal parameters of the model and then uses the obtained estimates as starting values in the final
+  weighted composite likelihood estimation (that includes both marginal and dependence parameters).
+  This provides robust starting values for the marginal parameters in the optimization algorithm.
 
+  Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
+  controls the thinning scheme (default \code{"iid"}).
+}
 \value{
   Returns an object of class \code{GeoFit}.
-  An object of class \code{GeoFit} is a list containing
-  at most the following components:
-  \item{bivariate}{Logical:\code{TRUE} if the Gaussian RF is bivariate, otherwise  \code{FALSE};}
-  \item{clic}{The composite information criterion, if the full
-  likelihood is considered then it coincides with the Akaike information
-  criterion;}
-  \item{coordx}{A \eqn{d}{d}-dimensional vector of spatial coordinates;}
-  \item{coordy}{A \eqn{d}{d}-dimensional vector of spatial coordinates;}
-  \item{coordt}{A \eqn{t}{t}-dimensional vector of temporal coordinates;}
-  \item{coordx_dyn}{A  list of dynamical (in time) spatial coordinates;}
-  \item{conf.int}{Confidence intervals for  standard maximum likelihood estimation;}
-  \item{convergence}{A string that denotes if convergence is reached;}
-  \item{copula}{The type of copula;}
-  \item{corrmodel}{The correlation model;}
-  \item{data}{The vector or matrix or array of data;}
-  \item{distance}{The type of spatial distance;}
-  \item{fixed}{A list of the  fixed parameters;}
-  \item{iterations}{The number of iteration used by the numerical routine;}
-  \item{likelihood}{The configuration of the composite likelihood;}
-  \item{logCompLik}{The value of the log composite-likelihood at the maximum;}
-  \item{maxdist}{The maximum spatial distance used in the weigthed composite likelihood. 
-                       If no spatial distance is specified then it is NULL;}
-  \item{maxtime}{The maximum temporal distance  used in the weigthed composite likelihood.
-                          If no spatial distance is specified then it is NULL;}
-  \item{message}{Extra message passed from the numerical routines;}
-  \item{model}{The density associated to the likelihood objects;}
-   \item{missp}{True if a misspecified  Gaussian model is ued in  the composite likelihhod;}
-  \item{n}{The number of trials in a binominal RF;the number of successes in a  negative Binomial RFs;} 
-      \item{neighb}{The 
-    order of spatial neighborhood  in the composite likelihood
-    computation. }
-  \item{ns}{The number of (different) location sites in the bivariate case;} 
-   \item{nozero}{In the case of tapered likelihood  the percentage of non zero values in the covariance matrix.
-  Otherwise is NULL.}
-  \item{numcoord}{The number of spatial coordinates;}
-  \item{numtime}{The number of the temporal realisations of the RF;}
-  \item{param}{A list of the  parameters' estimates;}
-  \item{radius}{The radius of the sphere in the case of great  circle distance;}
-  \item{stderr}{The vector of standard errors for  standard maximum likelihood estimation;}
-  \item{sensmat}{The sensitivity matrix;}
-  \item{varcov}{The matrix of the variance-covariance of the estimates;}
+  An object of class \code{GeoFit} is a list containing at most the following components:
+  \item{bivariate}{Logical: \code{TRUE} if the Gaussian RF is bivariate, otherwise \code{FALSE}.}
+  \item{clic}{The composite information criterion; if the full likelihood is considered then it coincides with AIC.}
+  \item{coordx}{A \eqn{d}{d}-dimensional vector of spatial coordinates.}
+  \item{coordy}{A \eqn{d}{d}-dimensional vector of spatial coordinates.}
+  \item{coordt}{A \eqn{t}{t}-dimensional vector of temporal coordinates.}
+  \item{coordx_dyn}{A list of dynamical (in time) spatial coordinates.}
+  \item{conf.int}{Confidence intervals for standard maximum likelihood estimation.}
+  \item{convergence}{A string that denotes if convergence is reached.}
+  \item{copula}{The type of copula.}
+  \item{corrmodel}{The correlation model.}
+  \item{data}{The vector or matrix or array (or list) of data.}
+  \item{distance}{The type of spatial distance.}
+  \item{fixed}{A list of fixed parameters.}
+  \item{iterations}{The number of iterations used by the numerical routine.}
+  \item{likelihood}{The configuration of the composite likelihood.}
+  \item{logCompLik}{The value of the log composite-likelihood at the maximum.}
+  \item{maxdist}{The maximum spatial distance used in the weighted composite likelihood (or \code{NULL}).}
+  \item{maxtime}{The order of temporal neighborhood in the composite likelihood computation.}
+  \item{message}{Extra message passed from the numerical routines.}
+  \item{model}{The density associated to the likelihood objects.}
+  \item{missp}{\code{TRUE} if a misspecified Gaussian model is used in the composite likelihood.}
+  \item{n}{The number of trials in a binomial RF; the number of successes in a negative binomial RF.}
+  \item{neighb}{The order of spatial neighborhood in the composite likelihood computation.}
+  \item{ns}{The number of (different) location sites in the bivariate case.}
+  \item{numcoord}{The number of spatial coordinates.}
+  \item{numtime}{The number of temporal realisations of the RF.}
+  \item{param}{A list of parameter estimates.}
+  \item{radius}{The radius of the sphere in the case of great-circle distance.}
+  \item{stderr}{Standard errors for standard maximum likelihood estimation.}
+  \item{sensmat}{The sensitivity matrix.}
+  \item{varcov}{The variance-covariance matrix of the estimates.}
   \item{type}{The type of the likelihood objects.}
-  \item{X}{The matrix of covariates;}
+  \item{X}{The matrix of covariates.}
 }
-
-
-
-
-
-\author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
+\author{
+Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com}, \url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl}, \url{https://www.researchgate.net/profile/Christian-Caamano}
 }
-  
 \examples{
+
+
 library(GeoModels)
 
 

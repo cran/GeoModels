@@ -1,13 +1,7 @@
-
-
 #include "header.h"
 
-
-
-
 double hyp2f1( double a,double b,double c,double x);
- /* Forward declarations */
- double hys2f1(double a, double b, double c, double x, double *loss);
+double hys2f1(double a, double b, double c, double x, double *loss);
 double hyt2f1(double a, double b, double c, double x, double *loss);
 double hyp2f1ra(double a, double b, double c, double x, double *loss);
 double hyp2f1_neg_c_equal_bc(double a, double b, double x);
@@ -16,46 +10,7 @@ double hyp2f1_neg_c_equal_bc(double a, double b, double x);
 #ifndef TINY_DEN
 #define TINY_DEN 1e-300
 #endif
-/*
-static inline void kahan_add(double x, double *sum, double *comp){
-    double y = x - *comp;
-    double t = *sum + y;
-    *comp = (t - *sum) - y;
-    *sum = t;
-}*/
 
-/*
-static inline int is_int_eps(double z){ return fabs(z - round(z)) < EPS; }*/
-
-/*
-static double hyp2F1_terminating(double a1, int m, double c, double x){
-    if (m < 0) return NA_REAL;
-
-    // Polo se c = 0, -1, -2, ... e la somma superasse r = -c + 1
-    if (c <= 0.0 && is_int_eps(c)) {
-        int Nc = (int) llround(-c);      // c = -Nc
-        if (m > Nc) return R_PosInf;     // toccherebbe il polo
-    }
-
-    double term = 1.0, sum = 1.0, comp = 0.0;
-    for (int r = 1; r <= m; ++r){
-        double num1 = a1 + (r - 1);
-        double num2 = -m  + (r - 1);
-        double den1 = c   + (r - 1);
-        double den2 = (double) r;
-        if (fabs(den1) < TINY_DEN) return R_PosInf;  // guardia numerica
-        term *= (num1 * num2 / (den1 * den2)) * x;
-        if (!R_finite(term)) break;
-        kahan_add(term, &sum, &comp);
-    }
-    return sum;
-}*/
-
-/*static double hyp2F1_both_terminating(int ma, int mb, double c, double x){
-    int m  = (ma < mb) ? ma : mb;
-    double a1 = (ma < mb) ? -(double)mb : -(double)ma; // l’altro parametro
-    return hyp2F1_terminating(a1, m, c, x);
-}*/
 
 
 double hyp2f1( double a,double b,double c,double x)
@@ -420,9 +375,6 @@ done:
     *loss = err;
     return (y);
 }
-
-
-
 
 
 /* Defining power series expansion of Gauss hypergeometric function */

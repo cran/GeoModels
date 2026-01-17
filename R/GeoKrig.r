@@ -100,7 +100,7 @@ if(!is.null(spobj)) {
    if(!is.null(a$Y)&&!is.null(a$X)) {data=a$Y ; X=a$X }
 }
 
-if(!is.null(Mloc)) type_krig="Simple"
+if(!is.null(Mloc)) {type_krig="Simple"}
 ######################################
 ############ some checks##############
 ######################################
@@ -137,7 +137,7 @@ loc_orig=loc
 if(!is.null(anisopars)) {  loc=GeoAniso(loc,c(anisopars$angle,anisopars$ratio))}
 
 if(!is.null(Mloc))
-{ 
+{   if(is.numeric(Mloc)) Mloc=as.vector(Mloc)
     if(!is.vector(Mloc)) stop("Mloc must be a vector")
     if(space){ 
        if(length(Mloc)==1) Mloc=rep(Mloc,nrow(loc));if(nrow(loc)!=length(Mloc)) stop("Lenght of the  mean vector fixed does not match the number of locations to predict \n")
@@ -652,7 +652,6 @@ MM=getInvC(covmatrix,CC,mse)
 krig_weights = MM$a       #compute (\Sigma^-1) %*% cc
 BB=MM$b                   #compute t(cc)%*%(\Sigma^-1) %*% cc
 
-#print(head(c(krig_weights)))
 
 ##################################################################
 ################# simple or uinversal  kriging #################################
@@ -794,7 +793,7 @@ ccorr=dotCall64::.C64('Corr_c_bin',SIGNATURE = c(rep("double",5),
 
 if(cop==1) { 
 nuisance$n=n[1]
-    corri= gaussian_copula_cov(ccorr$corri,covmatrix$model, nuisance)  ##it works in the stationary case..
+corri= gaussian_copula_cov(ccorr$corri,covmatrix$model, nuisance)  ##it works in the stationary case..
      }
 else {corri=ccorr$corri}
 
@@ -814,6 +813,7 @@ else {corri=ccorr$corri}
         p0=exp(mu0); pmu=exp(mu)
             if(!bivariate) { 
             datas=c(dataT)-c(pmu)
+
             pp = c(p0) + crossprod(datas, krig_weights)
              }  ## simple kriging
             else{} #todo
@@ -844,7 +844,8 @@ else {corri=ccorr$corri}
        if(covmatrix$model==2||covmatrix$model==11){  ### binomial
         p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate) { 
-           #    pp = kk*c(p0) + Rfast::Crossprod(datas,  krig_weights) 
+          
+
                datas=c(dataT)-n*c(pmu)
 
                pp = KK*c(p0) + crossprod(datas,  krig_weights) 

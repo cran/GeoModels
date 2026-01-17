@@ -1,22 +1,21 @@
 GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
-                               optimizer = NULL, lower = NULL, upper = NULL, 
-                               method = "cholesky", alpha = 0.95, 
-                               L = 1000, parallel = TRUE, ncores = NULL, 
+                               optimizer = NULL, lower = NULL, upper = NULL,
+                               method = "cholesky", alpha = 0.95,
+                               L = 1000, parallel = TRUE, ncores = NULL,
                                progress = TRUE) {
 
   ## ------------------------------------------------------------------
-  ## Setup cleanup handlers - 
+  ## Setup cleanup handlers
   ## ------------------------------------------------------------------
-  future_plan_original <- future::plan()  
-  
-  cleanup_resources <- function() {
+  future_plan_original <- future::plan()
 
+  cleanup_resources <- function() {
     tryCatch({
       future::plan(future_plan_original)
     }, error = function(e) {
-      tryCatch(future::plan(future::sequential), error = function(e2) invisible(NULL))
+      tryCatch(future::plan(future::sequential),
+               error = function(e2) invisible(NULL))
     })
-    # Garbage collection 
     gc(verbose = FALSE, full = TRUE)
   }
   on.exit(cleanup_resources(), add = TRUE)
@@ -28,7 +27,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   if (!is.logical(progress)) stop("progress must be logical (TRUE or FALSE)")
   if (!progress) progressr::handlers("void")
   on.exit(progressr::handlers(old_handlers), add = TRUE)
-  
+
   ## ------------------------------------------------------------------
   ## 1. Check input
   ## ------------------------------------------------------------------
@@ -50,8 +49,11 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   cat("Parametric bootstrap can be time consuming ...\n")
 
   ## ------------------------------------------------------------------
-  ## 2. Misspecification mapping
+  ## 2. Misspecification mapping 
   ## ------------------------------------------------------------------
+  model_sim <- model
+  model_est <- model
+
   if (isTRUE(fit$missp)) {
     model_map <- c(
       StudentT     = "Gaussian_misp_StudentT",
@@ -60,7 +62,9 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
       SkewStudentT = "Gaussian_misp_SkewStudentT",
       Tukeygh      = "Gaussian_misp_Tukeygh"
     )
-    if (model %in% names(model_map)) model <- model_map[[model]]
+    if (model %in% names(model_map)) {
+      model_est <- model_map[[model]]
+    }
   }
 
   ## ------------------------------------------------------------------
@@ -81,16 +85,26 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   }
 
   ## ------------------------------------------------------------------
+  ## 3.1. Memory pre-check (estimate before simulation)
+  ## ------------------------------------------------------------------
+  estimated_size_mb <- (K * fit$numtime * fit$numcoord * 8) / (1024^2)
+  if (estimated_size_mb > 500) {
+    warning(sprintf(
+      "Estimated simulated dataset size: %.1f MB (>500MB). Consider reducing K or using sparse methods.",
+      estimated_size_mb
+    ))
+  }
+
+  ## ------------------------------------------------------------------
   ## 4. Simulation 
   ## ------------------------------------------------------------------
-  
   sim_args <- list(
     coordx     = coords,
     coordt     = fit$coordt,
     coordx_dyn = fit$coordx_dyn,
     anisopars  = fit$anisopars,
     corrmodel  = fit$corrmodel,
-    model      = model,  
+    model      = model_sim,
     param      = append(fit$param, fit$fixed),
     grid       = fit$grid,
     X          = fit$X,
@@ -118,9 +132,9 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
       stop("Unsupported method for copula simulation")
     }
   }
-  
+
   ## ------------------------------------------------------------------
-  ## 5. Setting parallelization
+  ## 5. Setting parallelization 
   ## ------------------------------------------------------------------
   coremax <- parallel::detectCores()
   if (is.na(coremax) || coremax <= 1) {
@@ -132,56 +146,100 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   }
 
   ## ------------------------------------------------------------------
-  ## 6. Helper function per validare likelihood (full/composite)
+  ## 6. Helper function to validate likelihood 
   ## ------------------------------------------------------------------
-  is_valid_loglik <- function(res_est) {
+  is_valid_fit <- function(res_est) {
     if (is.null(res_est)) return(FALSE)
+
+    # Check convergence
+    conv <- res_est$convergence
+    if (is.null(conv) || !is.character(conv)) return(FALSE)
+    if (!(conv %in% c("Successful"))) return(FALSE)
+
+    # Check loglik
     ll <- if (!is.null(res_est$logCompLik)) res_est$logCompLik else res_est$logLik
-    if (is.null(ll)) return(FALSE)
-    if (!is.finite(ll)) return(FALSE)
-    if (ll == 0) return(FALSE)
-    if (abs(ll) >= 1e10) return(FALSE)
+    if (is.null(ll) || !is.finite(ll)) return(FALSE)
+    if (ll == 0 || abs(ll) >= 1e10) return(FALSE)
+
+    # Check parameters
+    th <- unlist(res_est$param)
+    if (is.null(th) || any(!is.finite(th))) return(FALSE)
+    
     TRUE
   }
 
   ## ------------------------------------------------------------------
-  ## 7. Estimation function - OTTIMIZZATA per ritornare solo parametri
+  ## 7. Estimation function 
   ## ------------------------------------------------------------------
   estimate_fun <- function(k) {
     result <- tryCatch(
       {
         capture.output({
-          fit_result <- GeoFit(
-            data       = data_sim$data[[k]],
-            start      = fit$param,
-            fixed      = fit$fixed, 
-            coordx     = coords,
-            coordt     = fit$coordt, 
-            coordx_dyn = fit$coordx_dyn, 
-            copula     = fit$copula, 
-            anisopars  = fit$anisopars,
-            est.aniso  = fit$est.aniso, 
-            lower      = lower, 
-            upper      = upper, 
-            neighb     = fit$neighb,
-            corrmodel  = fit$corrmodel, 
-            model      = model, 
-            sparse     = FALSE, 
-            n          = fit$n,
-            maxdist    = fit$maxdist, 
-            maxtime    = fit$maxtime, 
-            optimizer  = optimizer, 
-            grid       = fit$grid,
-            likelihood = fit$likelihood, 
-            type       = fit$type, 
-            X          = X_use, 
-            distance   = fit$distance,
-            radius     = fit$radius
-          )
+          # Simple seed based on iteration k for reproducibility
+          seed_thin <- as.integer(1234567L + k * 9999L)
+          
+          fit_result <- if (isTRUE(fit$p_neighb < 1)) {
+            withr::with_seed(seed_thin, GeoFit(
+              data       = data_sim$data[[k]],
+              start      = fit$param,
+              fixed      = fit$fixed,
+              coordx     = coords,
+              coordt     = fit$coordt,
+              coordx_dyn = fit$coordx_dyn,
+              copula     = fit$copula,
+              anisopars  = fit$anisopars,
+              est.aniso  = fit$est.aniso,
+              lower      = lower,
+              upper      = upper,
+              neighb     = fit$neighb,
+              p_neighb   = fit$p_neighb,
+              corrmodel  = fit$corrmodel,
+              model      = model_est,
+              sparse     = FALSE,
+              n          = fit$n,
+              maxdist    = fit$maxdist,
+              maxtime    = fit$maxtime,
+              optimizer  = optimizer,
+              grid       = fit$grid,
+              likelihood = fit$likelihood,
+              type       = fit$type,
+              X          = X_use,
+              distance   = fit$distance,
+              radius     = fit$radius
+            ))
+          } else {
+            GeoFit(
+              data       = data_sim$data[[k]],
+              start      = fit$param,
+              fixed      = fit$fixed,
+              coordx     = coords,
+              coordt     = fit$coordt,
+              coordx_dyn = fit$coordx_dyn,
+              copula     = fit$copula,
+              anisopars  = fit$anisopars,
+              est.aniso  = fit$est.aniso,
+              lower      = lower,
+              upper      = upper,
+              neighb     = fit$neighb,
+              p_neighb   = fit$p_neighb,
+              corrmodel  = fit$corrmodel,
+              model      = model_est,
+              sparse     = FALSE,
+              n          = fit$n,
+              maxdist    = fit$maxdist,
+              maxtime    = fit$maxtime,
+              optimizer  = optimizer,
+              grid       = fit$grid,
+              likelihood = fit$likelihood,
+              type       = fit$type,
+              X          = X_use,
+              distance   = fit$distance,
+              radius     = fit$radius
+            )
+          }
         }, file = nullfile())
-        
-        # MODIFICA CHIAVE: ritorna solo parametri e loglik, non l'intero oggetto
-        if (is_valid_loglik(fit_result)) {
+
+        if (is_valid_fit(fit_result)) {
           ll <- if (!is.null(fit_result$logCompLik)) fit_result$logCompLik else NA_real_
           c(unlist(fit_result$param), logCompLik = ll)
         } else {
@@ -198,7 +256,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   }
 
   ## ------------------------------------------------------------------
-  ## 8. Bootstrap
+  ## 8. Bootstrap 
   ## ------------------------------------------------------------------
   num_params <- length(fit$param)
   param_cols <- seq_len(num_params)
@@ -228,6 +286,12 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   } else {
     cat("Performing", K, "estimations using", ncores, "cores...\n")
 
+    data_size_mb <- as.numeric(object.size(data_sim)) / 1024^2
+    future_limit_mb <- max(600, ceiling(data_size_mb * 2))
+    old_limit <- getOption("future.globals.maxSize")
+    options(future.globals.maxSize = future_limit_mb * 1024^2)
+    on.exit(options(future.globals.maxSize = old_limit), add = TRUE)
+
     future::plan(future::multisession, workers = ncores)
 
     if (progress) {
@@ -253,7 +317,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
             if (is.null(res_est)) {
               rep(NA_real_, num_params + 1L)
             } else {
-              res_est  # Già contiene solo parametri + loglik
+              res_est
             }
           }
         })
@@ -280,7 +344,8 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
       matrix(NA_real_, nrow = 0, ncol = num_params + 1L)
     })
 
-    if (is.null(dim(xx)) || nrow(xx) == 0) {
+    # More robust check for parallel results
+    if (!is.matrix(xx) || is.null(dim(xx)) || nrow(xx) == 0) {
       res <- matrix(NA_real_, nrow = 0, ncol = num_params + 1L)
     } else {
       valid <- !apply(xx[, param_cols, drop = FALSE], 1L, function(row) all(is.na(row)))
@@ -292,7 +357,13 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
     colnames(res) <- c(names(fit$param), "logCompLik")
   }
 
-  rm(data_sim); gc(verbose = FALSE, full = TRUE)
+  ## ------------------------------------------------------------------
+  ## Clean memory 
+  ## ------------------------------------------------------------------
+  rm(data_sim)
+  if (exists("xx", inherits = FALSE)) rm(xx)
+  if (exists("res_list", inherits = FALSE)) rm(res_list)
+  gc(verbose = FALSE, full = TRUE)
 
   ## ------------------------------------------------------------------
   ## 9. Post-processing 
@@ -319,23 +390,25 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
     fit$varimat <- H %*% invG %*% H
   } else if (fit$likelihood == "Full" && fit$type == "Standard") {
     claic <- -2 * fit$logCompLik + 2 * numparam
-    clbic <- -2 * fit$logCompLik + log(dimat)  * numparam
+    clbic <- -2 * fit$logCompLik + log(dimat) * numparam
   } else {
     claic <- clbic <- NA_real_
   }
+
   ## ------------------------------------------------------------------
-  ## 9.1 CI e p-value bootstrap 
+  ## 9.1 Confidence intervals and bootstrap p-values
   ## ------------------------------------------------------------------
-  theta_hat <- as.numeric(fit$param)                   
+  theta_hat <- as.numeric(fit$param)
   names(theta_hat) <- names(fit$param)
-  B <- nrow(param_mat)
   probs <- c((1 - alpha)/2, 1 - (1 - alpha)/2)
 
   q_boot <- t(apply(param_mat, 2L, quantile, probs = probs, na.rm = TRUE))
   colnames(q_boot) <- c("Lower_perc", "Upper_perc")
   confint_boot_perc <- q_boot
-  
-  theta0 <- rep(0, length(theta_hat)); names(theta0) <- names(theta_hat)
+
+  # Two-tailed p-values against zero
+  theta0 <- rep(0, length(theta_hat))
+  names(theta0) <- names(theta_hat)
   pval_boot <- vapply(seq_along(theta_hat), function(j) {
     bj <- param_mat[, j]
     pj_low  <- mean(bj <= theta0[j], na.rm = TRUE)
@@ -345,8 +418,9 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   names(pval_boot) <- names(theta_hat)
 
   fit$conf.int.bootstrap_percentile <- t(confint_boot_perc)
-  rownames(fit$conf.int.bootstrap_percentile) <- c("Lower","Upper")
+  rownames(fit$conf.int.bootstrap_percentile) <- c("Lower", "Upper")
   fit$pvalues_bootstrap <- pmin(1, pval_boot)
+
   ## ------------------------------------------------------------------
   ## 10. Final output
   ## ------------------------------------------------------------------
@@ -354,7 +428,7 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
   fit$clbic      <- clbic
   fit$stderr     <- stderr
   fit$varcov     <- invG
-  fit$estimates  <- res  
+  fit$estimates  <- res
 
   z_alpha <- qnorm(1 - (1 - alpha) / 2)
   aa      <- z_alpha * stderr

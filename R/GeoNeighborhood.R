@@ -5,29 +5,8 @@ GeoNeighborhood <- function(data = NULL, coordx = NULL, coordy = NULL, coordz = 
                            X = NULL, M = NULL, spobj = NULL, spdata = NULL,
                            parallel = FALSE, ncores = NULL) {
   
-  #################
-  # Internal: find spatial neighbors
-  #################
-  #find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
-  #  if (is.null(maxdist)) maxdist <- 0
-  #  if (is.null(neighb)) neighb <- min(100, nrow(coords))
-  #  
-  #  if (distance %in% c("Geod", "Chor")) {
-  #    coords_proj <- mapproj::mapproject(coords[, 1], coords[, 2], projection = "sinusoidal")
-  #    coords_projected <- radius * cbind(coords_proj$x, coords_proj$y)
-  #    
-  #    loc_proj <- mapproj::mapproject(locations[, 1], locations[, 2], projection = "sinusoidal")
-  #    locations_projected <- radius * cbind(loc_proj$x, loc_proj$y)
-  #    
-  #    result <- nabor::knn(coords_projected, locations_projected, k = neighb, radius = maxdist)
-  #  } else {
-  #    result <- nabor::knn(coords, locations, k = neighb, radius = maxdist)
-  #  }
-  #  return(result)
-  #}
-  
-
-  find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
+ 
+find_neighbors <- function(coords, locations, distance, maxdist, neighb, radius) {
   if (is.null(maxdist)) maxdist <- 0
   if (is.null(neighb)) neighb <- min(100, nrow(coords))
   
