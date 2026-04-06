@@ -1,18 +1,11 @@
 #include "header.h"
-
-
 /*************************************************/
-
-
 int is_integer(double x) {
     return fabs(x - round(x)) < DBL_EPSILON;
 }
-
 int is_nonneg_integer(double x) {
     return is_integer(x) && x >= -DBL_EPSILON;
 }
-
-
 //******************************************************************************
 double polevl(double x, const double coef[], int N)
 
@@ -102,9 +95,6 @@ double poch(double a, double m)
     return(r * exp(lgammafn(a + m) - lgammafn(a)) * sign(gammafn(a + m)) * sign(gammafn(a)));
 }
 /************************************************************************/
-
-
-
 
 // ===================================== START: Bivariate Normal  =====================================//
 
@@ -215,15 +205,7 @@ double Phi2help( double x, double y, double rho )
     else if(c3 ) {sol = (p1 - q - 0.5);}
     else if(c2 ) {sol = (p1 - q);}
     else {sol = (0.5 - q);}
-    
-    //return (0.5 - p1 + q );
     return (sol );
-    //return ( c1 && c3 ? q - 0.5
-    //        : c1 && c2 ? q
-    //        : c1 ? 0.5 - p1 + q
-    //        : c3 ? p1 - q - 0.5
-    //        : c2 ? p1 - q
-    //        : 0.5 - q );
 }
 
 double Phi2( double x, double y, double rho )
@@ -265,8 +247,6 @@ double Phi2( double x, double y, double rho )
     return (sol);
 }
 
-
-
 /*for bivariate t distributions*/
 double A[] = {
     8.11614167470508450300E-4,
@@ -294,9 +274,6 @@ double C[] = {
     -2.53252307177582951285E6,
     -2.01889141433532773231E6
 };
-
-
-
 
 
  /****** integrand  in  generalized wendland function ************************/
@@ -337,7 +314,6 @@ double onef2integral(double x, double *param) {
     R_Free(iwork);R_Free(work);
     return(result);
 }
-
 /******************************************************************************/
 /******************************************************************************/
 /* Wendland covariance */
@@ -384,8 +360,6 @@ double wendintegral(double x, double *param) {
 }
 /******************************************************************************/
 /******************************************************************************/
-/******************************************************************************/
-/******************************************************************************/
 // Integrand function (derivatives of the Student-t cdf):
 double int_pt(double x, double df)
   {
@@ -405,8 +379,6 @@ void integr_pt(double *x, int n, void *ex)
     x[i]=int_pt(x[i],d);
   return;
 }
-
-
 // bivariate of Gaussian bivariate rf
 double log_biv2gauss(int *cormod, double dij,double *par, double data1, double data2, int first,int second)
 {
@@ -418,8 +390,6 @@ det=rhott*rhovv-R_pow(rhotv,2);
 dens=-0.5*(2*log(2*M_PI)+log(det)+(rhovv*R_pow(data1,2)+rhott*R_pow(data2,2)-2*(data1*data2)*rhotv)/det);
 return dens;
 }
-
-
 // compute  bivariate normal standard pdf:
 double d2norm(double x, double y, double rho)
 {
@@ -439,23 +409,6 @@ double d22norm(double x, double y,double v11,double v22,double v12)
   res=exp(-0.5*zz/omr)/aa;
   return(res);
 }
-
-/*
-double d2lognorm(double x, double y, double sill,double nugget, double mux,double muy,double rho)
-{
-  double KK=exp(sill/2);
-  x=x*KK; y=y*KK;
-  double res=0.0, q=0.0, omr=R_pow(sill,2)-R_pow(rho*sill,2);
-  q=(sill*R_pow((log(x)-mux),2) + sill*R_pow((log(y)-muy),2)
-    -2*rho*sill*(log(x)-mux)*(log(y)-muy))/omr;
-  res=exp(-q/2)/(2*x*y*M_PI*sqrt(omr));
-  return(res*R_pow(KK,2));
-}
-*/
-
-
-
-
  double compute_biv_norm_density(double d1, double d2, double mui, double muj, 
                                              double vvi, double vvj, double corr1) {
     // Centered data
@@ -495,8 +448,6 @@ double d2lognorm(double x, double y, double sill,double nugget, double mux,doubl
 
 double d2lognorm(double x, double y, double sill, double nugget, double mux, double muy, double rho)
 {
-
-    
     double sigma = sqrt(sill);
     double sigma2 = sill;
     double mu_i = exp(mux);double mu_j = exp(muy);
@@ -520,7 +471,6 @@ static inline double logcosh(double b){
 double biv_log_sas(double corr, double zi, double zj,
                    double mi, double mj, double skew, double tail, double vari)
 {
-
   const double sd = sqrt(vari);
   const double xi = (zi - mi) / sd;
   const double xj = (zj - mj) / sd;
@@ -549,7 +499,6 @@ double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,
   return (lp == -INFINITY) ? 0.0 : exp(lp);
 }
 
-
 void CBessel(double *xxx, double *nuu, int *expscale,double *res, int *tipo)
 {
     switch (*tipo) {
@@ -561,9 +510,6 @@ void CBessel(double *xxx, double *nuu, int *expscale,double *res, int *tipo)
         default:
             break;
 }}
-
-
-
 
 double biv_chisqu2(double corr,double zi,double zj, double shape)
 {
@@ -599,8 +545,6 @@ if(zi<mui&&zj<muj)
 return(R_pow(alpha,2)*res/sill);
 }
 
-
-
 double biv_Weibull2(double rho12,double zi,double zj,double mi,double mj,double shape1,double shape2){
 
 double a1=gammafn(1.0+1.0/shape1);
@@ -630,9 +574,6 @@ double asy_log_besselI(double z,double nu)
      return(val);
 }
 
-
-
-
 double biv_Weibull(double corr,double zi,double zj,double mui,double muj,double shape){
 
 double ci=exp(mui);
@@ -653,10 +594,6 @@ double res=A+B+log(bessel_i(z,0,2))+z-(mui+muj);
 return res;
 }
 
-
-
-
-
 double psi(int i,int j,double p1,double p2,double p12,double**cache){
     if(i==0||j==0)return 0.0;
     if(i==1&&j==1)return(p1+p2-p1*p2)/(p2*p1*(p1+p2-p12));
@@ -673,9 +610,6 @@ double psi(int i,int j,double p1,double p2,double p12,double**cache){
     return cache[i][j];
 }
 
-
-
-
 double** create_cache(int max_i,int max_j){
     double** cache=(double**)malloc((max_i+1)*sizeof(double*));
     for(int i=0;i<=max_i;i++){
@@ -684,8 +618,6 @@ double** create_cache(int max_i,int max_j){
     }
     return cache;
 }
-
-
 
 double cov_binom_neg(int m,double p11,double p1, double p2) {
 
@@ -696,22 +628,6 @@ else
  a=psi( m, m, p1, p2, p11,cache)- m*m/(p1*p2);
 return(a);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /********************************************************************/
 /********* poisson gamma correlation*********************************/
@@ -835,7 +751,6 @@ double CorrPGns_SmallA(double corr, double mean_i, double mean_j, double a) {
     if (a < 1e-6) {
         return term1;
     }
-    
     // Correzione del secondo ordine
     const double log_nu_prod = log(nu_i * nu_j);
     const double log1p_nu_sum = log1p(nu_i) + log1p(nu_j);
@@ -872,7 +787,6 @@ static inline void kahan_init(KahanSum *ks) {
     ks->sum = 0.0;
     ks->compensation = 0.0;
 }
-
 /*---------------------------------------------------------------------------
  * 4. METODO STABILE CON SOMMAZIONE DI KAHAN E BLOCCHI ADATTIVI
  *---------------------------------------------------------------------------*/
@@ -956,12 +870,8 @@ double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double
         const int r2 = r + 2;
         const double lgamma_r2 = lgammafn(r2);
         const double log_r2_factorial = 2.0 * lgamma_r2;
-        
         KahanSum row_sum;
         kahan_init(&row_sum);
-        
-    
-        
         for (int m = 0; m < max_m; m++) {
             const double a1m = 1.0 - a - m;
             
@@ -1227,11 +1137,9 @@ double corr_pois_gen(double corr, double mean_i, double mean_j, double a) {
     return CorrPGns_AdaptiveBlocks(corr, mean_i, mean_j, a);
 }
 
-
 /******************************************/
 /******** Poisson correlation *************/
 /******************************************/
-
 double corr_pois_s(double rho, double mi) {
     // Gestione casi limite
     if (fabs(rho) < 1e-15) return 0.0;  
@@ -1280,7 +1188,6 @@ if(fabs(rho)<1e-10){return(0.0);}
 }
 /*****************************************/
 /*****************************************/
-
 double corr_tukeygh(double rho,double eta,double tail){
 
     if(fabs(rho)<1e-16) return 0.0;
@@ -1309,9 +1216,6 @@ double corr_tukeygh(double rho,double eta,double tail){
     return rho1;
 }
 
-
-
-
 double corr_skewt(double corr,double df,double skew)
 {
 if(fabs(corr)<MACHEP){return(0.0);}
@@ -1329,30 +1233,6 @@ if(fabs(corr)<MACHEP){return(0.0);}
 return(corr1);
 }
 }
-/*
-double biv_gamma(double corr,double zi,double zj,double mui,double muj,double shape) {
-    double a = 1.0 - corr * corr;
-    double ci = zi / exp(mui);
-    double cj = zj / exp(muj);
-    double gam = gammafn(shape / 2.0);
-    double res = 0.0;
-
-    if (fabs(corr) > MACHEP) {
-        double z = shape * fabs(corr) * sqrt(ci * cj) / a;
-        double A = (shape / 2.0 - 1.0) * log(ci * cj) - shape * (ci + cj) / (2.0 * a);
-        double C = (1.0 - shape / 2.0) * log(z / 2.0);
-        double B = log(gam) + (shape / 2.0) * log(a) + shape * log(2.0) - shape * log(shape);
-        double D = log(bessel_i(z, shape / 2.0 - 1.0, 2)) + z;
-        res = (A + C + D) - (mui + muj + B);
-        return exp(res);
-    } else {
-        double B = R_pow(shape / (2.0 * exp(mui)), shape / 2.0) * R_pow(zi, shape / 2.0 - 1.0) * exp(-shape * ci / 2.0) / gam;
-        double C = R_pow(shape / (2.0 * exp(muj)), shape / 2.0) * R_pow(zj, shape / 2.0 - 1.0) * exp(-shape * cj / 2.0) / gam;
-        res = B * C;
-    }
-    return res;
-}*/
-
 
 double biv_gamma(double corr, double zi, double zj,
                  double mui, double muj, double shape)
@@ -1431,8 +1311,6 @@ double biv_gamma(double corr, double zi, double zj,
     }
 }
 
-
-
 double biv_gamma_gen(double corr,double zi,double zj,double mui, double muj, double shape,double n)
 {
     double a=0.0,A=0.0,D=0.0,z=0.0,res=0.0,B=0.0,C=0.0;
@@ -1456,8 +1334,6 @@ double biv_gamma_gen(double corr,double zi,double zj,double mui, double muj, dou
     }
 return(res);
 }
-
-
 
 void biv_gamma_call(double *corr,double *zi,double *zj,double *mui, double *muj, double *shape, double *res)
 {
@@ -1500,8 +1376,7 @@ if(b==z+a+1)
 res=k1*k2*(gammafn(a/2)-k3);}
 return(res);
 }
-
-          
+    
 double biv_skew(double corr, double z1, double z2, double mi, double mj, double vari, double skew, double nugget) {
     double zi = z1 - mi;
     double zj = z2 - mj;
@@ -1547,10 +1422,6 @@ double biv_skew(double corr, double z1, double z2, double mi, double mj, double 
     return dens;
 }
 
-
-
-
-
 double biv_wrapped(double alfa, double u, double v, double mi, double mj, double nugget, double sill, double corr) {
     double x = u - 2 * atan(mi) - M_PI;
     double y = v - 2 * atan(mj) - M_PI;
@@ -1578,8 +1449,6 @@ double biv_wrapped(double alfa, double u, double v, double mi, double mj, double
     }
     return wrap_gauss;
 }
-
-
 
 double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, double rho, double skew1, double skew2) {
     // Calcoli preliminari
@@ -1646,8 +1515,6 @@ double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, 
     return dens;
 }
 
-
-
 double log_biv_Norm(double corr, double zi, double zj, double mi, double mj, double vari, double nugget) {
     double u = zi - mi;
     double v = zj - mj;
@@ -1710,11 +1577,6 @@ double dNnorm(int N, double **M, double *dat) {
     R_Free(inverse);
     return pdf;
 }
-
-
-
-
-
 // compute the inverse lambert w transformation
 double inverse_lamb(double x,double tail)
 {
@@ -1725,9 +1587,6 @@ double inverse_lamb(double x,double tail)
   if (x < 0) sign= -1;
    return(sign*value);
 }
-
-
-
 static inline double inv_tukey_h(double z, double h) {
     if (h == 0.0) return z;
     const double arg = h * z * z;          
@@ -1795,99 +1654,6 @@ double biv_tukey_hh(double rho,
 }
 
 
-/*
-double biv_tukey_hh(double corr, double data_i, double data_j, double mui, double muj,
-                         double sill, double hl, double hr) {
-    
-
-
-    const double sqrt_sill = sqrt(sill);
-    const double zi = (data_i - mui) / sqrt_sill;
-    const double zj = (data_j - muj) / sqrt_sill;
-    
-    // Controllo per valori molto piccoli
-    const double MIN_Z = 1e-12;
-    if (fabs(zi) < MIN_Z || fabs(zj) < MIN_Z) {
-        return 0.0;  // o un valore appropriato per il tuo modello
-    }
-    
-    const double zi2 = zi * zi;
-    const double zj2 = zj * zj;
-    
-    // Controlli per LambertW
-    const double lambert_arg_i_l = hl * zi2;
-    const double lambert_arg_j_l = hl * zj2;
-    const double lambert_arg_i_r = hr * zi2;
-    const double lambert_arg_j_r = hr * zj2;
-    
-    // LambertW ha dominio >= -1/e ≈ -0.368
-    if (lambert_arg_i_l < -0.36 || lambert_arg_j_l < -0.36 ||
-        lambert_arg_i_r < -0.36 || lambert_arg_j_r < -0.36) {
-        return NAN;
-    }
-    
-    const double hl_zi = inverse_lamb(zi, hl);
-    const double hl_zj = inverse_lamb(zj, hl);
-    const double hr_zi = inverse_lamb(zi, hr);
-    const double hr_zj = inverse_lamb(zj, hr);
-    
-    const double Lhl_zi = 1.0 + LambertW(lambert_arg_i_l);
-    const double Lhl_zj = 1.0 + LambertW(lambert_arg_j_l);
-    const double Lhr_zi = 1.0 + LambertW(lambert_arg_i_r);
-    const double Lhr_zj = 1.0 + LambertW(lambert_arg_j_r);
-    
-    // Controllo che i denominatori non siano zero
-    if (fabs(Lhl_zi) < 1e-15 || fabs(Lhl_zj) < 1e-15 ||
-        fabs(Lhr_zi) < 1e-15 || fabs(Lhr_zj) < 1e-15) {
-        return NAN;
-    }
-    
-    double res;
-    const double CORR_THRESHOLD = 1e-10;  // Soglia più ragionevole
-    
-    if (fabs(corr) > CORR_THRESHOLD) {
-        if (zi >= 0 && zj >= 0) {
-            res = dbnorm(hr_zi, hr_zj, 0, 0, 1, corr) *
-                  hr_zi * hr_zj / (zi * zj * Lhr_zi * Lhr_zj);
-        } else if ((zi >= 0 && zj < 0) || (zi < 0 && zj >= 0)) {
-            res = dbnorm(hr_zi, hl_zj, 0, 0, 1, corr) *
-                  hr_zi * hl_zj / (zi * zj * Lhr_zi * Lhl_zj);
-        } else {
-            res = dbnorm(hl_zi, hl_zj, 0, 0, 1, corr) *
-                  hl_zi * hl_zj / (zi * zj * Lhl_zi * Lhl_zj);
-        }
-    } else {
-        double A = (zi >= 0) ? dnorm(hr_zi, 0, 1, 0) * hr_zi / (zi * Lhr_zi)
-                             : dnorm(hl_zi, 0, 1, 0) * hl_zi / (zi * Lhl_zi);
-        double B = (zj >= 0) ? dnorm(hr_zj, 0, 1, 0) * hr_zj / (zj * Lhr_zj)
-                             : dnorm(hl_zj, 0, 1, 0) * hl_zj / (zj * Lhl_zj);
-        res = A * B;
-    }
-    
-    // Controllo finale
-    if (!isfinite(res)) {
-        return NAN;
-    }
-    
-    return res / sill;
-}
-*/
-
-/****************************************************/
-/*** bivariate skew laplace ****/
-/*****************************************************/
-
-/*
-#define LOG_TOL   (-18.0)
-#define EXP_CUTOFF (-700.0)
-#define MAX_STREAK 4
-#define MAX_TERMS 8192
-#define KMAX_DEFAULT 60
-#define KMAX_MAX 60
-#define CONV_TOL 1e-7
-#define CONV_STREAK_MIN 2
-*/
-
 
 #define LOG_TOL   (-16.0)
 #define EXP_CUTOFF (-600.0)
@@ -1897,12 +1663,6 @@ double biv_tukey_hh(double corr, double data_i, double data_j, double mui, doubl
 #define KMAX_MAX 50
 #define CONV_TOL 1e-6
 #define CONV_STREAK_MIN 1
-
-
-
-
-
-
 
 static inline double logsumexp_r_style(const double *log_terms, int n) {
     if (n <= 0) return R_NegInf;
@@ -2107,193 +1867,163 @@ double log_biv_skewlaplace(double rho, double z1, double z2, double m1, double m
     return R_NegInf;
 }
 
-
-
-
-
-
 /**********************************************************************/
-double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11) {
+double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11,
+                               double *lgamma_cache, int cache_size)
+{
     int i = 0;
     double dens = 0.0;
-    
-    // Pre-calcolo termini fissi
+
     double lgamma_NN_u_1 = lgammafn(NN - 1 + u + 1);
-    double base_prob = 1 + p11 - (p01 + p10);
-    double diff_p01 = p01 - p11;
-    double diff_p10 = p10 - p11;
-    
-    // Pre-calcolo array di lgammafn per evitare ricalcoli
-    int max_i = NN - 1;
-    double *lgamma_cache = (double*)malloc((max_i + 2) * sizeof(double));
-    for (int k = 0; k <= max_i + 1; k++) {
-        lgamma_cache[k] = lgammafn(k + 1);
-    }
-    
+    double base_prob     = 1 + p11 - (p01 + p10);
+    double diff_p01      = p01 - p11;
+    double diff_p10      = p10 - p11;
+
+#define LG(k) ((k) >= 0 && (k) < cache_size ? lgamma_cache[(k)] : lgammafn((k) + 1))
+
     for (i = fmax_int(0, NN - u - 1); i <= NN - 1; i++) {
-        double lgamma_i1 = lgamma_cache[i];
-        double lgamma_NN_i = lgamma_cache[NN - i - 1];
+
+        double lgamma_i1     = LG(i);
+        double lgamma_NN_i   = LG(NN - i - 1);
         double lgamma_u_NN_i = lgammafn(u - NN + 1 + i + 1);
-        
-        // Coefficiente binomiale corretto
+
+        /* lgamma_NN_i sottratto DUE VOLTE: corretto per il coefficiente
+         * multinomiale della formula g2 del paper (slot 2 e 3 identici) */
         double log_coeff = lgamma_NN_u_1 - lgamma_i1 - lgamma_NN_i - lgamma_NN_i - lgamma_u_NN_i;
-        double coeff = exp(log_coeff);
-        
+        double coeff     = exp(log_coeff);
+
         double term1 = R_pow(p11, i + 1);
-        // Stabilità numerica: usa log1p se base_prob è vicino a 0
+
         double term2;
-        if (fabs(base_prob) < 1e-10) {
+        if (fabs(base_prob) < 1e-10)
             term2 = exp((u - NN + 1 + i) * log1p(p11 - (p01 + p10)));
-        } else {
+        else
             term2 = R_pow(base_prob, u - NN + 1 + i);
-        }
+
         double term3 = R_pow(diff_p01, NN - 1 - i);
         double term4 = R_pow(diff_p10, NN - 1 - i);
-        
+
         dens += coeff * term1 * term2 * term3 * term4;
     }
-    
-    free(lgamma_cache);
+
+#undef LG
     return dens;
 }
 
-double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11) {
-    int a = 0, i = 0;
+/**********************************************************************/
+double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11,
+                        double *lgamma_cache, int cache_size)
+{
+    int    a = 0, i = 0;
     double dens1 = 0.0, dens2 = 0.0;
-    
-    // Pre-calcolo termini fissi che non dipendono dai loop
+
     double lgamma_NN_u = lgammafn(NN + u);
-    double lgamma_v_u = lgammafn(v - u);
-    double base_prob = 1 + p11 - (x + y);
-    double diff_x = x - p11;
-    double diff_y = y - p11;
+    double lgamma_v_u  = lgammafn(v - u);
+    double base_prob   = 1 + p11 - (x + y);
+    double diff_x      = x - p11;
+    double diff_y      = y - p11;
     double one_minus_y = 1 - y;
-    
-    // Pre-calcolo array di lgammafn per evitare ricalcoli
-    int max_val = fmax_int(NN + u, v - u) + 5; // margine di sicurezza
-    double *lgamma_cache = (double*)malloc(max_val * sizeof(double));
-    for (int k = 0; k < max_val; k++) {
-        lgamma_cache[k] = lgammafn(k + 1);
-    }
-    
-    // Prima sommatoria (a da max{0, u-v+NN-1} a NN-2)
+
+#define LG(k) ((k) >= 0 && (k) < cache_size ? lgamma_cache[(k)] : lgammafn((k) + 1))
+
+    /* --- Prima sommatoria (primo blocco di g1 nel paper) --- */
     for (a = fmax_int(0, u - v + NN - 1); a <= NN - 2; a++) {
-        // Pre-calcolo termini che dipendono solo da 'a'
-        double lgamma_NN_a_1 = (NN - a - 2 >= 0) ? lgamma_cache[NN - a - 2] : lgammafn(NN - a - 1);
-        double pow_y_NN_a_1 = R_pow(y, NN - a - 1);
+
+        double lgamma_NN_a_1        = LG(NN - a - 2);
+        double pow_y_NN_a_1         = R_pow(y,           NN - a - 1);
         double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a + 1);
-        
+
         for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
-            // Coefficienti binomiali usando cache quando possibile
-            double lgamma_i1 = (i < max_val - 1) ? lgamma_cache[i] : lgammafn(i + 1);
-            double lgamma_NN_i = (NN - i - 1 < max_val - 1) ? lgamma_cache[NN - i - 1] : lgammafn(NN - i);
-            double lgamma_a_i_1 = (a - i < max_val - 1) ? lgamma_cache[a - i] : lgammafn(a - i + 1);
+
+            double lgamma_i1      = LG(i);
+            double lgamma_NN_i    = LG(NN - i - 1);
+            double lgamma_a_i_1   = LG(a - i);
             double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
-            
-            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i - lgamma_a_i_1 - lgamma_u_a_i_1;
+
+            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i
+                                - lgamma_a_i_1 - lgamma_u_a_i_1;
             double coeff1 = exp(log_coeff1);
-            
+
             double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 2);
-            double log_coeff2 = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a_1;
-            double coeff2 = exp(log_coeff2);
-            
-            // Calcolo delle potenze con stabilità numerica
+            double log_coeff2      = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a_1;
+            double coeff2          = exp(log_coeff2);
+
             double pow_p11 = R_pow(p11, i + 1);
             double pow_base_prob;
-            if (fabs(base_prob) < 1e-10) {
+            if (fabs(base_prob) < 1e-10)
                 pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
-            } else {
+            else
                 pow_base_prob = R_pow(base_prob, u - a + i);
-            }
+
             double pow_diff_x = R_pow(diff_x, NN - i - 1);
             double pow_diff_y = R_pow(diff_y, a - i);
-            
-            double term = coeff1 * coeff2 * pow_p11 * pow_base_prob * 
-                         pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a_1;
-            
-            dens1 += term;
+
+            dens1 += coeff1 * coeff2 * pow_p11 * pow_base_prob
+                   * pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a_1;
         }
     }
-    
-    // Seconda sommatoria (a da max{0, u-v+NN} a NN-1)
+
+    /* --- Seconda sommatoria (secondo blocco di g1 nel paper) --- */
     for (a = fmax_int(0, u - v + NN); a <= NN - 1; a++) {
-        // Pre-calcolo termini che dipendono solo da 'a'
-        double lgamma_NN_a = (NN - a - 1 >= 0) ? lgamma_cache[NN - a - 1] : lgammafn(NN - a);
-        double pow_y_NN_a = R_pow(y, NN - a);
+
+        double lgamma_NN_a          = LG(NN - a - 1);
+        double pow_y_NN_a           = R_pow(y,           NN - a);
         double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a);
-        
+
         for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
-            // Coefficienti binomiali usando cache quando possibile
-            double lgamma_i1 = (i < max_val - 1) ? lgamma_cache[i] : lgammafn(i + 1);
-            double lgamma_NN_i = (NN - i - 1 < max_val - 1) ? lgamma_cache[NN - i - 1] : lgammafn(NN - i);
-            double lgamma_a_i_1 = (a - i < max_val - 1) ? lgamma_cache[a - i] : lgammafn(a - i + 1);
+
+            double lgamma_i1      = LG(i);
+            double lgamma_NN_i    = LG(NN - i - 1);
+            double lgamma_a_i_1   = LG(a - i);
             double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
-            
-            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i - lgamma_a_i_1 - lgamma_u_a_i_1;
+
+            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i
+                                - lgamma_a_i_1 - lgamma_u_a_i_1;
             double coeff1 = exp(log_coeff1);
-            
+
             double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 1);
-            double log_coeff2 = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a;
-            double coeff2 = exp(log_coeff2);
-            
-            // Calcolo delle potenze con stabilità numerica
+            double log_coeff2      = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a;
+            double coeff2          = exp(log_coeff2);
+
             double pow_p11 = R_pow(p11, i);
             double pow_base_prob;
-            if (fabs(base_prob) < 1e-10) {
+            if (fabs(base_prob) < 1e-10)
                 pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
-            } else {
+            else
                 pow_base_prob = R_pow(base_prob, u - a + i);
-            }
+
             double pow_diff_x = R_pow(diff_x, NN - i);
             double pow_diff_y = R_pow(diff_y, a - i);
-            
-            double term = coeff1 * coeff2 * pow_p11 * pow_base_prob * 
-                         pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a;
-            
-            dens2 += term;
+
+            dens2 += coeff1 * coeff2 * pow_p11 * pow_base_prob
+                   * pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a;
         }
     }
-    
-    free(lgamma_cache);
+
+#undef LG
     return dens1 + dens2;
 }
 
-double biv_binomneg(int NN, int u, int v, double p01, double p10, double p11) {
-    double dens = 0.0;
-    
-    
-    // Controllo probabilità
-    if (p01 < 0 || p01 > 1 || p10 < 0 || p10 > 1 || p11 < 0 || p11 > 1) {
-        return 0.0; // Probabilità non valide
-    }
-    
-    // Controllo coerenza: p11 non può essere maggiore di p01 o p10
-    if (p11 > fmin(p01, p10)) {
-        return 0.0; // Correlazione impossibile
-    }
-    
-    if (u < v) {
-        dens = aux_biv_binomneg(NN, u, v, p01, p10, p11);
-    } else if (u == v) {
-        dens = aux_biv_binomneg_simple(NN, u, p01, p10, p11);
-    } else { // u > v
-        dens = aux_biv_binomneg(NN, v, u, p10, p01, p11);
-    }
-    
-    return dens;
-}
-
-void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res)
+/**********************************************************************/
+double biv_binomneg(int NN, int u, int v, double p01, double p10, double p11,
+                    double *lgamma_cache, int cache_size)
 {
-    *res = biv_binomneg (*NN,*u,*v,*p01, *p10,*p11);
+    if (p01 < 0.0 || p01 > 1.0 || p10 < 0.0 || p10 > 1.0 ||
+        p11 < 0.0 || p11 > 1.0)
+        return 0.0;
+
+    if (p11 > fmin(p01, p10))
+        return 0.0;
+
+    if (u < v)
+        return aux_biv_binomneg(NN, u, v, p01, p10, p11, lgamma_cache, cache_size);
+    else if (u == v)
+        return aux_biv_binomneg_simple(NN, u, p01, p10, p11, lgamma_cache, cache_size);
+    else
+        return aux_biv_binomneg(NN, v, u, p10, p01, p11, lgamma_cache, cache_size);
 }
-
-
-
-
 
 /**********************************************************************/
-
 
 void biv_binom_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res)
 {
@@ -2324,9 +2054,8 @@ double biv_binom(int NN, int u, int v, double p1, double p2, double p11) {
     double kk = 0.0, dens = 0.0;
     
     // Parameter validation
-    if (!check_biv_binom_params(NN, u, v, p1, p2, p11)) {
-        return 0.0;
-    }
+    //if (!check_biv_binom_params(NN, u, v, p1, p2, p11)) {
+    //    return 0.0;}
     
     // Edge case: if NN = 0
     if (NN == 0) {
@@ -2427,13 +2156,7 @@ double biv_binom222(int n1, int n2, int u, int v, double p1, double p2, double p
     return res;
 }
 
-
-
-
-
 /// biv binomial type II
-
-
 double  biv_binom2 (int NN_i,int NN_j, int k, int u, int v, double p01,double p10,double p11)
 {
 
@@ -2479,8 +2202,6 @@ double biv_poisbin (int NN, int u, int  v, double p01,double p10,double p11)
     return(exp(-NN*(p01+p10-p11))*dens);
 }
 
-
-
 // bivariate pois-bineg 
 double biv_poisbinneg (int NN, int u, int v, double p01,double p10,double p11)
 {
@@ -2497,8 +2218,6 @@ double biv_poisbinneg (int NN, int u, int v, double p01,double p10,double p11)
     }
     return(exp(-NN*bb)*dens);
 }
-
-
 
 // marginal binomial
 double marg_binom(int n,double x,double p)
@@ -2573,19 +2292,7 @@ double aprox1(double a) {
     return(res);
  }
 
-
-
-
-
 /**********************************************************/
-
-/* Logarithm of Gamma function 
-double lgam(double x)
-{
-    int sign;
-    return lgam_sgn(x, &sign);
-}
-*/
 double lgam_sgn(double x, int *sign)
 {
     double p, q, u, w, z;
@@ -2672,17 +2379,6 @@ double lgam_sgn(double x, int *sign)
     return (q);
 }
 
-
-
-
-
-
-
-
-
-
-
-
 /***********************************************************/
 /*********** bivariate T distribution*********************/
 double biv_T(double rho, double zi, double zj, double nuu, double nugget)
@@ -2741,13 +2437,10 @@ double biv_T(double rho, double zi, double zj, double nuu, double nugget)
 
 /*********** Appell F4 function ********/
 
-
-
 void appellF4_call(double *a,double *b,double *c,double *d,double *x,double *y, double *res)
 {
     *res = appellF4(*a,*b,*c,*d,*x,*y);
 }
-
 
 double appellF4(double a, double b, double c, double d, double x, double y)
 {
@@ -2959,7 +2652,6 @@ double appellF4_mod(double nu, double rho, double x, double y, double nugget)
     
     return result;
 }
-
 /*********** bivariate two piece-T distribution********************/ 
 
 double biv_two_pieceT(double rho,double zi,double zj,double sill,double nuu,double eta,
@@ -2993,10 +2685,6 @@ double zjstd=(zj-muj)/sqrt(sill);
 return(res/sill);
     
 }
-
-
-
-
 
 /***** bivariate half gaussian ****/     
 double biv_half_Gauss(double rho,double zi,double zj)
@@ -3034,10 +2722,6 @@ double biv_two_pieceGaussian(double rho, double zi, double zj, double sill, doub
     return res / sill;
 }
 
-
-
-
-
 double biv_beta(double rho,double zi,double zj,double ai,double aj,double shape1,double shape2,double min,double max)
 {
   double ki=0.0,kj=0.0,p1=0.0,p2=0.0,rho2=0.0,res=0.0,p3;
@@ -3058,12 +2742,6 @@ if(rho) {
 return(res/R_pow(dd,2));
 }
 
-
-
-
-
-
-
 double biv_Unif(double rho,double ui,double uj)
 {
   double res,rho2;
@@ -3073,8 +2751,6 @@ if(fabs(rho)>1e-8){
  else  {res= 1.0;}
 return(res);
 }
-
-
 
 double biv_Kumara(double rho,double zi,double zj,double ai,double aj,double shape1,double shape2,double min,double  max)
 {
@@ -3095,8 +2771,6 @@ if(rho) {
          res=p1*p2;}
 return(res/R_pow(dd,2));
 }
-
-
 
 double biv_Kumara2(double rho,double zi,double zj,double ai,double aj,double shape1,double shape2,double min,double  max)
 {
@@ -3244,9 +2918,6 @@ double biv_Logistic(double corr,double zi,double zj,double mui, double muj, doub
     return(res);
 }
 
-
-
-
 //********** functions for bivariate tukey h *******************//
 
 // compute lambert w function
@@ -3330,8 +3001,6 @@ double dbnorm(double x_i,double x_j,double mean_i,double mean_j,double sill,doub
     return(dens);
 }
 
-
-
 // pdf bivariate tukey h random field 
 double biv_tukey_h(double corr,double data_i, double data_j, double mean_i, double mean_j, double tail, double sill)
 {
@@ -3357,11 +3026,6 @@ double biv_tukey_h(double corr,double data_i, double data_j, double mean_i, doub
 
 
 
-
-
-
-
-
 /***** bivariate half tukey h ****/     
 double biv_half_Tukeyh(double rho,double ti,double tj,double tail)
 {
@@ -3372,7 +3036,6 @@ double biv_half_Tukeyh(double rho,double ti,double tj,double tail)
   return(dens);
 }
  
-
 /***** bivariate two piece tukey h ****/ 
 double biv_two_pieceTukeyh(double rho,double zi,double zj,double sill,double eta,double tail,
              double p11,double mui,double muj)
@@ -3421,10 +3084,6 @@ void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *mean_j,d
 
 /*******************************************************************************/
 
-/*******************************************************************************/
-
-
-
 /******************************************************************************
  * VERSIONE "LOG" (ritorna log(p)) delle funzioni che mi hai dato.
  *
@@ -3471,7 +3130,6 @@ static inline double logdiffexp_local(double a, double b) {
     if (b >= a) return -INFINITY;
     return a + log1mexp_local(b - a);
 }
-
 /*******************************************************************************/
 // Convergenza ultra-veloce (tuo)
 /*******************************************************************************/
@@ -3490,7 +3148,6 @@ static inline bool check_ultra_fast_convergence(double current, double previous,
 
     return abs_diff < fmax(abs_tol, rel_tol * scale);
 }
-
 /*******************************************************************************/
 // Cache lgamma (tuo): fast_lgamma(n) = lgamma(n+1)
 /*******************************************************************************/
@@ -3505,7 +3162,6 @@ static inline double fast_lgamma(int n) {
     if (n < 255) return cached_lgamma[n];
     return lgammafn(n + 1);
 }
-
 /*******************************************************************************/
 // log(igam) safe (tuo)
 /*******************************************************************************/
@@ -3520,7 +3176,6 @@ static inline double safe_log_igam_fast(double a, double x) {
 
     return log(igam_val);
 }
-
 /*******************************************************************************/
 // Stima iterazioni (tuo)
 /*******************************************************************************/
@@ -3537,7 +3192,6 @@ static inline int estimate_iterations(double mean_scale, int base_iter) {
 static inline double log_sum_exp3(double a, double b, double c) {
     return log_sum_exp(log_sum_exp(a, b), c);
 }
-
 /*******************************************************************************/
 // helper: log( exp(a) + exp(b) - exp(c) )  (richiede risultato > 0)
 /*******************************************************************************/
@@ -3559,7 +3213,6 @@ static inline double log_add_add_sub(double a, double b, double c) {
 
     return M + log(s);
 }
-
 /*******************************************************************************/
 // helper: log( exp(a) + exp(b) + exp(c) - 1 )
 /*******************************************************************************/
@@ -3569,7 +3222,6 @@ static inline double log_add3_minus1(double a, double b, double c) {
     // log(pos - 1) = logdiffexp(log_pos, 0) se pos>1
     return logdiffexp_local(log_pos, 0.0);
 }
-
 /*******************************************************************************/
 /*  Prt  (ora ritorna LOG(Prt)) */
 /*******************************************************************************/
@@ -3712,7 +3364,6 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
     double b = -auxi + log_sum;
     return logdiffexp_local(a, b); // se a<=b -> -Inf (prt=0)
 }
-
 /*******************************************************************************/
 /*  Prr  (ora ritorna LOG(Prr)) */
 /*******************************************************************************/
@@ -3964,7 +3615,6 @@ double P00(double corr, int r, int t, double mean_i, double mean_j) {
     // log(p00) = log( exp(a)+exp(b)+exp(c) - 1 )
     return log_add3_minus1(a, b, c);
 }
-
 /*******************************************************************************/
 /*  Funzione principale: ora ritorna LOG densità */
 /*******************************************************************************/
@@ -4004,7 +3654,6 @@ double biv_Poisson(double corr, int r, int t, double mean_i, double mean_j) {
 
     return (R_finite(logdens)) ? logdens : -INFINITY;
 }
-
 /******************************************************************************
  * (Opzionale) wrapper se ti serve ancora la densità “in scala normale”
  *
@@ -4016,9 +3665,6 @@ double biv_Poisson(double corr, int r, int t, double mean_i, double mean_j) {
  *     return exp(lp);
  * }
  ******************************************************************************/
-
-
-
 double biv_PoissonZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2)
 {
 double dens=0.0,p,p00,p10,p01,p11;
@@ -4043,10 +3689,6 @@ if(r>0&&t>0)
 return(dens);
 
 }
-
-
-
-
 
 double biv_Mis_PoissonZIP(double corr, double data_i, double data_j,
                           double mean_i, double mean_j, double mup,
@@ -4093,37 +3735,45 @@ double biv_Mis_PoissonZIP(double corr, double data_i, double data_j,
     return dens;
 }
 
-
-/*****/
-double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,
-    double nugget1,double nugget2,double mup)
+double biv_binomnegZINB(int N, double corr, int r, int t, double mean_i, double mean_j,
+    double nugget1, double nugget2, double mup,
+    double *lgamma_cache, int cache_size)
 {
-double dens=0.0,ap,ap00,ap10,ap01,ap11;
-ap=pnorm(mup,0,1,1,0);
-
-ap00=pbnorm22(mup,mup,(1-nugget2)*corr);
-ap01=ap-ap00;
-ap10=ap01;
-ap11=1-2*ap+ap00;
-
-double p11=pbnorm22(mean_i,mean_j,(1-nugget1)*corr);
-double p1=pnorm(mean_i,0,1,1,0);
-double p2=pnorm(mean_j,0,1,1,0);
-
-
-if(r==0&&t==0)
-     dens=ap00  + ap01*R_pow(p1,N) + ap10*R_pow(p2,N)+ap11*biv_binomneg(N,0, 0 ,p1, p2, p11);
-if(r==0&&t>0)
-      dens=      ap01*  exp(lgammafn(N+t)-lgammafn(t+1)-lgammafn(N) +N*log(p2)+t*log1p(-p2) ) +
-                               ap11*biv_binomneg(N,0, t, p1, p2, p11);
-if(r>0&&t==0)
-      dens=      ap10* exp(lgammafn(N+r)-lgammafn(r+1)-lgammafn(N) +N*log(p1)+r*log1p(-p1) ) +
-                               ap11*biv_binomneg(N,r, 0, p1, p2, p11);
-if(r>0&&t>0)
-      dens=      ap11*biv_binomneg(N,r, t,p1, p2, p11);
-return(dens);
-
+    double dens = 0.0, ap, ap00, ap01, ap10, ap11;
+ 
+    ap    = pnorm(mup, 0, 1, 1, 0);
+    ap00  = pbnorm22(mup, mup, (1 - nugget2) * corr);
+    ap01  = ap - ap00;
+    ap10  = ap01;
+    ap11  = 1 - 2 * ap + ap00;
+ 
+    double p11 = pbnorm22(mean_i, mean_j, (1 - nugget1) * corr);
+    double p1  = pnorm(mean_i, 0, 1, 1, 0);
+    double p2  = pnorm(mean_j, 0, 1, 1, 0);
+ 
+    if (r == 0 && t == 0)
+        dens = ap00
+             + ap01 * R_pow(p1, N)
+             + ap10 * R_pow(p2, N)
+             + ap11 * biv_binomneg(N, 0, 0, p1, p2, p11, lgamma_cache, cache_size);
+ 
+    if (r == 0 && t > 0)
+        dens = ap01 * exp(lgammafn(N + t) - lgammafn(t + 1) - lgammafn(N)
+                          + N * log(p2) + t * log1p(-p2))
+             + ap11 * biv_binomneg(N, 0, t, p1, p2, p11, lgamma_cache, cache_size);
+ 
+    if (r > 0 && t == 0)
+        dens = ap10 * exp(lgammafn(N + r) - lgammafn(r + 1) - lgammafn(N)
+                          + N * log(p1) + r * log1p(-p1))
+             + ap11 * biv_binomneg(N, r, 0, p1, p2, p11, lgamma_cache, cache_size);
+ 
+    if (r > 0 && t > 0)
+        dens = ap11 * biv_binomneg(N, r, t, p1, p2, p11, lgamma_cache, cache_size);
+ 
+    return dens;
 }
+
+
 /* binary misspecified negative binomial*/
 double biv_binegbinary (int NN, int u, int v,double pu,double pv, double p11)
 {
@@ -4139,12 +3789,6 @@ if(v==0&&u>0)   res=v_0-p00;
 if(u>0&&v>0)    res=1-(u_0-p00+v_0);
 return(res);
 }
-
-
-
-
-
-
 
 static double hyp2F1_trunc_recur(double a1, int m, double c, double z) {
     if (m < 0) return NA_REAL;
@@ -4304,26 +3948,6 @@ double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
     return (p00 < 1e-320) ? 1e-320 : p00;
 }
 
-// Helpers (ponlos una sola vez en tu .c si aún no están)
-// ------------------------------------------------------
-// #include <Rmath.h>
-// static inline int is_integer(double x){ return fabs(x - round(x)) < 1e-12; }
-// static double hyp2F1_trunc_recur(double a1, int m, double c, double z){
-//     if (m < 0) return NA_REAL;
-//     double term = 1.0, sum = 1.0, comp = 0.0; // Kahan
-//     for (int r = 1; r <= m; ++r) {
-//         double num1 = a1 + (r - 1);
-//         double num2 = -m + (r - 1);
-//         double den1 = c  + (r - 1);
-//         double den2 = (double)r;
-//         term *= (num1 * num2 / (den1 * den2)) * z;
-//         double y = term - comp, t = sum + y; comp = (t - sum) - y; sum = t;
-//         if (!R_finite(term)) break;
-//     }
-//     return sum;
-// }
-// ------------------------------------------------------
-
 double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     // Pre-calcolo di tutte le costanti
     const double rho2 = corr * corr;
@@ -4480,8 +4104,6 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
     return (prr < 1e-320) ? 1e-320 : prr;
 }
 
-
-
 double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double beta_i = a / mean_i;
@@ -4558,8 +4180,6 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
     if (pr0 < 1e-320) pr0 = 1e-320;
     return pr0;
 }
-
-
 
 double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a) {
     // Pre-calcolo delle costanti (invarianti)
@@ -4779,8 +4399,6 @@ double biv_PoissonGamma(double corr, int r, int t, double mean_i, double mean_j,
 }
 
 
-
-
 double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape)
 {
 double dens=0.0,p,p00,p10,p01,p11;
@@ -4825,7 +4443,6 @@ void integr_kuma(double *x, int n, void *ex){
     return;
 }
 
-
 double kumaintegral(double *param) {
     double ex[4], lower, upper, epsabs, epsrel, result, abserr, *work;
     int neval, ier, subdiv, lenw, last, *iwork;
@@ -4844,12 +4461,6 @@ double kumaintegral(double *param) {
     R_Free(iwork);R_Free(work);
     return(result);
 }
-
-
-
-
-
-
 
 /*######*/
   double mean_kuma(double eta,double gam){
@@ -4931,9 +4542,6 @@ if (eta!=1.0&&gam==1.0){
     corr=(res_K-R_pow(mm,2))/vv;
   }
   
- 
-
-
   /**+*********************/
   if ((eta!=1.0)&&(gam!=1.0)){
    
@@ -4971,7 +4579,6 @@ if (eta!=1.0&&gam==1.0){
  }
  
 }
-
   /*********************/
 void corr_kuma_vec(double *rho,double *eta,double *gam,double *res, int *n)
 {
@@ -5003,12 +4610,10 @@ double biv_unif_CopulaGauss(double dat1, double dat2, double rho)
     // Calcola e restituisci il risultato
     return biv_Norm(rho, a1, a2, 0, 0, 1, 1, 0) / (g1 * g2);
 }
-
-
 // bivariatte density  skewgaussian copula
 double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho, double alpha)
 {
-
+     // reparametrization
 
     if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
     if (fabs(dat2 - 1) < 0.0001) dat2 = 0.999;
@@ -5027,8 +4632,6 @@ double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho, double alp
     // Calcola e restituisci il risultato
     return biv_skew(rho, a1, a2, 0, 0, 1, alpha, 0) / (g1 * g2);
 }
-
-
 
  /*********************/
 void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, double *res)
@@ -5063,24 +4666,26 @@ return(res);
 }
 
 /*********************************************************************/
+/*********************************************************************/
 double biv_cop(double rho,int type_cop,int cond,
              double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2)
              {
 double dens=0.0,rho1=0.0,nu=0.0;
 double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0;
+rho1=(1-nuis[0])*rho;
 switch(model) // Correlation functions are in alphabetical order
     {
 
 /******* models on the real line ****************/
     case 1: // gaussian
-      rho1=(1-nuis[0])*rho;
+    
       b1=(z1-mu1)/sqrt(nuis[1]);b2=(z2-mu2)/sqrt(nuis[1]);
       a1=pnorm(b1,0,1,1,0);  a2=pnorm(b2,0,1,1,0); 
       g1=dnorm(b1,0,1,0)/sqrt(nuis[1]); //marginal 1
       g2=dnorm(b2,0,1,0)/sqrt(nuis[1]); //marginal 2
     break;
  case 34:  // Tukeyh
-      rho1=(1-nuis[0])*rho;  
+  
       b1=1;
       b2=1;
       a1=1;
@@ -5089,7 +4694,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=1;
    break;
     case 25:  // Logistic
-      rho1=(1-nuis[0])*rho;
+
       b1=1;b2=1;
       a1=plogis(z1, mu1, sqrt(nuis[1]),1,0);
       a2=plogis(z2, mu2, sqrt(nuis[1]),1,0);
@@ -5098,7 +4703,7 @@ switch(model) // Correlation functions are in alphabetical order
    break;
    case 12: // t student
     //Rprintf("%f %f \n",1/nuis[0],nuis[1]);
-      rho1=(1-nuis[1])*rho; 
+  
       b1=(z1-mu1)/sqrt(nuis[2]);b2=(z2-mu2)/sqrt(nuis[2]);
       a1=pt(b1,1/nuis[0],1,0);  a2=pt(b2,1/nuis[0],1,0);
       g1=dt(b1,1/nuis[0],0)/sqrt(nuis[2]); //marginal 1
@@ -5106,7 +4711,7 @@ switch(model) // Correlation functions are in alphabetical order
    break;
 /******* models on the  positive real line ****************/
      case 22: // lognormal
-      rho1=(1-nuis[0])*rho; 
+
       b1=mu1-nuis[1]/2; b2=mu2-nuis[1]/2;
       a1=plnorm(z1,b1, sqrt(nuis[1]),1,0);
       a2=plnorm(z2,b2, sqrt(nuis[1]),1,0);
@@ -5114,7 +4719,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dlnorm(z2,b2, sqrt(nuis[1]),0);
   break;
    case 21: // gamma
-      rho1=(1-nuis[0])*rho;
+
       b1=1;
       b2=1;
       a1=pgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),1,0);  
@@ -5123,7 +4728,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),0); 
    break;
      case 26: // weibull
-      rho1=(1-nuis[0])*rho;      
+     
       b1=1;
       b2=1;
       a1=pweibull(z1,nuis[2],exp(mu1)/(gammafn(1+1/nuis[2])),1,0);
@@ -5132,7 +4737,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dweibull(z2,nuis[2],exp(mu2)/(gammafn(1+1/nuis[2])),0);
    break;
      case 59: // skewlaplace
-      rho1=(1-nuis[0])*rho;      
+      
       b1=1;
       b2=1;
       a1=pSkewLaplace(z1,nuis[2],mu1,nuis[1]);
@@ -5143,14 +4748,14 @@ switch(model) // Correlation functions are in alphabetical order
    break;
 /******* models on the a bounded support ****************/
    case 28: //Beta
-      rho1=(1-nuis[0])*rho; 
+    
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]); b2=(z2- nuis[4])/(nuis[5]-nuis[4]);
       a1=pbeta(b1,nuis[2],nuis[3],0,0); a2=pbeta(b2,nuis[2],nuis[3],0,0);
       g1=dbeta(b1,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 1
       g2=dbeta(b2,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 2
    break;   
    case 50:  // Beta regression
-    rho1=(1-nuis[0])*rho; 
+
       mu1=1/(1+exp(-mu1));
       mu2=1/(1+exp(-mu2));
     //  Rprintf("%f %f %f %f %f \n",mu1,rho,nuis[2],nuis[4],nuis[3]);
@@ -5161,7 +4766,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dbeta(b2, nuis[2]*mu2,(1-mu2)*nuis[2],0)/(nuis[4]-nuis[3]); //marginal 2
    break;
    case 33:  // kuma
-    rho1=(1-nuis[0])*rho; 
+ 
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]);
       b2=(z2- nuis[4])/(nuis[5]-nuis[4]);
       a1= cdf_kuma(b1,nuis[2],nuis[3]);
@@ -5170,7 +4775,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2= pdf_kuma(b2,nuis[2],nuis[3])/(nuis[5]-nuis[4]);
    break;
    case 42:  // kuma regression
-    rho1=(1-nuis[0])*rho; 
+   
       mu1=1/(1+exp(-mu1));mu2=1/(1+exp(-mu2));
       b1=(z1- nuis[3])/(nuis[4]-nuis[3]);
       b2=(z2- nuis[3])/(nuis[4]-nuis[3]);
@@ -5183,7 +4788,7 @@ switch(model) // Correlation functions are in alphabetical order
    break;
 /************ discrete models *****************************/
 case 30: // Poisson
-      rho1=(1-nuis[0])*rho; 
+  
       mu1=exp(mu1);mu2=exp(mu2);
       b2=dpois(z2,mu2,0);
       a1=qnorm(ppois(z1,  mu1,1,0),0,1,1,0);
@@ -5194,7 +4799,7 @@ case 30: // Poisson
       if(z2==0) {g2=-99;}
    break;
       case 43: // Poisson inflated
-      rho1=(1-nuis[0])*rho; 
+ 
       mu1=exp(mu1);mu2=exp(mu2);
       b2=dpois(z2,mu2,0);
       a1=qnorm(ppoisinflated(z1,  mu1,nuis[1]),0,1,1,0);
@@ -5204,39 +4809,28 @@ case 30: // Poisson
       if(z1==0) {a2=-99;}
       if(z2==0) {g2=-99;}
    break;
-     case 11: // binomial     /// 
-      rho1=(1-nuis[0])*rho;
-      mu1=pnorm(mu1,0,1,1,0);
-      mu2=pnorm(mu2,0,1,1,0);
-      b2=dbinom(z2,NN2,mu2,0);
-      a1=qnorm(pbinom(z1,  NN1,mu1,1,0),0,1,1,0);
-      a2=qnorm(pbinom(z1-1,NN1,mu1,1,0),0,1,1,0);
-      g1=qnorm(pbinom(z2,  NN2,mu2,1,0),0,1,1,0);      
-      g2=qnorm(pbinom(z2-1,NN2,mu2,1,0),0,1,1,0);
-      if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
-      if(z1==0){a2=-99;}  
-      if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
-      if(z2==0){g2=-99;}  
+     case 11: // Binomiale
+   
+    mu1 = pnorm(mu1, 0, 1, 1, 0);
+    mu2 = pnorm(mu2, 0, 1, 1, 0);
+    b2 = dbinom(z2, NN2, mu2, 0);
+    a1 = (z1 >= NN1) ? R_PosInf : qnorm(pbinom(z1,   NN1, mu1, 1, 0), 0, 1, 1, 0);
+    a2 = (z1 == 0)   ? R_NegInf : qnorm(pbinom(z1-1, NN1, mu1, 1, 0), 0, 1, 1, 0);
+    g1 = (z2 >= NN2) ? R_PosInf : qnorm(pbinom(z2,   NN2, mu2, 1, 0), 0, 1, 1, 0);
+    g2 = (z2 == 0)   ? R_NegInf : qnorm(pbinom(z2-1, NN2, mu2, 1, 0), 0, 1, 1, 0);  
    break;
-       case 16: // binomial neg     /// ok 
-      rho1=(1-nuis[0])*rho;
-      mu1=pnorm(mu1,0,1,1,0);
-      mu2=pnorm(mu2,0,1,1,0);
-      b2=dnbinom(z2,NN2,mu2,0);
-      a1=qnorm(pnbinom(z1,  NN1,mu1,1,0),0,1,1,0);
-      a2=qnorm(pnbinom(z1-1,NN1,mu1,1,0),0,1,1,0);
-      g1=qnorm(pnbinom(z2,  NN2,mu2,1,0),0,1,1,0);      
-      g2=qnorm(pnbinom(z2-1,NN2,mu2,1,0),0,1,1,0);
-      //Rprintf("%f %f %d %d %f %f  %f\n",mu1,mu2,NN1,NN2,a1,a2,rho1);
-      /*if(z1==0) {a2=-99;}
-      if(z2==0) {g2=-99;}*/
-        //if((z1<NN1+MAXERR)&&(z1>NN1-MAXERR)) {a1=99;}
-      if(z1==0){a2=-99;}  
-      //if((z2<NN2+MAXERR)&&(z2>NN2-MAXERR)) {g1=99;}
-      if(z2==0){g2=-99;}  
+       case 16: // binomial neg
+  
+    mu1 = pnorm(mu1, 0, 1, 1, 0);
+    mu2 = pnorm(mu2, 0, 1, 1, 0);
+    b2 = dnbinom(z2, NN2, mu2, 0);
+    a1 = qnorm(pnbinom(z1,   NN1, mu1, 1, 0), 0, 1, 1, 0);
+    a2 = (z1 == 0) ? R_NegInf : qnorm(pnbinom(z1-1, NN1, mu1, 1, 0), 0, 1, 1, 0);
+    g1 = qnorm(pnbinom(z2,   NN2, mu2, 1, 0), 0, 1, 1, 0);
+    g2 = (z2 == 0) ? R_NegInf : qnorm(pnbinom(z2-1, NN2, mu2, 1, 0), 0, 1, 1, 0);  
    break;
     case 45: // binomial neg  inflated   /// ok 
-      rho1=(1-nuis[0])*rho;
+     
       mu1=pnorm(mu1,0,1,1,0);
       mu2=pnorm(mu2,0,1,1,0);
       b2=dnbinom(z2,NN2,mu2,0);
@@ -5256,7 +4850,7 @@ if(type_cop==1)  {
        dens = log(biv_unif_CopulaGauss(a1, a2, rho1)) 
             + log(g1) + log(g2);
    } else {                                      // discreti
-       double prob = pbnorm22(a1, g1, rho1) - pbnorm22(a2, g1, rho1) - pbnorm22(a1, g2, rho1) + pbnorm22(a2, g2, rho1);
+       double prob = safe_pbnorm22(a1, g1, rho1) - safe_pbnorm22(a2, g1, rho1) - safe_pbnorm22(a1, g2, rho1) + safe_pbnorm22(a2, g2, rho1);
        prob = fmax(DBL_MIN, prob);
        dens = log(prob);
    }
@@ -5284,7 +4878,8 @@ if(type_cop==3)
                    nu=nuis[2];    // loggaussian gaussian logistic pois binom binomneg 
                //nu=nuis[2] / R_pow(1 - nuis[2]*nuis[2],0.5);
                     
-    dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu))+ log(g1)+log(g2);
+    dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu/(sqrt(1-nu*nu))))+ log(g1)+log(g2);
+     //  dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu))+ log(g1)+log(g2);
      }
      else { Rf_error("not implemented."); } //   discrete   models
 }
@@ -5307,9 +4902,6 @@ return(dens);
 /******* some marginals (log)pdf  *****************/
 /***********************/
 /***********************/
-
-
-
 
 /* cdf skewlaplace */
 double pSkewLaplace(double x, double sk, double mm, double vv) {
@@ -5536,11 +5128,6 @@ double one_log_SkewGauss(double z, double m, double vari, double skew)
     return res;
 }
 
-
-
-
-
-
 double one_log_SkewLaplace(double z, double mu, double sill, double skew) {
     double sigma = sqrt(sill);
     double z_std = (z - mu) / sigma; // Standardizzazione
@@ -5551,8 +5138,6 @@ double one_log_SkewLaplace(double z, double mu, double sill, double skew) {
         return log(skew * (1 - skew)) - log(sigma) + skew * z_std;
     }
 }
-
-
 double one_log_tukeyh(double z, double m, double sill, double tail)
 {
     const double sqrt_sill = sqrt(sill);
@@ -5586,17 +5171,6 @@ double one_log_T(double z,double m, double sill, double df)
     res=lgammafn(0.5*(df+1))-(0.5*(df+1))*log1p(q*q/df)-log(sqrt(M_PI*df))-lgammafn(df/2)-0.5*log(sill);
   return(res);
 }
-/*
-double one_log_sas(double z,double m, double skew, double tail,  double vari)
-{
-  double  res=0.0,S,b;
-  double x=(z-m)/(sqrt(vari));
-    b=tail*asinh(x)-skew;
-    S=sinh(b);
-       res= tail*sqrt(1+S*S)*dnorm(S,0,1,0)/(sqrt(1+x*x)*sqrt(vari));
-  return(log(res));
-}*/
-
 
 double one_log_sas(double z, double m, double skew, double tail, double vari)
 {
@@ -5816,19 +5390,14 @@ double one_log_dpoisgamma(int z,double lambda, double a)
 
 double one_log_negbinom_marg(int u, int N, double p)
 {
- 
-    const double p_safe = fmax(DBL_EPSILON, fmin(1-DBL_EPSILON, p));
-    if (u < 0 || N <= 0) {
-        return -700.0;
-    }
-    const double result = dnbinom(u, N, p_safe, 1);  // 1 = give_log=TRUE
-    if (!R_FINITE(result)) {
-        return -700.0;
-    }
-    
-    return result;
-}
+#define P_CLAMP 1e-10
 
+    if (u < 0 || N <= 0) return R_NegInf;
+
+    p = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, p));
+
+    return dnbinom(u, N, p, 1);  /* give_log = TRUE */
+}
 
 double one_log_loglogistic(double z,double m, double shape)
 {
@@ -5846,11 +5415,6 @@ double one_log_logistic(double z,double m, double sill)
   res=log(k)-2*log(k+1)-0.5*log(sill);
   return(res);
 }
-
-
-
-
-
 
 /*#########################################################################################*/
 /*#####################   bivariate gaussian probabilities      ###########################*/
@@ -6052,8 +5616,6 @@ double bvu(double sh, double sk, double r) {
 
     return bvn;
 }
-
-
 double bvn_hybrid(double h, double k, double rho) {
     double abs_rho = fabs(rho);
     // Gestione casi limite
@@ -6072,7 +5634,6 @@ double bvn_hybrid(double h, double k, double rho) {
         return bvu(h, k, rho);
     //}
 }
-
 // Wrapper IDENTICO al tuo bvnmvn
 double bvnmvn(const double lower[2], const double upper[2], const int infin[2], double corr) {
     double result = 0.0;
@@ -6107,9 +5668,15 @@ double bvnmvn(const double lower[2], const double upper[2], const int infin[2], 
     return result;
 }
 
-
-
-
+ double safe_pbnorm22(double x, double y, double rho)
+{
+    // casi esatti ai bordi — nessuna approssimazione
+    if (!R_FINITE(x) && x < 0) return 0.0;          // Φ₂(-∞, y) = 0
+    if (!R_FINITE(x) && x > 0) return pnorm(y,0,1,1,0); // Φ₂(+∞, y) = Φ(y)
+    if (!R_FINITE(y) && y < 0) return 0.0;          // Φ₂(x, -∞) = 0
+    if (!R_FINITE(y) && y > 0) return pnorm(x,0,1,1,0); // Φ₂(x, +∞) = Φ(x)
+    return pbnorm22(x, y, rho);
+}
 double pbnorm22(double lim1,double lim2,double corr){
     double lower[2] = {-INFINITY, -INFINITY};
     double upper[2] = {lim1, lim2};
@@ -6118,19 +5685,6 @@ double pbnorm22(double lim1,double lim2,double corr){
     //Rprintf("%f = %f %f %f  \n",res,lim1,lim2,corr);
     return res;
 }
-
-
-/*
-double pbnorm22(double lim1,double lim2,double corr)
-{
-    double  lowe[2]  = {0,0}, uppe[2] = {lim1,lim2}, corre[1] = {corr};
-    double  value;
-    int     infin[2] = {0,0};
-    value            = F77_CALL(bvnmvn)(lowe,uppe,infin,corre); 
-    return(value);
-}
-*/
-
 // compute the bivariate normal cdf for the bernoulli RF:
 double pbnorm(int *cormod, double h, double u, double mean1, double mean2, 
   double nugget, double var,double *par, double thr)
@@ -6143,8 +5697,6 @@ double pbnorm(int *cormod, double h, double u, double mean1, double mean2,
     res=bvnmvn(lim_inf,lim_sup,infin,corr);
   return(res);
 }
-
-
 // CDF of a bivariate Gaussian distribution using bvnmvn
 double cdf_norm(double lim1, double lim2, double a11, double a12) {
     double res = 0.0;
@@ -6157,8 +5709,6 @@ double cdf_norm(double lim1, double lim2, double a11, double a12) {
     res = a11 * sqrt(auxil / det) * bvnmvn(lower, upper, infin, corr);
     return res;
 }
-
-
 // CDF of a bivariate Gaussian distribution using general covariance
 double cdf_norm2(double lim1, double lim2, double a11, double a12, double a22) {
     double res = 0.0;
@@ -6172,4 +5722,3 @@ double cdf_norm2(double lim1, double lim2, double a11, double a12, double a22) {
 
     return res;
 }
-

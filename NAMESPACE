@@ -1,8 +1,9 @@
 export(CheckBiv,CheckDistance,CheckSph,CheckST,	CkCorrModel,CkInput,CkLikelihood,CkModel,	CkType,CompIndLik2,CompLik,CompLik2,	CorrelationPar,	CorrParam, corrsas, GeoAniso,
-GeoKrigWeights,GeoKriglocWeights,GeoCorrFct_Cop,GeoDistances,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,GeoTestIsotropy,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,	GeoNosymindices,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,MargParam,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect,GeoTestsupp_space)
+GeoKrigWeights,GeoKriglocWeights,GeoCorrFct_Cop,GeoDistances,	GeoCorrFct,GeoCovariogram,GeoCovDisplay,GeoCovmatrix,GeoCV,GeoFit,GeoFit2,GeoTestIsotropy,	GeoKrig,GeoKrigloc,GeoNA,GeoNeighborhood,GeoNeighIndex,GeoOutlier,GeoPit,	GeoQQ,GeoResiduals,GeoScatterplot,GeoSim,GeoSimapprox,GeoSimcond,GeoSimCopula,GeoScores,GeoTests,GeoVarestbootstrap,GeoVariogram,GeoVariogramDir,Lik,MatDecomp,NuisParam,NuisParam2,MargParam,GeoDoScores,StartParam,WlsStart,MatSqrt,MatInv,MatLogDet,GeoWLS,sp2Geo,GeoNeighbSelect,GeoTestsupp_space)
 useDynLib(GeoModels, .registration = TRUE)
 S3method(print,GeoFit) 
 S3method(print,GeoCovmatrix) 
+S3method(summary, GeoFit)
 S3method(print,GeoWLS)
 S3method(plot,GeoVariogram)
 S3method(plot,GeoVariogramDir)
@@ -31,6 +32,7 @@ importFrom(future,plan)
 importFrom(future,sequential)
 importFrom(doFuture,"%dofuture%")
 importFrom(progressr,handlers,progressor)
+
 
 
 

@@ -1,7 +1,7 @@
 #include "header.h"
 
 double clamp_corr(double x) {
-    const double eps = 1e-12;
+    const double eps = 1e-10;
     if (x >  1.0 - eps) return  1.0 - eps;
     return x;
 }

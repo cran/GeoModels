@@ -344,8 +344,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                           l2=dnorm(data2[i],mean2[i]+sqrt(sill)*MM,sqrt(sill*FF),1);
                         //*res+= (2*bl-l1-l2)*weights;
                         *res+= (bl-l2)*weights;
-
-
                     }}
     if(!R_FINITE(*res))  *res = LOW;
     return;
@@ -801,7 +799,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
-
 /*********************************************************/
 void Comp_Cond_Pois2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -845,7 +842,6 @@ void Comp_Cond_BinomGauss2mem(int *cormod, double *data1, double *data2, int *N1
         *res = LOW;
         return;
     }
-    
     const double scale = 1.0 - nugget;
     const int N = N1[0];
     
@@ -956,35 +952,69 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))*res = LOW;
     return;
 }
-void Comp_Cond_BinomNNGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomNNGauss2mem(int *cormod, double *data1, double *data2,
+        int *N1, int *N2, double *par, int *weigthed, double *res,
+        double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
 {
-    int i=0, uu=0,vv=0,n1,n2;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double p1=0.0,p2=0.0;//probability of marginal success
-    double p11=0.0;//probability of joint success
-    double nugget=nuis[0];
-    if( nugget>=1 || nugget<0){*res=LOW; return;}
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                 ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],0,par,0,0);
-                 p11=pbnorm22(ai,aj,(1-nugget)*clamp_corr(corr));
-                 p1=pnorm(ai,0,1,1,0);
-                 p2=pnorm(aj,0,1,1,0);
-                 u=data1[i];v=data2[i];
-                 n1=N1[i];n2=N2[i];
-                 if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                 uu=(int) u; vv=(int) v;
-                 l2=dbinom(vv,n2,p2,1);
-                 bl=log(biv_binom222(n1,n2,uu,vv,p1,p2,p11))-l2;
-                 *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
-}
+    *res = 0.0;  /* FIX 5: reset esplicito */
 
+    double nugget = nuis[0];
+    if (nugget < 0.0 || nugget >= 1.0) { *res = LOW; return; }
+    double one_minus_nugget = 1.0 - nugget;
+
+#define P_CLAMP 1e-10
+
+    int    i, uu, vv, n1, n2, valid_pairs = 0;
+    double u, v, bl, weights, ai, aj, corr, l2;
+    double p1, p2, p11;
+
+    for (i = 0; i < npairs[0]; i++) {
+
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+
+        weights = 1.0;
+        if (*weigthed) {
+            weights = CorFunBohman(lags[i], maxdist[0]);
+            if (weights <= 0.0) continue;
+        }
+
+        if (data1[i] < 0.0 || data2[i] < 0.0) continue;
+
+        /* FIX 4: N check esplicito */
+        if (N1[i] <= 0 || N2[i] <= 0) continue;
+
+        u = data1[i];
+        v = data2[i];
+        uu = (int) u;
+        vv = (int) v;
+        n1 = N1[i];
+        n2 = N2[i];
+
+        ai = mean1[i];
+        aj = mean2[i];
+
+        corr = clamp_corr(CorFct(cormod, lags[i], 0, par, 0, 0));
+
+        p1 = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(ai, 0.0, 1.0, 1, 0)));
+        p2 = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(aj, 0.0, 1.0, 1, 0)));
+
+        p11 = pbnorm22(ai, aj, one_minus_nugget * corr);
+        p11 = fmax(fmax(0.0, p1 + p2 - 1.0), fmin(fmin(p1, p2), p11));
+
+        bl = biv_binom222(n1, n2, uu, vv, p1, p2, p11);
+        if (!R_FINITE(bl) || bl <= 0.0) continue;
+
+        l2 = dbinom(vv, n2, p2, 1);
+        if (!R_FINITE(l2)) continue;
+
+        valid_pairs++;
+        *res += weights * (log(bl) - l2);
+    }
+
+    if (valid_pairs < npairs[0] / 2) { *res = LOW; return; }
+
+    if (!R_FINITE(*res)) *res = LOW;
+}
 void Comp_Cond_BinomNNLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond)
@@ -1013,135 +1043,87 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /*********************************************************/
-void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                                  double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                  double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2,
+        int *N1, int *N2, double *par, int *weigthed, double *res,
+        double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
 {
-    int i = 0, uu = 0, vv = 0;
-    double u, v, bl = 0.0, weights = 1.0, ai = 0.0, aj = 0.0, corr = 0.0, l2 = 0.0;
-    double p1 = 0.0, p2 = 0.0;  // probability of marginal success
-    double p11 = 0.0;           // probability of joint success
-    
-    // Controllo precoce dei parametri
-    const double nugget = nuis[0];
-    if (nugget >= 1 || nugget < 0) {
-        *res = LOW;
-        return;
-    }
-    
-    const double scale = 1.0 - nugget;
-    const int N = N1[0];
-    
-    // Inizializza res a 0
     *res = 0.0;
-    
-    // Calcolo della composite log-likelihood
+ 
+    double nugget = nuis[0];
+    if (nugget < 0.0 || nugget >= 1.0) { *res = LOW; return; }
+    double one_minus_nugget = 1.0 - nugget;
+ 
+    int N = N1[0];
+    if (N <= 0) { *res = LOW; return; }
+ 
+    /* FIX 1: scansione preliminare per dimensionare la cache */
+    int MAX_UV = 0;
+    for (int k = 0; k < npairs[0]; k++) {
+        if (!ISNAN(data1[k]) && data1[k] > MAX_UV) MAX_UV = (int)data1[k];
+        if (!ISNAN(data2[k]) && data2[k] > MAX_UV) MAX_UV = (int)data2[k];
+    }
+    /* FIX 3: dimensione sicura */
+    int cache_size = N + 2 * MAX_UV + 10;
+    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
+    if (!lgamma_cache) { *res = LOW; return; }
+    for (int k = 0; k < cache_size; k++)
+        lgamma_cache[k] = lgammafn(k + 1);
+ 
+#define P_CLAMP 1e-10
+ 
+    int    i, uu, vv, valid_pairs = 0;
+    double u, v, bl, weights, ai, aj, corr, l2;
+    double p1, p2, p11, joint;
+ 
     for (i = 0; i < npairs[0]; i++) {
-        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
-            ai = mean1[i];
-            aj = mean2[i];
-            
-            // CLIPPING DEI PARAMETRI LINEARI per evitare overflow in pnorm
-            const double ai_safe = fmax(-5.0, fmin(5.0, ai));
-            const double aj_safe = fmax(-5.0, fmin(5.0, aj));
-            
-            // Calcolo correlazione con clipping per stabilità numerica
-            corr = CorFct(cormod, lags[i], 0, par, 0, 0);
-            corr = fmax(-0.999, fmin(0.999, clamp_corr(corr)));  // CLIPPING DELLA CORRELAZIONE
-            const double scaled_corr = scale * clamp_corr(corr);
-            
-            // Calcolo probabilità congiunta e marginali con parametri sicuri
-            p11 = pbnorm22(ai_safe, aj_safe, scaled_corr);
-            p1 = pnorm(ai_safe, 0, 1, 1, 0);
-            p2 = pnorm(aj_safe, 0, 1, 1, 0);
-            
-            // CLIPPING DELLE PROBABILITÀ per evitare valori estremi
-            const double p1_safe = fmax(1e-15, fmin(1-1e-15, p1));
-            const double p2_safe = fmax(1e-15, fmin(1-1e-15, p2));
-            const double p11_safe = fmax(1e-15, fmin(fmin(p1_safe, p2_safe), p11));
-            
-            u = data1[i];
-            v = data2[i];
-            
-            // Calcolo pesi se richiesto
-            if (*weigthed) {
-                weights = CorFunBohman(lags[i], maxdist[0]);
-            } else {
-                weights = 1.0;
-            }
-            
-            uu = (int)u;
-            vv = (int)v;
-            
-            // Calcolo della densità marginale con controllo di validità
-            l2 = one_log_negbinom_marg(vv, N, p2_safe);
-            
-            // Controllo per evitare valori non finiti nella densità marginale
-            if (!R_FINITE(l2)) {
-                l2 = -700.0;  // Valore molto negativo invece di -Inf
-            }
-            
-            // Calcolo della densità bivariata con controllo di validità
-            const double binomneg_joint = biv_binomneg(N, uu, vv, p1_safe, p2_safe, p11_safe);
-            double log_binomneg_joint;
-            
-            if (binomneg_joint > 1e-300 && R_FINITE(binomneg_joint)) {
-                log_binomneg_joint = log(binomneg_joint);
-            } else {
-                log_binomneg_joint = -700.0;  // Valore molto negativo invece di -Inf
-            }
-            
-            // Calcolo della likelihood condizionale: log(P(X,Y)) - log(P(Y))
-            bl = log_binomneg_joint - l2;
-            
-            // Controllo finale per valori finiti
-            if (R_FINITE(bl)) {
-                *res += weights * bl;
-            } else {
-                // Se bl non è finito, aggiungi un valore penalizzante
-                *res += weights * (-700.0);
-            }
+ 
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+        if (data1[i] < 0.0   || data2[i] < 0.0)  continue;
+ 
+        weights = 1.0;
+        if (*weigthed) {
+            weights = CorFunBohman(lags[i], maxdist[0]);
+            if (weights <= 0.0) continue;
         }
+ 
+        u  = data1[i];
+        v  = data2[i];
+        uu = (int)u;
+        vv = (int)v;
+        ai = mean1[i];
+        aj = mean2[i];
+ 
+        corr = clamp_corr(CorFct(cormod, lags[i], 0, par, 0, 0));
+        p1   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(ai, 0.0, 1.0, 1, 0)));
+        p2   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(aj, 0.0, 1.0, 1, 0)));
+        p11  = pbnorm22(ai, aj, one_minus_nugget * corr);
+ 
+        /* FIX 4: evita p11 == min(p1,p2) esattamente */
+        p11  = fmax(fmax(0.0, p1 + p2 - 1.0),
+                    fmin(fmin(p1, p2) - P_CLAMP, p11));
+ 
+        l2 = one_log_negbinom_marg(vv, N, p2);
+        if (!R_FINITE(l2)) continue;
+ 
+        /* FIX 1: passa la cache allocata una sola volta */
+        joint = biv_binomneg(N, uu, vv, p1, p2, p11, lgamma_cache, cache_size);
+        if (!R_FINITE(joint) || joint <= 0.0) continue;
+ 
+        bl = log(joint) - l2;
+        if (!R_FINITE(bl)) continue;
+ 
+        valid_pairs++;
+        *res += weights * bl;
     }
-    
-    // Controllo finale del risultato
-    if (!R_FINITE(*res)) {
-        *res = LOW;
-    }
-    
-    return;
+ 
+    free(lgamma_cache);
+ 
+#undef P_CLAMP
+ 
+    /* FIX 2: soglia robusta per npairs piccolo */
+    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+    if (!R_FINITE(*res)) *res = LOW;
 }
-
-/*********************************************************/
-void Comp_Cond_BinomnegLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
-{
-    int i=0,  uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double p1=0.0,p2=0.0;//probability of marginal success
-    double p11=0.0;//probability of joint success
-    double nugget=nuis[0];
-       if( nugget>=1 || nugget<0){*res=LOW; return;}
-    //compute the composite log-likelihood:
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                  ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],0,par,0,0);
-                    p11=pblogi22(log(exp(ai)+1),log(exp(aj)+1),(1-nugget)*clamp_corr(corr));
-                p1=1/(1+exp(-ai));p2=1/(1+exp(-aj));
-                    u=data1[i];v=data2[i];
-                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                          uu=(int) u;vv=(int) v;
-                         l2=one_log_negbinom_marg(vv,N1[0],p2);
-                        bl=log(biv_binomneg(N1[0],uu,vv,p1,p2,p11))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
-}
-
 
 /******************************************************/
 void Comp_Cond_BinomnegBinary2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -1300,30 +1282,78 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /********************************************************/
-void Comp_Cond_BinomnegGaussZINB2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2,
+    int *N1, int *N2, double *par, int *weigthed, double *res,
+    double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
 {
-    int i=0,  uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double nugget1=nuis[0];double nugget2=nuis[1];
-    double mup=nuis[2];
-      if(nugget1<0||nugget1>=1||nugget2<0||nugget2>=1){*res=LOW; return;}
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                  ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],0,par,0,0);
-                    u=data1[i];v=data2[i];
-                         if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0]);
-                          uu=(int) u;
-                         vv=(int) v;
-                    l2=one_log_BinomnegZIP(vv,N1[0],aj,mup);
-                    bl=log(biv_binomnegZINB(N1[0],clamp_corr(corr),uu,vv,ai,aj,nugget1,nugget2,mup))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
-
+    *res = 0.0;
+ 
+    double nugget1 = nuis[0];
+    double nugget2 = nuis[1];
+    double mup     = nuis[2];
+ 
+    if (nugget1 < 0.0 || nugget1 >= 1.0 ||
+        nugget2 < 0.0 || nugget2 >= 1.0) { *res = LOW; return; }
+ 
+    int N = N1[0];
+    if (N <= 0) { *res = LOW; return; }
+ 
+    /* FIX 1: scansione preliminare per dimensionare la cache */
+    int MAX_UV = 0;
+    for (int k = 0; k < npairs[0]; k++) {
+        if (!ISNAN(data1[k]) && data1[k] > MAX_UV) MAX_UV = (int)data1[k];
+        if (!ISNAN(data2[k]) && data2[k] > MAX_UV) MAX_UV = (int)data2[k];
+    }
+    /* FIX 3: dimensione sicura */
+    int cache_size = N + 2 * MAX_UV + 10;
+    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
+    if (!lgamma_cache) { *res = LOW; return; }
+    for (int k = 0; k < cache_size; k++)
+        lgamma_cache[k] = lgammafn(k + 1);
+ 
+    int    i, uu, vv, valid_pairs = 0;
+    double u, v, bl, weights, ai, aj, corr, l2, joint;
+ 
+    for (i = 0; i < npairs[0]; i++) {
+ 
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+ 
+        weights = 1.0;
+        if (*weigthed) {
+            weights = CorFunBohman(lags[i], maxdist[0]);
+            if (weights <= 0.0) continue;
+        }
+ 
+        ai   = mean1[i];
+        aj   = mean2[i];
+        corr = clamp_corr(CorFct(cormod, lags[i], 0, par, 0, 0));
+        u    = data1[i];
+        v    = data2[i];
+        uu   = (int)u;
+        vv   = (int)v;
+ 
+        /* marginale controllato prima per evitare calcoli inutili */
+        l2 = one_log_BinomnegZIP(vv, N, aj, mup);
+        if (!R_FINITE(l2)) continue;
+ 
+        /* FIX 1: passa la cache allocata una sola volta */
+        joint = biv_binomnegZINB(N, corr, uu, vv, ai, aj,
+                                 nugget1, nugget2, mup,
+                                 lgamma_cache, cache_size);
+        if (!R_FINITE(joint) || joint <= 0.0) continue;
+ 
+        bl = log(joint) - l2;
+        if (!R_FINITE(bl)) continue;
+ 
+        valid_pairs++;
+        *res += weights * bl;
+    }
+ 
+    free(lgamma_cache);
+ 
+    /* FIX 2: soglia robusta per npairs piccolo */
+    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+    if (!R_FINITE(*res)) *res = LOW;
 }
 /************************************************/
 void Comp_Cond_PoisZIP2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -2451,87 +2481,93 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /*********************************************************/
-void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                                   double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                                   double *nuis,  int *type_cop, int *cond)
+void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
+    int *N1, int *N2, double *par, int *weigthed, double *res,
+    double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
 {
-
-    const double nugget = nuis[0];
-    const int npairs_val = npairs[0];
+    *res = 0.0;
+ 
+    const double nugget        = nuis[0];
+    const double nugget_factor = 1.0 - nugget;
+    if (nugget < 0.0 || nugget >= 1.0) { *res = LOW; return; }
+ 
+    const int npairs_val   = npairs[0];
     const int weigthed_val = *weigthed;
-    const int trials = N1[0];  // Number of trials for negative binomial
+    const int trials       = N1[0];
+    if (trials <= 0) { *res = LOW; return; }
+ 
     const double maxdist_val = maxdist[0];
     const double maxtime_val = maxtime[0];
-    const double nugget_factor = 1.0 - nugget;
-    if(nugget >= 1 || nugget < 0) {
-        *res = LOW;
-        return;
+ 
+    /* FIX 1: scansione preliminare per dimensionare la cache */
+    int MAX_UV = 0;
+    for (int k = 0; k < npairs_val; k++) {
+        if (!ISNAN(data1[k]) && data1[k] > MAX_UV) MAX_UV = (int)data1[k];
+        if (!ISNAN(data2[k]) && data2[k] > MAX_UV) MAX_UV = (int)data2[k];
     }
-    double total = 0.0;
-    for(int i = 0; i < npairs_val; i++) {
+    /* FIX 3: dimensione sicura */
+    int cache_size = trials + 2 * MAX_UV + 10;
+    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
+    if (!lgamma_cache) { *res = LOW; return; }
+    for (int k = 0; k < cache_size; k++)
+        lgamma_cache[k] = lgammafn(k + 1);
+ 
+#define P_CLAMP 1e-10
+ 
+    double total       = 0.0;
+    int    valid_pairs = 0;
+ 
+    for (int i = 0; i < npairs_val; i++) {
+ 
         const double d1 = data1[i];
         const double d2 = data2[i];
-        if(!ISNAN(d1) && !ISNAN(d2)) {
-            // Precompute probabilities
-            const double ai = mean1[i];
-            const double aj = mean2[i];
-            const double corr = CorFct(cormod, lags[i], lagt[i], par, 0, 0) * nugget_factor;
-            const double p11 = pbnorm22(ai, aj, clamp_corr(corr));
-            const double p1 = pnorm(ai, 0, 1, 1, 0);
-            const double p2 = pnorm(aj, 0, 1, 1, 0);
-            const int uu = (int)d1;
-            const int vv = (int)d2;
-            double weights = 1.0;
-            if(weigthed_val) {
-                weights = CorFunBohman(lags[i], maxdist_val) * 
-                         CorFunBohman(lagt[i], maxtime_val);
-            }
-            const double l2 = one_log_negbinom_marg(vv, trials, p2);
-            const double biv = biv_binomneg(trials, uu, vv, p1, p2, p11);
-            const double bl = log(biv) - l2;
-
-            total += weights * bl;
+        if (ISNAN(d1) || ISNAN(d2)) continue;
+ 
+        double weights = 1.0;
+        if (weigthed_val) {
+            weights = CorFunBohman(lags[i], maxdist_val) *
+                      CorFunBohman(lagt[i], maxtime_val);
+            if (weights <= 0.0) continue;
         }
+ 
+        const double ai   = mean1[i];
+        const double aj   = mean2[i];
+        const double corr = clamp_corr(CorFct(cormod, lags[i], lagt[i], par, 0, 0));
+        const double p1   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(ai, 0, 1, 1, 0)));
+        const double p2   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(aj, 0, 1, 1, 0)));
+        double       p11  = pbnorm22(ai, aj, nugget_factor * corr);
+ 
+        /* FIX 4: evita p11 == min(p1,p2) esattamente */
+        p11 = fmax(fmax(0.0, p1 + p2 - 1.0),
+                   fmin(fmin(p1, p2) - P_CLAMP, p11));
+ 
+        const int uu = (int)d1;
+        const int vv = (int)d2;
+ 
+        /* marginale controllato prima per evitare calcoli inutili */
+        const double l2 = one_log_negbinom_marg(vv, trials, p2);
+        if (!R_FINITE(l2)) continue;
+ 
+        /* FIX 1: passa la cache allocata una sola volta */
+        const double biv = biv_binomneg(trials, uu, vv, p1, p2, p11,
+                                        lgamma_cache, cache_size);
+        if (!R_FINITE(biv) || biv <= 0.0) continue;
+ 
+        const double bl = log(biv) - l2;
+        if (!R_FINITE(bl)) continue;
+ 
+        valid_pairs++;
+        total += weights * bl;
     }
-    *res = total;
-    if(!R_FINITE(*res)) {
-        *res = LOW;
-    }
+ 
+    free(lgamma_cache);
+ 
+#undef P_CLAMP
+ 
+    /* FIX 2: soglia robusta per npairs piccolo */
+    if (valid_pairs < (npairs_val + 1) / 2) { *res = LOW; return; }
+    *res = R_FINITE(total) ? total : LOW;
 }
-
-
-
-/*********************************************************/
-void Comp_Cond_BinomnegLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
-{
-    int i=0,  uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double p1=0.0,p2=0.0;//probability of marginal success
-    double p11=0.0;//probability of joint success
-    double nugget=nuis[0];
-       if( nugget>=1 || nugget<0){*res=LOW; return;}
-    //compute the composite log-likelihood:
-
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                  ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],lagt[i],par,0,0);
-                    p11=pblogi22(log(exp(ai)+1),log(exp(aj)+1),(1-nugget)*clamp_corr(corr));
-                p1=1/(1+exp(-ai));p2=1/(1+exp(-aj));
-                    u=data1[i];v=data2[i];
-                            if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxtime[0]);
-                          uu=(int) u;  vv=(int) v;
-                         l2=one_log_negbinom_marg(vv,N1[0],p2);
-                          bl=log(biv_binomneg(N1[0],uu,vv,p1,p2,p11))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
-}
-
-
 
 void Comp_Cond_TWOPIECETukeyh_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -2691,29 +2727,79 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 }
 
 /********************************************************/
-void Comp_Cond_BinomnegGaussZINB_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_BinomnegGaussZINB_st2mem(int *cormod, double *data1, double *data2,
+    int *N1, int *N2, double *par, int *weigthed, double *res,
+    double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
 {
-    int i=0,  uu=0,vv=0;
-    double u,v,bl=0.0,weights=1.0,ai=0.0,aj=0.0,corr=0.0,l2=0.0;
-    double nugget1=nuis[0];double nugget2=nuis[1];
-    double mup=nuis[2];
-      if(nugget1<0||nugget1>=1||nugget2<0||nugget2>=1){*res=LOW; return;}
-    for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                  ai=mean1[i];aj=mean2[i];
-                 corr=CorFct(cormod,lags[i],lagt[i],par,0,0);
-                    u=data1[i];v=data2[i];
-                                  if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxtime[0]);
-                          uu=(int) u;vv=(int) v;
-                    l2=one_log_BinomnegZIP(vv,N1[0],aj,mup);
-
-                    bl=log(biv_binomnegZINB(N1[0],clamp_corr(corr),uu,vv,ai,aj,nugget1,nugget2,mup))-l2;
-                    *res+= weights*bl;
-                }}
-    if(!R_FINITE(*res))*res = LOW;
-    return;
+    *res = 0.0;
+ 
+    double nugget1 = nuis[0];
+    double nugget2 = nuis[1];
+    double mup     = nuis[2];
+ 
+    if (nugget1 < 0.0 || nugget1 >= 1.0 ||
+        nugget2 < 0.0 || nugget2 >= 1.0) { *res = LOW; return; }
+ 
+    int N = N1[0];
+    if (N <= 0) { *res = LOW; return; }
+ 
+    /* FIX 1: scansione preliminare per dimensionare la cache */
+    int MAX_UV = 0;
+    for (int k = 0; k < npairs[0]; k++) {
+        if (!ISNAN(data1[k]) && data1[k] > MAX_UV) MAX_UV = (int)data1[k];
+        if (!ISNAN(data2[k]) && data2[k] > MAX_UV) MAX_UV = (int)data2[k];
+    }
+    /* FIX 3: dimensione sicura */
+    int cache_size = N + 2 * MAX_UV + 10;
+    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
+    if (!lgamma_cache) { *res = LOW; return; }
+    for (int k = 0; k < cache_size; k++)
+        lgamma_cache[k] = lgammafn(k + 1);
+ 
+    int    i, uu, vv, valid_pairs = 0;
+    double u, v, bl, weights, ai, aj, corr, l2, joint;
+ 
+    for (i = 0; i < npairs[0]; i++) {
+ 
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+ 
+        weights = 1.0;
+        if (*weigthed) {
+            weights = CorFunBohman(lags[i], maxdist[0]) *
+                      CorFunBohman(lagt[i], maxtime[0]);
+            if (weights <= 0.0) continue;
+        }
+ 
+        ai   = mean1[i];
+        aj   = mean2[i];
+        corr = clamp_corr(CorFct(cormod, lags[i], lagt[i], par, 0, 0));
+        u    = data1[i];
+        v    = data2[i];
+        uu   = (int)u;
+        vv   = (int)v;
+ 
+        /* marginale controllato prima per evitare calcoli inutili */
+        l2 = one_log_BinomnegZIP(vv, N, aj, mup);
+        if (!R_FINITE(l2)) continue;
+ 
+        /* FIX 1: passa la cache allocata una sola volta */
+        joint = biv_binomnegZINB(N, corr, uu, vv, ai, aj,
+                                 nugget1, nugget2, mup,
+                                 lgamma_cache, cache_size);
+        if (!R_FINITE(joint) || joint <= 0.0) continue;
+ 
+        bl = log(joint) - l2;
+        if (!R_FINITE(bl)) continue;
+ 
+        valid_pairs++;
+        *res += weights * bl;
+    }
+ 
+    free(lgamma_cache);
+ 
+    /* FIX 2: soglia robusta per npairs piccolo */
+    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+    if (!R_FINITE(*res)) *res = LOW;
 }
 /************************************************/
 void Comp_Cond_PoisZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -2778,7 +2864,6 @@ if(*weigthed) weights=CorFunBohman(lags[i],maxdist[0])*CorFunBohman(lagt[i],maxt
     return;
 }
 
-
 void Comp_Cond_LogLogistic_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond)
@@ -2805,10 +2890,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 
-
-
-
-
 void Comp_Cond_Logistic_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond)
@@ -2832,9 +2913,3 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
-
-
-
-
-
-

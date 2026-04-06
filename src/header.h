@@ -482,7 +482,10 @@ double appellF4(double a,double b,double c,double d,double x,double y);
 double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a);
 double biv_PoissonZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2);
 double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape);
-double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,double nugget1,double nugget2,double mup);
+//double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,double nugget1,double nugget2,double mup);
+double biv_binomnegZINB(int N, double corr, int r, int t, double mean_i, double mean_j,
+    double nugget1, double nugget2, double mup,
+    double *lgamma_cache, int cache_size);
 double biv_wrapped(double alfa,double u, double v, double mi, double mj, double nugget,double sill,double corr);
 double biv_Weibull(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_Weibull2(double rho12,double zi,double zj,double mi,double mj, double shape1,double shape2);
@@ -495,12 +498,18 @@ double biv_beta(double rho,double zi,double zj,double ai,double aj,double shape1
 //double log_biv_binom (int NN, double u, double v, double psm,double psj);
 double biv_LogLogistic(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_Logistic(double corr,double zi,double zj,double mui, double muj, double sill);
-double biv_binomneg (int NN, int u, int v, double p01,double p10,double p11);
+//double biv_binomneg (int NN, int u, int v, double p01,double p10,double p11);
+double biv_binomneg(int NN, int u, int v, double p01, double p10, double p11,
+                    double *lgamma_cache, int cache_size);
 double biv_binegbinary(int NN, int u, int v,double pu,double pv, double p11);
 double biv_binom222(int n1,int n2, int u, int v, double p01,double p10,double p11);
 double bin_aux(int a,int NN,int u,int v,double p1, double p2,double p11);
-double aux_biv_binomneg (int NN, int u, int v, double x,double y,double p11);
-double aux_biv_binomneg_simple(int NN, int u, double p01,double p10,double p11);
+//double aux_biv_binomneg (int NN, int u, int v, double x,double y,double p11);
+double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11,
+                        double *lgamma_cache, int cache_size);
+//double aux_biv_binomneg_simple(int NN, int u, double p01,double p10,double p11);
+double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11,
+                               double *lgamma_cache, int cache_size);
 double aux_euv_binomneg (int N, double p1,double p2,double p11);
 double aux_biv_binom(int n1,int n2, int u, int v,double p01,double p10,double p11);
 double corr_binomneg (int N, double p1,double p2,double p11);
@@ -707,6 +716,7 @@ double onef2integral(double x, double *param);
 double pbnorm(int *cormod, double h, double u, double lim1, double lim2, double nugget, double var,double *par, double thr);
 double phalf_gauss (double z);
 double pbnorm22(double lim1,double lim2,double corr);
+ double safe_pbnorm22(double x, double y, double rho);
 double bvnmvn_optimized(const double *lower, const double *upper, 
                           const int *infin, double correl);
 double pblogi22(double lim1,double lim2,double corr);

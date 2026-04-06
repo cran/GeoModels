@@ -8,8 +8,6 @@
 #include "header.h"
 #undef extern
 
-
-
 /********************** utility C calls ****************************************************/
 
 //extern void hyperg_U_e_call( double *a,  double *b,  double *x, double *val);
@@ -17,8 +15,6 @@ extern void SetGlobalVar2 (int *nsite, int *times,
                            double *h,int *nn,  double *maxh,
                            double *u,int *tt,  double *maxu,
                            int *st,int *biv,int *one, int *two);
-
-
 
 extern void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *coordt,int *grid,int *ia,
       int *idx,int *ismal,int *ja,int *mem, int *nsite,int *nsitex,int *nsitey,int *nsitez,
@@ -40,12 +36,8 @@ extern void gamma_gibbs_sampler(double *SigmaInv,double *y,int *n,int *v,double 
 
 extern void rnorm_constraint_simple(double *A, double *b, double *mu, 
                              double *sigma, double *result);
-
-
-
 extern void geo_distances(double *coords, int *ncoords, int *p, int *type_dist, double *radius,
                      double *out) ;
-
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
@@ -75,7 +67,6 @@ extern void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2
 extern void pairs(int *ncoords,double *data,double *coordx,double *coordy,double *coordz,double *numbins,
                        double *bins,double *v0,double *v1,double *v2,double *maxdist,int *typ, double *radius);
 
-
 /********************** for variogrms computations  ****************************************************/
 
 extern void Binned_Variogram_biv2(double *bins,double *coordx, double *coordy,double *coordz, double *coordt, double *data,
@@ -91,24 +82,19 @@ extern void Binned_Variogram2new(double *bins, int *np,double *data1, double *da
 
 extern void Binned_Variogram_biv2new(double *bins, int *np,double *data1, double *data2,  double *vdist, double *mm,
      double *moms00,double *moms10,double *moms11,int *lbins00,int *lbins10,int *lbins11,int *nbins,int *first, int *second);
-
-
 extern void Binned_Variogram_st2_dyn(double *bins, double *bint, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, int *lbinst,
                               int *lbint, double *moms,double *momst, double *momt, int *nbins, int *nbint, int *ns,int *NS);
-
 extern void Cloud_Variogram2(double *bins,double *coordx, double *coordy,double *coordz, double *coordt, double *data, int *lbins, double *moms, int *nbins);
 extern void LeastSquare_G(double *bins, double *bint, int *cormod, double *lbins, double *moms,
           int *nbins, int *nbint, double *nuis, double *par, double *res);
 extern void WLeastSquare_G(double *bins, double *bint, int *cormod, double *lbins, double *moms,
            int *nbins, int *nbint, double *nuis, double *par, double *res);
 
-
 /********************** for distribution computations  ****************************************************/
 
 extern void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, double *res);
 extern void biv_unif_CopulaGauss_call(double *x,double *y,double *rho, double *res);
 extern void corr_kuma_vec(double *rho,double *eta,double *gam,double *res, int *n);
-
 
 /*********************** for correlation computations ***************************************************/
 
@@ -642,9 +628,9 @@ extern void Comp_Cond_BinomNNLogi_st2mem(int *cormod, double *data1,double *data
 extern void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                     double *nuis, int *type_cop, int *cond);
-extern void Comp_Cond_BinomnegLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
-                                   double *nuis, int *type_cop, int *cond);
+//extern void Comp_Cond_BinomnegLogi_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+// double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ //                                  double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_TWOPIECETukeyh_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                      double *nuis, int *type_cop, int *cond);
@@ -724,12 +710,12 @@ extern void Comp_Pair_PoisbinGauss2mem_aniso(int *cormod, double *coord1,double 
 extern void Comp_Pair_BinomnegGauss2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                        double *nuis, int *type_cop, int *cond);
-extern void Comp_Pair_BinomnegLogi2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
-                                      double *nuis, int *type_cop, int *cond);
-extern void Comp_Pair_BinomnegGaussZINB2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
-                                           double *nuis, int *type_cop, int *cond);
+//extern void Comp_Pair_BinomnegLogi2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+// double *par, int *weigthed, double *res,double *mean1,double *mean2,
+//                                      double *nuis, int *type_cop, int *cond);
+//extern void Comp_Pair_BinomnegGaussZINB2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+// double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ //                                          double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_BinomGauss2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                     double *nuis, int *type_cop, int *cond);
@@ -913,9 +899,9 @@ extern void Comp_Cond_TWOPIECEGauss2mem_aniso(int *cormod, double *coord1, doubl
 extern void Comp_Cond_TWOPIECEBIMODAL2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
-extern void Comp_Cond_BinomnegGaussZINB2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond);
+//extern void Comp_Cond_BinomnegGaussZINB2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
+// double *par, int *weigthed, double *res,double *mean1,double *mean2,
+// double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_PoisZIP2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
@@ -941,7 +927,7 @@ extern void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *m
 extern void appellF4_call(double *a,double *b,double *c,double *d,double *x,double *y, double *res);
 extern void biv_gamma_call(double *corr,double *zi,double *zj,double *mui, double *muj, double *shape, double *res);
 
-extern void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res);
+//extern void biv_binomneg_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res);
 
 extern void biv_binom_call(int *NN,int *u, int *v, double *p01, double *p10,double *p11,double *res);
 
@@ -962,7 +948,7 @@ static const R_CMethodDef CEntries[] = {
     {"integr_kuma",                 (DL_FUNC) &integr_kuma,              3},
     {"lgnd",                        (DL_FUNC) &lgnd,                     3},
     {"qnorm55_call",                (DL_FUNC) &qnorm55_call,             6},
-    {"biv_binomneg_call",           (DL_FUNC) &biv_binomneg_call,        7},
+    //{"biv_binomneg_call",           (DL_FUNC) &biv_binomneg_call,        7},
     {"biv_binom_call",              (DL_FUNC) &biv_binom_call,           7},
     {"biv_gamma_call",              (DL_FUNC) &biv_gamma_call,           7},
     {"hyperg_call",                 (DL_FUNC) &hyperg_call,              4},
@@ -1185,7 +1171,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_BinomNNGauss_st2mem",         (DL_FUNC) &Comp_Cond_BinomNNGauss_st2mem,         13},
     {"Comp_Cond_BinomNNLogi_st2mem",         (DL_FUNC) &Comp_Cond_BinomNNLogi_st2mem,         13},
     {"Comp_Cond_BinomnegGauss_st2mem",         (DL_FUNC) &Comp_Cond_BinomnegGauss_st2mem,         13},
-    {"Comp_Cond_BinomnegLogi_st2mem",         (DL_FUNC) &Comp_Cond_BinomnegLogi_st2mem,         13},//96
+    //{"Comp_Cond_BinomnegLogi_st2mem",         (DL_FUNC) &Comp_Cond_BinomnegLogi_st2mem,         13},//96
     {"Comp_Cond_TWOPIECETukeyh_st2mem",         (DL_FUNC) &Comp_Cond_TWOPIECETukeyh_st2mem,         13},
     {"Comp_Cond_TWOPIECET_st2mem",         (DL_FUNC) &Comp_Cond_TWOPIECET_st2mem,         13},
     {"Comp_Cond_TWOPIECEGauss_st2mem",         (DL_FUNC) &Comp_Cond_TWOPIECEGauss_st2mem,         13},
@@ -1213,8 +1199,8 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_PoisbinnegGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisbinnegGauss2mem_aniso,         15},
     {"Comp_Pair_PoisbinGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisbinGauss2mem_aniso,         15},
     {"Comp_Pair_BinomnegGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegGauss2mem_aniso,         15},//109
-    {"Comp_Pair_BinomnegLogi2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegLogi2mem_aniso,         15},
-    {"Comp_Pair_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegGaussZINB2mem_aniso,         15},
+    //{"Comp_Pair_BinomnegLogi2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegLogi2mem_aniso,         15},
+    //{"Comp_Pair_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegGaussZINB2mem_aniso,         15},
     {"Comp_Pair_BinomGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomGauss2mem_aniso,         15},//112
     {"Comp_Pair_BinomLogi2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomLogi2mem_aniso,         15},
     {"Comp_Pair_BinomNNGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomNNGauss2mem_aniso,         15},
@@ -1270,7 +1256,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_TWOPIECET2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECET2mem_aniso,         15},
     {"Comp_Cond_TWOPIECEGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECEGauss2mem_aniso,         15},
     {"Comp_Cond_TWOPIECEBIMODAL2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECEBIMODAL2mem_aniso,         15},
-    {"Comp_Cond_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomnegGaussZINB2mem_aniso,         15},
+  //  {"Comp_Cond_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomnegGaussZINB2mem_aniso,         15},
     {"Comp_Cond_PoisZIP2mem_aniso",         (DL_FUNC) &Comp_Cond_PoisZIP2mem_aniso,         15},
     {"Comp_Cond_LogLogistic2mem_aniso",         (DL_FUNC) &Comp_Cond_LogLogistic2mem_aniso,         15},
     {"Comp_Cond_Logistic2mem_aniso",         (DL_FUNC) &Comp_Cond_Logistic2mem_aniso,         15},

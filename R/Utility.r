@@ -1,8 +1,6 @@
 ####################################################
 ### File name: Utility.r
 ####################################################
-
-
 # Check if the correlation is bivariate
 CheckBiv <- function(numbermodel)
 {
@@ -109,7 +107,7 @@ CkCorrModel <- function(corrmodel)
                              exp_cauchy=82,Exp_Cauchy=82,
                              exp_exp=84,Exp_Exp=84,
                              Matern_Matern=86, matern_matern=86,  #ok
-                             Matern_Matern_temp=95,
+                             Matern_Matern_temp=95,# new model
                              stable_stable=94,Stable_Stable=94,
                              prove=96,
               # Bivariate models
@@ -1594,14 +1592,6 @@ if(space)   #  spatial case
     maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb,thin_method=thin_method)
   #sol=GeoNeighIndexRandom(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb)
 
-
- ###    deleting symmetric indexes with associate distances
- if(nosym){
-  aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-  sol$rowidx=c(aa$xy[,1])
-  sol$colidx=c(aa$xy[,2])
-  sol$lags=c(aa$d) }
-
 ###
   nn = length(sol$lags)
   sol$lagt=0
@@ -1638,9 +1628,6 @@ if(weighted)  mmm=max(sol$lags)
            PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
 } 
-
-
-
 ##############################################   
 if(spacetime)   #  space time  case
 {      
@@ -1654,14 +1641,6 @@ if(spacetime)   #  space time  case
    #sol=GeoNeighIndexRandom(coordx=x[1:numcoord,],
    # coordx_dyn=coordx_dyn,
 #coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
-    
- # ###    deleting symmetric indexes with associate distances #unuseful
-  if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-             sol$rowidx=c(aa$xy[,1])
-             sol$colidx=c(aa$xy[,2])
-             sol$lags=c(aa$d)
-           }
-
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
              nn=length(gb$colidx)
@@ -1696,14 +1675,10 @@ if(bivariate)   # bivariate case
 
   #sol=GeoNeighIndexRandom(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
   ###    deleting symmetric indexes with associate distances
-  if(nosym){ aa=GeoNosymindices(cbind(sol$colidx,sol$rowidx),sol$lags)
-             sol$rowidx=c(aa$xy[,1])
-             sol$colidx=c(aa$xy[,2])
-             sol$lags=c(aa$d)}
+
+
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
-             #gb$first=sol$first
-             #gb$second=sol$second
              nn=length(gb$colidx)
              gb$numpairs=nn
 ## loading space time distances in memory   
@@ -1724,8 +1699,6 @@ if(weighted) { mmm=max(sol$lags)}
         INTENT =    c(rep("r",12)),
          PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
-  
-  
 } #### end bivariate case
 
     numpairs <- gb$numpairs
@@ -1742,8 +1715,6 @@ if(weighted) { mmm=max(sol$lags)}
 if(is.null(coordt)) coordt=1
 }}
 
-########################################################################################
-########################################################################################
 ########################################################################################
 ########################################################################################
     ### Returned list of objects:

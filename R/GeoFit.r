@@ -2,559 +2,653 @@
 ### File name: GeoFit.r
 ####################################################
 
-
-GeoFit <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,copula=NULL,corrmodel=NULL, distance="Eucl",
-                         fixed=NULL,anisopars=NULL,est.aniso=c(FALSE,FALSE), grid=FALSE, likelihood='Marginal',
-                         lower=NULL,maxdist=Inf,neighb=NULL,p_neighb=1,
-                          maxtime=Inf, memdist=TRUE,method="cholesky", model='Gaussian',n=1, onlyvar=FALSE ,
-                          optimizer='Nelder-Mead',radius=1,  score=FALSE,sensitivity=FALSE,sparse=FALSE, start=NULL, 
-                         thin_method="iid",type='Pairwise', upper=NULL, varest=FALSE, weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL)
+GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+                   coordx_dyn = NULL, copula = NULL, corrmodel = NULL,
+                   distance = "Eucl", fixed = NULL, anisopars = NULL,
+                   est.aniso = c(FALSE, FALSE), grid = FALSE,
+                   likelihood = "Marginal", lower = NULL, maxdist = Inf,
+                   neighb = NULL, p_neighb = 1, maxtime = Inf, memdist = TRUE,
+                   method = "cholesky", model = "Gaussian", n = 1,
+                   onlyvar = FALSE, optimizer = "Nelder-Mead", radius = 1,
+                   score = FALSE, sensitivity = FALSE, sparse = FALSE,
+                   start = NULL, thin_method = "iid", type = "Pairwise",
+                   upper = NULL, varest = FALSE, weighted = FALSE, X = NULL,
+                    spobj = NULL, spdata = NULL)
 {
-###########  first preliminary check  ###############
-     call <- match.call()
-    suppressWarnings({
+  ###########  first preliminary check  ###############
+  call <- match.call()
 
-    if(is.null(start)) stop("Starting parameters are missing")
-    if(is.null(corrmodel)&& likelihood=="Marginal"&&type=="Independence") 
-    {
-        if(is.null(coordt)){corrmodel="Exponential";tlist=list(nugget=0,scale=1)}
-        else               {corrmodel="Exp_Exp";tlist=list(nugget=0,scale_s=1,scale_t=1)}
-        fixed=append(fixed,tlist)
+  suppressWarnings({
+
+    if (is.null(start)) stop("Starting parameters are missing")
+
+    ## normalize strings early (before checks)
+    if (!is.null(corrmodel)) corrmodel <- gsub("[[:blank:]]", "", corrmodel)
+    if (!is.null(model))     model     <- gsub("[[:blank:]]", "", model)
+    if (!is.null(distance))  distance  <- gsub("[[:blank:]]", "", distance)
+    if (!is.null(optimizer)) optimizer <- gsub("[[:blank:]]", "", optimizer)
+    if (!is.null(likelihood))likelihood<- gsub("[[:blank:]]", "", likelihood)
+    if (!is.null(type))      type      <- gsub("[[:blank:]]", "", type)
+
+    ## default corrmodel for Independence+Marginal
+    if (is.null(corrmodel) && likelihood == "Marginal" && type == "Independence") {
+      if (is.null(coordt)) {
+        corrmodel <- "Exponential"
+        tlist <- list(nugget = 0, scale = 1)
+      } else {
+        corrmodel <- "Exp_Exp"
+        tlist <- list(nugget = 0, scale_s = 1, scale_t = 1)
+      }
+      fixed <- append(fixed, tlist)
     }
-    if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
-    if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
-    if(!is.null(copula))
-     { if((copula!="Clayton")&&(copula!="Gaussian")&&(copula!="SkewGaussian")) stop("the type of copula is wrong\n")}
+    nosym = FALSE
+    ## checks on corrmodel/model/copula
+    if (!is.character(corrmodel) || is.null(CkCorrModel(corrmodel)))
+      stop("the name of the correlation model is wrong\n")
+    if (is.null(CkModel(model)))
+      stop("The name of the model is not correct\n")
 
-    if(type=='Independence'&&likelihood!='Marginal') stop("Independence likelihood must be coupled with 
-        Marginal likelihood\n")
-     
-     if(type=='Pairwise'){ 
-     if(is.null(coordt)) {if(is.null(neighb)&&is.null(maxdist)) stop("neighb or maxdist must be fixed\n")}
-     else                {if((is.null(neighb)||is.null(maxdist))&&is.null(maxtime)) stop("neighb or maxdist and maxtime must be fixed\n")}
-     }
-     #if(type=='Standard'){
-     #   if(!is.null(neighb)||!is.infinite(maxdist)||!is.infinite(maxtime))
-     #   stop("neighb or maxdist or maxtime  shuold not be considered for Standard Likelihood\n")}
-
-    taper=NULL;tapsep=NULL
-    if((likelihood=='Marginal'&&type=="Independence")) {anisopars=NULL;est.aniso=c(FALSE,FALSE)}
-    ### Check the parameters given in input:
-      if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
-    corrmodel=gsub("[[:blank:]]", "",corrmodel)
-    model=gsub("[[:blank:]]", "",model)
-    distance=gsub("[[:blank:]]", "",distance)
-    optimizer=gsub("[[:blank:]]", "",optimizer)
-    likelihood=gsub("[[:blank:]]", "",likelihood)
-    type=gsub("[[:blank:]]", "",type)
-    if(!is.logical(memdist)) memdist=FALSE
-
-    if(!is.null(X)) if(is.null(coordx_dyn)) X=as.matrix(X)
-
-    if(is.numeric(neighb)) {
-            neighb=round(neighb)
-            if(all(neighb<1))  stop("neighb must be an integer >=1\n")
-          }
-    if(!is.null(anisopars)) {if(!is.list(anisopars)) stop("anisopars must be a list with two elements\n")}
-    #if(!is.null(start)) {if(length(start$mean)>1)  stop("mean parameter cannot  be  a vector\n")}
-
-    if(!is.character(optimizer)) stop("invalid optimizer\n")
-    if(!is.character(distance)) stop("invalid distance\n")
-     
-
-bivariate<-CheckBiv(CkCorrModel(corrmodel))
-spacetime<-CheckST(CkCorrModel(corrmodel))
-space=!spacetime&&!bivariate
-
-###### checking if neighb or maxdist or maxtime has been specified when using cl
-if(space){
-     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
-          if(is.null(neighb)&&maxdist==Inf) 
-               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
-}
-
-
-if(bivariate){
-     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
-           if(sum(is.null(neighb)&maxdist==Inf))
-               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
-}
-
-if(spacetime){
-     if( type=='Pairwise'&&(likelihood=='Marginal'||likelihood=='Conditional')) 
-       if((is.null(neighb)&maxdist==Inf)&maxtime==Inf) 
-               stop("neighb or maxdist and maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")
-       if((is.null(neighb)&maxdist==Inf)&maxtime<Inf) 
-               stop("neighb or maxdist must be specificed when using marginal or conditional  pairwise composite likelihood\n")
-       if((!is.null(neighb)|maxdist<Inf) &maxtime==Inf) 
-               stop("maxtime must be specificed when using marginal or conditional  pairwise composite likelihood\n")     
-     }
-########
-
-##############################################################################
-###### extracting sp object informations if necessary              ###########
-##############################################################################
-if(!is.null(spobj)) {
-   if(space||bivariate){
-        a=sp2Geo(spobj,spdata); coordx=a$coords 
-       if(!a$pj) {if(distance!="Chor") distance="Geod"}
+    if (!is.null(copula)) {
+      if (!((copula == "Clayton") || (copula == "Gaussian") || (copula == "SkewGaussian")))
+        stop("the type of copula is wrong\n")
     }
-   if(spacetime){
-        a=sp2Geo(spobj,spdata); coordx=a$coords ; coordt=a$coordt 
-        if(!a$pj) {if(distance!="Chor") distance="Geod"}
-     }
-   if(!is.null(a$Y)&&!is.null(a$X)) {data=a$Y ; X=a$X }
-}
-##############################################################################
-###### setting nugget if missing
-if(!bivariate)
-   if(!sum(substr(names(unlist(append(start,fixed))),1,6)=="nugget")) fixed$nugget=0
 
-###############################################################
-###############################################################  
-if(!bivariate){
-if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson","Binary_misp_BinomialNeg",
-        'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB',"BinomNeg",
-        'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
-        'Gaussian_misp_PoissonGamma',
-        "PoissonGamma","PoissonGammaZIP","PoissonGammaZIP1",
-        'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) {
-if(!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")    
-if(is.null(fixed$sill)) fixed$sill=1
-else                    fixed$sill=1
-}
-}
+    ## Independence requires Marginal likelihood
+    if (type == "Independence" && likelihood != "Marginal")
+      stop("Independence likelihood must be coupled with Marginal likelihood\n")
 
+    ## Pairwise requirements (early)
+    if (type == "Pairwise") {
+      if (is.null(coordt)) {
+        if (is.null(neighb) && is.null(maxdist))
+          stop("neighb or maxdist must be fixed\n")
+      } else {
+        ## space-time: require (neighb OR maxdist) AND maxtime
+        if ((is.null(neighb) && is.null(maxdist)) || is.null(maxtime))
+          stop("neighb or maxdist and maxtime must be fixed\n")
+      }
+    }
 
+    taper <- NULL
+    tapsep <- NULL
 
-##### all parameters are estimated
-allest=FALSE 
-if(!bivariate){   
-if((length(c(CorrParam(corrmodel),NuisParam2(model,bivariate,2,copula=copula)))==length(start)) && is.null(fixed))
-{fixed=list(nugget=0);tempstart=start;start$nugget=NULL;allest=TRUE}
-}
+    if (likelihood == "Marginal" && type == "Independence") {
+      anisopars <- NULL
+      est.aniso <- c(FALSE, FALSE)
+    }
 
-#############################################################################
-    checkinput <- CkInput(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data, distance, "Fitting",fixed, grid,
-                    likelihood, maxdist, maxtime, model, n,optimizer, NULL, 
-                    radius, start, taper, tapsep, 
-                             type, varest,weighted, copula, X)
+    if (!is.logical(memdist)) memdist <- FALSE
 
-    if(!is.null(checkinput$error))
+    if (!is.null(X) && is.null(coordx_dyn)) X <- as.matrix(X)
+
+    if (is.numeric(neighb)) {
+      neighb <- round(neighb)
+      if (any(neighb < 1)) stop("neighb must be an integer >=1\n")
+    }
+
+    if (!is.null(anisopars) && !is.list(anisopars))
+      stop("anisopars must be a list with two elements\n")
+
+    if (!is.character(optimizer)) stop("invalid optimizer\n")
+    if (!is.character(distance))  stop("invalid distance\n")
+
+  
+    bivariate <- CheckBiv(CkCorrModel(corrmodel))
+    spacetime <- CheckST(CkCorrModel(corrmodel))
+    space <- !spacetime && !bivariate
+
+    ###### checking if neighb or maxdist or maxtime has been specified when using cl
+    if (space) {
+      if (type == "Pairwise" && (likelihood == "Marginal" || likelihood == "Conditional")) {
+        if (is.null(neighb) && isTRUE(maxdist == Inf))
+          stop("neighb or maxdist must be specificed when using marginal or conditional pairwise composite likelihood\n")
+      }
+    }
+
+    if (bivariate) {
+      if (type == "Pairwise" && (likelihood == "Marginal" || likelihood == "Conditional")) {
+        ## keep your original intent, but avoid sum(is.null(...)) which is odd
+        if (is.null(neighb) && isTRUE(maxdist == Inf))
+          stop("neighb or maxdist must be specificed when using marginal or conditional pairwise composite likelihood\n")
+      }
+    }
+
+    if (spacetime) {
+      if (type == "Pairwise" && (likelihood == "Marginal" || likelihood == "Conditional")) {
+        if ((is.null(neighb) && isTRUE(maxdist == Inf)) && isTRUE(maxtime == Inf))
+          stop("neighb or maxdist and maxtime must be specificed when using marginal or conditional pairwise composite likelihood\n")
+        if ((is.null(neighb) && isTRUE(maxdist == Inf)) && isTRUE(maxtime < Inf))
+          stop("neighb or maxdist must be specificed when using marginal or conditional pairwise composite likelihood\n")
+        if ((!is.null(neighb) || isTRUE(maxdist < Inf)) && isTRUE(maxtime == Inf))
+          stop("maxtime must be specificed when using marginal or conditional pairwise composite likelihood\n")
+      }
+    }
+    ########
+
+    ##############################################################################
+    ###### extracting sp object informations if necessary              ###########
+    ##############################################################################
+    if (!is.null(spobj)) {
+      if (space || bivariate) {
+        a <- sp2Geo(spobj, spdata)
+        coordx <- a$coords
+        if (!a$pj) { if (distance != "Chor") distance <- "Geod" }
+      }
+      if (spacetime) {
+        a <- sp2Geo(spobj, spdata)
+        coordx <- a$coords
+        coordt <- a$coordt
+        if (!a$pj) { if (distance != "Chor") distance <- "Geod" }
+      }
+      if (!is.null(a$Y) && !is.null(a$X)) { data <- a$Y; X <- a$X }
+    }
+
+    ##############################################################################
+    ###### setting nugget if missing
+    if (!bivariate) {
+      if (!sum(substr(names(unlist(append(start, fixed))), 1, 6) == "nugget"))
+        fixed$nugget <- 0
+    }
+
+    ###############################################################
+    ###############################################################
+    if (!bivariate) {
+      if (model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
+                       "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+                       "Binary_misp_BinomialNeg","PoissonZIP","Gaussian_misp_PoissonZIP",
+                       "BinomialNegZINB","BinomNeg","PoissonZIP1","Gaussian_misp_PoissonZIP1",
+                       "BinomialNegZINB1","Gaussian_misp_PoissonGamma","PoissonGamma",
+                       "PoissonGammaZIP","PoissonGammaZIP1","Beta2","Kumaraswamy2","Beta",
+                       "Kumaraswamy")) {
+        if (!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")
+        fixed$sill <- 1
+      }
+    }
+
+    ##### all parameters are estimated
+    allest <- FALSE
+    if (!bivariate) {
+      if ((length(c(CorrParam(corrmodel), NuisParam2(model, bivariate, 2, copula = copula))) == length(start)) &&
+          is.null(fixed)) {
+        fixed <- list(nugget = 0)
+        tempstart <- start
+        start$nugget <- NULL
+        allest <- TRUE
+      }
+    }
+
+    #############################################################################
+    checkinput <- CkInput(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
+                          distance, "Fitting", fixed, grid, likelihood, maxdist, maxtime,
+                          model, n, optimizer, NULL, radius, start, taper, tapsep, type,
+                          varest, weighted, copula, X)
+
+    if (!is.null(checkinput$error))
       stop(checkinput$error)
+
     ### Initialization global variables:
     GeoFit <- NULL
     sensmat <- varcov <- varimat <- parscale <- NULL
+
     ### Initialization parameters:
-    coordt=unname(coordt);
-    if(is.null(coordx_dyn)){
-    coordx=unname(coordx);coordy=unname(coordy)}
-
-
-    initparam <- WlsStart(coordx, coordy,coordz, coordt, coordx_dyn, corrmodel, data, distance, "Fitting", fixed, grid,#10
-                         likelihood, maxdist,neighb,maxtime,  model, n, NULL,#16
-                         parscale, optimizer=='L-BFGS-B', radius, start, taper, tapsep,#22
-                         type, varest,  weighted, copula,X,memdist,nosym,p_neighb,thin_method)#32
-
-
-  ### fixing initparam if all parameters are estimated
-  if(allest)
-{
-   if(!bivariate){  
-    bb=initparam$num_betas
-    ccpp=CorrParam(corrmodel)
-    aabb=NuisParam2(model,bivariate,bb,copula=copula)
-    ### 
-    initparam$namescorr=ccpp; initparam$namesnuis=aabb; 
-    initparam$param=unlist(tempstart);initparam$namesparam=names(initparam$param);initparam$fixed=NULL;
-    oo=double(length(ccpp)); names(oo)=ccpp; oo[names(oo)!="kl"]=1;initparam$flagcorr=oo
-    oo=double(length(aabb)); names(oo)=aabb; oo[names(oo)!="kl"]=1;initparam$flagnuis=oo
-   }
-    #if(!bivariate){ 
-}
-if(type=="Independence"){
-     if(sum(NuisParam(model, bivariate=initparam$bivariate, num_betas=initparam$num_betas-1) %in% names(unlist(start)))==0) stop("No marginal parameters to estimate")
-     }
-        ## moving sill from starting to fixed parameters if necessary (in some model sill mus be 1 )
-        if(sum(initparam$namesparam=='sill')==1)
-        {
-          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11,54)) 
-          {initparam$param=initparam$param[initparam$namesparam!='sill'];initparam$namesparam=names(initparam$param)
-           a=1; names(a)="sill";initparam$fixed=c(initparam$fixed,a)}}
-     
-    if(!is.null(initparam$error))   stop(initparam$error)
-
-
-if(!(optimizer %in% c('L-BFGS-B','nlminb','nlm','nmkb','nmk','multiNelder-Mead',
-    'multinlminb',"BFGS","Nelder-Mead","optimize","SANN","bobyqa","sbplx")))
-             stop("optimizer is not correct\n")
-if((optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb',"bobyqa","sbplx"))&is.null(lower)&is.null(upper))
-             stop("lower and upper bound are missing\n")
-######################## handling lower and upper bound parameters####################################        
-    if(optimizer %in% c('L-BFGS-B','nlminb','nmkb','multinlminb','multiNelder-Mead',"bobyqa","sbplx") || length(initparam$param)==1)
-    {
-   
-     if(!is.null(lower)||!is.null(upper)){
-     if(!is.list(lower)||!is.list(upper))  stop("lower and upper bound must be a list\n")
-     if(sum(unlist(lower)>unlist((upper)))>0) stop("some values of the lower bound is greater of the upper bound \n")
-     if(sum(names(lower)=='sill')==1){
-          if(initparam$model %in%  c(2,14,16,21,42,50,26,24,30,46,43,11,54)) 
-            {lower=lower[names(lower)!='sill'];upper=upper[names(upper)!='sill']; }}
-    #setting alphabetic order
-      lower=lower[order(names(lower))]
-      upper=upper[order(names(upper))] 
-      npar<-length(initparam$param) 
-      ll<-as.numeric(lower);uu<-as.numeric(upper)
-      if(length(ll)!=npar||length(uu)!=npar)
-           stop("lower and upper bound must be of the same length of starting values\n") 
-      if(sum(sort(names(initparam$param))==sort(names(upper)))<npar || sum(sort(names(initparam$param))==sort(names(lower)))<npar){
-           stop("the names of  parameters in the lower and/or  upper bounds do not match with starting parameters names .\n") }
-      ll[ll==0]=.Machine$double.eps ## when 0 we don't want exactly zero
-      uu[uu==Inf]=1e+12
-      initparam$upper <- uu;initparam$lower <- ll
-     }
-}
-############################################################ 
-
-## in the case on external fixed mean
-  MM=NULL
-  if(!is.null(fixed))
-     if(length(fixed$mean)>1) {MM=as.numeric(fixed$mean);initparam$mean=1e-07}
-    ###################################################################################
-####################################################################
-#############  handling anisotropy parameters ######################
-###################################################################
-update.aniso=function(param,namesparam,fixed,namesfixed,lower,upper,anisopars,estimate_aniso)
-{
- un_anisopars=unlist(anisopars); 
- namesaniso=names(un_anisopars)  
- anisostart=unlist(anisopars)[estimate_aniso]
- anisofixed=unlist(anisopars)[!estimate_aniso]
-
- if(length(anisostart)==0) anisostart=NULL
- if(length(anisofixed)==0) anisofixed=NULL
- ll=c(0,1)
- uu=c(pi,1e+25);
- lwr=c(lower,ll[estimate_aniso])
- upr=c(upper,uu[estimate_aniso])
-
- param=c(param,anisostart)
- fixed=c(fixed,anisofixed)
- namesparam=names(param);namesfixed=names(fixed)
-
- if(sum(!is.na(fixed[namesaniso]))){ # updating fixed values
-          if(!estimate_aniso[2]& estimate_aniso[1]) fixed["ratio"]=un_anisopars['ratio']
-          if(!estimate_aniso[1]& estimate_aniso[2]) fixed["angle"]=un_anisopars['angle']
-          if(!estimate_aniso[1]&!estimate_aniso[2]) {fixed["angle"]=un_anisopars['angle'];fixed["ratio"]=un_anisopars['ratio']}
+    coordt <- unname(coordt)
+    if (is.null(coordx_dyn)) {
+      coordx <- unname(coordx)
+      coordy <- unname(coordy)
     }
-aa=list(param=param,namesparam=namesparam, fixed=fixed,namesfixed=namesfixed,lower=lwr,upper=upr)
-return(aa)
-}
-aniso=FALSE
-if(!is.null(anisopars)) {
-                 aniso=TRUE; namesaniso=c("angle","ratio")
-         qq=update.aniso(initparam$param,initparam$namesparam,initparam$fixed,initparam$namesfixed,initparam$lower,initparam$upper,
-                 anisopars,est.aniso)
-         initparam$param=qq$param ; initparam$fixed=qq$fixed
-         initparam$namesparam=qq$namesparam; initparam$namesfixed=qq$namesfixed
-         initparam$lower=qq$lower; initparam$upper=qq$upper
-    }
-###################################################################################
-###################################################################################
-   # Full likelihood:
-    if(likelihood=='Full')
-          # Fitting by log-likelihood maximization:
-         fitted <- Lik(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,coordx_dyn, initparam$corrmodel,
-                               unname(initparam$data),initparam$fixed,initparam$flagcorr,
-                               initparam$flagnuis,grid,initparam$lower,method,initparam$model,initparam$namescorr,
-                               initparam$namesnuis,initparam$namesparam,initparam$numcoord,initparam$numpairs,
-                               initparam$numparamcorr,initparam$numtime,optimizer,onlyvar,
-                               initparam$param,initparam$radius,initparam$setup,initparam$spacetime,sparse,varest,taper,initparam$type,
-                               initparam$upper,initparam$ns,unname(initparam$X),initparam$neighb,MM,aniso,score)
 
-    # Composite likelihood:
-    if((likelihood=='Marginal' || likelihood=='Conditional' || likelihood=='Difference' || 
-        likelihood=='Marginal_2')&&type=="Pairwise"){
+    initparam <- WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
+                          distance, "Fitting", fixed, grid, likelihood, maxdist, neighb,
+                          maxtime, model, n, NULL, parscale, optimizer == "L-BFGS-B",
+                          radius, start, taper, tapsep, type, varest, weighted, copula,
+                          X, memdist, nosym, p_neighb, thin_method)
 
-
-    if(!memdist)     ## old style
-          fitted <- CompLik(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
-                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid, #12
-                                   initparam$likelihood, initparam$lower,initparam$model,initparam$n,#17
-                                   initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,
-                                   initparam$param,initparam$spacetime,initparam$type,#27
-                                   initparam$upper,varest,initparam$weighted,initparam$ns,
-                                   unname(initparam$X),sensitivity,MM,aniso,score)
-    if(memdist)
-          fitted <- CompLik2(copula,initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
-                                   coordx_dyn,initparam$corrmodel,unname(initparam$data), #6
-                                   initparam$distance,initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid, #12
-                                   initparam$likelihood, initparam$lower,initparam$model,initparam$n,#17
-                                   initparam$namescorr,initparam$namesnuis,#19
-                                   initparam$namesparam,initparam$numparam,initparam$numparamcorr,optimizer,onlyvar,
-                                   initparam$param,initparam$spacetime,initparam$type,#27
-                                   initparam$upper,varest,initparam$weighted,initparam$ns,
-                                   unname(initparam$X),sensitivity,initparam$colidx,initparam$rowidx,initparam$neighb,MM,aniso,score)
-        
+    ### fixing initparam if all parameters are estimated
+    if (allest) {
+      if (!bivariate) {
+        bb <- initparam$num_betas
+        ccpp <- CorrParam(corrmodel)
+        aabb <- NuisParam2(model, bivariate, bb, copula = copula)
+        initparam$namescorr <- ccpp
+        initparam$namesnuis <- aabb
+        initparam$param <- unlist(tempstart)
+        initparam$namesparam <- names(initparam$param)
+        initparam$fixed <- NULL
+        oo <- double(length(ccpp)); names(oo) <- ccpp; oo[names(oo) != "kl"] <- 1
+        initparam$flagcorr <- oo
+        oo <- double(length(aabb)); names(oo) <- aabb; oo[names(oo) != "kl"] <- 1
+        initparam$flagnuis <- oo
       }
- if(likelihood=='Marginal'&&type=="Independence")
-           fitted<-CompIndLik2 (initparam$bivariate,initparam$coordx,initparam$coordy,initparam$coordz,initparam$coordt,
-                                   coordx_dyn,unname(initparam$data), 
-                                   initparam$flagcorr,initparam$flagnuis,initparam$fixed,grid,
-                                    initparam$lower,initparam$model,initparam$n ,
-                                     initparam$namescorr,initparam$namesnuis,
-                                   initparam$namesparam,initparam$numparam,optimizer,onlyvar, initparam$param,initparam$spacetime,initparam$type,#27
-                                   initparam$upper,names(upper),varest, initparam$ns, unname(initparam$X),sensitivity,copula,MM,score)
-  
-
-     ##misspecified models
-    missp=FALSE 
-    if(model=="Gaussian_misp_Tukeygh"){model="Tukeygh";missp=TRUE}
-    if(model=="Gaussian_misp_Poisson"){model="Poisson";missp=TRUE}
-    if(model=="Gaussian_misp_Binomial"){model="Binomial";missp=TRUE}
-    if(model=="Gaussian_misp_PoissonGamma"){model="PoissonGamma";missp=TRUE}
-    if(model=="Gaussian_misp_PoissonZIP"){model="PoissonZIP";missp=TRUE}
-    if(model=="Gaussian_misp_StudentT"){model="StudentT";missp=TRUE}
-    if(model=="Gaussian_misp_SkewStudentT"){model="SkewStudentT";missp=TRUE}
-    if(model=="Binary_misp_BinomialNeg"){model="BinomialNeg";missp=TRUE}
-    ##################
-    numtime=1
-    if(initparam$spacetime) numtime=length(coordt)
-    if(initparam$bivariate) numtime=2
-    dimat <- initparam$numcoord#*numtime#
-
-    if( !(likelihood=='Marginal'&&type=="Independence"))
-    {             
-     if(memdist) .C('DeleteGlobalVar2', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE) # my distances
-     else        .C('DeleteGlobalVar' , PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE) # distances with rann
     }
 
-ff=as.list(initparam$fixed)
-if(!is.null(MM)) ff$mean=MM
-
-if(length(initparam$param)==1) optimizer="optimize"
-
-if(aniso) anisopars=as.list(c(fitted$par,ff)[namesaniso])
-
-
-if(is.null(unlist(ff))) ff=NULL
-
-#!!ojo this is the case maxdist and neighb =NULL
-# distances are computed in C i=1 j>i
-# for comparson we consider this code
-if(likelihood!="Full") {if(is.null(neighb)&&is.numeric(maxdist)&&likelihood=="Marginal")
-                                                    { 
-                                                     fitted$value=2*fitted$value;
-                                                     initparam$numpairs=2*initparam$numpairs
-                                                    } 
-                       }
-if(!is.null(coordt)&is.null(coordx_dyn)) { if(is.null(coordz))
-                                          {
-                                          initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
-                                          initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
-                                           }
-                                          else
-                                          {
-                                          initparam$coordx=initparam$coordx[1:(length(initparam$coordx)/length(initparam$coordt))]
-                                          initparam$coordy=initparam$coordy[1:(length(initparam$coordy)/length(initparam$coordt))]
-                                          initparam$coordz=initparam$coordz[1:(length(initparam$coordz)/length(initparam$coordt))]
-                                          }
-                                        }   
-
-if (model %in% c("Weibull", "Poisson", "Binomial", "Gamma", "PoissoGamma", "Gaussian_misp_PoissonGamma",
-        "LogLogistic", "BinomialNeg", "Bernoulli", "Geometric",  "Binary_misp_BinomialNeg",
-        "Gaussian_misp_Poisson", "PoissonZIP", "PoissonGammaZIP", "PoissonGammaZIP1","Gaussian_misp_PoissonZIP", 
-        "BinomialNegZINB", "PoissonZIP1", "Gaussian_misp_PoissonZIP1", 
-        "BinomialNegZINB1", "Beta2", "Kumaraswamy2", "Beta", 
-        "Kumaraswamy")) {  if(!is.null(ff$sill)) ff$sill=NULL}
-
-conf.int=NULL
-pvalues=NULL
-
- #initparam$coordz=coordz
-
-if(all(initparam$coordz==0)) initparam$coordz=NULL
-
-
-if(likelihood=="Full"&&type=="Standard") 
-{
-
-  if(varest){
-   alpha=0.95
-   conf.int=pvalues=NULL
-   if(is.numeric(fitted$stderr))
-   { aa=qnorm(1-(1-alpha)/2)*fitted$stderr
-     pp=as.numeric(fitted$par)
-     low=pp-aa; upp=pp+aa
-     conf.int=rbind(low,upp)
-     pvalues= 2*pnorm(-abs(pp/fitted$stderr))
+    if (type == "Independence") {
+      if (sum(NuisParam(model, bivariate = initparam$bivariate,
+                        num_betas = initparam$num_betas - 1) %in% names(unlist(start))) == 0)
+        stop("No marginal parameters to estimate")
     }
-   }
-}
-#####
-if (bivariate && is.null(coordx_dyn)) {initparam$coordx <- initparam$coordx[1:dimat]
-                                       initparam$coordy <- initparam$coordy[1:dimat]
-                                      }
-###
 
+    ## moving sill from starting to fixed parameters if necessary (in some model sill must be 1)
+    if (sum(initparam$namesparam == "sill") == 1) {
+      if (initparam$model %in% c(2,14,16,21,42,50,26,24,30,46,43,11,54)) {
+        initparam$param <- initparam$param[initparam$namesparam != "sill"]
+        initparam$namesparam <- names(initparam$param)
+        a <- 1; names(a) <- "sill"
+        initparam$fixed <- c(initparam$fixed, a)
+      }
+    }
+
+    if (!is.null(initparam$error)) stop(initparam$error)
+
+    if (!(optimizer %in% c("L-BFGS-B","nlminb","nlm","nmkb","nmk","multiNelder-Mead",
+                           "multinlminb","BFGS","Nelder-Mead","optimize","SANN",
+                           "bobyqa","sbplx")))
+      stop("optimizer is not correct\n")
+
+    if ((optimizer %in% c("L-BFGS-B","nlminb","nmkb","multinlminb","bobyqa","sbplx")) &&
+        is.null(lower) && is.null(upper))
+      stop("lower and upper bound are missing\n")
+
+    ######################## handling lower and upper bound parameters####################################
+    if (optimizer %in% c("L-BFGS-B","nlminb","nmkb","multinlminb","multiNelder-Mead","bobyqa","sbplx") ||
+        length(initparam$param) == 1) {
+
+      if (!is.null(lower) || !is.null(upper)) {
+        if (!is.list(lower) || !is.list(upper)) stop("lower and upper bound must be a list\n")
+        if (sum(unlist(lower) > unlist(upper)) > 0)
+          stop("some values of the lower bound is greater of the upper bound\n")
+
+        if (sum(names(lower) == "sill") == 1) {
+          if (initparam$model %in% c(2,14,16,21,42,50,26,24,30,46,43,11,54)) {
+            lower <- lower[names(lower) != "sill"]
+            upper <- upper[names(upper) != "sill"]
+          }
+        }
+
+        ## setting alphabetic order
+        lower <- lower[order(names(lower))]
+        upper <- upper[order(names(upper))]
+
+        npar <- length(initparam$param)
+        ll <- as.numeric(lower)
+        uu <- as.numeric(upper)
+
+        if (length(ll) != npar || length(uu) != npar)
+          stop("lower and upper bound must be of the same length of starting values\n")
+
+        if (sum(sort(names(initparam$param)) == sort(names(upper))) < npar ||
+            sum(sort(names(initparam$param)) == sort(names(lower))) < npar)
+          stop("the names of parameters in the lower and/or upper bounds do not match with starting parameters names.\n")
+
+        ll[ll == 0] <- .Machine$double.eps
+        uu[uu == Inf] <- 1e+12
+        initparam$upper <- uu
+        initparam$lower <- ll
+      }
+    }
+    ############################################################
+
+    ## in the case on external fixed mean
+    MM <- NULL
+    if (!is.null(fixed)) {
+      if (length(fixed$mean) > 1) { MM <- as.numeric(fixed$mean); initparam$mean <- 1e-07 }
+    }
+
+    ###################################################################################
+    ####################################################################
+    #############  handling anisotropy parameters ######################
+    ####################################################################
+    update.aniso <- function(param, namesparam, fixed, namesfixed, lower, upper,
+                             anisopars, estimate_aniso)
+    {
+      un_anisopars <- unlist(anisopars)
+      namesaniso <- names(un_anisopars)
+
+      anisostart <- unlist(anisopars)[estimate_aniso]
+      anisofixed <- unlist(anisopars)[!estimate_aniso]
+
+      if (length(anisostart) == 0) anisostart <- NULL
+      if (length(anisofixed) == 0) anisofixed <- NULL
+
+      ll <- c(0, 1)
+      uu <- c(pi, 1e+25)
+      lwr <- c(lower, ll[estimate_aniso])
+      upr <- c(upper, uu[estimate_aniso])
+
+      param <- c(param, anisostart)
+      fixed <- c(fixed, anisofixed)
+      namesparam <- names(param)
+      namesfixed <- names(fixed)
+
+      if (sum(!is.na(fixed[namesaniso]))) { # updating fixed values
+        if (!estimate_aniso[2] && estimate_aniso[1]) fixed["ratio"] <- un_anisopars["ratio"]
+        if (!estimate_aniso[1] && estimate_aniso[2]) fixed["angle"] <- un_anisopars["angle"]
+        if (!estimate_aniso[1] && !estimate_aniso[2]) {
+          fixed["angle"] <- un_anisopars["angle"]
+          fixed["ratio"] <- un_anisopars["ratio"]
+        }
+      }
+
+      list(param = param, namesparam = namesparam,
+           fixed = fixed, namesfixed = namesfixed,
+           lower = lwr, upper = upr)
+    }
+
+    aniso <- FALSE
+    if (!is.null(anisopars)) {
+      aniso <- TRUE
+      namesaniso <- c("angle","ratio")
+      qq <- update.aniso(initparam$param, initparam$namesparam,
+                         initparam$fixed, initparam$namesfixed,
+                         initparam$lower, initparam$upper,
+                         anisopars, est.aniso)
+      initparam$param <- qq$param
+      initparam$fixed <- qq$fixed
+      initparam$namesparam <- qq$namesparam
+      initparam$namesfixed <- qq$namesfixed
+      initparam$lower <- qq$lower
+      initparam$upper <- qq$upper
+    }
+
+    ###################################################################################
+    ###################################################################################
+
+    ## Full likelihood:
+    if (likelihood == "Full")
+      fitted <- Lik(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
+                    initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
+                    unname(initparam$data), initparam$fixed, initparam$flagcorr,
+                    initparam$flagnuis, grid, initparam$lower, method, initparam$model,
+                    initparam$namescorr, initparam$namesnuis, initparam$namesparam,
+                    initparam$numcoord, initparam$numpairs, initparam$numparamcorr,
+                    initparam$numtime, optimizer, onlyvar, initparam$param, initparam$radius,
+                    initparam$setup, initparam$spacetime, sparse, varest, taper, initparam$type,
+                    initparam$upper, initparam$ns, unname(initparam$X), initparam$neighb,
+                    MM, aniso, score)
+
+    ## Composite likelihood:
+    if ((likelihood %in% c("Marginal","Conditional","Difference","Marginal_2")) && type == "Pairwise") {
+
+      if (!memdist) {
+        fitted <- CompLik(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
+                          initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
+                          unname(initparam$data), initparam$distance, initparam$flagcorr,
+                          initparam$flagnuis, initparam$fixed, grid, initparam$likelihood,
+                          initparam$lower, initparam$model, initparam$n, initparam$namescorr,
+                          initparam$namesnuis, initparam$namesparam, initparam$numparam,
+                          initparam$numparamcorr, optimizer, onlyvar, initparam$param,
+                          initparam$spacetime, initparam$type, initparam$upper, varest,
+                          initparam$weighted, initparam$ns, unname(initparam$X), sensitivity,
+                          MM, aniso, score)
+      }
+
+      if (memdist) {
+        fitted <- CompLik2(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
+                           initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
+                           unname(initparam$data), initparam$distance, initparam$flagcorr,
+                           initparam$flagnuis, initparam$fixed, grid, initparam$likelihood,
+                           initparam$lower, initparam$model, initparam$n, initparam$namescorr,
+                           initparam$namesnuis, initparam$namesparam, initparam$numparam,
+                           initparam$numparamcorr, optimizer, onlyvar, initparam$param,
+                           initparam$spacetime, initparam$type, initparam$upper, varest,
+                           initparam$weighted, initparam$ns, unname(initparam$X), sensitivity,
+                           initparam$colidx, initparam$rowidx, initparam$neighb, MM, aniso, score)
+      }
+    }
+
+    if (likelihood == "Marginal" && type == "Independence")
+      fitted <- CompIndLik2(initparam$bivariate, initparam$coordx, initparam$coordy, initparam$coordz,
+                            initparam$coordt, coordx_dyn, unname(initparam$data),
+                            initparam$flagcorr, initparam$flagnuis, initparam$fixed, grid,
+                            initparam$lower, initparam$model, initparam$n, initparam$namescorr,
+                            initparam$namesnuis, initparam$namesparam, initparam$numparam,
+                            optimizer, onlyvar, initparam$param, initparam$spacetime, initparam$type,
+                            initparam$upper, names(upper), varest, initparam$ns, unname(initparam$X),
+                            sensitivity, copula, MM, score)
+
+    ## misspecified models
+    missp <- FALSE
+    if (model == "Gaussian_misp_Tukeygh")      { model <- "Tukeygh";      missp <- TRUE }
+    if (model == "Gaussian_misp_Poisson")      { model <- "Poisson";      missp <- TRUE }
+    if (model == "Gaussian_misp_Binomial")     { model <- "Binomial";     missp <- TRUE }
+    if (model == "Gaussian_misp_PoissonGamma") { model <- "PoissonGamma"; missp <- TRUE }
+    if (model == "Gaussian_misp_PoissonZIP")   { model <- "PoissonZIP";   missp <- TRUE }
+    if (model == "Gaussian_misp_StudentT")     { model <- "StudentT";     missp <- TRUE }
+    if (model == "Gaussian_misp_SkewStudentT") { model <- "SkewStudentT"; missp <- TRUE }
+    if (model == "Binary_misp_BinomialNeg")    { model <- "BinomialNeg";  missp <- TRUE }
+
+    numtime <- 1
+    if (initparam$spacetime) numtime <- length(coordt)
+    if (initparam$bivariate) numtime <- 2
+    dimat <- initparam$numcoord
+
+    if (!(likelihood == "Marginal" && type == "Independence")) {
+      if (memdist) .C("DeleteGlobalVar2", PACKAGE = "GeoModels", DUP = TRUE, NAOK = TRUE)
+      else         .C("DeleteGlobalVar" , PACKAGE = "GeoModels", DUP = TRUE, NAOK = TRUE)
+    }
+
+    ff <- as.list(initparam$fixed)
+    if (!is.null(MM)) ff$mean <- MM
+
+    if (length(initparam$param) == 1) optimizer <- "optimize"
+
+    if (aniso) anisopars <- as.list(c(fitted$par, ff)[namesaniso])
+
+    if (is.null(unlist(ff))) ff <- NULL
+
+    ## special case: maxdist and neighb = NULL
+    if (likelihood != "Full") {
+      if (is.null(neighb) && is.numeric(maxdist) && likelihood == "Marginal") {
+        fitted$value <- 2 * fitted$value
+        initparam$numpairs <- 2 * initparam$numpairs
+      }
+    }
+
+    if (!is.null(coordt) && is.null(coordx_dyn)) {
+      if (is.null(coordz)) {
+        initparam$coordx <- initparam$coordx[1:(length(initparam$coordx) / length(initparam$coordt))]
+        initparam$coordy <- initparam$coordy[1:(length(initparam$coordy) / length(initparam$coordt))]
+      } else {
+        initparam$coordx <- initparam$coordx[1:(length(initparam$coordx) / length(initparam$coordt))]
+        initparam$coordy <- initparam$coordy[1:(length(initparam$coordy) / length(initparam$coordt))]
+        initparam$coordz <- initparam$coordz[1:(length(initparam$coordz) / length(initparam$coordt))]
+      }
+    }
+
+    if (model %in% c("Weibull","Poisson","Binomial","Gamma","PoissoGamma","Gaussian_misp_PoissonGamma",
+                     "LogLogistic","BinomialNeg","Bernoulli","Geometric","Binary_misp_BinomialNeg",
+                     "Gaussian_misp_Poisson","PoissonZIP","PoissonGammaZIP","PoissonGammaZIP1",
+                     "Gaussian_misp_PoissonZIP","BinomialNegZINB","PoissonZIP1","Gaussian_misp_PoissonZIP1",
+                     "BinomialNegZINB1","Beta2","Kumaraswamy2","Beta","Kumaraswamy")) {
+      if (!is.null(ff$sill)) ff$sill <- NULL
+    }
+
+    conf.int <- NULL
+    pvalues <- NULL
+
+    if (all(initparam$coordz == 0)) initparam$coordz <- NULL
+
+    if (likelihood == "Full" && type == "Standard") {
+      if (varest) {
+        alpha <- 0.95
+        conf.int <- pvalues <- NULL
+        if (is.numeric(fitted$stderr)) {
+          aa <- qnorm(1 - (1 - alpha) / 2) * fitted$stderr
+          pp <- as.numeric(fitted$par)
+          low <- pp - aa
+          upp <- pp + aa
+          conf.int <- rbind(low, upp)
+          pvalues <- 2 * pnorm(-abs(pp / fitted$stderr))
+        }
+      }
+    }
+
+    if (bivariate && is.null(coordx_dyn)) {
+      initparam$coordx <- initparam$coordx[1:dimat]
+      initparam$coordy <- initparam$coordy[1:dimat]
+    }
 
     ### Set the output object:
-    GeoFit <- list(      anisopars=anisopars,
-                         bivariate=initparam$bivariate,
-                         claic = fitted$claic,
-                         clbic = fitted$clbic,
-                         coordx = initparam$coordx,
-                         coordy = initparam$coordy,
-                         coordz = initparam$coordz,
-                         coordt = initparam$coordt,
-                         coordx_dyn=coordx_dyn,
-                         conf.int=conf.int,
-                         convergence = fitted$convergence,
-                         copula=copula,
-                         corrmodel = corrmodel,
-                         data = initparam$data,
-                         distance = distance,
-                         est.aniso=est.aniso,
-                         fixed = ff,
-                         grid = grid,
-                         iterations = fitted$counts,
-                         likelihood = likelihood,
-                         logCompLik = fitted$value,
-                         lower=lower,
-                         message = fitted$message,
-                         model = model,
-                         n=initparam$n,
-                         ns=initparam$ns,
-                         numbetas=initparam$num_betas,
-                         numcoord=initparam$numcoord,
-                         numtime=initparam$numtime,
-                         optimizer=optimizer,
-                         param = as.list(fitted$par),
-                         p_neighb=p_neighb,
-                         nozero = initparam$setup$nozero,
-                         score = fitted$score,
-                         maxdist =maxdist,
-                         maxtime = maxtime,
-                         neighb=initparam$neighb,
-                         numpairs=initparam$numpairs,
-                         missp=missp,
-                         pvalues=pvalues,
-                         radius = radius,
-                         spacetime = initparam$spacetime,
-                         stderr = fitted$stderr,
-                         sensmat = fitted$sensmat,
-                         upper=upper,
-                         varcov = fitted$varcov,
-                         varimat = fitted$varimat,
-                         type = type,
-                         weighted=initparam$weighted,
-                         X = X)
+    GeoFit <- list(
+      anisopars = anisopars,
+      bivariate = initparam$bivariate,
+      claic = fitted$claic,
+      clbic = fitted$clbic,
+      coordx = initparam$coordx,
+      coordy = initparam$coordy,
+      coordz = initparam$coordz,
+      coordt = initparam$coordt,
+      coordx_dyn = coordx_dyn,
+      conf.int = conf.int,
+      convergence = fitted$convergence,
+      copula = copula,
+      corrmodel = corrmodel,
+      data = initparam$data,
+      distance = distance,
+      est.aniso = est.aniso,
+      fixed = ff,
+      grid = grid,
+      iterations = fitted$counts,
+      likelihood = likelihood,
+      logCompLik = fitted$value,
+      lower = lower,
+      message = fitted$message,
+      model = model,
+      n = initparam$n,
+      ns = initparam$ns,
+      numbetas = initparam$num_betas,
+      numcoord = initparam$numcoord,
+      numtime = initparam$numtime,
+      optimizer = optimizer,
+      param = as.list(fitted$par),
+      p_neighb = p_neighb,
+      nozero = initparam$setup$nozero,
+      score = fitted$score,
+      maxdist = maxdist,
+      maxtime = maxtime,
+      neighb = initparam$neighb,
+      numpairs = initparam$numpairs,
+      missp = missp,
+      pvalues = pvalues,
+      radius = radius,
+      spacetime = initparam$spacetime,
+      stderr = fitted$stderr,
+      sensmat = fitted$sensmat,
+      upper = upper,
+      varcov = fitted$varcov,
+      varimat = fitted$varimat,
+      type = type,
+      weighted = initparam$weighted,
+      X = X
+    )
+
     structure(c(GeoFit, call = call), class = c("GeoFit"))
-    })
-  }
+  })
+}
 
-
-
+################################################################################
 
 print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
-  {
-
-    if(x$likelihood=='Full'){
-        method <- 'Likelihood'
-        if(x$type=="Tapering") {claic <- "CLAIC";clbic <- "CLBIC";}
-        else { claic <- "AIC";clbic <- "BIC";    }
-      }
-    else{
-        method <- 'Composite-Likelihood'; claic <- 'CLAIC';clbic <- 'CLBIC';}
-  missp=""
-  if(x$missp) missp="misspecified"
-  if(x$model=='Gaussian'||x$model=='Gauss'){ process <- 'Gaussian';model <- 'Gaussian'}
-  if(x$model=='Gamma') { process <- 'Gamma'; model <- 'Gamma'}
-  if(x$model=='TwoPieceBimodal') { process <- 'TwoPieceBimodal'; model <- 'TwoPieceBimodal'}
-  if(x$model=='LogLogistic') { process <- 'LogLogistic'; model <- 'LogLogistic'}
-  if(x$model=='Gaussian_misp_Poisson') { process <- 'Poisson'; model <- 'Misspecified Gaussian Poisson '}
-  if(x$model=='Gaussian_misp_Binomial') { process <- 'Binomial'; model <- 'Misspecified Gaussian Binomial '}
-  if(x$model=='Gaussian_misp_PoissonZIP') { process <- 'PoissonZIP'; model <- 'Misspecified Gaussian Poisson Inflated'}
-  if(x$model=='Poisson') { process <- 'Poisson'; model <- 'Poisson'}
-  if(x$model=='PoissonGamma') { process <- 'PoissonGamma'; model <- 'PoissonGamma'}
-  if(x$model=='Gaussian_misp_PoissonGamma') { process <- 'PoissonGamma'; model <- 'Misspecified Gaussian PoissonGamma'}
-  if(x$model=='PoissonZIP') { process <- 'PoissonZIP'; model <- 'PoissonZIP'}
-  if(x$model=='PoissonGammaZIP') { process <- 'PoissonGammaZIP'; model <- 'PoissonGammaZIP'}
-  if(x$model=='Beta2') { process <- 'Beta2'; model <- 'Beta2'}
-  if(x$model=='Gaussian_misp_StudentT') { process <- 'StudentT'; model <- 'Misspecified Gaussian  StudentT '}
-  if(x$model=='StudentT'){ process <- 'StudentT';model <- 'StudentT'}
-  if(x$model=='Gaussian_misp_Tukeygh') { process <- 'Tukeygh'; model <- 'Misspecified Gaussian Tukeygh '}
-  if(x$model=='Tukeygh') { process <- 'Tukeygh'; model <- 'Tukeygh '}
-  if(x$model=='Gaussian_misp_SkewStudentT') { process <- 'SkewStudentT'; model <- 'Misspecified Gaussian   SkewStudentT '}
-  if(x$model=='SkewStudentT') { process <- 'SkewStudentT'; model <- 'SkewStudentT'}
-  if(x$model=='Logistic') { process <- 'Logistic'; model <- 'Logistic'}
-  if(x$model=='Tukeyh') { process <- 'Tukeyh'; model <- 'Tukeyh'}
-  if(x$model=='Tukeyh2') { process <- 'Tukeyh2'; model <- 'Tukeyh2'}
-  if(x$model=='Gamma2'){ process <- 'Gamma2'; model <- 'Gamma2'}
-  if(x$model=='LogGauss'||x$model=='LogGaussian'){ process <- 'Log Gaussian'; model <- 'LogGaussian'}
-  if(x$model=='SkewGauss'||x$model=='SkewGaussian'){ process <- 'Skew Gaussian';model <- 'SkewGaussian'}
-  if(x$model=='SkewLaplace'){ process <- 'Skew Laplace';model <- 'SkewLaplace'}
-  if(x$model=='TwoPieceStudentT'){ process <- 'TwoPiece StudentT';model <- 'TwoPieceStudentT'}
-  if(x$model=='TwoPieceTukeyh'){ process <- 'TwoPiece Tukeyh';model <- 'TwoPieceTukeyh'}
-  if(x$model=='TwoPieceGaussian'||x$model=='TwoPieceGauss'){ process <- 'TwoPiece Gaussian';model <- 'TwoPieceGaussian'}
-  if(x$model=='SinhAsinh'){ process <- 'SinhAsinh'; model <- 'SinhAsinh'}    
-  if(x$model=='Wrapped'){ process <- 'Wrapped'; model <- 'Wrapped'}
-  if(x$model=='Weibull'){ process <- 'Weibull'; model <- 'Weibull'}
-  if(x$model=='Binomial'){ process <- 'Binomial';model <- 'Binomial'}
-  if(x$model=='BinomialLogistic'){ process <- 'BinomialLogistic';model <- 'BinomialLogistic'}
-  if(x$model=='Kumaraswamy'){ process <- 'Kumaraswamy';model <- 'Kumaraswamy'}
-  if(x$model=='Kumaraswamy2'){ process <- 'Kumaraswamy2';model <- 'Kumaraswamy2'}
-  if(x$model=='Beta'){ process <- 'Beta';model <- 'Beta'}
-  if(x$model=='Binomial_TwoPieceGaussian'||x$model=='Binomial_TwoPieceGauss'){ process <- 'Binomial TwoPiece Gaussian';model <- 'Binomial_TwoPieceGauss'}
-  if(x$model=='BinomialNeg_TwoPieceGaussian'||x$model=='BinomialNeg_TwoPieceGauss'){ process <- 'Negative Binomial TwoPiece Gaussian';model <- 'BinomialNeg_TwoPieceGauss'}
-  if(x$model=='Binomial2'){ process <- 'Binomial';model <- 'Binomial2'}     
-  if(x$model=='BinomialNeg'){ process <- 'BinomialNeg'; model <- 'BinomialNeg'}
-  if(x$model=='Binary_misp_BinomialNeg'){ process <- 'BinomialNeg'; model <- 'Misspecified Binary BinomialNeg'}
-  if(x$model=='BinomialNegLogistic'){ process <- 'BinomialNegLogistic'; model <- 'BinomialNegLogistic'}
-  if(x$model=='BinomialNegZINB'){ process <- 'BinomialNegZINB'; model <- 'BinomialNegZINB'}
-  if(x$model=='Geom'||x$model=='Geometric'){ process <- 'Geometric';model <- 'Geometric'}
-  if(x$model=='PoisBin'){ process <- 'Poisson Binomial';model <- 'PoisBin'}
-  if(x$model=='PoisBinNeg'){ process <- 'Poisson NegBinomial';model <- 'PoisBinNeg'}    
-  if(x$bivariate){ biv <- 'bivariate';x$numtime=1}
-  else { biv <- 'univariate'}                       
-    cat('\n##################################################################')
-    cat('\nMaximum', missp, method, 'Fitting of', process, 'Random Fields\n')
-    if(!is.null(x$copula)) {cat('\nCopula:', x$copula,'\n')}
-    cat('\nSetting:', x$likelihood, method, '\n')
-    cat('\nModel:', model, '\n')
-    cat('\nDistance:', x$distance, '\n')
-    cat('\nType of the likelihood objects:', x$type, x$method,'\n')
-    cat('\nCovariance model:', x$corrmodel, '\n')
-    cat('\nOptimizer:', x$optimizer, '\n')
-    cat('\nNumber of spatial coordinates:', x$numcoord, '\n')
-    if(x$spacetime) cat('Number of dependent temporal realisations:', x$numtime, '\n')
-    cat('Type of the random field:', biv, '\n')
-    cat('Number of estimated parameters:', length(x$param), '\n')
-    cat('\nType of convergence:', x$convergence, '')
-    cat('\nMaximum log-', method, ' value: ',
-        format(x$logCompLik, digits = digits, nsmall = 2), '\n', sep='')
-
-    if(!is.null(x$claic))
-      cat(claic,':', format(x$claic, digits = digits),'\n')
-
-    if(!is.null(x$clbic))
-      cat(clbic,':', format(x$clbic, digits = digits),'\n')  
-
-    cat('\nEstimated parameters:\n')
-    print.default(unlist(x$param), digits = digits, print.gap = 2,
-                  quote = FALSE)
-
-    if(!is.null(x$stderr))
-      {
-        cat('\nStandard errors:\n')
-        print.default(x$stderr, digits = digits, print.gap = 2,
-                      quote = FALSE)
-      }
-   
-
-    cat('\n##################################################################\n')
-    invisible(x)
+{
+  if (x$likelihood == "Full") {
+    method <- "Likelihood"
+    if (x$type == "Tapering") { claic <- "CLAIC"; clbic <- "CLBIC" }
+    else { claic <- "AIC"; clbic <- "BIC" }
+  } else {
+    method <- "Composite-Likelihood"
+    claic <- "CLAIC"
+    clbic <- "CLBIC"
   }
 
+  missp <- ""
+  if (isTRUE(x$missp)) missp <- "misspecified"
+
+  if (x$model %in% c("Gaussian","Gauss")) { process <- "Gaussian"; model <- "Gaussian" }
+  if (x$model == "Gamma") { process <- "Gamma"; model <- "Gamma" }
+  if (x$model == "TwoPieceBimodal") { process <- "TwoPieceBimodal"; model <- "TwoPieceBimodal" }
+  if (x$model == "LogLogistic") { process <- "LogLogistic"; model <- "LogLogistic" }
+  if (x$model == "Gaussian_misp_Poisson") { process <- "Poisson"; model <- "Misspecified Gaussian Poisson" }
+  if (x$model == "Gaussian_misp_Binomial") { process <- "Binomial"; model <- "Misspecified Gaussian Binomial" }
+  if (x$model == "Gaussian_misp_PoissonZIP") { process <- "PoissonZIP"; model <- "Misspecified Gaussian Poisson Inflated" }
+  if (x$model == "Poisson") { process <- "Poisson"; model <- "Poisson" }
+  if (x$model == "PoissonGamma") { process <- "PoissonGamma"; model <- "PoissonGamma" }
+  if (x$model == "Gaussian_misp_PoissonGamma") { process <- "PoissonGamma"; model <- "Misspecified Gaussian PoissonGamma" }
+  if (x$model == "PoissonZIP") { process <- "PoissonZIP"; model <- "PoissonZIP" }
+  if (x$model == "PoissonGammaZIP") { process <- "PoissonGammaZIP"; model <- "PoissonGammaZIP" }
+  if (x$model == "Beta2") { process <- "Beta2"; model <- "Beta2" }
+  if (x$model == "Gaussian_misp_StudentT") { process <- "StudentT"; model <- "Misspecified Gaussian StudentT" }
+  if (x$model == "StudentT") { process <- "StudentT"; model <- "StudentT" }
+  if (x$model == "Gaussian_misp_Tukeygh") { process <- "Tukeygh"; model <- "Misspecified Gaussian Tukeygh" }
+  if (x$model == "Tukeygh") { process <- "Tukeygh"; model <- "Tukeygh" }
+  if (x$model == "Gaussian_misp_SkewStudentT") { process <- "SkewStudentT"; model <- "Misspecified Gaussian SkewStudentT" }
+  if (x$model == "SkewStudentT") { process <- "SkewStudentT"; model <- "SkewStudentT" }
+  if (x$model == "Logistic") { process <- "Logistic"; model <- "Logistic" }
+  if (x$model == "Tukeyh") { process <- "Tukeyh"; model <- "Tukeyh" }
+  if (x$model == "Tukeyh2") { process <- "Tukeyh2"; model <- "Tukeyh2" }
+  if (x$model == "Gamma2") { process <- "Gamma2"; model <- "Gamma2" }
+  if (x$model %in% c("LogGauss","LogGaussian")) { process <- "Log Gaussian"; model <- "LogGaussian" }
+  if (x$model %in% c("SkewGauss","SkewGaussian")) { process <- "Skew Gaussian"; model <- "SkewGaussian" }
+  if (x$model == "SkewLaplace") { process <- "Skew Laplace"; model <- "SkewLaplace" }
+  if (x$model == "TwoPieceStudentT") { process <- "TwoPiece StudentT"; model <- "TwoPieceStudentT" }
+  if (x$model == "TwoPieceTukeyh") { process <- "TwoPiece Tukeyh"; model <- "TwoPieceTukeyh" }
+  if (x$model %in% c("TwoPieceGaussian","TwoPieceGauss")) { process <- "TwoPiece Gaussian"; model <- "TwoPieceGaussian" }
+  if (x$model == "SinhAsinh") { process <- "SinhAsinh"; model <- "SinhAsinh" }
+  if (x$model == "Wrapped") { process <- "Wrapped"; model <- "Wrapped" }
+  if (x$model == "Weibull") { process <- "Weibull"; model <- "Weibull" }
+  if (x$model == "Binomial") { process <- "Binomial"; model <- "Binomial" }
+  if (x$model == "BinomialLogistic") { process <- "BinomialLogistic"; model <- "BinomialLogistic" }
+  if (x$model == "Kumaraswamy") { process <- "Kumaraswamy"; model <- "Kumaraswamy" }
+  if (x$model == "Kumaraswamy2") { process <- "Kumaraswamy2"; model <- "Kumaraswamy2" }
+  if (x$model == "Beta") { process <- "Beta"; model <- "Beta" }
+  if (x$model %in% c("Binomial_TwoPieceGaussian","Binomial_TwoPieceGauss")) { process <- "Binomial TwoPiece Gaussian"; model <- "Binomial_TwoPieceGauss" }
+  if (x$model %in% c("BinomialNeg_TwoPieceGaussian","BinomialNeg_TwoPieceGauss")) { process <- "Negative Binomial TwoPiece Gaussian"; model <- "BinomialNeg_TwoPieceGauss" }
+  if (x$model == "Binomial2") { process <- "Binomial"; model <- "Binomial2" }
+  if (x$model == "BinomialNeg") { process <- "BinomialNeg"; model <- "BinomialNeg" }
+  if (x$model == "Binary_misp_BinomialNeg") { process <- "BinomialNeg"; model <- "Misspecified Binary BinomialNeg" }
+  if (x$model == "BinomialNegLogistic") { process <- "BinomialNegLogistic"; model <- "BinomialNegLogistic" }
+  if (x$model == "BinomialNegZINB") { process <- "BinomialNegZINB"; model <- "BinomialNegZINB" }
+  if (x$model %in% c("Geom","Geometric")) { process <- "Geometric"; model <- "Geometric" }
+  if (x$model == "PoisBin") { process <- "Poisson Binomial"; model <- "PoisBin" }
+  if (x$model == "PoisBinNeg") { process <- "Poisson NegBinomial"; model <- "PoisBinNeg" }
+
+  if (x$bivariate) { biv <- "bivariate"; x$numtime <- 1 }
+  else { biv <- "univariate" }
+
+  cat("\n##################################################################")
+  cat("\nMaximum", missp, method, "Fitting of", process, "Random Fields\n")
+  if (!is.null(x$copula)) cat("\nCopula:", x$copula, "\n")
+  cat("\nSetting:", x$likelihood, method, "\n")
+  cat("\nModel:", model, "\n")
+  cat("\nDistance:", x$distance, "\n")
+  cat("\nType of the likelihood objects:", x$type, x$method, "\n")
+  cat("\nCovariance model:", x$corrmodel, "\n")
+  cat("\nOptimizer:", x$optimizer, "\n")
+  cat("\nNumber of spatial coordinates:", x$numcoord, "\n")
+  if (x$spacetime) cat("Number of dependent temporal realisations:", x$numtime, "\n")
+  cat("Type of the random field:", biv, "\n")
+  cat("Number of estimated parameters:", length(x$param), "\n")
+  cat("\nType of convergence:", x$convergence, "")
+  cat("\nMaximum log-", method, " value: ",
+      format(x$logCompLik, digits = digits, nsmall = 2), "\n", sep = "")
+
+  if (!is.null(x$claic))
+    cat(claic, ":", format(x$claic, digits = digits), "\n")
+
+  if (!is.null(x$clbic))
+    cat(clbic, ":", format(x$clbic, digits = digits), "\n")
+
+  cat("\nEstimated parameters:\n")
+  print.default(unlist(x$param), digits = digits, print.gap = 2, quote = FALSE)
+
+  if (!is.null(x$stderr)) {
+    cat("\nStandard errors:\n")
+    print.default(x$stderr, digits = digits, print.gap = 2, quote = FALSE)
+  }
+
+  cat("\n##################################################################\n")
+  invisible(x)
+}
+
+
+summary.GeoFit <- function(object, digits = max(3, getOption("digits") - 3), ...) {
+  print.GeoFit(object, digits = digits, ...)
+}

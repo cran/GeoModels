@@ -13,6 +13,8 @@ CompLik2 <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,
 
 comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, fixed, fan, n, namescorr, 
                               namesnuis, namesparam, namesaniso, weigthed, X, MM, aniso, type_cop, cond_pair) {
+    
+
     names(param) <- namesparam
     param <- c(param, fixed)
     paramcorr <- param[namescorr]
@@ -21,7 +23,6 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
     
     if (is.null(MM)) {
         mm <- nuisance[sel]
-        # Usa tcrossprod per maggiore efficienza se X è grande
         if (ncol(X) > 10) {
             Mean <- as.vector(tcrossprod(mm, X))
         } else {
@@ -33,10 +34,7 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
     other_nuis <- nuisance[!sel]
     #
     if (aniso) {
-        # Pre-calcolo coordinate anisotrope
         coords1 <- GeoAniso(coords, anisopars = param[namesaniso])
-        
-        # Estrazione coordinate ottimizzata (evita transposizioni multiple)
         c1 <- as.vector(t(coords1[colidx, , drop = FALSE]))
         c2 <- as.vector(t(coords1[rowidx, , drop = FALSE]))
         

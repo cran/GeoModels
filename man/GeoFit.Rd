@@ -20,7 +20,7 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
        sensitivity=FALSE, sparse=FALSE, start=NULL,
        thin_method="iid",type="Pairwise", upper=NULL, 
        varest=FALSE, weighted=FALSE,
-       X=NULL, nosym=FALSE, spobj=NULL, spdata=NULL)
+       X=NULL, spobj=NULL, spdata=NULL)
 }
 
 \arguments{
@@ -115,8 +115,6 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   \item{weighted}{Logical; if \code{TRUE} the likelihood objects are weighted; see the Section \bold{Details}. Default is \code{FALSE}.}
 
   \item{X}{Numeric; matrix of spatio(temporal) covariates in the linear mean specification.}
-
-  \item{nosym}{Logical; if \code{TRUE} symmetric weights are not considered. This allows faster but less efficient CL estimation.}
 
   \item{spobj}{An object of class \code{sp} or \code{spacetime}.}
 

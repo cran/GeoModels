@@ -129,7 +129,8 @@ if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
        stop("Nuisance and correlation parameters must be included in param\n")
     }
 #################################
-    if(model %in% c("SkewGaussian","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',#"Binomial","BinomialNeg","BinomialNegZINB",
+    if(model %in% c("SkewGaussian","Beta",'Kumaraswamy','Kumaraswamy2','LogGaussian',
+        "Binomial","BinomialNeg",#"BinomialNegZINB",
                     "StudentT","SkewStudentT","Poisson","TwoPieceTukeyh","PoissonZIP","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
                      "TwoPieceBimodal", "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss","Tukeyh","Tukeyh2","Tukeygh","SinhAsinh",
                     "Gamma","Weibull","LogLogistic","Logistic","SkewLaplace","BinomialLogistic"))
@@ -146,11 +147,14 @@ if(!bivariate) { if(is.null(param$sill))  param$sill=1 }
         if((model %in% c("SkewGaussian","TwoPieceGaussian","Logistic","SkewLaplace",
           "TwoPieceGauss","Gamma","Weibull","LogLogistic","Poisson","PoissonZIP","Tukeyh","Tukeyh2","PoissonGamma","PoissonGammaZIP","PoissonWeibull",
           'LogGaussian',"TwoPieceTukeyh","TwoPieceBimodal", "Tukeygh","SinhAsinh",
+          "Binomial","BinomialNeg",
                     "StudentT","SkewStudentT","TwoPieceStudentT","Gaussian")))  
         {
           vv<-param$sill;
           param$sill=1
         }
+
+
         if(model%in% c("SkewGaussian","SkewStudentT","TwoPieceTukeyh","TwoPieceBimodal",
                "TwoPieceStudentT","TwoPieceGaussian","TwoPieceGauss"))
                { sk<-param$skew
@@ -379,7 +383,6 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
      }
      ####################################
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    # REPLACEMENT: efficient accumulation for BinomialNeg / BinomialNegZINB
     if(model %in% c("BinomialNeg","BinomialNegZINB")){
                  # vec Bernoulli corrente (ordine identico a c(t(sim)) usato prima)
                  trial <- trial + 1L
@@ -476,8 +479,6 @@ if(model %in% c("BinomialLogistic"))   {
                   sim=apply(sim,2,sum)
                   byrow=TRUE }
 #######################################
-   # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-   # REPLACEMENT: post-processing for BinomialNeg / BinomialNegZINB
    if(model %in% c("BinomialNeg"))   {
           sim <- nb_vals
           byrow=TRUE

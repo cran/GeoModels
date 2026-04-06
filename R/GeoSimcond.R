@@ -78,7 +78,11 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
                              mu = as.double(c(0, 0)),
                              sigma = as.double(1),
                              result = double(2),
-                             INTENT = c("r", "r", "r", "r", "w"))$result
+                             INTENT = c("r", "r", "r", "r", "w"),
+                             VERBOSE = 0, 
+                             NAOK = TRUE, 
+                             PACKAGE = "GeoModels"
+                             )$result
       result_matrix[, i] <- vvv
     }
     return(result_matrix)
@@ -1192,9 +1196,12 @@ if (copula == "Gaussian") {
 ####################### skewgaussian copula ####################################################
 if (copula == "SkewGaussian") {
 
+### reparametrization ## from (-1,1) to (-I,+I)
+param$skew=param$nu/sqrt(1-param$nu*param$nu)
+
+
     if (model == "Weibull") {
 
-    param$skew=param$nu
     mm <- exp(param$mean)
     ss <- param$shape
     datanorm1 <- pweibull(data, shape = ss, scale = mm/(gamma(1 + 1/ss))) 
@@ -1212,7 +1219,6 @@ if (copula == "SkewGaussian") {
   }
 
     if (model == "LogGaussian") {
-    param$skew=param$nu  
     mm <- exp(param$mean)
     vv <- param$sill
     datanorm1 <- plnorm(data, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE)
@@ -1228,7 +1234,7 @@ if (copula == "SkewGaussian") {
   }
 
   if (model == "Gamma") {
-    param$skew=param$nu 
+
     mm <- exp(param$mean)
     ss <- param$shape
     datanorm1 <- pgamma(data, shape = ss/2, rate = ss/(2 * mm))
@@ -1243,7 +1249,7 @@ if (copula == "SkewGaussian") {
   }
 
     if (model == "Beta2") {
-    param$skew=param$nu 
+
     mm <- 1/(1 + exp(-param$mean))
     ss <- param$shape
     pmin <- param$min
@@ -1260,7 +1266,6 @@ if (copula == "SkewGaussian") {
   }
 
     if (model == "StudentT") {
-    param$skew=param$nu 
     mm <- param$mean
     vv <- param$sill
     df <- param$df
@@ -1276,7 +1281,6 @@ if (copula == "SkewGaussian") {
   }
 
     if (model == "Gaussian") {
-    param$skew=param$nu 
     mm <- param$mean
     vv <- param$sill
     datanorm1 <- pnorm(data, mm, sqrt(vv))
@@ -1290,8 +1294,7 @@ if (copula == "SkewGaussian") {
     res <- lapply(res, function(r) qnorm(r, mm, sqrt(vv)))
   }
 
-    if (model == "Binomial") {
-    param$skew=param$nu   
+    if (model == "Binomial") { 
     mm <- param$mean; prob <- pnorm(mm)
     datanorm1 <- (pbinom(data - 1, size = n, prob = prob) + pbinom(data, size = n, prob = prob))/2
     param$mean <- 0; param$sill <- 1
@@ -1305,7 +1308,6 @@ if (copula == "SkewGaussian") {
   }
 
   if (model == "BinomialNeg") {
-    param$skew=param$nu  
     mm <- param$mean; prob <- pnorm(mm); size <- n
     datanorm1 <- (pnbinom(data - 1, size = size, prob = prob) + pnbinom(data, size = size, prob = prob))/2
     param$mean <- 0; param$sill <- 1
@@ -1319,7 +1321,7 @@ if (copula == "SkewGaussian") {
   }
 
   if (model == "Poisson") {
-    param$skew=param$nu  
+ 
     mu <- exp(param$mean)
     datanorm1 <- (ppois(data - 1, lambda = mu) + ppois(data, lambda = mu))/2
     param$mean <- 0; param$sill <- 1

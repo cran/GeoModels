@@ -87,13 +87,13 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     cv_iteration <- function(i) {
       sel_data <- sel_list[[i]]
       X <- Xloc <- Mloc <- NULL
-      
+
       # Prepara covariate
       if (!is.null(fit$X)) {
         X    <- tempX[sel_data, , drop = FALSE]
         Xloc <- tempX[-sel_data, , drop = FALSE]
       }
-      
+
       # Prepara medie fisse
       if (length(fit$fixed$mean) > 1) {
         Mloc <- tempM[-sel_data]
@@ -105,22 +105,21 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       coords_pred  <- coords[-sel_data, , drop = FALSE]
 
       param <- c(fit$param, fit$fixed)
-      
+
       if (estimation) {
-        # CORREZIONE: prepara fixed corretto per il subset
         fixed_for_est <- fit$fixed
         if (length(fit$fixed$mean) > 1) {
           fixed_for_est$mean <- tempM[sel_data]
         }
-        
-        # Con estimation=TRUE, ri-stima i parametri sui dati di training
+
         fit_s <- suppressWarnings(
           GeoFit(
             data = data_to_est, coordx = coords_est, corrmodel = fit$corrmodel,
             X = X, likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
             copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
-            model = model1, radius = fit$radius, n = fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb,  p_neighb=fit$p_neighb,
+            model = model1, radius = fit$radius,
+            n = if (length(fit$n) > 1) fit$n[sel_data] else fit$n,
+            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
             distance = fit$distance,
             optimizer = optimizer, lower = lower, upper = upper,
             start = fit$param, fixed = fixed_for_est
@@ -128,7 +127,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         )
         param <- c(fit_s$param, fit_s$fixed)
       } else {
-        # Con estimation=FALSE, crea un oggetto fit ridotto
         fit_s <- fit
         fit_s$data <- data_to_est
         fit_s$coordx <- coords_est[, 1]
@@ -136,9 +134,9 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         if (!is.null(fit$coordz)) fit_s$coordz <- coords_est[, 3]
         if (!is.null(X)) fit_s$X <- X
         if (length(fit$fixed$mean) > 1) fit_s$fixed$mean <- tempM[sel_data]
+        if (length(fit$n) > 1) fit_s$n <- fit$n[sel_data]
       }
 
-      # Esegui kriging
       pr <- if (!local) {
         GeoKrig(fit_s, loc = coords_pred, mse = TRUE,
                 param = param, Xloc = Xloc, Mloc = Mloc)
@@ -148,10 +146,9 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                    neighb = neighb, maxdist = maxdist, progress = FALSE)
       }
 
-      # Calcola TUTTE le metriche disponibili
       pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
                       score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps, 
+      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
         mean(pp$pit), pp$intscore, pp$coverage)
     }
 
@@ -175,15 +172,18 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       future::plan(future::multisession, workers = n.cores)
       on.exit(future::plan(future::sequential), add = TRUE)
 
+      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
       if (isTRUE(progress)) {
-        p <- progressr::progressor(along = 1:K)
-        res <- future.apply::future_lapply(
-          1:K,
-          function(i) { out <- cv_iteration(i); p(); out },
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
-        )
+        progressr::with_progress({
+          p <- progressr::progressor(along = 1:K)
+          res <- future.apply::future_lapply(
+            1:K,
+            function(i) { out <- cv_iteration(i); p(); out },
+            future.seed = TRUE,
+            future.stdout = FALSE,
+            future.conditions = "none"
+          )
+        })
       } else {
         res <- future.apply::future_lapply(
           1:K, cv_iteration,
@@ -215,7 +215,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
 
     datos <- if (is.list(fit$data)) do.call(c, fit$data) else fit$data
 
-    # OTTIMIZZAZIONE: Costruisci data_tot una volta sola
     if (!space_dyn) {
       data_tot <- NULL
       for (k in 1:T) {
@@ -234,6 +233,10 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       tempM <- if (!space_dyn) fit$fixed$mean else do.call(rbind, fit$fixed$mean)
       data_tot <- cbind(data_tot, tempM)
     }
+
+    # BUG FIX #1: determina la colonna dei dati in base alla presenza di coordz
+    # Layout di data_tot: [t, x, y, (z), data, ...]
+    data_col <- ifelse(!is.null(fit$coordz), 5L, 4L)
 
     # Pre-genera i fold una volta sola
     folds <- split(sample(1:NT), rep(1:K, length.out = NT))
@@ -255,7 +258,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       coordx_dynnew     <- Xnew <- datanew <- list()
       coordx_dynnew_loc <- Xnew_loc <- Mnew_loc <- list()
 
-      # Prepara dati per prediction locations
       for (k in seq_along(utt_1)) {
         ll <- data_pred_ord[data_pred_ord[, 1] == utt_1[k], , drop = FALSE]
         if (!is.null(fit$coordz)) {
@@ -269,7 +271,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         }
       }
 
-      # Prepara dati per training
       Mnew <- NULL
       for (k in seq_along(utt)) {
         ss <- data_sel_ord[data_sel_ord[, 1] == utt[k], , drop = FALSE]
@@ -288,12 +289,9 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
 
       param <- c(fit$param, fit$fixed)
       if (estimation) {
-        # CORREZIONE: prepara fixed corretto per il subset
         fixed_for_est <- fit$fixed
-        if (MM) {
-          fixed_for_est$mean <- Mnew
-        }
-        
+        if (MM) fixed_for_est$mean <- Mnew
+
         fit_s <- suppressWarnings(
           GeoFit(
             data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
@@ -301,7 +299,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
             type = fit$type, grid = fit$grid, copula = fit$copula,
             anisopars = fit$anisopars, est.aniso = fit$est.aniso,
             model = model1, radius = fit$radius, n = fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb=fit$p_neighb,
+            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
             maxtime = fit$maxtime,
             distance = fit$distance, optimizer = optimizer,
             lower = lower, upper = upper,
@@ -310,7 +308,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         )
         param <- c(fit_s$param, fit_s$fixed)
       } else {
-        # Crea oggetto fit ridotto per spazio-tempo
         fit_s <- fit
         fit_s$data <- datanew
         fit_s$coordx_dyn <- coordx_dynnew
@@ -319,7 +316,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         if (MM) fit_s$fixed$mean <- Mnew
       }
 
-      # Esegui kriging per ogni tempo
       pr_st  <- list()
       pr_mse <- list()
       for (j in seq_along(utt_1)) {
@@ -335,8 +331,8 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         pr_mse[[j]] <- pr$mse
       }
 
-      # Calcola metriche
-      pp <- GeoScores(data_pred[, 4], pred = unlist(pr_st), mse = unlist(pr_mse),
+      # BUG FIX #1: usa data_col invece del valore fisso 4
+      pp <- GeoScores(data_pred[, data_col], pred = unlist(pr_st), mse = unlist(pr_mse),
                       score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
       c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
         mean(pp$pit), pp$intscore, pp$coverage)
@@ -362,15 +358,18 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       future::plan(future::multisession, workers = n.cores)
       on.exit(future::plan(future::sequential), add = TRUE)
 
+      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
       if (isTRUE(progress)) {
-        p <- progressr::progressor(along = 1:K)
-        res <- future.apply::future_lapply(
-          1:K,
-          function(i) { out <- cv_iteration_st(i); p(); out },
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
-        )
+        progressr::with_progress({
+          p <- progressr::progressor(along = 1:K)
+          res <- future.apply::future_lapply(
+            1:K,
+            function(i) { out <- cv_iteration_st(i); p(); out },
+            future.seed = TRUE,
+            future.stdout = FALSE,
+            future.conditions = "none"
+          )
+        })
       } else {
         res <- future.apply::future_lapply(
           1:K, cv_iteration_st,
@@ -490,7 +489,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                    progress = FALSE)
       }
 
-      # Calcola metriche
       pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
                       score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
       c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
@@ -517,15 +515,18 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       future::plan(future::multisession, workers = n.cores)
       on.exit(future::plan(future::sequential), add = TRUE)
 
+      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
       if (isTRUE(progress)) {
-        p <- progressr::progressor(along = 1:K)
-        res <- future.apply::future_lapply(
-          1:K,
-          function(i) { out <- cv_iteration_biv(i); p(); out },
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
-        )
+        progressr::with_progress({
+          p <- progressr::progressor(along = 1:K)
+          res <- future.apply::future_lapply(
+            1:K,
+            function(i) { out <- cv_iteration_biv(i); p(); out },
+            future.seed = TRUE,
+            future.stdout = FALSE,
+            future.conditions = "none"
+          )
+        })
       } else {
         res <- future.apply::future_lapply(
           1:K, cv_iteration_biv,
@@ -542,6 +543,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
   }
 
   # Output esteso con tutte le metriche
-  list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps, 
+  list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps,
        lscore = lscore, pit = pit, intscore = intscore, coverage = coverage)
 }

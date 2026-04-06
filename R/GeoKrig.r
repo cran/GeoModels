@@ -18,11 +18,12 @@ mse_universal <- function(krig_weights, X, Xloc, vvar, BB, varcov) {
   if (p > nrow(varcov) || p > ncol(varcov))
     stop("varcov dimension does not match ncol(X)")
   var_mean <- varcov[1:p, 1:p, drop = FALSE]
-  Wt <- t(krig_weights)  # N × n
-  V <- Xloc - Wt %*% X   # N × p
+  Wt <- t(krig_weights)  # N x n
+  V <- Xloc - Wt %*% X   # N x p
 
   term <- rowSums((V %*% var_mean) * V)  # N
-  base <- diag(as.matrix(diag(vvar, nrow(V))) - BB)
+  # FIX (diag): evita costruzione matrice N×N — estrae la diagonale direttamente
+  base <- rep(as.numeric(vvar), length.out = nrow(V)) - diag(as.matrix(BB))
   base + term
 }
 
@@ -104,8 +105,6 @@ if(!is.null(Mloc)) {type_krig="Simple"}
 ######################################
 ############ some checks##############
 ######################################
-#if(is.vector(loc))    loc=t(as.matrix(loc)) ## case of 1 location sites given as vector
-#if(!is.matrix(loc))   loc=as.matrix(loc)
 if (is.vector(loc)) {
   loc <- matrix(loc, nrow = 1)
 } else if (!is.matrix(loc)) {
@@ -114,11 +113,6 @@ if (is.vector(loc)) {
 
 if(!(ncol(loc)==2||ncol(loc)==3))   stop("loc parameter must be a matrix  N X 2 or N X 3 ")
 
-#if(!is.null(Xloc))
-#         { if(is.vector(Xloc)) Xloc=matrix(Xloc,nrow=1)
-#           else                Xloc=as.matrix(Xloc)
-#         }
-#if(!is.null(X)) X=as.matrix(X)
 if (!is.null(Xloc)) {
   if (is.vector(Xloc)) {
     Xloc <- matrix(Xloc, nrow = 1)
@@ -195,7 +189,6 @@ type="Standard"
 if(type %in% c("Standard","standard")) {
 
 ################################################
-#if(!bivariate) {
 ######################################################## 
 ############ optimal prediction cases ##################   
 ######################################################## 
@@ -429,7 +422,6 @@ if(covmatrix$model==40) #
 }
 ####################### sas ######################################
 if (covmatrix$model == 20) { 
-  # Estrazione parametri una volta sola
   vv <- as.numeric(covmatrix$param['sill'])
   tail <- as.numeric(covmatrix$param['tail'])
   skew <- as.numeric(covmatrix$param['skew'])
@@ -526,13 +518,15 @@ if(covmatrix$model==18)
           corr2=cc^2       
          cc1=0.5*(shape1+shape2); vv=shape1*shape2/((cc1+1)*(shape1+shape2)^2)
          idx=which(abs(corr2)>1e-10);corr22=corr2[idx]; nu2=shape1/2;alpha2=shape2/2
-         res=0;ss=0;k=0
-         while(k<=100){
-             p1=2*(lgamma(cc1+k)-lgamma(cc1)+lgamma(nu2+1+k)-lgamma(nu2+1));p2=lgamma(k+1)+(lgamma(nu2+k)-lgamma(nu2))+2*(lgamma(cc1+1+k)-lgamma(cc1+1))
-             b1=p1-p2; b2=log(hypergeo::genhypergeo(U=c(cc1+k,cc1+k,alpha2), L=c(cc1+k+1,cc1+k+1), polynomial=TRUE,maxiter=1000, z=corr22)); b3=k*log(corr22)
+         # FIX 1: rinominato k -> kk per evitare shadowing della variabile esterna
+         # FIX 3: A inizializzato a 0 prima del loop per evitare "object 'A' not found"
+         A <- 0; res <- 0; ss <- 0; kk <- 0
+         while(kk<=100){
+             p1=2*(lgamma(cc1+kk)-lgamma(cc1)+lgamma(nu2+1+kk)-lgamma(nu2+1));p2=lgamma(kk+1)+(lgamma(nu2+kk)-lgamma(nu2))+2*(lgamma(cc1+1+kk)-lgamma(cc1+1))
+             b1=p1-p2; b2=log(hypergeo::genhypergeo(U=c(cc1+kk,cc1+kk,alpha2), L=c(cc1+kk+1,cc1+kk+1), polynomial=TRUE,maxiter=1000, z=corr22)); b3=kk*log(corr22)
              sum=exp(b1+b2+b3); res=res+sum
              if (all(sum<1e-6)){ break} else{ A=res}
-         k=k+1
+         kk=kk+1
         }
          cc[idx]=A; corri=shape1*(cc1 + 1 ) * ((1-corr2)^(cc1) *cc -1)/shape2 ## correlation
          corri[-idx]=0
@@ -552,8 +546,6 @@ if(covmatrix$model==26)
 {  # weibull
                         sh=as.numeric(covmatrix$param['shape']);
                         if(is.null(covmatrix$copula)){ 
-                     #    bcorr=    (gamma(1+1/sh))^2/((gamma(1+2/sh))-(gamma(1+1/sh))^2)
-                     #   corri=bcorr*((1-cc^2)^(1+2/sh)*Re(hypergeo::hypergeo(1+1/sh,1+1/sh ,1 ,cc^2)) -1)
                         cc2 <- cc^2;c2 <- gamma(1 + 1/sh)^2;denom <- gamma(1 + 2/sh) - c2;Fz <- hypergeo::hypergeo(-1/sh, -1/sh, 1, cc2)
                         corri <- (c2 / denom) * (Re(Fz) - 1)
                          }
@@ -677,11 +669,6 @@ if(covmatrix$model %in% c(21,24,26,22))
                  datas=as.matrix(c(dataT)/emu-ones)
                  pp = c(emuloc) * ( one + crossprod(datas,krig_weights))  
                       }
-               ####log gaussian   simple kriging
-#if(covmatrix$model==1&&logGausstemp)   {  
- #                pp = (c(emuloc)+covmatrix$param['sill']/2) +
-  #                                        krig_weights %*% (c(dataT)-exp(c(mu)+covmatrix$param['sill']/2))
-      #        }     
 }     ####simple kriging
       
 else  {   ## bivariate  case   cokriging
@@ -699,16 +686,23 @@ else  {   ## bivariate  case   cokriging
            # Gaussian,StudentT,skew-Gaussian,two piece linear kriging
         if(covmatrix$model %in% c(1,12,27,38,29,10,18,39,28,40,34,9,20,59))
                          ## simple or universal MSE kriging
-                              vv <- if (identical(type_krig, "Universal")) { mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)} 
-                                    else { as.numeric(diag(as.matrix(diag(vvar, dimat2) - BB))) }
+                              # FIX (diag): sostituisce diag(as.matrix(diag(vvar,dimat2)-BB))
+                              # con operazione O(n) invece di O(n^2)
+                              vv <- if (identical(type_krig, "Universal")) {
+                                      mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)
+                                    } else {
+                                      rep(as.numeric(vvar), length.out = dimat2) - diag(as.matrix(BB))
+                                    }
 
              #gamma  #weibull     #loglogistic #loggaussian
     if(covmatrix$model %in% c(21,26,24,22))  {
-                   # vv=emuloc^2*diag(as.matrix(diag(vvar,dimat2)- BB ))   
-
-                     vv <- if (identical(type_krig, "Universal")) { mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)} 
-                                    else { diag(as.matrix(diag(vvar,dimat2)- BB )) } 
-                     vv=   emuloc^2*vv            
+                              # FIX (diag): stessa ottimizzazione per modelli moltiplicativi
+                              vv <- if (identical(type_krig, "Universal")) {
+                                      mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)
+                                    } else {
+                                      rep(as.numeric(vvar), length.out = dimat2) - diag(as.matrix(BB))
+                                    }
+                     vv <- emuloc^2 * vv            
                      }
 
                }     # end if(mse)
@@ -844,10 +838,7 @@ else {corri=ccorr$corri}
        if(covmatrix$model==2||covmatrix$model==11){  ### binomial
         p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate) { 
-          
-
                datas=c(dataT)-n*c(pmu)
-
                pp = KK*c(p0) + crossprod(datas,  krig_weights) 
             }  ## simple kriging
             else{} #todo
@@ -898,11 +889,13 @@ else {corri=ccorr$corri}
             if(mse) vvar=n*(1-k1)*(1-p)*(1+n*p*(1-k1))/k1^2
           }
         if(mse){
-                  
                   vv = diag(sqrt(tcrossprod(vvar))  - BB  )
                 }
         }
 ##############################################################
+# FIX 4: se mse=FALSE, vv non viene mai assegnata nel ramo count-data.
+# Inizializzare a NA per evitare che cvv=c(vv) propaghi NULL nell'output.
+if(!mse) vv <- rep(NA_real_, dimat2)
 cvv=c(vv)
 ##### setting almost zero when zero mse
 if(mse) {
@@ -940,4 +933,3 @@ if(tloc==1)  {pred=c(pred);varpred=c(varpred)}
 }
 
 }
-

@@ -100,6 +100,8 @@ GeoNeighbSelect <- function(
 
     if(!(aa$logCompLik == 0 || aa$logCompLik > 1e+13)) {
       # IMPORTANT: keep your "variogram vs corr" choice unchanged
+
+      if(is.null(copula)){
       cc <- suppressWarnings(
         GeoCorrFct(
           semiv$centers, t = semiv$centert, corrmodel = corrmodel,
@@ -107,7 +109,17 @@ GeoNeighbSelect <- function(
           param = c(aa$param, aa$fixed), radius = radius, n = n,
           covariance = TRUE, variogram = TRUE
         )$corr
-      )
+      )}
+      else {
+          cc <- suppressWarnings(
+        GeoCorrFct_Cop(
+          semiv$centers, t = semiv$centert, corrmodel = corrmodel,
+          model = model, distance = distance,copula=copula,
+          param = c(aa$param, aa$fixed), radius = radius, n = n,
+          covariance = TRUE, variogram = TRUE
+        )$corr
+      )}
+
       res_val <- sum((semiv$variograms - cc)^2)
     } else {
       res_val <- Inf

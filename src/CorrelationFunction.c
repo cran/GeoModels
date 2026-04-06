@@ -1,6 +1,5 @@
 #include "header.h"
 
-
 // check the validity of the parameters' range:
 double CheckCor(int *cormod, double *par)
 {
@@ -8,8 +7,7 @@ double CheckCor(int *cormod, double *par)
   double rho=0.0, sep=0, scale=0.0, smooth=0.0, scale_s=0.0, scale_t=0,smooth_s=0.0,smooth_t=0.0;
   double scale11=0.0, scale22=0, scale12=0.0, smoo11=0.0, smoo12=0.0, smoo22=0,
     R_power11=0.0, R_power12=0.0, R_power22=0,nug11=0.0,nug22=0.0;
-
-
+    
   switch(*cormod) // Correlation functions are in alphabetical order
     {
     case 1:// Cauchy correlation function
@@ -916,10 +914,7 @@ case 23: // hyperg correlation  parameter with matern my version
         scale_s=par[3];
         scale_t=par[4];
         sep=par[5];
-        //arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);
-        //rho=R_pow(arg,R_power)*CorFunW0(u,scale_t*R_pow(arg,sep),R_power_t);
-        arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);
-       /*  arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);  */
+         arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);
         rho=R_pow(arg,R_power)*CorFunW0(u,scale_t*R_pow(arg,sep),R_power_t);  //2.5+2*0
          //2.5+2*0
         break;
@@ -972,7 +967,6 @@ case 23: // hyperg correlation  parameter with matern my version
           scale_t=par[3];
 
           rho=CorFunW_gen(h, R_power_s, 0, scale_s)*CorFunW_gen(u, R_power_t, 0, scale_t);
-          //rho=CorFunW0(h,scale_s,R_power_s)*CorFunW0(u,scale_t,R_power_t);
         break;
         case 70:
               R_power_s=par[0];
@@ -1067,7 +1061,7 @@ case 23: // hyperg correlation  parameter with matern my version
       rho=CorFunWitMat(h, scale_s,smooth_s)*CorFunWitMat(u, scale_t, smooth_t);
       break;
 
-    case 95:// Matern Matern temp
+    case 95:// Matern Matern nosep
       scale_s=par[0];
       scale_t=par[1];
       smooth_s=par[2];
@@ -1955,22 +1949,23 @@ double CorFunWitMat(double lag, double scale, double smooth)
 
 double CorFunWitMat(double lag, double scale, double smooth)
 {
+    if (scale <= 0.0 || smooth <= 0.0)
+        return NAN;
+
     if (lag <= 0.0)
         return 1.0;
 
     double a = lag / scale;
 
-    // ---------------------------------------------------------
-    // Controlla se smooth è semintero (ν = k + 1/2)
-    // ---------------------------------------------------------
-    double k_real = smooth - 0.5;
-    double intpart;
-    int is_half_integer = (fabs(modf(k_real, &intpart)) < 1e-10);
-    int k = (int)(k_real + 0.5);
+    if (a < 1e-12)
+        return 1.0;
 
-    // ---------------------------------------------------------
-    // 1️⃣ Casi piccoli hard-coded (super veloci)
-    // ---------------------------------------------------------
+    // ---- check half-integer ν = k + 1/2 ----
+    double k_real = smooth - 0.5;
+    double k_round = round(k_real);
+    int is_half_integer = fabs(k_real - k_round) < 1e-10;
+    int k = (int)k_round;
+
     if (is_half_integer)
     {
         if (k == 0)
@@ -1983,24 +1978,13 @@ double CorFunWitMat(double lag, double scale, double smooth)
             return exp(-a) * (1.0 + a + 0.4 * a * a + (a * a * a) / 15.0);
     }
 
-    // ---------------------------------------------------------
-    // 3️⃣ Caso generale: formula con Bessel Kν
-    // ---------------------------------------------------------
-    // M_ν(a) = (2^{1−ν} / Γ(ν)) * a^ν * K_ν(a)
-    double log_besselk = log(bessel_k(a, smooth, 2));  // scaling interno esponenziale
+    // ---- general case ----
+    double log_besselk = log(bessel_k(a, smooth, 2));  // scaled: e^a Kν(a)
     double log_num = smooth * log(a) + log_besselk - a;
     double log_den = (smooth - 1.0) * log(2.0) + log(gammafn(smooth));
 
     return exp(log_num - log_den);
 }
-
-
-
-
-
-
-
-
 
 
 double Shkarofski(double lag, double a,double b, double k)
@@ -3115,24 +3099,10 @@ void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy, double 
 }
 
 
-
-
-
-
-
-
-
-
-
-
-/************************************************************************************************/
-/************************************************************************************************/
 /************************************************************************************************/
 /************************************************************************************************/
 /************************************************************************************************/
 /****************** SPATIO-Temporal(BIVARIATE) CORRELATION Vector *******************************/
-/************************************************************************************************/
-/************************************************************************************************/
 /************************************************************************************************/
 /************************************************************************************************/
 
@@ -4533,121 +4503,78 @@ double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11
    TABELLE GAUSS-LEGENDRE PRECOMPUTE
    ============================================================================ */
 
-// 16 nodi Gauss-Legendre su [-1, 1] (ottimo compromesso)
+#include <R.h>
+#include <Rmath.h>
+#include <stdbool.h>
+#include <math.h>
+
+/* 16 nodi Gauss-Legendre su [-1, 1] */
 static const int N_GL16 = 16;
 static const double GL16_NODES[16] = {
-    -0.989400934991649932596154,
-    -0.944575023073232576077989,
-    -0.865631202387831743880468,
-    -0.755404408355003033895101,
-    -0.617876244402643748446672,
-    -0.458016777657227386342420,
-    -0.281603550779258913230461,
-    -0.095012509837637440185319,
-     0.095012509837637440185319,
-     0.281603550779258913230461,
-     0.458016777657227386342420,
-     0.617876244402643748446672,
-     0.755404408355003033895101,
-     0.865631202387831743880468,
-     0.944575023073232576077989,
-     0.989400934991649932596154
+    -0.989400934991649932596154, -0.944575023073232576077989,
+    -0.865631202387831743880468, -0.755404408355003033895101,
+    -0.617876244402643748446672, -0.458016777657227386342420,
+    -0.281603550779258913230461, -0.095012509837637440185319,
+     0.095012509837637440185319,  0.281603550779258913230461,
+     0.458016777657227386342420,  0.617876244402643748446672,
+     0.755404408355003033895101,  0.865631202387831743880468,
+     0.944575023073232576077989,  0.989400934991649932596154
 };
 
 static const double GL16_WEIGHTS[16] = {
-    0.027152459411754094851781,
-    0.062253523938647892862844,
-    0.095158511682492784809925,
-    0.124628971255533872052477,
-    0.149595988816576732081501,
-    0.169156519395002538189313,
-    0.182603415044923588866764,
-    0.189450610455068496285396,
-    0.189450610455068496285396,
-    0.182603415044923588866764,
-    0.169156519395002538189313,
-    0.149595988816576732081501,
-    0.124628971255533872052477,
-    0.095158511682492784809925,
-    0.062253523938647892862844,
-    0.027152459411754094851781
+    0.027152459411754094851781, 0.062253523938647892862844,
+    0.095158511682492784809925, 0.124628971255533872052477,
+    0.149595988816576732081501, 0.169156519395002538189313,
+    0.182603415044923588866764, 0.189450610455068496285396,
+    0.189450610455068496285396, 0.182603415044923588866764,
+    0.169156519395002538189313, 0.149595988816576732081501,
+    0.124628971255533872052477, 0.095158511682492784809925,
+    0.062253523938647892862844, 0.027152459411754094851781
 };
 
-// 32 nodi Gauss-Legendre (alta precisione, per casi critici)
+/* 32 nodi Gauss-Legendre su [-1, 1] */
 static const int N_GL32 = 32;
 static const double GL32_NODES[32] = {
-    -0.997263861849481563544981,
-    -0.985611511545268335400175,
-    -0.964762255587506430773811,
-    -0.934906075937739689170919,
-    -0.896321155766052123965307,
-    -0.849367613732569970133693,
-    -0.794483795967942406963098,
-    -0.732182118740289680387427,
-    -0.663044266930215200975115,
-    -0.587715757240762329040746,
-    -0.506899908932229390023747,
-    -0.421351276130635345364119,
-    -0.331868602282127649779917,
-    -0.239287362252137074544603,
-    -0.144471961582796493485186,
-    -0.048307665687738316234812,
-     0.048307665687738316234812,
-     0.144471961582796493485186,
-     0.239287362252137074544603,
-     0.331868602282127649779917,
-     0.421351276130635345364119,
-     0.506899908932229390023747,
-     0.587715757240762329040746,
-     0.663044266930215200975115,
-     0.732182118740289680387427,
-     0.794483795967942406963098,
-     0.849367613732569970133693,
-     0.896321155766052123965307,
-     0.934906075937739689170919,
-     0.964762255587506430773811,
-     0.985611511545268335400175,
-     0.997263861849481563544981
+    -0.997263861849481563544981, -0.985611511545268335400175,
+    -0.964762255587506430773811, -0.934906075937739689170919,
+    -0.896321155766052123965307, -0.849367613732569970133693,
+    -0.794483795967942406963098, -0.732182118740289680387427,
+    -0.663044266930215200975115, -0.587715757240762329040746,
+    -0.506899908932229390023747, -0.421351276130635345364119,
+    -0.331868602282127649779917, -0.239287362252137074544603,
+    -0.144471961582796493485186, -0.048307665687738316234812,
+     0.048307665687738316234812,  0.144471961582796493485186,
+     0.239287362252137074544603,  0.331868602282127649779917,
+     0.421351276130635345364119,  0.506899908932229390023747,
+     0.587715757240762329040746,  0.663044266930215200975115,
+     0.732182118740289680387427,  0.794483795967942406963098,
+     0.849367613732569970133693,  0.896321155766052123965307,
+     0.934906075937739689170919,  0.964762255587506430773811,
+     0.985611511545268335400175,  0.997263861849481563544981
 };
 
 static const double GL32_WEIGHTS[32] = {
-    0.007018610009470096600407,
-    0.016274394730905670605170,
-    0.025392065309262059455752,
-    0.034273862913021433102271,
-    0.042835898022226680656878,
-    0.050998059262376176196163,
-    0.058684093478535547145284,
-    0.065822222776361846837651,
-    0.072345794108848506225399,
-    0.078193895787070306471741,
-    0.083311924226946755222199,
-    0.087652093004403811142771,
-    0.091173878695763884712709,
-    0.093844399080804565639180,
-    0.095638720079274859419082,
-    0.096540088514727800566764,
-    0.096540088514727800566764,
-    0.095638720079274859419082,
-    0.093844399080804565639180,
-    0.091173878695763884712709,
-    0.087652093004403811142771,
-    0.083311924226946755222199,
-    0.078193895787070306471741,
-    0.072345794108848506225399,
-    0.065822222776361846837651,
-    0.058684093478535547145284,
-    0.050998059262376176196163,
-    0.042835898022226680656878,
-    0.034273862913021433102271,
-    0.025392065309262059455752,
-    0.016274394730905670605170,
-    0.007018610009470096600407
+    0.007018610009470096600407, 0.016274394730905670605170,
+    0.025392065309262059455752, 0.034273862913021433102271,
+    0.042835898022226680656878, 0.050998059262376176196163,
+    0.058684093478535547145284, 0.065822222776361846837651,
+    0.072345794108848506225399, 0.078193895787070306471741,
+    0.083311924226946755222199, 0.087652093004403811142771,
+    0.091173878695763884712709, 0.093844399080804565639180,
+    0.095638720079274859419082, 0.096540088514727800566764,
+    0.096540088514727800566764, 0.095638720079274859419082,
+    0.093844399080804565639180, 0.091173878695763884712709,
+    0.087652093004403811142771, 0.083311924226946755222199,
+    0.078193895787070306471741, 0.072345794108848506225399,
+    0.065822222776361846837651, 0.058684093478535547145284,
+    0.050998059262376176196163, 0.042835898022226680656878,
+    0.034273862913021433102271, 0.025392065309262059455752,
+    0.016274394730905670605170, 0.007018610009470096600407
 };
 
 
 /* ============================================================================
-   SUPPORTO: COMBINAZIONI E COEFFICIENTI
+   SUPPORTO: COEFFICIENTI
    ============================================================================ */
 
 static double log_choose_int(int n, int k) {
@@ -4657,94 +4584,140 @@ static double log_choose_int(int n, int k) {
            lgammafn((double)(n - k) + 1.0);
 }
 
-static double choose_int(int n, int k) {
-    double lC = log_choose_int(n, k);
-    if (!R_FINITE(lC)) return 0.0;
-    return exp(lC);
-}
-
-// Coefficienti A_{k,i} = (k + i)! / (2^k * k!) * binom(k, i)
+/* Coefficienti A_{k,i} = (k+i)! / (2^k * k!) * binom(k,i) */
 static double compute_A(int k, int i) {
     if (i < 0 || i > k) return 0.0;
-    double log_term = log_choose_int(k, i) + lgammafn((double)(k + i + 1)) -
-                      (double)k * log(2.0) - lgammafn((double)(k + 1));
+    double log_term = log_choose_int(k, i)
+        + lgammafn((double)(k + i + 1))
+        - (double)k * log(2.0)
+        - lgammafn((double)(k + 1));
     if (!R_FINITE(log_term)) return 0.0;
     return exp(log_term);
 }
 
-// Complete Bell polynomial B_m(x1, ..., xm)
-static double complete_bell(int m, double *x) {
+
+/* ============================================================================
+   BELL POLYNOMIAL COMPLETO
+   B_n = sum_{k=1}^n binom(n-1,k-1) x_k B_{n-k}
+   con binomi aggiornati ricorsivamente.
+   ============================================================================ */
+
+static double complete_bell_fast(int m, const double *x) {
     if (m == 0) return 1.0;
+
     double *b = (double *)R_alloc(m + 1, sizeof(double));
     b[0] = 1.0;
+
     for (int n = 1; n <= m; ++n) {
-        b[n] = 0.0;
-        for (int j = 1; j <= n; ++j) {
-            if (n - j < 0) continue;
-            double binom = choose_int(n - 1, j - 1);
-            b[n] += binom * x[j] * b[n - j];
+        double acc   = 0.0;
+        double binom = 1.0; /* binom(n-1, 0) */
+
+        for (int k = 1; k <= n; ++k) {
+            acc += binom * x[k] * b[n - k];
+            if (k < n)
+                binom *= (double)(n - k) / (double)k;
         }
+        b[n] = acc;
     }
     return b[m];
 }
+
 
 /* ============================================================================
    CLOSED FORM: SEMI-INTEGER SMOOTHNESS
    ============================================================================ */
 
 static double cov_st_semi_integer(double h, double u, double scale_s, double scale_t,
-                                  int ks, int kt, double alpha) {
+                                  int ks, int kt, double alpha)
+{
     double beta = h / scale_s + u / scale_t;
-    if (beta < 1e-10) return 1.0;
-    
-    double g = (R_pow(1.0 + beta, alpha) - 1.0) / alpha;
-    double exp_neg_g = exp(-g);
-    
+    if (beta < 1e-12) return 1.0;
+
     int max_m = ks + kt;
-    if (max_m > 20) {
-        warning("cov_st_semi_integer: max_m=%d too large (>20), falling back.", max_m);
+    if (max_m > 40) {
+        warning("cov_st_semi_integer: max_m=%d too large, returning NA.", max_m);
         return NA_REAL;
     }
-    
+
+    /* g(t) = ((1+t)^alpha - 1) / alpha */
+    double onepb     = 1.0 + beta;
+    double g         = (R_pow(onepb, alpha) - 1.0) / alpha;
+    double exp_neg_g = exp(-g);
+
+    /* Derivate: g'(t) = (1+t)^(alpha-1)
+                 g^(m)(t) = (alpha-1)...(alpha-m+1) * (1+t)^(alpha-m), m>=2 */
     double *g_derivs = (double *)R_alloc(max_m + 1, sizeof(double));
     g_derivs[0] = 0.0;
-    
-    // Compute g^{(m)}(beta) = (alpha)_m * (1 + beta)^{alpha - m}
-    double poch = alpha;
-    double pow_term = R_pow(1.0 + beta, alpha - 1.0);
-    g_derivs[1] = poch * pow_term;
-    for (int m = 2; m <= max_m; ++m) {
-        poch *= (alpha - (double)m + 1.0);
-        pow_term /= (1.0 + beta);
-        g_derivs[m] = poch * pow_term;
-    }
-    
-    double sum_total = 0.0;
-    for (int i = 0; i <= ks; ++i) {
-        double A_s = compute_A(ks, i);
-        double pow_h = R_pow(2.0 * h / scale_s, (double)(ks - i));
-        for (int j = 0; j <= kt; ++j) {
-            double A_t = compute_A(kt, j);
-            double pow_u = R_pow(2.0 * u / scale_t, (double)(kt - j));
-            int mij = (ks - i) + (kt - j);
-            double bell = complete_bell(mij, g_derivs);
-            sum_total += A_s * A_t * pow_h * pow_u * bell;
+
+    if (max_m >= 1) g_derivs[1] = R_pow(onepb, alpha - 1.0);
+
+    if (max_m >= 2) {
+        double coef     = alpha - 1.0;
+        double pow_term = R_pow(onepb, alpha - 2.0);
+        g_derivs[2] = coef * pow_term;
+        for (int m = 3; m <= max_m; ++m) {
+            coef     *= (alpha - (double)m + 1.0);
+            pow_term /= onepb;
+            g_derivs[m] = coef * pow_term;
         }
     }
-    
+
+    /* x[m] = -g^(m)(beta) per uso in Bell polynomials */
+    double *x = (double *)R_alloc(max_m + 1, sizeof(double));
+    x[0] = 0.0;
+    for (int m = 1; m <= max_m; ++m) x[m] = -g_derivs[m];
+
+    /* bell_signed[m] = (-1)^m * B_m(x1,...,xm) */
+    double *bell_signed = (double *)R_alloc(max_m + 1, sizeof(double));
+    bell_signed[0] = 1.0;
+    for (int m = 1; m <= max_m; ++m) {
+        double Bm = complete_bell_fast(m, x);
+        bell_signed[m] = (m & 1) ? -Bm : Bm;
+    }
+
+    /* Coefficienti A_{ks,i} e A_{kt,j} */
+    double *As = (double *)R_alloc(ks + 1, sizeof(double));
+    double *At = (double *)R_alloc(kt + 1, sizeof(double));
+    for (int i = 0; i <= ks; ++i) As[i] = compute_A(ks, i);
+    for (int j = 0; j <= kt; ++j) At[j] = compute_A(kt, j);
+
+    /* Potenze precompute: (2h/scale_s)^(ks-i), (2u/scale_t)^(kt-j) */
+    double base_h = 2.0 * h / scale_s;
+    double base_u = 2.0 * u / scale_t;
+
+    double *ph = (double *)R_alloc(ks + 1, sizeof(double));
+    double *pu = (double *)R_alloc(kt + 1, sizeof(double));
+
+    ph[ks] = 1.0;
+    for (int i = ks - 1; i >= 0; --i) ph[i] = ph[i + 1] * base_h;
+
+    pu[kt] = 1.0;
+    for (int j = kt - 1; j >= 0; --j) pu[j] = pu[j + 1] * base_u;
+
+    double sum_total = 0.0;
+    for (int i = 0; i <= ks; ++i) {
+        double w_s = As[i] * ph[i];
+        int    ms  = ks - i;
+        for (int j = 0; j <= kt; ++j) {
+            int mij = ms + (kt - j);
+            sum_total += w_s * (At[j] * pu[j]) * bell_signed[mij];
+        }
+    }
+
     return exp_neg_g * sum_total;
 }
 
+
 /* ============================================================================
-   COEFFICIENTI STEHFEST PER DENSITÀ TEMPERED-STABLE
+   COEFFICIENTI STEHFEST — N_steh=16 per ~8 cifre di precisione
    ============================================================================ */
 
-const int N_steh = 10;
+const int N_steh = 16; /* FIX: era 10, portato a 16 */
 
 static void stehfest_coeffs(int N, double *V) {
     int n2 = N / 2;
     for (int i = 1; i <= N; ++i) {
-        double sum = 0.0;
+        double sum  = 0.0;
         int k_min = (i + 1) / 2;
         int k_max = (i < n2) ? i : n2;
         for (int k = k_min; k <= k_max; ++k) {
@@ -4765,180 +4738,166 @@ static void stehfest_coeffs(int N, double *V) {
     }
 }
 
+
 /* ============================================================================
-   GRIGLIA PRECOMPUTATA DENSITÀ TEMPERED-STABLE
+   GRIGLIA LOG-UNIFORME DENSITÀ TEMPERED-STABLE
    ============================================================================ */
 
 #define N_GRID 2000
-static double w_grid[N_GRID];
 static double f_grid[N_GRID];
-static double last_alpha = -1.0;
-static int grid_initialized = 0;
+static double w_grid[N_GRID];
+static double last_alpha      = -1.0;
+static int    grid_initialized = 0;
+
+/* FIX: rimossi grid_w_min/max statici e grid_dw — ora gestiti dentro precompute */
+static double grid_w_min  = 0.0;
+static double grid_w_max  = 0.0;
+static double grid_log_min = 0.0;
+static double grid_log_max = 0.0;
+static double grid_dlog    = 0.0;
 
 static void precompute_density_grid(double alpha) {
-    if (alpha <= 0.0 || alpha >= 1.0) return;
-    
-    static double V[32];
+    if (alpha <= 0.0 || alpha >= 1.0) {
+        warning("precompute_density_grid: alpha=%g outside (0,1).", alpha);
+        return;
+    }
+
+    static double V[32]; /* sufficiente per N_steh <= 32 */
     if (!grid_initialized) {
         stehfest_coeffs(N_steh, V);
         grid_initialized = 1;
     }
-    
-    double w_min = 0.01;
-    double w_max = 20.0;
-    double dw = (w_max - w_min) / (N_GRID - 1.0);
+
+    /* FIX: griglia log-uniforme con w_min=1e-4 per catturare il picco vicino a 0 */
+    grid_w_min   = 1e-4;
+    grid_w_max   = 20.0;
+    grid_log_min = log(grid_w_min);
+    grid_log_max = log(grid_w_max);
+    grid_dlog    = (grid_log_max - grid_log_min) / (N_GRID - 1.0);
+
     double ln2 = log(2.0);
-    
+
     for (int i = 0; i < N_GRID; ++i) {
-        double w = w_min + i * dw;
+        double w  = exp(grid_log_min + i * grid_dlog);
         w_grid[i] = w;
+
         double sum = 0.0;
         for (int k = 1; k <= N_steh; ++k) {
-            double s = (double)k * ln2 / w;
+            double s          = (double)k * ln2 / w;
             double one_plus_s = 1.0 + s;
             if (one_plus_s <= 0.0) continue;
             double pow_term = R_pow(one_plus_s, alpha);
-            double expo_arg = - (pow_term - 1.0) / alpha;
+            double expo_arg = -(pow_term - 1.0) / alpha;
             if (expo_arg < -745.0) continue;
-            if (expo_arg > 709.0) {
-                sum = 0.0;
-                break;
-            }
-            double phi = exp(expo_arg);
-            sum += V[k] * phi;
+            if (expo_arg >  709.0) { sum = 0.0; break; }
+            sum += V[k] * exp(expo_arg);
         }
-        double f = (ln2 / w) * sum;
+
+        double f  = (ln2 / w) * sum;
         f_grid[i] = (f > 0.0) ? f : 0.0;
     }
+
+    /* check normalizzazione */
+    double mass = 0.0;
+    for (int i = 0; i < N_GRID - 1; i++)
+        mass += 0.5 * (f_grid[i] + f_grid[i + 1]) * (w_grid[i + 1] - w_grid[i]);
+    if (fabs(mass - 1.0) > 0.01)
+        warning("precompute_density_grid: alpha=%.3f copre massa=%.4f (atteso 1.0).",
+                alpha, mass);
+
     last_alpha = alpha;
 }
 
-// Interpolazione con binary search (molto più veloce)
+
+/* Interpolazione O(1) su griglia log-uniforme */
 static double interp_density_fast(double w, double alpha) {
     if (w <= 0.0) return 0.0;
     if (alpha != last_alpha) precompute_density_grid(alpha);
-    
-    double w_min = w_grid[0];
-    double w_max = w_grid[N_GRID - 1];
-    if (w < w_min || w > w_max) return 0.0;
-    
-    // Binary search
-    int left = 0, right = N_GRID - 1;
-    while (right - left > 1) {
-        int mid = (left + right) / 2;
-        if (w_grid[mid] <= w) {
-            left = mid;
-        } else {
-            right = mid;
-        }
-    }
-    
-    // Interpolazione lineare
-    double w1 = w_grid[left];
-    double w2 = w_grid[left + 1];
-    double f1 = f_grid[left];
-    double f2 = f_grid[left + 1];
-    double t = (w - w1) / (w2 - w1);
-    
-    return f1 + t * (f2 - f1);
+    if (w < grid_w_min || w > grid_w_max) return 0.0;
+
+    double z   = (log(w) - grid_log_min) / grid_dlog;
+    int    idx = (int)z;
+    if (idx < 0)           idx = 0;
+    if (idx >= N_GRID - 1) idx = N_GRID - 2;
+
+    double t = z - idx;
+    return f_grid[idx] + t * (f_grid[idx + 1] - f_grid[idx]);
 }
 
+
 /* ============================================================================
-   INTEGRAZIONE GAUSS-LEGENDRE (VELOCE E ACCURATA)
+   INTEGRAZIONE GAUSS-LEGENDRE
    ============================================================================ */
 
-// Integrazione su regione [a, b] con n nodi GL
 static double integrate_region_GL(double a, double b, int n_nodes,
                                   const double *nodes, const double *weights,
-                                  double h, double u, 
+                                  double h, double u,
                                   double scale_s, double scale_t,
-                                  double nu_s, double nu_t, double alpha) {
+                                  double nu_s, double nu_t, double alpha)
+{
+    if (b <= a) return 0.0;
+
     double half = (b - a) / 2.0;
-    double mid = (a + b) / 2.0;
-    double sum = 0.0;
-    
+    double mid  = (a + b) / 2.0;
+    double sum  = 0.0;
+
     for (int i = 0; i < n_nodes; i++) {
         double w = mid + half * nodes[i];
         if (w <= 0.0) continue;
-        
+
         double rho_s = CorFunWitMat(w * h, scale_s, nu_s);
         double rho_t = CorFunWitMat(w * u, scale_t, nu_t);
-        double f_w = interp_density_fast(w, alpha);
-        
+        double f_w   = interp_density_fast(w, alpha);
+
         sum += weights[i] * rho_s * rho_t * f_w;
     }
-    
+
     return half * sum;
 }
 
-// Integrazione adattiva multi-regione per massima efficienza
-static double cov_st_general_adaptive(double h, double u, 
+
+static double cov_st_general_adaptive(double h, double u,
                                       double scale_s, double scale_t,
-                                      double nu_s, double nu_t, double alpha) {
-    if (h < 1e-10 && u < 1e-10) return 1.0;
-    
-    // Precomputa griglia densità
+                                      double nu_s, double nu_t, double alpha)
+{
+    if (h < 1e-12 && u < 1e-12) return 1.0;
+
     if (last_alpha != alpha) precompute_density_grid(alpha);
-    
-    // Strategia adattiva: 3 regioni con densità decrescente
-    // [0, 2]: alta densità → GL32 (massima precisione)
-    // [2, 8]: media densità → GL16 (bilanciato)
-    // [8, 20]: bassa densità → GL16 (sufficiente)
-    
-    double result = 0.0;
-    
-    result += integrate_region_GL(0.0, 2.0, N_GL32, GL32_NODES, GL32_WEIGHTS,
-                                  h, u, scale_s, scale_t, nu_s, nu_t, alpha);
-    
-    result += integrate_region_GL(2.0, 8.0, N_GL16, GL16_NODES, GL16_WEIGHTS,
-                                  h, u, scale_s, scale_t, nu_s, nu_t, alpha);
-    
-    result += integrate_region_GL(8.0, 20.0, N_GL16, GL16_NODES, GL16_WEIGHTS,
-                                  h, u, scale_s, scale_t, nu_s, nu_t, alpha);
-    
-    return result;
+
+    const double WMAX    = 20.0;
+    const double arg_max = 30.0;
+
+    double w_max_eff = WMAX;
+    if (h > 0.0) w_max_eff = fmin(w_max_eff, arg_max * scale_s / h);
+    if (u > 0.0) w_max_eff = fmin(w_max_eff, arg_max * scale_t / u);
+    if (w_max_eff < 0.2) w_max_eff = 0.2;
+    if (w_max_eff > WMAX) w_max_eff = WMAX;
+
+    double res = 0.0;
+    double b1  = fmin(2.0, w_max_eff);
+    double b2  = fmin(8.0, w_max_eff);
+
+    /* [0, b1] con GL32 */
+    if (b1 > 0.0)
+        res += integrate_region_GL(0.0, b1, N_GL32, GL32_NODES, GL32_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+
+    /* [2, b2] con GL16 */
+    if (w_max_eff > 2.0 && b2 > 2.0)
+        res += integrate_region_GL(2.0, b2, N_GL16, GL16_NODES, GL16_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+
+    /* [8, w_max_eff] con GL16 */
+    if (w_max_eff > 8.0)
+        res += integrate_region_GL(8.0, w_max_eff, N_GL16, GL16_NODES, GL16_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+
+    return res;
 }
 
 
 /* ============================================================================
-   CASI SPECIALI (FORMULE CHIUSE)
-   ============================================================================ */
-
-static double cov_st_case1(double h, double u, double scale_s, double scale_t, double alpha) {
-    double beta = h / scale_s + u / scale_t;
-    double g = (R_pow(1.0 + beta, alpha) - 1.0) / alpha;
-    return exp(-g);
-}
-
-static double cov_st_case2(double h, double u, double scale_s, double scale_t, double alpha) {
-    double beta = h / scale_s + u / scale_t;
-    double g = (R_pow(1.0 + beta, alpha) - 1.0) / alpha;
-    double g1 = R_pow(1.0 + beta, alpha - 1.0);
-    return exp(-g) * (1.0 + (h / scale_s) * g1);
-}
-
-static double cov_st_case3(double h, double u, double scale_s, double scale_t, double alpha) {
-    double beta = h / scale_s + u / scale_t;
-    double g = (R_pow(1.0 + beta, alpha) - 1.0) / alpha;
-    double g1 = R_pow(1.0 + beta, alpha - 1.0);
-    return exp(-g) * (1.0 + (u / scale_t) * g1);
-}
-
-static double cov_st_case4(double h, double u, double scale_s, double scale_t, double alpha) {
-    double beta = h / scale_s + u / scale_t;
-    double g = (R_pow(1.0 + beta, alpha) - 1.0) / alpha;
-    double g1 = R_pow(1.0 + beta, alpha - 1.0);
-    double g2 = (alpha - 1.0) * R_pow(1.0 + beta, alpha - 2.0);
-    
-    double term1 = 1.0;
-    double term2 = (h / scale_s + u / scale_t) * g1;
-    double term3 = (h * u) / (scale_s * scale_t) * (g1 * g1 + g2);
-    
-    return exp(-g) * (term1 + term2 + term3);
-}
-
-/* ============================================================================
-   FUNZIONE PRINCIPALE OTTIMIZZATA
+   FUNZIONE PRINCIPALE
    ============================================================================ */
 
 double CorFunWitMattemp(double h, double u,
@@ -4946,42 +4905,29 @@ double CorFunWitMattemp(double h, double u,
                         double smooth_s, double smooth_t,
                         double alpha)
 {
+
+    alpha=exp(alpha)/(1+exp(alpha));
     double nu_s = smooth_s;
     double nu_t = smooth_t;
-    double ss = scale_s;
-    double st = scale_t;
 
-    if (h < 1e-10 && u < 1e-10) return 1.0;
-    
-    // Check se semi-integer
-    double eps = 1e-8;
+    if (h < 1e-12 && u < 1e-12) return 1.0;
+
+    /* semi-integer check */
+    const double eps = 1e-8;
     double ks_d = nu_s - 0.5;
     double kt_d = nu_t - 0.5;
     int ks = (int)round(ks_d);
     int kt = (int)round(kt_d);
+
     bool is_semi_s = (fabs(ks_d - (double)ks) < eps && ks >= 0);
     bool is_semi_t = (fabs(kt_d - (double)kt) < eps && kt >= 0);
-    
-    // 1️⃣ Semi-integer: forma chiusa generale (gestisce anche casi 1-4)
-    if (is_semi_s && is_semi_t) {
-        return cov_st_semi_integer(h, u, ss, st, ks, kt, alpha);
-    }
-    
-    // 2️⃣ Casi speciali hard-coded
-    if (fabs(nu_s - 0.5) < eps && fabs(nu_t - 0.5) < eps) {
-        return cov_st_case1(h, u, ss, st, alpha);
-    }
-    if (fabs(nu_s - 1.5) < eps && fabs(nu_t - 0.5) < eps) {
-        return cov_st_case2(h, u, ss, st, alpha);
-    }
-    if (fabs(nu_s - 0.5) < eps && fabs(nu_t - 1.5) < eps) {
-        return cov_st_case3(h, u, ss, st, alpha);
-    }
-    if (fabs(nu_s - 1.5) < eps && fabs(nu_t - 1.5) < eps) {
-        return cov_st_case4(h, u, ss, st, alpha);
-    }
-    
-    // 3️⃣ Caso generale: integrazione Gauss-Legendre ADATTIVA
-    // Usa GL32 su [0,2] e GL16 su [2,20] per massima efficienza
-    return cov_st_general_adaptive(h, u, ss, st, nu_s, nu_t, alpha);
+
+    /* FIX: i casi speciali (0.5,0.5), (1.5,0.5), ecc. sono gia'
+       catturati qui — i quattro if hard-coded sono stati rimossi
+       perche' erano dead code (unreachable). */
+    if (is_semi_s && is_semi_t)
+        return cov_st_semi_integer(h, u, scale_s, scale_t, ks, kt, alpha);
+
+    /* caso generale: nu non semi-intero */
+    return cov_st_general_adaptive(h, u, scale_s, scale_t, nu_s, nu_t, alpha);
 }

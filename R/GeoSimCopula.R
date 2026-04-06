@@ -69,12 +69,16 @@ unif=pnorm(sim$data,mean=0,sd=1);
 ####skewGaussian copula #############################################
 if(copula=="SkewGaussian")
 {
-param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=param$nu),paramcorr)
+
+nu <- as.numeric(param$nu)
+if(abs(nu>1)) stop(" nu parameter must be between -1 and 1")
+alpha <- nu / sqrt(1 - nu^2)
+   
+param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=alpha),paramcorr)
 sim=GeoSim(coordx=coordx, coordy=coordy,coordz=coordz,coordt=coordt, coordx_dyn=coordx_dyn,corrmodel=corrmodel, 
     distance=distance, grid=grid,
      method=method,model='SkewGaussian', n=1, param=param1,anisopars=anisopars, radius=radius, sparse=sparse,nrep=1)
-omega=as.numeric(sqrt((param$nu^2 + 1)/1))
-alpha=as.numeric(param$nu)
+omega=as.numeric(sqrt((alpha^2 + 1)/1))
 unif=sn::psn(sim$data,xi=0,omega= omega,alpha= alpha)
 }
 
