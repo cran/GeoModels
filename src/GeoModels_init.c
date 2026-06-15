@@ -40,6 +40,12 @@ extern void geo_distances(double *coords, int *ncoords, int *p, int *type_dist, 
                      double *out) ;
 /* for Turning band */
 extern void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, int *N, double *result);
+
+extern void TBD1d_amp(double *ux, double *uy,
+               double *sx, double *sy,
+               double *phi, double *amp,
+               int *L, int *N,
+               double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
 extern void extraer(double *coord,int sequen1,double *sub_coord,int fila,int col, int d);
 extern void rellenar_indice(int *index,int inicio, int final,int largo);
@@ -101,11 +107,16 @@ extern void corr_kuma_vec(double *rho,double *eta,double *gam,double *res, int *
 extern void Corr_c(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,double *locy,double *locz,
         int *ncoord, int *nloc,int *tloc,int *ns,int *NS,int *ntime, double *par, int *spt, int *biv, double *time,int *type, int *which,double *radius);
 
-extern void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,double *locy,double *locz,
-            int *ncoord, int *nloc,int *model,int *tloc,int *nn,int *n, int *ns,int *NS,int *ntime, double *mean,
-            double *nuis, double *par, int *spt, int *biv, 
-                      double *time,int *type, int *which,double *radius,int *cop);
+//extern void Corr_c_bin(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,double *locy,double *locz,
+//            int *ncoord, int *nloc,int *model,int *tloc,int *nn,int *n, int *ns,int *NS,int *ntime, double *mean,
+//            double *nuis, double *par, int *spt, int *biv, 
+//                      double *time,int *type, int *which,double *radius,int *cop);
 
+extern void Corr_c_bin(double *cc,double *coordx, double *coordy, double *coordz, double *coordt,
+                int *cormod, int *grid,double *locx, double *locy, double *locz,
+                int *ncoord, int *nloc,int *model, int *tloc, int *nn, int *n,int *ns, int *NS, int *ntime,
+                double *mean_obs,   double *mean_loc,  double *nuis, double *par,
+                int *spt, int *biv,double *time, int *type, int *which,double *radius, int *cop);
 
 extern void Corr_c_tap(double *cc,double *cc_tap,double *coordx, double *coordy, double *coordz, double *coordt, int *cormod, int *cormodtap, int *grid,
  double *locx,  double *locy,double *locz,
@@ -982,7 +993,7 @@ static const R_CMethodDef CEntries[] = {
     {"biv_unif_CopulaClayton_call", (DL_FUNC) &biv_unif_CopulaClayton_call,  5},
     {"biv_unif_CopulaGauss_call",   (DL_FUNC) &biv_unif_CopulaGauss_call,    4},
     {"Corr_c",                      (DL_FUNC) &Corr_c,                      23},
-    {"Corr_c_bin",                  (DL_FUNC) &Corr_c_bin,                  29},
+    {"Corr_c_bin",                  (DL_FUNC) &Corr_c_bin,                  30},
     {"Corr_c_tap",                  (DL_FUNC) &Corr_c_tap,                  27},
     {"corr_kuma_vec",               (DL_FUNC) &corr_kuma_vec,                5},
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
@@ -1000,6 +1011,7 @@ static const R_CMethodDef CEntries[] = {
 /* for Turning band */
 
     {"TBD1d",                       (DL_FUNC) &TBD1d,                      8},
+     {"TBD1d_amp",                       (DL_FUNC) &TBD1d_amp,                      9},
     {"spectraldensityC",            (DL_FUNC) &spectraldensityC,          10},
    // {"spectral_density_1d",         (DL_FUNC) &spectral_density_1d,        7},
     {"extraer",                     (DL_FUNC) &extraer,                    6},

@@ -391,7 +391,7 @@ extern int *ncoordx;// number of the first spatial coordinates
 extern int *ncoordy;// number of the second spatial coordinates
 extern int *ncoordz;// number of the second spatial coordinates
 extern int *npairs;// effective number of pairs
-//int *nrep;// number of iid replicates of the random field
+//int *nrep;// number of bernoulli replicates of the random field
 extern int *ntime;// number of times
 extern double *REARTH; // radius of the sphere
 extern double *tapsep; // parameter separability for space time quasi taper

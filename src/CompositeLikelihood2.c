@@ -1201,84 +1201,158 @@ void Comp_Pair_Pois2mem(int *cormod, double *data1, double *data2, int *N1, int 
 }
 
 /*********************************************************/
-void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
-                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
-                            double *nuis,  int *type_cop, int *cond)
+
+#ifndef RHO_EPS
+#define RHO_EPS 1e-15
+#endif
+#ifndef PROB_MIN
+#define PROB_MIN 1e-300
+#endif
+
+static R_INLINE double clamp_prob_safe(double p)
 {
-    // Early parameter validation
+    if (!R_FINITE(p) || p <= 0.0) return PROB_MIN;
+    if (p > 1.0) return 1.0;
+
+    return p;
+}
+void Comp_Pair_PoisGamma2mem(int *cormod, double *data1, double *data2, int *N1, int *N2,
+                             double *par, int *weigthed, double *res, double *mean1, double *mean2,
+                             double *nuis, int *type_cop, int *cond)
+{
+    (void)N1;
+    (void)N2;
+    (void)type_cop;
+    (void)cond;
+
     const double nugget = nuis[0];
-    const double gamma_param = nuis[2]; // Gamma distribution parameter
-    if(nugget < 0 || nugget >= 1) {
+    const double gamma_param = nuis[2];
+
+    if (!R_FINITE(nugget) || nugget < 0.0 || nugget >= 1.0 ||
+        !R_FINITE(gamma_param) || gamma_param <= 0.0) {
         *res = LOW;
         return;
     }
 
-    // Precompute frequently used values
     const int weighted = *weigthed;
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
     const double scale = 1.0 - nugget;
-    
-    double total = 0.0;  // Accumulator variable
 
-    // Optimized main loop
-    if (weighted) {
-        // With weights
-        for(int i = 0; i < n_pairs; i++) {
-            const double d1 = data1[i];
-            const double d2 = data2[i];
-            
-            if(!ISNAN(d1) && !ISNAN(d2)) {
-                // Compute correlation
-                const double lag = lags[i];
-                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-                
-                // Compute means (exp transformed)
-                const double mui = exp(mean1[i]);
-                const double muj = exp(mean2[i]);
-                
-                // Convert to integers
-                const int uu = (int)d1;
-                const int ww = (int)d2;
-                
-                // Compute the weight
-                const double weights = CorFunBohman(lag, max_dist);
-                
-                // Compute Poisson-Gamma and accumulate result
-                const double poisgamma_val = biv_PoissonGamma(
-                    scale * clamp_corr(corr), uu, ww, mui, muj, gamma_param);
-                total += log(poisgamma_val) * weights;
+    double total = 0.0;
+    double comp = 0.0;   /* Kahan compensation */
+    int used_pairs = 0;
+
+    for (int i = 0; i < n_pairs; ++i) {
+        const double d1 = data1[i];
+        const double d2 = data2[i];
+
+        if (ISNAN(d1) || ISNAN(d2)) {
+            continue;
+        }
+
+        const double lag = lags[i];
+
+        double weight = 1.0;
+
+        if (weighted) {
+            weight = CorFunBohman(lag, max_dist);
+
+            if (!R_FINITE(weight) || weight <= 0.0) {
+                continue;
             }
         }
-    } else {
-        // Without weights
-        for(int i = 0; i < n_pairs; i++) {
-            const double d1 = data1[i];
-            const double d2 = data2[i];
-            
-            if(!ISNAN(d1) && !ISNAN(d2)) {
-                // Compute correlation
-                const double lag = lags[i];
-                const double corr = CorFct(cormod, lag, 0, par, 0, 0);
-                
-                // Compute means (exp transformed)
-                const double mui = exp(mean1[i]);
-                const double muj = exp(mean2[i]);
-                
-                // Convert to integers
-                const int uu = (int)d1;
-                const int ww = (int)d2;
-                
-                // Compute Poisson-Gamma and accumulate result
-                const double poisgamma_val = biv_PoissonGamma(
-                    scale * clamp_corr(corr), uu, ww, mui, muj, gamma_param);
-                total += log(poisgamma_val);  // No weight applied here
-            }
+
+        const double rd1 = nearbyint(d1);
+        const double rd2 = nearbyint(d2);
+
+        if (!R_FINITE(rd1) || !R_FINITE(rd2) ||
+            rd1 < 0.0 || rd2 < 0.0 ||
+            fabs(d1 - rd1) > 1e-10 ||
+            fabs(d2 - rd2) > 1e-10 ||
+            rd1 > INT_MAX || rd2 > INT_MAX) {
+            *res = LOW;
+            return;
         }
+
+        const int uu = (int)rd1;
+        const int ww = (int)rd2;
+
+        if (!R_FINITE(mean1[i]) || !R_FINITE(mean2[i]) ||
+            mean1[i] > 700.0 || mean2[i] > 700.0) {
+            *res = LOW;
+            return;
+        }
+
+        const double mui = exp(mean1[i]);
+        const double muj = exp(mean2[i]);
+
+        if (!R_FINITE(mui) || !R_FINITE(muj) || mui <= 0.0 || muj <= 0.0) {
+            *res = LOW;
+            return;
+        }
+
+        const double corr0 = CorFct(cormod, lag, 0, par, 0, 0);
+
+        if (!R_FINITE(corr0)) {
+            *res = LOW;
+            return;
+        }
+
+        double rho = clamp_corr(corr0);
+
+        if (!R_FINITE(rho)) {
+            *res = LOW;
+            return;
+        }
+
+        /*
+           Per pair distinti lag > 0: rho = (1 - nugget) * corr.
+           Se per qualche motivo entra lag = 0, non applico il nugget come attenuazione.
+        */
+        if (lag <= 0.0) {
+            rho = 1.0 - RHO_EPS;
+        } else {
+            rho = scale * rho;
+            rho = clamp_corr(rho);
+        }
+
+        if (!R_FINITE(rho)) {
+            *res = LOW;
+            return;
+        }
+
+        double p = biv_PoissonGamma(rho, uu, ww, mui, muj, gamma_param);
+
+        if (!R_FINITE(p) || p <= 0.0 || p > 1.0 + 1e-8) {
+            *res = LOW;
+            return;
+        }
+
+        p = clamp_prob_safe(p);
+
+        const double contribution = weight * log(p);
+
+        if (!R_FINITE(contribution)) {
+            *res = LOW;
+            return;
+        }
+
+        /* Kahan summation */
+        const double y = contribution - comp;
+        const double tmp = total + y;
+        comp = (tmp - total) - y;
+        total = tmp;
+
+        ++used_pairs;
     }
 
-    // Final assignment with check
-    *res = R_FINITE(total) ? total : LOW;
+    if (used_pairs == 0 || !R_FINITE(total)) {
+        *res = LOW;
+        return;
+    }
+
+    *res = total;
 }
 
 

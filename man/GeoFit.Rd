@@ -18,7 +18,7 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
        method="cholesky", model="Gaussian", n=1, onlyvar=FALSE,
        optimizer="Nelder-Mead", radius=1, score=FALSE,
        sensitivity=FALSE, sparse=FALSE, start=NULL,
-       thin_method="iid",type="Pairwise", upper=NULL, 
+       thin_method="bernoulli",type="Pairwise", upper=NULL, 
        varest=FALSE, weighted=FALSE,
        X=NULL, spobj=NULL, spdata=NULL)
 }
@@ -102,14 +102,15 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 
   \item{start}{An optional named list with initial values for parameters to be estimated. Default is \code{NULL} (see \bold{Details}).}
 
-  \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"iid"} (independent Bernoulli thinning).}
+  \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is 
+   \code{"FixedBudget"}}. 
 
   \item{type}{String; the type of likelihood objects. If \code{"Pairwise"} (default) the composite likelihood is formed by pairwise components (see \bold{Details}).}
 
   \item{upper}{An optional named list giving upper bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
     Names must match those in \code{start}.}
 
-  \item{varest}{Logical; if \code{TRUE} the estimates' variances and standard errors are returned. For composite likelihood estimation it is deprecated.
+  \item{varest}{Logical; if \code{TRUE} the estimates variances and standard errors are returned. For composite likelihood estimation it is deprecated.
     Use \code{sensitivity=TRUE} and update the object using \code{GeoVarestbootstrap}. Default is \code{FALSE}.}
 
   \item{weighted}{Logical; if \code{TRUE} the likelihood objects are weighted; see the Section \bold{Details}. Default is \code{FALSE}.}
@@ -169,7 +170,7 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   }
 
   Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
-  controls the thinning scheme (default \code{"iid"}).
+  controls the thinning scheme (default \code{"bernoulli"}).
 }
 \value{
   Returns an object of class \code{GeoFit}.

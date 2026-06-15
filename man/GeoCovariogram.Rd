@@ -10,7 +10,7 @@
 \usage{
 GeoCovariogram(fitted, distance="Eucl",answer.cov=FALSE,
             answer.vario=FALSE, answer.range=FALSE, fix.lags=NULL, 
-             fix.lagt=NULL, show.cov=FALSE, show.vario=FALSE, 
+             fix.lagt=NULL, show.cov=FALSE, show.vario=TRUE, 
             show.range=FALSE, add.cov=FALSE, add.vario=FALSE,
             pract.range=95, vario, invisible=FALSE, \dots)
 }

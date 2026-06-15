@@ -6,7 +6,7 @@ GeoNeighbSelect <- function(
   maxtime=Inf, memdist=TRUE, model='Gaussian', n=1, ncores=NULL,
   optimizer='Nelder-Mead', parallel=FALSE, bivariate=FALSE, radius=1, start=NULL,
   type='Pairwise', upper=NULL, weighted=FALSE,
-  X=NULL, nosym=FALSE, spobj=NULL, spdata=NULL, vario=NULL, progress=TRUE
+  X=NULL, spobj=NULL, spdata=NULL, vario=NULL, progress=TRUE
 )
 {
   # --- Input validation (FIX: no coercion warning) ---
@@ -81,7 +81,7 @@ GeoNeighbSelect <- function(
     fixed = fixed, anisopars = anisopars, est.aniso = est.aniso, grid = grid,
     likelihood = likelihood, lower = lower, memdist = memdist, model = model, n = n,
     optimizer = optimizer, radius = radius, start = start, type = type, upper = upper,
-    weighted = weighted, X = X, nosym = nosym, spobj = spobj, spdata = spdata,
+    weighted = weighted, X = X,  spobj = spobj, spdata = spdata,
     p_neighb = p_neighb
   )
 

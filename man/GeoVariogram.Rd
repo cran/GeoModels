@@ -16,15 +16,10 @@ GeoVariogram(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 }
 \arguments{
   \item{data}{
-    A numeric vector of length \eqn{d}{d} (a single spatial realisation), or an
-    \eqn{n \times d}{n x d} matrix (\eqn{n}{n} iid spatial realisations), or a
+    A numeric vector of length \eqn{d}{d} (a single spatial realisation),  or a
     \eqn{d \times d}{d x d} matrix (a single realisation on a regular grid), or a
-    \eqn{d \times d \times n}{d x d x n} array (\eqn{n}{n} iid realisations on a regular grid), or a
     \eqn{t \times d}{t x d} matrix (a single spatio-temporal realisation), or a
-    \eqn{t \times d \times n}{t x d x n} array (\eqn{n}{n} iid spatio-temporal realisations), or a
-    \eqn{d \times d \times t}{d x d x t} array (a single spatio-temporal realisation on a regular grid), or a
-    \eqn{d \times d \times t \times n}{d x d x t x n} array
-    (\eqn{n}{n} iid spatio-temporal realisations on a regular grid).
+    \eqn{d \times d \times t}{d x d x t} array (a single spatio-temporal realisation on a regular grid).
     See \code{\link{GeoFit}} for details.
   }
   \item{coordx}{

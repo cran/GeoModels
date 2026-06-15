@@ -10,7 +10,7 @@ GeoFit2 <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                     method = "cholesky", model = "Gaussian", n = 1, onlyvar = FALSE,
                     optimizer = "Nelder-Mead", radius = 1, score = FALSE,
                     sensitivity = FALSE, sparse = FALSE, start = NULL,
-                    thin_method = "iid", type = "Pairwise", upper = NULL,
+                    thin_method = "bernoulli", type = "Pairwise", upper = NULL,
                     varest = FALSE, weighted = FALSE, X = NULL, 
                     spobj = NULL, spdata = NULL)
 {

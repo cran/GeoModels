@@ -17,7 +17,7 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
         method="cholesky", model="Gaussian", n=1, onlyvar=FALSE,
         optimizer="Nelder-Mead", radius=1, score=FALSE,
         sensitivity=FALSE, sparse=FALSE, start=NULL,
-        thin_method="iid", type="Pairwise", upper=NULL,
+        thin_method="bernoulli", type="Pairwise", upper=NULL,
         varest=FALSE, weighted=FALSE, X=NULL, 
         spobj=NULL, spdata=NULL)
 }
@@ -102,7 +102,8 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   \item{start}{An optional named list with initial values for parameters used by the numerical routines in the maximization procedure.
     Default is \code{NULL} (see \bold{Details}).}
 
-  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"iid"} (independent Bernoulli thinning).}
+  \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is 
+    \code{"FixedBudget"}}. 
 
   \item{type}{String; the type of the likelihood objects. If \code{"Pairwise"} (default) then the marginal composite likelihood is formed by pairwise marginal likelihoods (see \bold{Details}).}
 
@@ -128,7 +129,7 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
   This provides robust starting values for the marginal parameters in the optimization algorithm.
 
   Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
-  controls the thinning scheme (default \code{"iid"}).
+  controls the thinning scheme (default \code{"bernoulli"}).
 }
 \value{
   Returns an object of class \code{GeoFit}.

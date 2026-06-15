@@ -17,6 +17,28 @@ void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, 
   }
 }
 
+void TBD1d_amp(double *ux, double *uy,
+               double *sx, double *sy,
+               double *phi, double *amp,
+               int *L, int *N,
+               double *result)
+{
+  int l, j;
+  double arg;
+  int nloc = N[0];
+  int Lfreq = L[0];
+
+  for(j = 0; j < nloc; j++){
+    result[j] = 0.0;
+  }
+
+  for(l = 0; l < Lfreq; l++){
+    for(j = 0; j < nloc; j++){
+      arg = 2.0 * M_PI * (ux[l] * sx[j] + uy[l] * sy[j]) + phi[l];
+      result[j] += amp[l] * cos(arg);
+    }
+  }
+}
 
 
 

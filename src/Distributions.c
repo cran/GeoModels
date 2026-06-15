@@ -735,7 +735,7 @@ double CorrPGs(double corr, double mean, double a) {
 
 /*---------------------------------------------------------------------------
  * 2. APPROSSIMAZIONE PER a PICCOLO
- *---------------------------------------------------------------------------*/
+ *---------------------------------------------------------------------------
 double CorrPGns_SmallA(double corr, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double nu_i = a / mean_i;
@@ -767,213 +767,252 @@ double CorrPGns_SmallA(double corr, double mean_i, double mean_j, double a) {
     
     return fmax(0.0, fmin(1.0, result));
 }
-
+*/
 /*---------------------------------------------------------------------------
  * 3. STRUTTURE DI SUPPORTO PER KAHAN SUMMATION
  *---------------------------------------------------------------------------*/
+#ifndef RHO_EPS
+#define RHO_EPS 1e-15
+#endif
+
 typedef struct {
     double sum;
     double compensation;
 } KahanSum;
 
-static inline void kahan_add(KahanSum *ks, double value) {
-    double y = value - ks->compensation;
-    double t = ks->sum + y;
+static R_INLINE void kahan_init(KahanSum *ks)
+{
+    ks->sum = 0.0;
+    ks->compensation = 0.0;
+}
+
+static R_INLINE void kahan_add(KahanSum *ks, double value)
+{
+    const double y = value - ks->compensation;
+    const double t = ks->sum + y;
     ks->compensation = (t - ks->sum) - y;
     ks->sum = t;
 }
 
-static inline void kahan_init(KahanSum *ks) {
-    ks->sum = 0.0;
-    ks->compensation = 0.0;
-}
-/*---------------------------------------------------------------------------
- * 4. METODO STABILE CON SOMMAZIONE DI KAHAN E BLOCCHI ADATTIVI
- *---------------------------------------------------------------------------*/
-double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double a) {
-    
-    const double rho2 = corr * corr;
-    const double nu_i = a / mean_i;
-    const double nu_j = a / mean_j;
-    
-    if (nu_i > MAX_NU_THRESHOLD || nu_j > MAX_NU_THRESHOLD) {
-        return rho2;
-    }
-    
-    // Pre-calcoli logaritmici
-    const double log_nu_i = log(nu_i);
-    const double log_nu_j = log(nu_j);
-    const double lnuij = log_nu_i + log_nu_j;
-    const double lpnuij = log1p(nu_i) + log1p(nu_j);
-    const double mnui = -1.0 / nu_i;
-    const double mnuj = -1.0 / nu_j;
-    const double log_abs_corr = log(fabs(corr));
-    const double log_rho2 = log(rho2);
-    const double log1m_rho2 = log1p(-rho2);
-    const double lgamma_a = lgammafn(a);
-    const double log_mean_prod = log(mean_i * mean_j);
-    
-    // Parametri adattivi basati su a e correlazione
-    int max_m = 150;
-    int max_r = 150;
-    
-    if (a <= 1.0) {
-        max_m = 100;
-        max_r = 100;
-    } else if (a <= 2.0) {
-        max_m = 120;
-        max_r = 120;
-    } else if (a > 5.0) {
-        max_m = 200;
-        max_r = 200;
-    }
-    
-    if (fabs(corr) > 0.85) {
-        max_m = (int)(max_m * 1.3);
-        max_r = (int)(max_r * 1.3);
-    }
-    
-    double tol = (a <= 1.0) ? 1e-13 : 1e-14;
-    
-    // Alloca cache
-    double *lgamma_cache_a_m = (double*)malloc(max_m * sizeof(double));
-    double *log_factorial_m = (double*)malloc(max_m * sizeof(double));
-    double *lgamma_cache_r_m = (double*)malloc((max_r + max_m) * sizeof(double));
-    
-    if (!lgamma_cache_a_m || !log_factorial_m || !lgamma_cache_r_m) {
-        free(lgamma_cache_a_m);
-        free(log_factorial_m);
-        free(lgamma_cache_r_m);
+double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double a)
+{
+    if (!R_FINITE(corr) ||
+        !R_FINITE(mean_i) ||
+        !R_FINITE(mean_j) ||
+        !R_FINITE(a) ||
+        mean_i <= MIN_MEAN_THRESHOLD ||
+        mean_j <= MIN_MEAN_THRESHOLD ||
+        a <= MIN_A_THRESHOLD) {
         return R_NaN;
     }
-    
-    // Riempi cache
-    for (int m = 0; m < max_m; m++) {
-        lgamma_cache_a_m[m] = lgammafn(a + m);
-        log_factorial_m[m] = lgammafn(m + 1);
+
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
+        return 0.0;
     }
-    
-    for (int i = 0; i < max_r + max_m; i++) {
-        lgamma_cache_r_m[i] = lgammafn(i + 1 + a);
+
+    if (fabs(corr) >= 1.0 - RHO_EPS) {
+        return 1.0;
     }
-    
-    // Sommazione con Kahan per stabilità numerica
+
+    const double rho2 = corr * corr;
+
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+
+    if (!R_FINITE(nu_i) || !R_FINITE(nu_j) ||
+        nu_i <= 0.0 || nu_j <= 0.0 ||
+        nu_i > MAX_NU_THRESHOLD ||
+        nu_j > MAX_NU_THRESHOLD) {
+        return R_NaN;
+    }
+
+    const double log_nu_i = log(nu_i);
+    const double log_nu_j = log(nu_j);
+
+    const double lnuij = log_nu_i + log_nu_j;
+    const double lpnuij = log1p(nu_i) + log1p(nu_j);
+
+    const double mnui = -1.0 / nu_i;
+    const double mnuj = -1.0 / nu_j;
+
+    const double log_rho2 = log(rho2);
+    const double log1m_rho2 = log1p(-rho2);
+
+    const double lgamma_a = lgammafn(a);
+    const double log_mean_prod = log(mean_i) + log(mean_j);
+
+    if (!R_FINITE(log_rho2) ||
+        !R_FINITE(log1m_rho2) ||
+        !R_FINITE(lgamma_a) ||
+        !R_FINITE(log_mean_prod)) {
+        return R_NaN;
+    }
+
+    int max_m = 150;
+    int max_r = 150;
+
+    if (a <= 1.0) {
+        max_m = 120;
+        max_r = 120;
+    } else if (a <= 2.0) {
+        max_m = 150;
+        max_r = 150;
+    } else if (a > 5.0) {
+        max_m = 220;
+        max_r = 220;
+    }
+
+    if (fabs(corr) > 0.85) {
+        max_m = (int)(1.35 * (double)max_m);
+        max_r = (int)(1.35 * (double)max_r);
+    }
+
+    const double tol = (a <= 1.0) ? 1e-13 : 1e-14;
+    const int block_size = 10;
+
+    double *lgamma_a_m = (double *) malloc((size_t)max_m * sizeof(double));
+    double *log_fact_m = (double *) malloc((size_t)max_m * sizeof(double));
+    double *lgamma_r_m_a1 = (double *) malloc((size_t)(max_r + max_m) * sizeof(double));
+
+    if (lgamma_a_m == NULL || log_fact_m == NULL || lgamma_r_m_a1 == NULL) {
+        free(lgamma_a_m);
+        free(log_fact_m);
+        free(lgamma_r_m_a1);
+        return R_NaN;
+    }
+
+    for (int m = 0; m < max_m; ++m) {
+        lgamma_a_m[m] = lgammafn(a + (double)m);
+        log_fact_m[m] = lgammafn((double)m + 1.0);
+    }
+
+    for (int i = 0; i < max_r + max_m; ++i) {
+        lgamma_r_m_a1[i] = lgammafn((double)i + a + 1.0);
+    }
+
     KahanSum total_sum;
     kahan_init(&total_sum);
-    
+
     double prev_sum_value = 0.0;
     int convergence_count = 0;
     int inactive_blocks = 0;
-    const int block_size = 10;
-    
-    for (int r = 0; r < max_r; r++) {
+
+    for (int r = 0; r < max_r; ++r) {
         const int r2 = r + 2;
-        const double lgamma_r2 = lgammafn(r2);
-        const double log_r2_factorial = 2.0 * lgamma_r2;
+
+        const double log_gamma_r2 = lgammafn((double)r2);
+        const double log_gamma_r2_sq = 2.0 * log_gamma_r2;
+
         KahanSum row_sum;
         kahan_init(&row_sum);
-        for (int m = 0; m < max_m; m++) {
-            const double a1m = 1.0 - a - m;
-            
-            // Calcola ipergeometriche
-            const double h1 = hypergeo(1.0, a1m, (double)r2, mnui);
-            const double h2 = hypergeo(1.0, a1m, (double)r2, mnuj);
-            
-            // Controlli di validità
-            if (!R_FINITE(h1) || !R_FINITE(h2) || h1 <= 0.0 || h2 <= 0.0) {
+
+        for (int m = 0; m < max_m; ++m) {
+            const double b_param = 1.0 - a - (double)m;
+
+            const double h1 = hypergeo(1.0, b_param, (double)r2, mnui);
+            const double h2 = hypergeo(1.0, b_param, (double)r2, mnuj);
+
+            if (!R_FINITE(h1) || !R_FINITE(h2)) {
                 break;
             }
-            
-            if (h1 < 1e-300 || h2 < 1e-300) {
+
+            const double hprod = h1 * h2;
+
+            if (!R_FINITE(hprod)) {
                 break;
             }
-            
-            const double log_h1h2 = log(h1) + log(h2);
-            const double H = log_h1h2 - log_r2_factorial;
-            
-            // Componenti del termine
-            const double log_term_1 = 2.0 * m * log_abs_corr + m * lnuij;
-            const double log_term_2 = 2.0 * lgamma_cache_r_m[r + m];
-            const double aux1 = log_term_1 + log_term_2;
-            
-            const double aux2 = (r + m) * lpnuij + lgamma_cache_a_m[m] + log_factorial_m[m];
-            
-            const double log_term = H + aux1 - aux2;
-            
-            // Controllo underflow
-            if (!R_FINITE(log_term)) {
+
+            if (hprod == 0.0) {
+                if (m > 5) break;
+                continue;
+            }
+
+            const int rm = r + m;
+
+            const double log_coeff =
+                (double)m * log_rho2 +
+                (double)m * lnuij +
+                2.0 * lgamma_r_m_a1[rm] -
+                log_gamma_r2_sq -
+                ((double)r + (double)m) * lpnuij -
+                lgamma_a_m[m] -
+                log_fact_m[m];
+
+            if (!R_FINITE(log_coeff)) {
                 break;
             }
-            
-            if (log_term < -1000.0) {
-               
+
+            const double log_abs_term = log_coeff + log(fabs(hprod));
+
+            if (!R_FINITE(log_abs_term)) {
                 break;
             }
-            
-            if (log_term < -700.0 && m > 10) {
-                break;
+
+            if (log_abs_term < -745.0) {
+                if (m > 5) break;
+                continue;
             }
-            
-            const double term = exp(log_term);
-            
+
+            if (log_abs_term > 700.0) {
+                free(lgamma_a_m);
+                free(log_fact_m);
+                free(lgamma_r_m_a1);
+                return R_NaN;
+            }
+
+            const double term = (hprod > 0.0 ? 1.0 : -1.0) * exp(log_abs_term);
+
             if (!R_FINITE(term)) {
                 break;
             }
-            
-            // Aggiungi con Kahan
+
             kahan_add(&row_sum, term);
-            
-            // Controllo overflow
+
             if (!R_FINITE(row_sum.sum) || fabs(row_sum.sum) > 1e100) {
-                free(lgamma_cache_a_m);
-                free(log_factorial_m);
-                free(lgamma_cache_r_m);
+                free(lgamma_a_m);
+                free(log_fact_m);
+                free(lgamma_r_m_a1);
                 return R_NaN;
             }
-            
-            // Convergenza locale
-            if (m > 5) {
-                double rel_term = fabs(term) / (fabs(row_sum.sum) + 1e-16);
+
+            if (m > 8) {
+                const double rel_term = fabs(term) / fmax2(1.0, fabs(row_sum.sum));
                 if (rel_term < tol * 0.1) {
-                
                     break;
                 }
             }
         }
-        
-        // Aggiungi riga alla somma totale
+
         kahan_add(&total_sum, row_sum.sum);
-        
-        // Controllo overflow globale
+
         if (!R_FINITE(total_sum.sum) || fabs(total_sum.sum) > 1e100) {
-            free(lgamma_cache_a_m);
-            free(log_factorial_m);
-            free(lgamma_cache_r_m);
+            free(lgamma_a_m);
+            free(log_fact_m);
+            free(lgamma_r_m_a1);
             return R_NaN;
         }
-        
-        // Convergenza globale (ogni blocco di righe)
+
         if (r > 0 && r % block_size == 0) {
-            double abs_change = fabs(total_sum.sum - prev_sum_value);
-            double rel_change = abs_change / (fabs(total_sum.sum) + 1e-16);
-            
+            const double abs_change = fabs(total_sum.sum - prev_sum_value);
+            const double rel_change = abs_change / fmax2(1.0, fabs(total_sum.sum));
+
             if (rel_change < tol) {
-                convergence_count++;
+                ++convergence_count;
                 if (convergence_count >= 3) {
-                    break;  // Converged
+                    break;
                 }
             } else {
                 convergence_count = 0;
             }
-            
+
             prev_sum_value = total_sum.sum;
         }
-        
-        // Early stopping: contributo riga trascurabile
+
         if (r > 20) {
-            double row_contrib = fabs(row_sum.sum) / (fabs(total_sum.sum) + 1e-16);
+            const double row_contrib = fabs(row_sum.sum) / fmax2(1.0, fabs(total_sum.sum));
+
             if (row_contrib < tol * 0.01) {
-                inactive_blocks++;
+                ++inactive_blocks;
                 if (inactive_blocks >= 3) {
                     break;
                 }
@@ -982,56 +1021,54 @@ double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double
             }
         }
     }
-    
-    // Pulizia memoria
-    free(lgamma_cache_a_m);
-    free(log_factorial_m);
-    free(lgamma_cache_r_m);
-    
-    // Calcolo termine finale
-    const double log_aux3_base = log_rho2 + (a + 1.0) * log1m_rho2 + 
-                                 (a - 0.5) * lnuij - lgamma_a - 
-                                 (a + 0.5) * lpnuij - 0.5 * log_mean_prod;
-    
-    if (!R_FINITE(log_aux3_base) || log_aux3_base < -700.0 || log_aux3_base > 700.0) {
+
+    free(lgamma_a_m);
+    free(log_fact_m);
+    free(lgamma_r_m_a1);
+
+    const double log_aux4 =
+        log_rho2 +
+        0.5 * (lnuij - lpnuij);
+
+    if (!R_FINITE(log_aux4) || log_aux4 < -745.0 || log_aux4 > 700.0) {
         return R_NaN;
     }
-    
-    const double aux3 = exp(log_aux3_base);
-    
-    if (!R_FINITE(aux3)) {
-        return R_NaN;
-    }
-    
-    const double log_aux4 = log_rho2 + 0.5 * (lnuij - lpnuij);
-    
-    if (!R_FINITE(log_aux4)) {
-        return R_NaN;
-    }
-    
+
     const double aux4 = exp(log_aux4);
-    
-    if (!R_FINITE(aux4)) {
+
+    const double log_aux3 =
+        log_rho2 +
+        (a + 1.0) * log1m_rho2 +
+        (a - 0.5) * lnuij -
+        lgamma_a -
+        (a + 0.5) * lpnuij -
+        0.5 * log_mean_prod;
+
+    if (!R_FINITE(log_aux3) || log_aux3 < -745.0 || log_aux3 > 700.0) {
         return R_NaN;
     }
-    
+
+    const double aux3 = exp(log_aux3);
+
+    if (!R_FINITE(aux3) || !R_FINITE(aux4)) {
+        return R_NaN;
+    }
+
     const double result = aux4 + aux3 * total_sum.sum;
-    
+
     if (!R_FINITE(result)) {
         return R_NaN;
     }
-    
-    // Clamp con warning se molto fuori range
-    if (result < -0.01 || result > 1.01) {
+
+    if (result < -1e-8 || result > 1.0 + 1e-8) {
         return R_NaN;
     }
-    
-    return fmax(0.0, fmin(1.0, result));
-}
 
+    return fmax2(0.0, fmin2(1.0, result));
+}
 /*---------------------------------------------------------------------------
  * 5. APPROSSIMAZIONE ASINTOTICA (per medie molto diverse)
- *---------------------------------------------------------------------------*/
+ *---------------------------------------------------------------------------
 double CorrPGns_Asymptotic(double corr, double mean_i, double mean_j, double a) {
     const double rho2 = corr * corr;
     const double nu_i = a / mean_i;
@@ -1070,73 +1107,46 @@ double CorrPGns_Asymptotic(double corr, double mean_i, double mean_j, double a) 
     
     return fmax(0.0, fmin(1.0, result));
 }
-
+*/
 /*---------------------------------------------------------------------------
  * 6. DISPATCHER INTELLIGENTE (Funzione principale da usare)
  *---------------------------------------------------------------------------*/
-double corr_pois_gen(double corr, double mean_i, double mean_j, double a) {
-    
-    // Validazione input
-    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) || !R_FINITE(a)) {
+double corr_pois_gen(double corr, double mean_i, double mean_j, double a)
+{
+    if (!R_FINITE(corr) ||
+        !R_FINITE(mean_i) ||
+        !R_FINITE(mean_j) ||
+        !R_FINITE(a)) {
         return R_NaN;
     }
-    
-    if (fabs(corr) >= 1.0 || mean_i <= MIN_MEAN_THRESHOLD || 
-        mean_j <= MIN_MEAN_THRESHOLD || a <= MIN_A_THRESHOLD) {
+
+    if (mean_i <= MIN_MEAN_THRESHOLD ||
+        mean_j <= MIN_MEAN_THRESHOLD ||
+        a <= MIN_A_THRESHOLD) {
         return R_NaN;
     }
-    
-    // Caso correlazione zero
+
     if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
         return 0.0;
     }
-    
-    // Caso stazionario (medie uguali)
-    const double mean_ratio = fmax(mean_i, mean_j) / fmin(mean_i, mean_j);
-    if (mean_ratio < 1.001) {  // Praticamente uguali
-        return CorrPGs(corr, mean_i, a);
+
+    if (fabs(corr) >= 1.0) {
+        return 1.0;
     }
-    
-    // Caso a molto piccolo
-    if (a < 0.05) {
-        return CorrPGns_SmallA(corr, mean_i, mean_j, a);
+
+    const double mean_ratio = fmax2(mean_i, mean_j) / fmin2(mean_i, mean_j);
+
+    /*
+       Usa il caso stazionario solo se le medie sono davvero uguali.
+       1.001 è troppo largo per una likelihood.
+    */
+    if (mean_ratio < 1.0 + 1e-10) {
+        const double mean = 0.5 * (mean_i + mean_j);
+        return CorrPGs(corr, mean, a);
     }
-    
-    // Scegli metodo in base a caratteristiche del problema
-    
-    // Caso: medie molto diverse o condizioni difficili
-    if (mean_ratio > 5.0 || (fabs(corr) > 0.85 && a > 3.0)) {
-        
-        // Prova approssimazione asintotica
-        double result_asym = CorrPGns_Asymptotic(corr, mean_i, mean_j, a);
-        
-        // Per casi non troppo estremi, verifica con metodo esatto
-        if (mean_ratio < 10.0 && a < 5.0) {
-            double result_exact = CorrPGns_AdaptiveBlocks(corr, mean_i, mean_j, a);
-            
-            // Se entrambi validi, confronta
-            if (R_FINITE(result_exact) && R_FINITE(result_asym)) {
-                double diff = fabs(result_exact - result_asym);
-                if (diff < 0.01) {
-                    return result_exact;  // Accordo buono
-                } else {
-                    // Media pesata favorendo asintotico in caso difficile
-                    return 0.6 * result_asym + 0.4 * result_exact;
-                }
-            } else if (R_FINITE(result_exact)) {
-                return result_exact;
-            } else {
-                return result_asym;
-            }
-        }
-        
-        return result_asym;
-    }
-    
-    // Caso standard: usa metodo a blocchi con Kahan
+
     return CorrPGns_AdaptiveBlocks(corr, mean_i, mean_j, a);
 }
-
 /******************************************/
 /******** Poisson correlation *************/
 /******************************************/
@@ -3789,13 +3799,12 @@ if(v==0&&u>0)   res=v_0-p00;
 if(u>0&&v>0)    res=1-(u_0-p00+v_0);
 return(res);
 }
-
+/*
 static double hyp2F1_trunc_recur(double a1, int m, double c, double z) {
     if (m < 0) return NA_REAL;
     // T0 = 1
     double term = 1.0;
     double sum  = 1.0;
-    // Kahan compensation para mitigar cancelaciones
     double comp = 0.0;
 
     for (int r = 1; r <= m; ++r) {
@@ -3814,17 +3823,16 @@ static double hyp2F1_trunc_recur(double a1, int m, double c, double z) {
         sum = t;
 
         if (!R_finite(term)) break;
-        // (opcional) corte por magnitud ínfima:
-        // if (fabs(term) < 1e-300) break;
     }
-    return sum; // 2F1 estándar (NO dividida por Gamma(c))
-}
+    return sum;
+}*/
 
 
 
 // 2F1(a1, -m; c; z) con m >= 0 entero.
 // Serie truncada con recurrencia:
 // T0=1,  T_r = T_{r-1} * ((a1+r-1)*(-m+r-1))/((c+r-1)*r) * z
+/*
 static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z) {
     if (m < 0) return NA_REAL;
     double term = 1.0;
@@ -3846,9 +3854,103 @@ static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z) {
 
         if (!R_finite(term)) break;
     }
-    return sum; // estándar (NO dividida por Gamma)
+    return sum; 
+}
+*/
+
+// ---------------------------------------------------------------------------
+
+
+
+
+/********************************************************************/
+/********* poisson gamma bivariate distribution *********************/
+/********************************************************************/
+
+
+
+#ifndef PG_PROB_MIN
+#define PG_PROB_MIN 1e-300
+#endif
+
+#ifndef PG_RHO_EPS
+#define PG_RHO_EPS 1e-15
+#endif
+
+#ifndef PG_TERM_TOL
+#define PG_TERM_TOL 1e-14
+#endif
+
+#ifndef PG_CONV_TOL
+#define PG_CONV_TOL 1e-13
+#endif
+
+#ifndef PG_INDEP_TOL
+#define PG_INDEP_TOL 1e-8
+#endif
+/*
+static R_INLINE int is_integer_pg(double x)
+{
+    if (!R_FINITE(x)) return 0;
+    const double y = nearbyint(x);
+    return fabs(x - y) <= 1e-12 * fmax2(1.0, fabs(x));
 }
 
+static R_INLINE double clamp_prob_pg(double p)
+{
+    if (!R_FINITE(p) || p <= 0.0) return PG_PROB_MIN;
+    if (p > 1.0) return 1.0;
+    return p;
+}
+
+static R_INLINE double clamp_corr_pg(double rho)
+{
+    if (!R_FINITE(rho)) return R_NaN;
+    if (rho >=  1.0) return  1.0 - PG_RHO_EPS;
+    if (rho <= -1.0) return -1.0 + PG_RHO_EPS;
+    return rho;
+}*/
+
+/* 2F1(a1, -m; c; z), m >= 0 integer. Standard, not regularized. */
+static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z)
+{
+    if (m < 0 || !R_FINITE(a1) || !R_FINITE(c) || !R_FINITE(z)) return R_NaN;
+
+    double term = 1.0;
+    double sum  = 1.0;
+    double comp = 0.0;
+
+    for (int r = 1; r <= m; ++r) {
+        const double num1 = a1 + (double)(r - 1);
+        const double num2 = -((double)m) + (double)(r - 1);
+        const double den1 = c + (double)(r - 1);
+        const double den2 = (double)r;
+
+        if (den1 == 0.0 || den2 == 0.0) return R_NaN;
+
+        term *= (num1 * num2 / (den1 * den2)) * z;
+
+        if (!R_FINITE(term)) return R_NaN;
+
+        const double y = term - comp;
+        const double tt = sum + y;
+        comp = (tt - sum) - y;
+        sum = tt;
+    }
+
+    return sum;
+}
+
+/* If you already have hyp2F1_trunc_recur, keep yours.
+   This wrapper makes calls consistent. */
+static R_INLINE double hyp2F1_trunc_recur_1(double a1, int m, double c, double z)
+{
+    return hyp2F1_trunc_recur_general(a1, m, c, z);
+}
+
+/* ------------------------------------------------------------------ */
+/* Case r = t = 0                                                     */
+/* ------------------------------------------------------------------ */
 
 // ---------------------------------------------------------------------------
 // Versión optimizada de PG00 con truncamiento si a es entero
@@ -3921,8 +4023,8 @@ double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
                 int m = (int)llround(l + a - 1.0);
                 if (m < 0) continue;
                 // Usamos la 2F1 estándar truncada por recurrencia (más estable)
-                hg1 = hyp2F1_trunc_recur(1.0, m, (double)k_plus_2, neg_inv_beta_i);
-                hg2 = hyp2F1_trunc_recur(1.0, m, (double)k_plus_2, neg_inv_beta_j);
+                hg1 = hyp2F1_trunc_recur_1(1.0, m, (double)k_plus_2, neg_inv_beta_i);
+                hg2 = hyp2F1_trunc_recur_1(1.0, m, (double)k_plus_2, neg_inv_beta_j);
             } else {
                 // Caso general: 2F1 estándar de tu implementación
                 hg1 = hypergeo(1.0, one_minus_l_plus_a, k_plus_2, neg_inv_beta_i);
@@ -4033,8 +4135,8 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
                 double hg1, hg2;
                 if (a_is_int && mpoly >= 0) {
                     // 2F1(1, -m; mml1; z) estándar (NO regularizada)
-                    hg1 = hyp2F1_trunc_recur(1.0, mpoly, (double)mml1, bmi);
-                    hg2 = hyp2F1_trunc_recur(1.0, mpoly, (double)mml1, bmj);
+                    hg1 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mml1, bmi);
+                    hg2 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mml1, bmj);
                 } else {
                     hg1 = hypergeo(1.0, one_minus_l1_plus_a, mml1, bmi);
                     hg2 = hypergeo(1.0, ff,                 mml1, bmj);
@@ -4062,10 +4164,10 @@ double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
             double h1, h2, h3, h4;
             if (a_is_int && mpoly >= 0) {
                 // Todas aquí son 2F1(1, -m; mm; z)
-                h1 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, bmi);
-                h2 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, bmj);
-                h3 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, r2br);
-                h4 = hyp2F1_trunc_recur(1.0, mpoly, (double)mm, r2brj);
+                h1 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, bmi);
+                h2 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, bmj);
+                h3 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, r2br);
+                h4 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, r2brj);
             } else {
                 h1 = hypergeo(1.0, ff, mm, bmi);
                 h2 = hypergeo(1.0, ff, mm, bmj);
@@ -4159,9 +4261,9 @@ double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
 
                 // Ambas 2F1 son truncadas (2F1 estándar)
                 // hg1: 2F1(n, 1-l1a; nq; rb) = 2F1(n, -m; nq; rb)
-                hg1 = hyp2F1_trunc_recur_general((double)n, m, (double)nq, rb);
+                hg1 = hyp2F1_trunc_recur_1((double)n, m, (double)nq, rb);
                 // hg2: 2F1(1, 1-l1a; q+1; ib) = 2F1(1, -m; q+1; ib)
-                hg2 = hyp2F1_trunc_recur_general(1.0,       m, (double)(q + 1), ib);
+                hg2 = hyp2F1_trunc_recur_1(1.0,       m, (double)(q + 1), ib);
             } else {
                 // Caso general: usa hypergeo estándar
                 hg1 = hypergeo((double)n, 1.0 - l1a, (double)nq, rb);
@@ -4397,6 +4499,9 @@ double biv_PoissonGamma(double corr, int r, int t, double mean_i, double mean_j,
     return (r > t) ? PGrt(corr, r, t, mean_i, mean_j, a) 
                    : PGrt(corr, t, r, mean_j, mean_i, a);
 }
+
+
+
 
 
 double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape)
@@ -4750,7 +4855,7 @@ switch(model) // Correlation functions are in alphabetical order
    case 28: //Beta
     
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]); b2=(z2- nuis[4])/(nuis[5]-nuis[4]);
-      a1=pbeta(b1,nuis[2],nuis[3],0,0); a2=pbeta(b2,nuis[2],nuis[3],0,0);
+      a1=pbeta(b1,nuis[2],nuis[3],1,0); a2=pbeta(b2,nuis[2],nuis[3],1,0);
       g1=dbeta(b1,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 1
       g2=dbeta(b2,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 2
    break;   
@@ -4760,8 +4865,8 @@ switch(model) // Correlation functions are in alphabetical order
       mu2=1/(1+exp(-mu2));
     //  Rprintf("%f %f %f %f %f \n",mu1,rho,nuis[2],nuis[4],nuis[3]);
       b1=(z1- nuis[3])/(nuis[4]-nuis[3]); b2=(z2- nuis[3])/(nuis[4]-nuis[3]);
-      a1=pbeta(b1, nuis[2]*mu1,(1-mu1)*nuis[2],0,0);
-      a2=pbeta(b2, nuis[2]*mu2,(1-mu2)*nuis[2],0,0);
+      a1=pbeta(b1, nuis[2]*mu1,(1-mu1)*nuis[2],1,0);
+      a2=pbeta(b2, nuis[2]*mu2,(1-mu2)*nuis[2],1,0);
       g1=dbeta(b1, nuis[2]*mu1,(1-mu1)*nuis[2],0)/(nuis[4]-nuis[3]); //marginal 1
       g2=dbeta(b2, nuis[2]*mu2,(1-mu2)*nuis[2],0)/(nuis[4]-nuis[3]); //marginal 2
    break;

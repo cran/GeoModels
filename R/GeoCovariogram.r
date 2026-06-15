@@ -6,7 +6,7 @@
 ### from  GeoFit object
 GeoCovariogram <- function(fitted, distance="Eucl", answer.cov=FALSE, answer.vario=FALSE,
                          answer.range=FALSE, fix.lags=NULL, fix.lagt=NULL,
-                        show.cov=FALSE, show.vario=FALSE,  show.range=FALSE,
+                        show.cov=FALSE, show.vario=TRUE,  show.range=FALSE,
                         add.cov=FALSE, add.vario=FALSE, pract.range=95,
                         vario=NULL,invisible=FALSE,...)
   {
@@ -134,6 +134,7 @@ fitted$fixed=unlist(fitted$fixed)
     model <- CkModel(fitted$model)
     gaussian <- model==1
     skewgausssian<- model==10
+    skewlaplace<-model==59
     gamma<- model==21
     skewstudentT<- model==18||model==37
     studentT<- model==12||model==35
@@ -163,7 +164,7 @@ fitted$fixed=unlist(fitted$fixed)
     Gaussian_misp_PoissonGamma<- model==47
     Gaussian_misp_BinomialNeg<-model==52
     zero <- 0;slow=1e-3;
-    if(gaussian||skewgausssian||gamma||loggauss||binomial||Gaussian_misp_Binomial||Gaussian_misp_BinomialNeg||Gaussian_misp_Poisson||binomialneg||binomialnegZINB||geom||tukeyh||tukeyh2||sas||twopiecebimodal||skewstudentT
+    if(gaussian||skewgausssian||skewlaplace||gamma||loggauss||binomial||Gaussian_misp_Binomial||Gaussian_misp_BinomialNeg||Gaussian_misp_Poisson||binomialneg||binomialnegZINB||geom||tukeyh||tukeyh2||sas||twopiecebimodal||skewstudentT
             ||twopieceGauss||twopieceTukeyh||twopieceT) slow=1e-6
     else slow=1e-5 
     # lags associated to empirical variogram estimation
@@ -298,6 +299,25 @@ if(!is.null(fitted$copula)&&fitted$copula=="Gaussian") iscopula=TRUE
               vv=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew']);sk2=sk^2;corr2=correlation^2;  
               cc=(2*sk2)*(sqrt(1-corr2) + correlation*asin(correlation)-1)/(pi*vv+sk2*(pi-2)) + (correlation1*vv)/(vv+sk2*(1-2/pi))
               vs=(vv+sk2*(1-2/pi))
+              covariance=vs*cc;variogram=vs*(1-cc) }
+              else
+              {
+                cova=gaussian_copula_cov((1-as.numeric(nuisance['nugget']))*correlation, model,c(mm,nuisance)   )
+                vv=variance_disp(model,nuisance)
+                covariance=cova
+                variogram=vv-cova
+              }
+          }
+    }
+##########################################
+ if(skewlaplace) {    
+            if(bivariate) {}
+              else {
+        if(!iscopula){
+              correlation1=(1-as.numeric(nuisance['nugget']) )*correlation  
+              vv=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew']);sk2=sk*sk;corr2=correlation1^2;  
+              cc=corr2
+              vs= vv*(1-2*sk+2*sk2)/(sk2*(1-sk)^2)
               covariance=vs*cc;variogram=vs*(1-cc) }
               else
               {
@@ -1066,6 +1086,7 @@ OLS=NULL
                                   MM=pnorm(mm['mean']);pg=pnorm(nuisance['pmu'])
                                 }
             if(skewgausssian) vvv=(nuisance["sill"]+as.numeric(nuisance["skew"]))^2*(1-2/pi)
+            if(skewlaplace)   vvv=(1-2*as.numeric(nuisance["skew"])+2*as.numeric(nuisance["skew"])^2)/(as.numeric(nuisance["skew"])^2*(1-as.numeric(nuisance["skew"]))^2)
             if(studentT)      vvv=(1/as.numeric(nuisance["df"]))/((1/as.numeric(nuisance["df"]))-2)
             if(tukeyh)        vvv=(1-2*as.numeric(nuisance["tail"]))^(-1.5)
             if(sas)           { 

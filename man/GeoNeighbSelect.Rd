@@ -17,7 +17,7 @@ GeoNeighbSelect(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=N
     neighb=c(1,2,3,4,5),p_neighb=1,maxtime=Inf, memdist=TRUE,model='Gaussian',
     n=1, ncores=NULL,optimizer='Nelder-Mead', parallel=FALSE, 
     bivariate=FALSE,radius=1, start=NULL,type='Pairwise', upper=NULL, 
-    weighted=FALSE,X=NULL,nosym=FALSE,spobj=NULL,spdata=NULL,vario=NULL,progress=TRUE)
+    weighted=FALSE,X=NULL,spobj=NULL,spdata=NULL,vario=NULL,progress=TRUE)
 }
 \arguments{
   \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation)  or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on 
@@ -117,7 +117,6 @@ independent Bernoulli sampling.}
     default) the composite likelihood is not weighted.}
  
   \item{X}{Numeric; Matrix of spatio(temporal)covariates in the linear mean specification.}
-  \item{nosym}{Logical; if TRUE simmetric weights are not considered. This allows a faster but less efficient CL estimation. }
  
    \item{spobj}{An object of class sp or spacetime}
    \item{spdata}{Character:The name of data in the sp or spacetime object}

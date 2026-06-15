@@ -65,29 +65,28 @@ MatLogDet <- function(mat.decomp, method) {
 
 # utility function for geokrig
 getInvC <- function(covmatrix, CC, mse = TRUE) {
-    if (!covmatrix$sparse) {
-      U <- tryCatch({
-        FastGP::rcppeigen_get_chol(covmatrix$covmatrix)
-      }, error = function(e) {
-        stop("Covariance matrix is not positive definite")
-      })
-      vec <- forwardsolve(U, CC)
-      Invc <- forwardsolve(U, vec, transpose = TRUE)
-      mse_val <- if (mse) as.numeric(crossprod(vec)) else NULL
-    } else {
-      cc <- if (spam::is.spam(covmatrix$covmatrix)) covmatrix$covmatrix else spam::as.spam(covmatrix$covmatrix)
-      U <- tryCatch({
-        spam::chol.spam(cc)
-      }, error = function(e) {
-        stop("Covariance matrix is not positive definite")
-      })
-      vec <- spam::forwardsolve(U, CC)
-      Invc <- spam::backsolve(U, vec)
-      mse_val <- if (mse) as.numeric(spam::crossprod.spam(vec)) else NULL
-    }
-    list(a = Invc, b = mse_val)
+  if (!covmatrix$sparse) {
+    U <- tryCatch({
+      FastGP::rcppeigen_get_chol(covmatrix$covmatrix)
+    }, error = function(e) {
+      stop("Covariance matrix is not positive definite")
+    })
+    vec <- forwardsolve(U, CC)
+    Invc <- forwardsolve(U, vec, transpose = TRUE)
+    mse_val <- if (mse) crossprod(vec) else NULL
+  } else {
+    cc <- if (spam::is.spam(covmatrix$covmatrix)) covmatrix$covmatrix else spam::as.spam(covmatrix$covmatrix)
+    U <- tryCatch({
+      spam::chol.spam(cc)
+    }, error = function(e) {
+      stop("Covariance matrix is not positive definite")
+    })
+    vec <- spam::forwardsolve(U, CC)
+    Invc <- spam::backsolve(U, vec)
+    mse_val <- if (mse) as.matrix(spam::crossprod.spam(vec)) else NULL
   }
-
+  list(a = Invc, b = mse_val)
+}
   
 ######################################################################################################
 ######################################################################################################

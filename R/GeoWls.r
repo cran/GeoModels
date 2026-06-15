@@ -355,7 +355,7 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
     parscale <- NULL
     initparam <- StartParam(coordx, coordy, coordz,coordt, coordx_dyn,corrmodel, data, distance, "Fitting", fixed, grid,
     'None', maxdist, neighb,maxtime,  model, NULL,  NULL,parscale, TRUE, radius, start,NULL,  NULL,
-                           'GeoWLS', 'GeoWLS', FALSE, NULL,NULL, FALSE,FALSE,"iid")
+                           'GeoWLS', 'GeoWLS', FALSE, NULL,NULL, FALSE,FALSE,"bernoulli")
 
 
     if(!is.null(initparam$error))

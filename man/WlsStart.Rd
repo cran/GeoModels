@@ -86,7 +86,7 @@ WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
     If \code{1} (default), no thinning is applied and all nearest-neighbor pairs are used. If \code{<1}, pairs are randomly retained using
     independent Bernoulli sampling.}
 
-  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"iid"} (independent Bernoulli thinning).}
+  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"bernoulli"} (independent Bernoulli thinning).}
 }
 \value{
   A list with a set of useful information in the estimation procedure.

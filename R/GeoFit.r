@@ -11,7 +11,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                    method = "cholesky", model = "Gaussian", n = 1,
                    onlyvar = FALSE, optimizer = "Nelder-Mead", radius = 1,
                    score = FALSE, sensitivity = FALSE, sparse = FALSE,
-                   start = NULL, thin_method = "iid", type = "Pairwise",
+                   start = NULL, thin_method = "bernoulli", type = "Pairwise",
                    upper = NULL, varest = FALSE, weighted = FALSE, X = NULL,
                     spobj = NULL, spdata = NULL)
 {
@@ -239,6 +239,11 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
     if (!is.null(initparam$error)) stop(initparam$error)
 
+    ## Defensive fallback: some StartParam/WlsStart paths may not carry this
+    ## flag into initparam.  Downstream methods such as GeoCovariogram()
+    ## expect every GeoFit object to contain a non-NULL logical bivariate field.
+    if (is.null(initparam$bivariate)) initparam$bivariate <- bivariate
+
     if (!(optimizer %in% c("L-BFGS-B","nlminb","nlm","nmkb","nmk","multiNelder-Mead",
                            "multinlminb","BFGS","Nelder-Mead","optimize","SANN",
                            "bobyqa","sbplx")))
@@ -269,8 +274,10 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         upper <- upper[order(names(upper))]
 
         npar <- length(initparam$param)
-        ll <- as.numeric(lower)
-        uu <- as.numeric(upper)
+        ll <- as.numeric(unlist(lower, use.names = TRUE))
+        uu <- as.numeric(unlist(upper, use.names = TRUE))
+        names(ll) <- names(lower)
+        names(uu) <- names(upper)
 
         if (length(ll) != npar || length(uu) != npar)
           stop("lower and upper bound must be of the same length of starting values\n")
@@ -284,6 +291,40 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         initparam$upper <- uu
         initparam$lower <- ll
       }
+    }
+
+    ## When only one parameter is estimated, the composite-likelihood code
+    ## switches internally to stats::optimize().  optimize() requires finite
+    ## scalar bounds; automatic bounds from WlsStart() can be 0 and Inf
+    ## for parameters such as scale.  Sanitize only the internal bounds here.
+    if (length(initparam$param) == 1) {
+      pname <- names(initparam$param)
+
+      if (is.null(initparam$lower) || is.null(initparam$upper))
+        stop("lower and upper bounds are required when only one parameter is estimated\n")
+
+      lb <- initparam$lower
+      ub <- initparam$upper
+
+      if (!is.null(names(lb)) && pname %in% names(lb)) lb <- lb[pname] else lb <- lb[1]
+      if (!is.null(names(ub)) && pname %in% names(ub)) ub <- ub[pname] else ub <- ub[1]
+
+      lb <- as.numeric(lb)
+      ub <- as.numeric(ub)
+
+      if (length(lb) != 1 || length(ub) != 1 || is.na(lb) || is.na(ub))
+        stop("invalid lower/upper bounds for optimize()\n")
+
+      if (lb == 0) lb <- .Machine$double.eps
+      if (is.infinite(ub)) ub <- 1e+12
+
+      if (!is.finite(lb) || !is.finite(ub) || lb >= ub)
+        stop("invalid lower/upper bounds for optimize()\n")
+
+      names(lb) <- pname
+      names(ub) <- pname
+      initparam$lower <- lb
+      initparam$upper <- ub
     }
     ############################################################
 
@@ -490,7 +531,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     ### Set the output object:
     GeoFit <- list(
       anisopars = anisopars,
-      bivariate = initparam$bivariate,
+      bivariate = if (is.null(initparam$bivariate)) bivariate else initparam$bivariate,
       claic = fitted$claic,
       clbic = fitted$clbic,
       coordx = initparam$coordx,

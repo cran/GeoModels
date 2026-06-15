@@ -85,7 +85,7 @@ StartParam(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel,
   \item{p_neighb}{Numeric; a value in \eqn{(0,1]} specifying the expected fraction of nearest-neighbor pairs retained through stochastic thinning.
     If \code{1} (default), no thinning is applied and all nearest-neighbor pairs are used. If \code{<1}, pairs are randomly retained using independent Bernoulli sampling.}
 
-  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"iid"} (independent Bernoulli thinning).}
+  \item{thin_method}{String; thinning scheme used when \code{p_neighb<1}. Default is \code{"bernoulli"} (independent Bernoulli thinning).}
 }
 \value{
   A list with a set of useful information in the estimation procedure.
