@@ -1,7 +1,7 @@
 \name{CkModel}
 \alias{CkModel}
 \encoding{UTF-8}
-\title{Checking Random Field Type}
+\title{Checking random field Type}
 \description{
 Subroutine called by \code{InitParam}.\\
 The procedure controls the type of random field inserted by the users.
@@ -10,8 +10,8 @@ The procedure controls the type of random field inserted by the users.
 CkModel(model)
 }
 \arguments{
-  \item{model}{String; the density associated with the likelihood
-  objects. \code{Gaussian} is the default.}
+ \item{model}{String; the density associated with the likelihood
+ objects. \code{Gaussian} is the default.}
 }
 \value{
 The function returns a numeric positive integer, or \code{NULL} if the model is invalid.

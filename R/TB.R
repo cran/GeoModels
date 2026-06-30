@@ -331,8 +331,8 @@ sample_fT_n_adaptive <- function(N, eta, n, d, safety = 1.2) {
   g2_rnd <- function(m) T0 * (1 - runif(m))^(-1 / alpha)
   g2_pdf <- function(t) ifelse(t > T0, alpha * T0^alpha / (t^(alpha + 1)), 0)
 
-  f_target <- function(t) const * t^(d - 1 - 2*eta) * besselJ(t / 2, nu)^2
-
+  #f_target <- function(t) const * t^(d - 1 - 2*eta) * besselJ(t / 2, nu)^2
+  f_target <- function(t) const * t^(d - 1 - 2*eta) * safe_besselJ(t / 2, nu)^2
   samples <- numeric(0)
   while (length(samples) < N) {
     m <- min(10000, (N - length(samples)) * 5)
@@ -473,6 +473,7 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
   u <- frequency_sampler(L, parametersg, corrmodel, d, condition)
   #######
   phi <- runif(L, 0, (2*pi))
+  amp <- sqrt(-2 * log(runif(L)))
   
   Nlocs <- nrow(coord)
   simu <- NULL
@@ -489,18 +490,19 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
         for (i in 1:length(low_limits)) {
           indexes <- (low_limits[i]+1):upp_limits[i]
           Ninner <- length(indexes)
-          result <- dotCall64::.C64("TBD1d",
+          result <- dotCall64::.C64("TBD1d_amp",
                      SIGNATURE = c("double","double","double","double",
-                                   "double","integer","integer","double"),
+                                   "double","double","integer","integer","double"),
                      ux = c(u[,1]), uy = c(u[,2]), 
                      sx = c(coord[indexes,1]), 
                      sy = c(coord[indexes,2]), 
-                     phi = phi, L = as.integer(L), n = as.integer(Ninner), 
-                     result = dotCall64::vector_dc("double",Ninner), 
-                     INTENT = c("r","r","r","r","r","r","r","rw"),
+                     phi = phi, amp = amp,
+                     L = as.integer(L), n = as.integer(Ninner), 
+                     result = dotCall64::vector_dc("double", Ninner), 
+                     INTENT = c("r","r","r","r","r","r","r","r","rw"),
                      PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
           
-          simu[indexes,1] <- sqrt(CC)*result/sqrt(2*L)
+          simu[indexes,1] <- sqrt(CC) * result / sqrt(L)
         }
       } else {
         future::plan(future::multisession, workers = ncores)
@@ -510,17 +512,18 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
         chunk_results <- future.apply::future_lapply(chunk_list, function(chunk_info) {
           indexes <- chunk_info$indexes
           Ninner <- length(indexes)
-          result <- dotCall64::.C64("TBD1d",
+          result <- dotCall64::.C64("TBD1d_amp",
                      SIGNATURE = c("double","double","double","double",
-                                   "double","integer","integer","double"),
+                                   "double","double","integer","integer","double"),
                      ux = c(u[,1]), uy = c(u[,2]), 
                      sx = c(coord[indexes,1]), 
                      sy = c(coord[indexes,2]), 
-                     phi = phi, L = as.integer(L), n = as.integer(Ninner), 
-                     result = dotCall64::vector_dc("double",Ninner), 
-                     INTENT = c("r","r","r","r","r","r","r","rw"),
+                     phi = phi, amp = amp,
+                     L = as.integer(L), n = as.integer(Ninner), 
+                     result = dotCall64::vector_dc("double", Ninner), 
+                     INTENT = c("r","r","r","r","r","r","r","r","rw"),
                      PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-          result <- sqrt(CC)*result/sqrt(2*L)
+          result <- sqrt(CC) * result / sqrt(L)
           return(list(indexes=indexes, result=result))
         }, future.seed=TRUE, future.packages="GeoModels")
         
@@ -530,16 +533,17 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
         future::plan(sequential)
       }
     } else {
-      result <- dotCall64::.C64("TBD1d",
+      result <- dotCall64::.C64("TBD1d_amp",
                    SIGNATURE = c("double","double","double","double",
-                                 "double","integer","integer","double"),
+                                 "double","double","integer","integer","double"),
                    ux = c(u[,1]), uy = c(u[,2]), 
                    sx = c(coord[,1]), sy = c(coord[,2]), 
-                   phi = phi, L = as.integer(L), n = as.integer(Nlocs), 
-                   result = dotCall64::vector_dc("double",Nlocs), 
-                   INTENT = c("r","r","r","r","r","r","r","rw"),
+                   phi = phi, amp = amp,
+                   L = as.integer(L), n = as.integer(Nlocs), 
+                   result = dotCall64::vector_dc("double", Nlocs), 
+                   INTENT = c("r","r","r","r","r","r","r","r","rw"),
                    PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-      simu <- matrix(sqrt(CC)*result/sqrt(2*L), Nlocs, 1)
+      simu <- matrix(sqrt(CC) * result / sqrt(L), Nlocs, 1)
     }
   }
   

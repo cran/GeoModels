@@ -9,9 +9,9 @@ Checks the validity and type of the specified distance.
 CheckDistance(distance)
 }
 \arguments{
-  \item{distance}{A character string indicating the type of distance. 
-  Available options are: \code{"Eucl"} (Euclidean), \code{"Geod"} (Geodesic), and \code{"Chor"} (Chordal).
-  See also \code{\link{GeoCovmatrix}}.}
+ \item{distance}{A character string indicating the type of distance. 
+ Available options are: \code{"Eucl"} (Euclidean), \code{"Geod"} (Geodesic), and \code{"Chor"} (Chordal).
+ See also \code{\link{GeoCovmatrix}}.}
 }
 \details{
 This function checks whether the specified distance type is valid.
@@ -19,9 +19,9 @@ This function checks whether the specified distance type is valid.
 \value{
 An integer:
 \itemize{
-  \item \code{0} for Euclidean distance
-  \item \code{1} for Geodesic distance
-  \item \code{2} for Chordal distance
+ \item \code{0} for Euclidean distance
+ \item \code{1} for Geodesic distance
+ \item \code{2} for Chordal distance
 }
 If the input is not recognized, the function returns \code{NULL}.
 }

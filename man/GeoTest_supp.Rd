@@ -8,37 +8,37 @@ The test statistic is the likelihood ratio and the \emph{p}-value is obtained by
 }
 \usage{
 GeoTestsupp_space(data, coordx,
-                  start, fixed,
-                  model = "Gaussian",
-                  h0 = NULL,
-                  optimizer = "bobyqa",
-                  lower = NULL, upper = NULL,
-                  neighb = 5,
-                  B = 1000,
-                  likelihood = NULL,
-                  type = NULL,
-                  method = "Cholesky",
-                  parallel = TRUE,
-                  ncores = NULL,
-                  progress = TRUE)
+ start, fixed,
+ model = "Gaussian",
+ h0 = NULL,
+ optimizer = "bobyqa",
+ lower = NULL, upper = NULL,
+ neighb = 5,
+ B = 1000,
+ likelihood = NULL,
+ type = NULL,
+ method = "Cholesky",
+ parallel = TRUE,
+ ncores = NULL,
+ progress = TRUE)
 }
 \arguments{
-  \item{data}{Numeric vector of observations of length \code{n}.}
-  \item{coordx}{\code{n x d} matrix with spatial coordinates (at least 2 columns).}
-  \item{start}{\emph{Named} list of parameters \strong{to be estimated}. Names must match \code{CorrParam(corrmodel)} and \code{NuisParam(model)}.}
-  \item{fixed}{\emph{Named} list of parameters \strong{kept fixed}. Together with \code{start} it must exactly cover the required set.}
-  \item{model}{Marginal model for the data (default \code{"Gaussian"}).}
-  \item{h0}{Positive threshold for the \emph{scale} parameter under \strong{H0}. If \code{NULL} (default), \strong{H0} represents \emph{spatial independence} with \code{scale = h0_val} set to the (adjusted) minimum inter-point distance.}
-  \item{optimizer}{Optimization method passed to \code{GeoFit} (e.g., \code{"bobyqa"}).}
-  \item{lower, upper}{\emph{Named} lists with bounds for parameters in \code{start} only. \code{NULL} means no extra bounds beyond defaults. Bounds are internally widened if too narrow.}
-  \item{neighb}{Number of neighbors for composite likelihood when applicable. Ignored when the full likelihood is used.}
-  \item{B}{Number of parametric bootstrap replications (default \code{1000}).}
-  \item{likelihood}{Type of (composite) likelihood to pass to \code{GeoFit} (e.g., \code{"Marginal"}).}
-  \item{type}{Composite-likelihood type (e.g., \code{"Pairwise"}).}
-  \item{method}{Simulation method for bootstrap under \strong{H0}: \code{"Cholesky"} or \code{"TB"} (turning bands via \code{GeoSimapprox}).}
-  \item{parallel}{If \code{TRUE}, bootstrap estimations are parallelized using \pkg{future}.}
-  \item{ncores}{Number of cores for parallelization. If \code{NULL}, it is selected automatically up to \code{B} or \code{parallel::detectCores()-1}.}
-  \item{progress}{If \code{TRUE}, progress bars are shown via \pkg{progressr}.}
+ \item{data}{Numeric vector of observations of length \code{n}.}
+ \item{coordx}{\code{n x d} matrix with spatial coordinates (at least 2 columns).}
+ \item{start}{\emph{Named} list of parameters \strong{to be estimated}. Names must match \code{CorrParam(corrmodel)} and \code{NuisParam(model)}.}
+ \item{fixed}{\emph{Named} list of parameters \strong{kept fixed}. Together with \code{start} it must exactly cover the required set.}
+ \item{model}{Marginal model for the data (default \code{"Gaussian"}).}
+ \item{h0}{Positive threshold for the \emph{scale} parameter under \strong{H0}. If \code{NULL} (default), \strong{H0} represents \emph{spatial independence} with \code{scale = h0_val} set to the (adjusted) minimum inter-point distance.}
+ \item{optimizer}{Optimization method passed to \code{GeoFit} (e.g., \code{"bobyqa"}).}
+ \item{lower, upper}{\emph{Named} lists with bounds for parameters in \code{start} only. \code{NULL} means no extra bounds beyond defaults. Bounds are internally widened if too narrow.}
+ \item{neighb}{Number of neighbors for composite likelihood when applicable. Ignored when the full likelihood is used.}
+ \item{B}{Number of parametric bootstrap replications (default \code{1000}).}
+ \item{likelihood}{Type of (composite) likelihood to pass to \code{GeoFit} (e.g., \code{"Marginal"}).}
+ \item{type}{Composite-likelihood type (e.g., \code{"Pairwise"}).}
+ \item{method}{Simulation method for bootstrap under \strong{H0}: \code{"Cholesky"} or \code{"TB"} (turning bands via \code{GeoSimapprox}).}
+ \item{parallel}{If \code{TRUE}, bootstrap estimations are parallelized using \pkg{future}.}
+ \item{ncores}{Number of cores for parallelization. If \code{NULL}, it is selected automatically up to \code{B} or \code{parallel::detectCores()-1}.}
+ \item{progress}{If \code{TRUE}, progress bars are shown via \pkg{progressr}.}
 }
 \details{
 The function fixes the correlation model to \code{corrmodel = "GenWend"} (generalized Wendland, compact support).
@@ -75,7 +75,7 @@ For very large \code{n}, \code{method = "TB"} may be preferable for speed.
 }
 
 \seealso{
-\code{\link{GeoFit}}, \code{\link{GeoSim}}, \code{\link{GeoSimapprox}}, \code{\link{GeoVarestbootstrap}}
+\code{\link{GeoFit}}, \code{\link{GeoSim}}, \code{\link{GeoSimapprox}}, \code{\link{GeoVarest}}
 }
 
 \author{

@@ -3,9 +3,9 @@
 \alias{MatInv}
 \alias{MatLogDet}
 \encoding{UTF-8}
-\title{Square root, inverse  and  log determinant of a (semi)positive definite matrix, given a matrix decomposition.}
+\title{Square root, inverse and log determinant of a (semi)positive definite matrix, given a matrix decomposition.}
 \description{
- Square root, inverse  and  log determinant of a (semi)positive definite matrix, given a matrix decomposition.
+ Square root, inverse and log determinant of a (semi)positive definite matrix, given a matrix decomposition.
 }
 \usage{
 MatSqrt(mat.decomp,method) 
@@ -13,12 +13,12 @@ MatInv(mtx)
 MatLogDet(mat.decomp,method)
 }
 
-\value{The function returna a  square root or inverse  or  log determinant of a (semi)positive definite matrix using the function in the FastGP package.}
+\value{The function returns a square root or inverse or log determinant of a (semi)positive definite matrix using the function in the FastGP package.}
 
 \arguments{
-  \item{mtx}{numeric; a squared symmetric positive definite matrix.}
-  \item{mat.decomp}{numeric; a matrix decomposition.}
-  \item{method}{string; the type of matrix decomposition. Two possible choices: \code{cholesky} and \code{svd}.}
+ \item{mtx}{numeric; a squared symmetric positive definite matrix.}
+ \item{mat.decomp}{numeric; a matrix decomposition.}
+ \item{method}{string; the type of matrix decomposition. Two possible choices: \code{cholesky} and \code{svd}.}
 }
 
 \seealso{\code{\link{MatDecomp}}}
@@ -27,7 +27,7 @@ MatLogDet(mat.decomp,method)
 
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
 
 \examples{
@@ -46,7 +46,7 @@ Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.rese
  param=list(smooth=0.5,sill=1,scale=0.2,nugget=0)
  a=matrix <- GeoCovmatrix(coordx=coords, corrmodel="Matern", param=param)
 
- ## decomposition with cholesky method  
+ ## decomposition with cholesky method 
  b=MatDecomp(a$covmat,method="cholesky")
  ## inverse of covariance matrix
  inverse=MatInv(a$covmat)

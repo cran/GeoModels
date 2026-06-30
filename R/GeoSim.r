@@ -74,6 +74,23 @@ return(dims*dimt)
     if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
     corrmodel=gsub("[[:blank:]]", "",corrmodel)
     model=gsub("[[:blank:]]", "",model)
+
+    # Geometric is the special case of the negative binomial field with r = 1.
+    # Convert it once here so the rest of the univariate code only handles BinomialNeg.
+    if(model == "Geometric") {
+        model <- "BinomialNeg"
+        n <- 1
+    }
+
+    # For BinomialNeg, n is the number of successes r.
+    # It must be a positive integer, either scalar or one value per site/time point.
+    if(model %in% c("BinomialNeg","BinomialNegZINB")) {
+        if(any(is.na(n)) || any(n <= 0) || any(n != round(n))) {
+            stop("For BinomialNeg, n must be a positive integer: number of successes r.")
+        }
+        n <- round(n)
+    }
+
     distance=gsub("[[:blank:]]", "",distance)
     method=gsub("[[:blank:]]", "",method)
 
@@ -301,8 +318,7 @@ for( L in 1:nrep){
     if(model %in% c("LogLogistic","Logistic","SkewLaplace")) k=4
     if(model %in% c("Binomial"))   k=max(round(n))
     if(model %in% c("BinomialLogistic"))   k=2*max(round(n))
-    if(model %in% c("Geometric","BinomialNeg","BinomialNegZINB"))
-                 { k=99999;if(model %in% c("Geometric")) {model="BinomialNeg";n=1}}
+    if(model %in% c("BinomialNeg","BinomialNegZINB")) k=99999
     if(model %in% c("Poisson","PoissonZIP")) {k=2;npoi=999999999}
     if(model %in% c("PoissonGamma","PoissonGammaZIP")) {k=2+2*param$shape;npoi=999999999}
     if(model %in% c("PoissonWeibull")) {k=4;npoi=999999999}
@@ -317,7 +333,11 @@ for( L in 1:nrep){
 
   ################################################################################
   ################################################################################
-   dd=array(0,dim=c(dime,1,k))
+   if(model %in% c("BinomialNeg","BinomialNegZINB")) {
+      dd <- NULL
+   } else {
+      dd <- array(0, dim = c(dime, 1, k))
+   }
 
    cumu=NULL;
  #########################################
@@ -342,9 +362,13 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
   # INIT efficient counters for BinomialNeg / BinomialNegZINB (univariate)
   if(model %in% c("BinomialNeg","BinomialNegZINB")){
+    rvec <- if(length(n) == 1) rep(n, dime) else n
+    if(length(rvec) != dime) {
+      stop("For BinomialNeg, n must have length 1 or length equal to the number of sites/time points.")
+    }
     counts   <- integer(dime)     # successi cumulati
     finished <- logical(dime)     # chi ha raggiunto n successi
-    nb_vals  <- integer(dime)     # output (tempo al successo n) = iter - n
+    nb_vals  <- integer(dime)     # output (tempo al successo r) = trial - r
     trial    <- 0L                # contatore di tentativi (iterazioni Bernoulli)
   }
   # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -368,11 +392,19 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
     ####################################
     ####### starting cases #############
     ####################################
-    if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
-        simdim <- dim(sim)
-        sim <- as.numeric(sim>0)
-        dim(sim) <- simdim
-         }
+     #if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
+      #   simdim <- dim(sim)
+       #  sim <- as.numeric(sim>0)
+        # dim(sim) <- simdim
+         # }
+ if(model %in% c("Binomial", "BinomialNeg","BinomialNegZINB")) {
+    simdim <- dim(sim)
+    sim_vec <- if(is.null(simdim)) c(sim) else c(t(sim))
+    eta <- if(length(mm) == 1) rep(mm, length(sim_vec)) else c(mm)
+    sim_vec <- as.numeric(sim_vec + eta > 0)
+    if(is.null(simdim)) sim <- sim_vec
+    else sim <- matrix(sim_vec, nrow=simdim[1], ncol=simdim[2], byrow=TRUE)
+    }    
     ####################################
     if(model %in% c("Weibull","SkewGaussian","SkewGauss","Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonGammaZIP","PoissonWeibull","PoissonZIP","Beta","Kumaraswamy","Kumaraswamy2",
               "LogGaussian","TwoPieceTukeyh",
@@ -390,9 +422,9 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                  idx <- !finished
                  if(any(idx)){
                    counts[idx] <- counts[idx] + vec[idx]
-                   new_finished <- (counts >= n) & !finished
+                   new_finished <- (counts >= rvec) & !finished
                    if(any(new_finished)){
-                     nb_vals[new_finished] <- trial - n
+                     nb_vals[new_finished] <- trial - rvec[new_finished]
                      finished <- finished | new_finished
                    }
                  }
@@ -480,10 +512,16 @@ if(model %in% c("BinomialLogistic"))   {
                   byrow=TRUE }
 #######################################
    if(model %in% c("BinomialNeg"))   {
+          if(any(!finished)) {
+              stop("Some locations did not reach n successes. Increase the maximum number of trials.")
+          }
           sim <- nb_vals
           byrow=TRUE
           }
   if(model %in% c("BinomialNegZINB"))   {
+          if(any(!finished)) {
+              stop("Some locations did not reach n successes. Increase the maximum number of trials.")
+          }
           sim <- nb_vals
       ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
 

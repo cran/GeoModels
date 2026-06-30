@@ -12,10 +12,10 @@ The precipitation field is derived from the WorldClim v2.1 monthly climatology f
 \format{
 A numeric matrix with 71,401 rows and 4 columns:
 \describe{
-  \item{Column 1}{Easting coordinate (UTM zone 31N), in kilometers.}
-  \item{Column 2}{Northing coordinate (UTM zone 31N), in kilometers.}
-  \item{Column 3}{Distance to the coastline, in kilometers (computed from Natural Earth coastline geometry, transformed to UTM).}
-  \item{Column 4}{April total precipitation, in millimeters.}
+ \item{Column 1}{Easting coordinate (UTM zone 31N), in kilometers.}
+ \item{Column 2}{Northing coordinate (UTM zone 31N), in kilometers.}
+ \item{Column 3}{Distance to the coastline, in kilometers (computed from Natural Earth coastline geometry, transformed to UTM).}
+ \item{Column 4}{April total precipitation, in millimeters.}
 }
 }
 \details{

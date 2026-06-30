@@ -8,9 +8,9 @@ A numerical matrix of dimension \eqn{7252 \times 3} containing longitude, latitu
 \format{
 A numeric matrix with 7,252 rows and 3 columns:
 \describe{
-  \item{Column 1}{Longitude}
-  \item{Column 2}{Latitude}
-  \item{Column 3}{Annual precipitation anomaly}
+ \item{Column 1}{Longitude}
+ \item{Column 2}{Latitude}
+ \item{Column 3}{Annual precipitation anomaly}
 }
 }
 \source{

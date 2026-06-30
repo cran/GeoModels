@@ -896,6 +896,40 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   # Temporal coordinates to use
   coordt_use <- if (spacetime || bivariate) coordt else NULL
 
+  # Helper for multiplicative models: eta(s) = log(mu(s)) = X(s)' beta.
+  # If X/Xloc are supplied, they are used; otherwise a constant mean is assumed.
+  # Mloc, when supplied, is interpreted on the eta = log(mu) scale.
+  get_eta_obs_loc <- function(param, X, Xloc, Mloc, n_obs, n_loc) {
+    sel <- substr(names(param), 1, 4) == "mean"
+    beta <- as.numeric(unlist(param[sel]))
+    if (length(beta) == 0L) stop("Mean parameter(s) are missing\n")
+
+    if (!is.null(X)) {
+      Xobs <- as.matrix(X)
+      if (ncol(Xobs) != length(beta)) {
+        stop("ncol(X) must match the number of mean parameters\n")
+      }
+      eta_obs <- as.numeric(Xobs %*% beta)
+    } else {
+      if (length(param$mean) == n_obs) eta_obs <- as.numeric(param$mean)
+      else eta_obs <- rep(as.numeric(param$mean)[1], n_obs)
+    }
+
+    if (!is.null(Mloc)) {
+      eta_loc <- as.numeric(Mloc)
+    } else if (!is.null(Xloc)) {
+      Xloc_mat <- as.matrix(Xloc)
+      if (ncol(Xloc_mat) != length(beta)) {
+        stop("ncol(Xloc) must match the number of mean parameters\n")
+      }
+      eta_loc <- as.numeric(Xloc_mat %*% beta)
+    } else {
+      eta_loc <- rep(as.numeric(param$mean)[1], n_loc)
+    }
+
+    list(obs = eta_obs, loc = eta_loc)
+  }
+
 ############################################################################
 ######################### not copula models ################################
 ############################################################################
@@ -912,15 +946,23 @@ if (is.null(copula)) {
   ############### monotone transformations of one Gaussian RF ####################
   ################################################################################
   if (model == "LogGaussian") {
-    mm <- exp(param$mean)
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
     vv <- param$sill
-    datanorm <- (log(data/mm) + vv/2)/sqrt(vv)   # gaussian scale
-    param$mean <- 0; param$sill <- 1
-    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+
+    # Multiplicative parametrization:
+    # Y(s) = exp(eta(s)) * exp(sqrt(vv) Z(s) - vv/2), hence E[Y(s)] = exp(eta(s)).
+    datanorm <- (log(data) - eta$obs + vv/2)/sqrt(vv)   # gaussian scale
+
+    param_gauss <- param
+    param_gauss$mean <- 0
+    param_gauss$sill <- 1
+
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
-    res <- lapply(res, function(r) mm * exp(sqrt(vv) * r - vv/2)) # back-transformation
+
+    res <- lapply(res, function(r) exp(eta$loc) * exp(sqrt(vv) * r - vv/2)) # back-transformation
   }
 
   if (model == "Tukeyh") {
@@ -1046,17 +1088,27 @@ if (copula == "Gaussian") {
   }
 
   if (model == "LogGaussian") {
-    mm <- exp(param$mean)
-    vv <- param$sill
-    datanorm1 <- plnorm(data, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE)
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    vv  <- param$sill
+    eps <- .Machine$double.eps
+
+    # Multiplicative parametrization with mean exp(eta):
+    # log Y(s) ~ N(eta(s) - vv/2, vv).
+    datanorm1 <- plnorm(data, meanlog = eta$obs - vv/2, sdlog = sqrt(vv), log.p = FALSE)
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
     datanorm  <- qnorm(datanorm1)
-    param$mean <- 0; param$sill <- 1
-    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+
+    param_gauss <- param
+    param_gauss$mean <- 0
+    param_gauss$sill <- 1
+
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
-    res <- lapply(res, function(r) pnorm(r))
-    res <- lapply(res, function(r) qlnorm(r, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE))
+
+    res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
+    res <- lapply(res, function(u) qlnorm(u, meanlog = eta$loc - vv/2, sdlog = sqrt(vv), log.p = FALSE))
   }
 
   if (model == "Gamma") {
@@ -1154,50 +1206,91 @@ if (copula == "Gaussian") {
   }
 
   if (model == "Binomial") {
-    mm <- param$mean; prob <- pnorm(mm)
-    datanorm1 <- (pbinom(data - 1, size = n, prob = prob) + pbinom(data, size = n, prob = prob))/2
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    prob_obs <- pmin(pmax(pnorm(eta$obs), eps), 1 - eps)
+    prob_loc <- pmin(pmax(pnorm(eta$loc), eps), 1 - eps)
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      pbinom(data - 1, size = n, prob = prob_obs) +
+      pbinom(data,     size = n, prob = prob_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
     datanorm  <- qnorm(datanorm1)
-    param$mean <- 0; param$sill <- 1
-    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+
+    param_gauss <- param
+    param_gauss$mean <- 0
+    param_gauss$sill <- 1
+
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
-    res <- lapply(res, function(r) pnorm(r))
-    res <- lapply(res, function(r) qbinom(p = r, size = n, prob = prob))
+    res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
+    res <- lapply(res, function(u) qbinom(p = u, size = n, prob = prob_loc))
   }
 
   if (model == "BinomialNeg") {
-    mm <- param$mean; prob <- pnorm(mm); size <- n
-    datanorm1 <- (pnbinom(data - 1, size = size, prob = prob) + pnbinom(data, size = size, prob = prob))/2
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    prob_obs <- pmin(pmax(pnorm(eta$obs), eps), 1 - eps)
+    prob_loc <- pmin(pmax(pnorm(eta$loc), eps), 1 - eps)
+    size <- n
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      pnbinom(data - 1, size = size, prob = prob_obs) +
+      pnbinom(data,     size = size, prob = prob_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
     datanorm  <- qnorm(datanorm1)
-    param$mean <- 0; param$sill <- 1
-    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+
+    param_gauss <- param
+    param_gauss$mean <- 0
+    param_gauss$sill <- 1
+
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
-    res <- lapply(res, function(r) pnorm(r))
-    res <- lapply(res, function(r) qnbinom(p = r, size = size, prob = prob))
+    res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
+    res <- lapply(res, function(u) qnbinom(p = u, size = size, prob = prob_loc))
   }
 
   if (model == "Poisson") {
-    mu <- exp(param$mean)
-    datanorm1 <- (ppois(data - 1, lambda = mu) + ppois(data, lambda = mu))/2
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    mu_obs <- exp(eta$obs)
+    mu_loc <- exp(eta$loc)
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      ppois(data - 1, lambda = mu_obs) +
+      ppois(data,     lambda = mu_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
     datanorm  <- qnorm(datanorm1)
-    param$mean <- 0; param$sill <- 1
-    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
+
+    param_gauss <- param
+    param_gauss$mean <- 0
+    param_gauss$sill <- 1
+
+    res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
                     coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
-    res <- lapply(res, function(r) pnorm(r))
-    res <- lapply(res, function(r) qpois(r, lambda = mu))
+    res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
+    res <- lapply(res, function(u) qpois(u, lambda = mu_loc))
   }
 }
 
 ####################### skewgaussian copula ####################################################
 if (copula == "SkewGaussian") {
 
-### reparametrization ## from (-1,1) to (-I,+I)
-param$skew=param$nu/sqrt(1-param$nu*param$nu)
+### reparametrization ## from (-1,1) to (-Inf,+Inf)
+if (abs(param$nu) >= 1) stop("nu parameter must be between -1 and 1", call. = FALSE)
+param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
 
 
     if (model == "Weibull") {
@@ -1207,8 +1300,8 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
     datanorm1 <- pweibull(data, shape = ss, scale = mm/(gamma(1 + 1/ss))) 
     param$mean <- 0; param$sill <- 1; param$shape <- NULL
 
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    omega <- sqrt(1 + param$skew^2)
+    alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
 
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel,local=local,neighb=neighb,L=L,
@@ -1219,18 +1312,27 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
   }
 
     if (model == "LogGaussian") {
-    mm <- exp(param$mean)
-    vv <- param$sill
-    datanorm1 <- plnorm(data, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE)
-    param$mean <- 0;param$sill<-1
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    vv  <- param$sill
+    eps <- .Machine$double.eps
+
+    # Multiplicative parametrization with mean exp(eta):
+    # log Y(s) ~ N(eta(s) - vv/2, vv).
+    datanorm1 <- plnorm(data, meanlog = eta$obs - vv/2, sdlog = sqrt(vv), log.p = FALSE)
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
+
+    param_skew <- param
+    param_skew$mean <- 0
+    param_skew$sill <- 1
+
+    omega <- sqrt(1 + param_skew$skew^2)
+    alpha <- as.numeric(param_skew$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
 
-    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel,local=local,neighb=neighb,L=L,
+    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel,local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
-    res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
-    res <- lapply(res, function(r) qlnorm(r, meanlog = mm - vv/2, sdlog = sqrt(vv), log.p = FALSE))
+    res=lapply(res, function(r) pmin(pmax(sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)), eps), 1 - eps))
+    res <- lapply(res, function(u) qlnorm(u, meanlog = eta$loc - vv/2, sdlog = sqrt(vv), log.p = FALSE))
   }
 
   if (model == "Gamma") {
@@ -1239,8 +1341,8 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
     ss <- param$shape
     datanorm1 <- pgamma(data, shape = ss/2, rate = ss/(2 * mm))
     param$mean <- 0; param$sill <- 1; param$shape <- NULL
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    omega <- sqrt(1 + param$skew^2)
+    alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel,local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
@@ -1256,8 +1358,8 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
     pmax <- param$max
     datanorm1 <- pbeta((data - pmin)/(pmax - pmin), shape1 = mm * ss, shape2 = (1 - mm) * ss)
     param$mean <- 0; param$sill <- 1;
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    omega <- sqrt(1 + param$skew^2)
+    alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
@@ -1271,8 +1373,8 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
     df <- param$df
     datanorm1 <- pt((data - mm)/sqrt(vv), df = 1/df)
     param$mean <- 0; param$sill <- 1; param$df <- NULL
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    omega <- sqrt(1 + param$skew^2)
+    alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
@@ -1285,8 +1387,8 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
     vv <- param$sill
     datanorm1 <- pnorm(data, mm, sqrt(vv))
     param$mean <- 0; param$sill <- 1
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
+    omega <- sqrt(1 + param$skew^2)
+    alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
@@ -1295,43 +1397,82 @@ param$skew=param$nu/sqrt(1-param$nu*param$nu)
   }
 
     if (model == "Binomial") { 
-    mm <- param$mean; prob <- pnorm(mm)
-    datanorm1 <- (pbinom(data - 1, size = n, prob = prob) + pbinom(data, size = n, prob = prob))/2
-    param$mean <- 0; param$sill <- 1
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
-    datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
-    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    prob_obs <- pmin(pmax(pnorm(eta$obs), eps), 1 - eps)
+    prob_loc <- pmin(pmax(pnorm(eta$loc), eps), 1 - eps)
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      pbinom(data - 1, size = n, prob = prob_obs) +
+      pbinom(data,     size = n, prob = prob_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
+
+    param_skew <- param
+    param_skew$mean <- 0
+    param_skew$sill <- 1
+    omega <- sqrt(1 + param_skew$skew^2)
+    alpha <- as.numeric(param_skew$skew)
+
+    datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
+    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
-    res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
-    res <- lapply(res, function(r) qbinom(p = r, size = n, prob = prob))
+    res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
+    res <- lapply(res, function(u) qbinom(p = u, size = n, prob = prob_loc))
   }
 
   if (model == "BinomialNeg") {
-    mm <- param$mean; prob <- pnorm(mm); size <- n
-    datanorm1 <- (pnbinom(data - 1, size = size, prob = prob) + pnbinom(data, size = size, prob = prob))/2
-    param$mean <- 0; param$sill <- 1
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
-    datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
-    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    prob_obs <- pmin(pmax(pnorm(eta$obs), eps), 1 - eps)
+    prob_loc <- pmin(pmax(pnorm(eta$loc), eps), 1 - eps)
+    size <- n
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      pnbinom(data - 1, size = size, prob = prob_obs) +
+      pnbinom(data,     size = size, prob = prob_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
+
+    param_skew <- param
+    param_skew$mean <- 0
+    param_skew$sill <- 1
+    omega <- sqrt(1 + param_skew$skew^2)
+    alpha <- as.numeric(param_skew$skew)
+
+    datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
+    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
-    res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
-    res <- lapply(res, function(r) qnbinom(p = r, size = size, prob = prob))
+    res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
+    res <- lapply(res, function(u) qnbinom(p = u, size = size, prob = prob_loc))
   }
 
   if (model == "Poisson") {
- 
-    mu <- exp(param$mean)
-    datanorm1 <- (ppois(data - 1, lambda = mu) + ppois(data, lambda = mu))/2
-    param$mean <- 0; param$sill <- 1
-    omega=as.numeric(sqrt((param$nu^2 + param$sill)/param$sill))
-    alpha=as.numeric(param$nu/param$sill^0.5)
-    datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
-    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
+    eps <- .Machine$double.eps
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, length(data), nrow(loc))
+    mu_obs <- exp(eta$obs)
+    mu_loc <- exp(eta$loc)
+
+    # Mid-PIT approximation for discrete observed data.
+    datanorm1 <- (
+      ppois(data - 1, lambda = mu_obs) +
+      ppois(data,     lambda = mu_obs)
+    ) / 2
+    datanorm1 <- pmin(pmax(datanorm1, eps), 1 - eps)
+
+    param_skew <- param
+    param_skew$mean <- 0
+    param_skew$sill <- 1
+    omega <- sqrt(1 + param_skew$skew^2)
+    alpha <- as.numeric(param_skew$skew)
+
+    datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
+    res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
                             nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
-    res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
-    res <- lapply(res, function(r) qpois(r, lambda = mu))
+    res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
+    res <- lapply(res, function(u) qpois(u, lambda = mu_loc))
   }
 
 }

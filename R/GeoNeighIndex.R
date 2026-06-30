@@ -758,22 +758,85 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
   }
 
   ##############################################################
-  ## Method II helper: fixed-budget thinning
+  ## Method II helpers: FixedBudget thinning
   ##
   ## The option name remains "FixedBudget" for compatibility with
-  ## the current simulation scripts, but the selection rule implemented
-  ## here is fixed-budget thinning: exactly K_target candidate edges are
-  ## sampled uniformly without replacement from the full NN candidate set.
+  ## existing scripts. The implementation is target-wise/stratum-wise:
+  ## the global budget is exact, but the allocation is made across
+  ## natural strata. In the purely spatial case the stratum is the
+  ## target location. In the space-time and bivariate cases the stratum
+  ## also includes the available pair type descriptors, so that distinct
+  ## temporal lags or variable-pair types are not mixed.
   ##
-  ## This is the fixed-size analogue of independent Bernoulli thinning:
-  ## it preserves the same marginal sampling level approximately, but it
-  ## removes the extra randomness in the total number of retained pairs.
+  ## This version avoids split(), which can be memory-expensive when the
+  ## number of target locations is very large. It sorts edges by stratum
+  ## and by a random tie-breaker, then keeps the first k_g randomized
+  ## ranks within each stratum.
   ##############################################################
 
-  fixed_budget_keep <- function(n_edges, K_target) {
+  make_stratum_id <- function(gb) {
+
+    n_edges <- length(gb$rowidx)
+
+    if (n_edges == 0L) {
+      return(numeric(0))
+    }
+
+    if (is.null(gb$rowidx) || length(gb$rowidx) != n_edges) {
+      stop("gb$rowidx must exist and have one entry per candidate edge.")
+    }
+
+    stratum_id <- as.double(gb$rowidx)
+
+    if (any(!is.finite(stratum_id))) {
+      stop("rowidx must be finite when constructing FixedBudget strata.")
+    }
+
+    ## Fold an additional discrete descriptor into the stratum id.
+    ## factor() is used so that numeric descriptors such as temporal lags
+    ## are converted to compact integer codes.
+    fold_in <- function(base, extra, name) {
+
+      if (length(extra) != length(base)) {
+        stop(name, " must have one entry per candidate edge.")
+      }
+
+      if (any(!is.finite(extra))) {
+        stop(name, " must be finite when constructing FixedBudget strata.")
+      }
+
+      code <- as.integer(factor(extra))
+      L <- max(code, na.rm = TRUE)
+
+      base * (L + 1L) + code
+    }
+
+    if (!is.null(gb$lagt)) {
+      stratum_id <- fold_in(stratum_id, gb$lagt, "lagt")
+    }
+
+    if (!is.null(gb$first)) {
+      stratum_id <- fold_in(stratum_id, gb$first, "first")
+    }
+
+    if (!is.null(gb$second)) {
+      stratum_id <- fold_in(stratum_id, gb$second, "second")
+    }
+
+    stratum_id
+  }
+
+  fixed_budget_keep <- function(stratum_id, p, K_target) {
+
+    n_edges <- length(stratum_id)
 
     if (n_edges <= 0L || K_target <= 0L) {
       return(integer(0))
+    }
+
+    if (!is.numeric(p) || length(p) != 1L || !is.finite(p) ||
+        p <= 0 || p > 1) {
+      stop("p must be in (0,1].")
     }
 
     K_target <- as.integer(round(K_target))
@@ -783,11 +846,122 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       return(integer(0))
     }
 
-    if (K_target >= n_edges) {
+    if (K_target >= n_edges || p >= 1) {
       return(seq_len(n_edges))
     }
 
-    sample.int(n_edges, size = K_target, replace = FALSE)
+    if (length(stratum_id) != n_edges || any(!is.finite(stratum_id))) {
+      stop("stratum_id must be finite and have one entry per candidate edge.")
+    }
+
+    ## Random tie-breaker: sorting by (stratum_id, u) gives a uniformly
+    ## random ordering of the candidate edges within each stratum.
+    u <- stats::runif(n_edges)
+
+    ord <- order(stratum_id, u)
+    str_sorted <- stratum_id[ord]
+
+    new_stratum <- c(TRUE, str_sorted[-1L] != str_sorted[-n_edges])
+    stratum_index <- cumsum(new_stratum)
+    stratum_start <- which(new_stratum)
+
+    n_strata <- length(stratum_start)
+
+    if (n_strata == 0L) {
+      return(integer(0))
+    }
+
+    stratum_size <- diff(c(stratum_start, n_edges + 1L))
+
+    rank_in_stratum <- seq_len(n_edges) -
+      stratum_start[stratum_index] + 1L
+
+    quota_raw <- p * stratum_size
+    quota_base <- floor(quota_raw + 1e-12)
+    quota_base <- pmin(quota_base, stratum_size)
+
+    ## Exact global budget by randomized residual allocation.
+    residual <- K_target - sum(quota_base)
+
+    if (residual > 0L) {
+
+      eligible <- which(quota_base < stratum_size)
+
+      if (length(eligible) > 0L) {
+
+        residual <- min(as.integer(residual), length(eligible))
+
+        frac <- quota_raw[eligible] -
+          floor(quota_raw[eligible] + 1e-12)
+
+        frac[!is.finite(frac) | frac < 0] <- 0
+
+        if (sum(frac) <= 0) {
+          prob <- rep.int(1 / length(eligible), length(eligible))
+        } else {
+          prob <- frac / sum(frac)
+        }
+
+        add_strata <- sample(
+          eligible,
+          size = residual,
+          replace = FALSE,
+          prob = prob
+        )
+
+        quota_base[add_strata] <- quota_base[add_strata] + 1L
+      }
+    }
+
+    ## Numerical safeguards. These should almost never be active, but they
+    ## keep the retained size exact in irregular cases.
+    deficit <- K_target - sum(quota_base)
+
+    if (deficit > 0L) {
+
+      eligible <- which(quota_base < stratum_size)
+
+      if (length(eligible) > 0L) {
+
+        add_strata <- sample(
+          eligible,
+          size = min(as.integer(deficit), length(eligible)),
+          replace = FALSE
+        )
+
+        quota_base[add_strata] <- quota_base[add_strata] + 1L
+      }
+    }
+
+    surplus <- sum(quota_base) - K_target
+
+    if (surplus > 0L) {
+
+      eligible <- which(quota_base > 0L)
+
+      if (length(eligible) > 0L) {
+
+        drop_strata <- sample(
+          eligible,
+          size = min(as.integer(surplus), length(eligible)),
+          replace = FALSE
+        )
+
+        quota_base[drop_strata] <- quota_base[drop_strata] - 1L
+      }
+    }
+
+    keep_sorted <- rank_in_stratum <= quota_base[stratum_index]
+    keep_idx <- sort(ord[keep_sorted])
+
+    if (length(keep_idx) != K_target) {
+      stop(
+        "FixedBudget retained ", length(keep_idx),
+        " pairs instead of K_target = ", K_target, "."
+      )
+    }
+
+    keep_idx
   }
 
   ##############################################################
@@ -1020,10 +1194,13 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
   }
 
   ##############################################################
-  ## Method II: fixed-budget thinning
+  ## Method II: FixedBudget thinning
   ##
-  ## The retained set has exact size
-  ## K_target = round(p_neighb * number_of_candidate_edges).
+  ## The option name is unchanged, but the retained set is now built
+  ## target-wise. In the regular directed m-NN case and when
+  ## p_neighb*m is an integer, this retains exactly p_neighb*m
+  ## candidate edges for every target location. The total retained
+  ## size is always exactly K_target = round(p_neighb * n_all).
   ##############################################################
 
   if (thin_method == "FixedBudget") {
@@ -1037,8 +1214,11 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     K_target <- as.integer(round(p_neighb * n_all))
     K_target <- max(1L, min(K_target, n_all))
 
+    stratum_id <- make_stratum_id(gb)
+
     keep_idx <- fixed_budget_keep(
-      n_edges = n_all,
+      stratum_id = stratum_id,
+      p = p_neighb,
       K_target = K_target
     )
 

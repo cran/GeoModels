@@ -1,12 +1,12 @@
-\name{NuisParam2}
-\alias{NuisParam2}
+\name{NuisParam}
+\alias{NuisParam}
 \encoding{UTF-8}
-\title{Internal function handling Nuisance Parameters of a random field}
+\title{Lists the Nuisance Parameters of a random field}
 \description{
- Internal function handling Nuisance Parameters of a random field.
+Internal function handling Nuisance Parameters of a random field.
 }
 \usage{
-NuisParam2(model, bivariate=FALSE,num_betas=c(1,1),copula=NULL)
+NuisParam(model, bivariate=FALSE,num_betas=c(1,1),copula=NULL)
 }
 \arguments{
  \item{model}{String; the name of a random field.}
@@ -27,7 +27,5 @@ NuisParam2(model, bivariate=FALSE,num_betas=c(1,1),copula=NULL)
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
 Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
-
-
 
 \keyword{Composite}

@@ -9,7 +9,7 @@ Checks whether the correlation model is bivariate.
 CheckBiv(numbermodel)
 }
 \arguments{
-  \item{numbermodel}{A numeric value; the number associated with a given correlation model.}
+ \item{numbermodel}{A numeric value; the number associated with a given correlation model.}
 }
 \details{ 
 This function checks whether the correlation model is bivariate.

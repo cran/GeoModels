@@ -13,70 +13,70 @@ optionally, the inverse of the left-hand-side matrix.
 }
 \usage{
 GeoKrigWeights(
-    coordx, coordy = NULL, coordz = NULL, coordt = NULL,
-    coordx_dyn = NULL, corrmodel, distance = "Eucl",
-    grid = FALSE, loc, method = "cholesky", model = "Gaussian",
-    n = 1, nloc = NULL, param, anisopars = NULL, radius = 1,
-    sparse = FALSE, time = NULL, which = 1, copula = NULL,
-    X = NULL, Xloc = NULL, Mloc=NULL)
+ coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+ coordx_dyn = NULL, corrmodel, distance = "Eucl",
+ grid = FALSE, loc, method = "cholesky", model = "Gaussian",
+ n = 1, nloc = NULL, param, anisopars = NULL, radius = 1,
+ sparse = FALSE, time = NULL, which = 1, copula = NULL,
+ X = NULL, Xloc = NULL, Mloc=NULL)
 }
 \arguments{
-  \item{coordx}{Numeric (\eqn{d\times 2}{d x 2}) or (\eqn{d\times 3}{d x 3}) matrix
-    of spatial coordinates.  Coordinates on a sphere are accepted
-    (lon/lat in decimal degrees) when \code{distance = "Sphere"}.}
-  \item{coordy}{Optional numeric vector giving an additional spatial coordinate
-    dimension.  Ignored if \code{coordx} is already a matrix.}
-  \item{coordz}{Optional numeric vector giving a third spatial coordinate
-    dimension.}
-  \item{coordt}{Optional numeric vector of temporal coordinates
-    (length \eqn{t}{t}).  If missing, a purely spatial random field is assumed.}
-  \item{coordx_dyn}{List of \eqn{m} matrices (\eqn{d_t\times 2}{d_t x 2})
-    containing time-varying spatial coordinates.  See \code{\link{GeoKrig}}.}
-  \item{corrmodel}{Character string naming a valid correlation model.
-    See \code{\link{GeoCovmatrix}} for admissible choices.}
-  \item{distance}{Character string specifying the spatial distance.
-    Default is \code{"Eucl"} (Euclidean).  See \code{\link{GeoFit}}.}
-  \item{grid}{Logical.  If \code{TRUE}, coordinates are interpreted as
-    defining a regular grid (see \code{\link{GeoKrig}}).}
-  \item{loc}{Numeric (\eqn{n\times 2}{n x 2}) matrix of locations for which
-    the kriging weights are required.}
-  \item{method}{Character string indicating the matrix factorisation
-    used to solve the kriging system: \code{"cholesky"} (default) or \code{"svd"}.}
-  \item{model}{Character string specifying the random field type
-    (e.g.\ \code{"Gaussian"}, \code{"SkewGaussian"}, \code{"Gamma"}, …).
-    See \code{\link{GeoFit}}.}
-  \item{n}{Integer.  Number of trials for Binomial random fields
-    (default \code{1}).}
-  \item{nloc}{Integer.  Number of trials for the prediction locations
-    in Binomial random fields (default \code{1}).}
-  \item{param}{Named list of covariance and mean parameters.
-    See \code{\link{CorrParam}} and \code{\link{GeoCovmatrix}}.}
-  \item{anisopars}{List with components \code{angle} and \code{ratio}
-    defining geometric anisotropy (optional).}
-  \item{radius}{Positive numeric value: sphere radius when
-    coordinates are lon/lat (default \code{1}).}
-  \item{sparse}{Logical.  If \code{TRUE}, sparse‐matrix algorithms
-    (package \pkg{spam}) are employed.  Only effective with compactly
-    supported covariance functions.}
-  \item{time}{Numeric vector of length \eqn{m}{m} giving the temporal
-    instants for which weights are required.  Ignored if \code{coordt} is
-    missing.}
-  \item{which}{Integer (\code{1} or \code{2}) selecting the variable whose
-    weights are returned in the bivariate case.}
-  \item{copula}{Character string naming a copula when a non-Gaussian
-    dependence structure is used (\code{"Clayton"} or \code{"Gaussian"}).}
-  \item{X}{Numeric matrix of spatio-temporal covariates at data locations.}
-  \item{Xloc}{Numeric matrix of spatio-temporal covariates at
-    prediction locations.}
-   \item{Mloc}{Numeric; Vector of spatio(temporal) estimated means 
-     associated to predicted locations.}
+ \item{coordx}{Numeric (\eqn{d\times 2}{d x 2}) or (\eqn{d\times 3}{d x 3}) matrix
+ of spatial coordinates. Coordinates on a sphere are accepted
+ (lon/lat in decimal degrees) when \code{distance = "Sphere"}.}
+ \item{coordy}{Optional numeric vector giving an additional spatial coordinate
+ dimension. Ignored if \code{coordx} is already a matrix.}
+ \item{coordz}{Optional numeric vector giving a third spatial coordinate
+ dimension.}
+ \item{coordt}{Optional numeric vector of temporal coordinates
+ (length \eqn{t}{t}). If missing, a purely spatial random field is assumed.}
+ \item{coordx_dyn}{List of \eqn{m} matrices (\eqn{d_t\times 2}{d_t x 2})
+ containing time-varying spatial coordinates. See \code{\link{GeoKrig}}.}
+ \item{corrmodel}{Character string naming a valid correlation model.
+ See \code{\link{GeoCovmatrix}} for admissible choices.}
+ \item{distance}{Character string specifying the spatial distance.
+ Default is \code{"Eucl"} (Euclidean). See \code{\link{GeoFit}}.}
+ \item{grid}{Logical. If \code{TRUE}, coordinates are interpreted as
+ defining a regular grid (see \code{\link{GeoKrig}}).}
+ \item{loc}{Numeric (\eqn{n\times 2}{n x 2}) matrix of locations for which
+ the kriging weights are required.}
+ \item{method}{Character string indicating the matrix factorisation
+ used to solve the kriging system: \code{"cholesky"} (default) or \code{"svd"}.}
+ \item{model}{Character string specifying the random field type
+ (e.g.\ \code{"Gaussian"}, \code{"SkewGaussian"}, \code{"Gamma"}, …).
+ See \code{\link{GeoFit}}.}
+ \item{n}{Integer. Number of trials for Binomial random fields
+ (default \code{1}).}
+ \item{nloc}{Integer. Number of trials for the prediction locations
+ in Binomial random fields (default \code{1}).}
+ \item{param}{Named list of covariance and mean parameters.
+ See \code{\link{CorrParam}} and \code{\link{GeoCovmatrix}}.}
+ \item{anisopars}{List with components \code{angle} and \code{ratio}
+ defining geometric anisotropy (optional).}
+ \item{radius}{Positive numeric value: sphere radius when
+ coordinates are lon/lat (default \code{1}).}
+ \item{sparse}{Logical. If \code{TRUE}, sparse‐matrix algorithms
+ (package \pkg{spam}) are employed. Only effective with compactly
+ supported covariance functions.}
+ \item{time}{Numeric vector of length \eqn{m}{m} giving the temporal
+ instants for which weights are required. Ignored if \code{coordt} is
+ missing.}
+ \item{which}{Integer (\code{1} or \code{2}) selecting the variable whose
+ weights are returned in the bivariate case.}
+ \item{copula}{Character string naming a copula when a non-Gaussian
+ dependence structure is used (\code{"Clayton"} or \code{"Gaussian"}).}
+ \item{X}{Numeric matrix of spatio-temporal covariates at data locations.}
+ \item{Xloc}{Numeric matrix of spatio-temporal covariates at
+ prediction locations.}
+ \item{Mloc}{Numeric; Vector of spatio(temporal) estimated means 
+ associated to predicted locations.}
 }
 \details{
 The function builds the kriging system
 \deqn{\Sigma \mathbf{w} = \boldsymbol{\sigma}_0}{Sigma w = sigma_0}
 where \eqn{\Sigma}{Sigma} is the covariance matrix between observed
 locations and \eqn{\boldsymbol{\sigma}_0}{sigma_0} the vector of
-covariances between observed and prediction locations.  
+covariances between observed and prediction locations. 
 The solution \eqn{\mathbf{w}}{w} is returned together with \eqn{\Sigma}{Sigma}
 and, optionally, \eqn{\Sigma^{-1}}{Sigma^-1}.
 Universal kriging with covariates is supported; in that case the
@@ -86,32 +86,32 @@ No actual prediction is carried out; for full kriging use
 }
 \value{
 An object of class \code{KgWeights}, a list containing:
-  \item{weights}{Numeric vector (or matrix) of kriging weights.}
-  \item{covmat}{Covariance matrix \eqn{\Sigma}{Sigma} used in the kriging system.}
-  \item{invcov}{Inverse of \eqn{\Sigma}{Sigma} (only if \code{sparse = FALSE}).}
-  \item{beta}{Estimated regression coefficients when covariates are supplied.}
-  \item{type}{Character string: \code{"simple"} or \code{"universal"}.}
-  \item{model}{Input \code{model}.}
-  \item{corrmodel}{Input \code{corrmodel}.}
-  \item{spacetime}{Logical: \code{TRUE} for spatio-temporal case,
-    \code{FALSE} otherwise.}
-  \item{sparse}{Logical: was a sparse algorithm used?}
-  \item{loc}{Copy of the \code{loc} argument.}
-  \item{time}{Copy of the \code{time} argument (if any).}
+ \item{weights}{Numeric vector (or matrix) of kriging weights.}
+ \item{covmat}{Covariance matrix \eqn{\Sigma}{Sigma} used in the kriging system.}
+ \item{invcov}{Inverse of \eqn{\Sigma}{Sigma} (only if \code{sparse = FALSE}).}
+ \item{beta}{Estimated regression coefficients when covariates are supplied.}
+ \item{type}{Character string: \code{"simple"} or \code{"universal"}.}
+ \item{model}{Input \code{model}.}
+ \item{corrmodel}{Input \code{corrmodel}.}
+ \item{spacetime}{Logical: \code{TRUE} for spatio-temporal case,
+ \code{FALSE} otherwise.}
+ \item{sparse}{Logical: was a sparse algorithm used?}
+ \item{loc}{Copy of the \code{loc} argument.}
+ \item{time}{Copy of the \code{time} argument (if any).}
 }
 \references{
-  Gaetan, C. and Guyon, X. (2010) \emph{Spatial Statistics and Modeling}.
-  Springer-Verlag, New York.
+ Gaetan, C. and Guyon, X. (2010) \emph{Spatial Statistics and Modeling}.
+ Springer-Verlag, New York.
 }
 \seealso{
-  \code{\link{GeoKrig}} for full prediction,
-   \code{\link{GeoKrigloc}} for local prediction,
-  \code{\link{GeoCovmatrix}} for covariance model details,
+ \code{\link{GeoKrig}} for full prediction,
+ \code{\link{GeoKrigloc}} for local prediction,
+ \code{\link{GeoCovmatrix}} for covariance model details,
 }
 \author{
-  Moreno Bevilacqua, \email{moreno.bevilacqua@uai.cl},  
-  Víctor Morales-Oñate, \email{victor.morales@uv.cl},  
-  Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl}
+ Moreno Bevilacqua, \email{moreno.bevilacqua@uai.cl}, 
+ Víctor Morales-Oñate, \email{victor.morales@uv.cl}, 
+ Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl}
 }
 
 
@@ -140,15 +140,15 @@ param=list(mean=mean,sill=sill,nugget=nugget,scale=scale,smooth=smooth,power2=po
 
 # Simulation of the spatial Gaussian random field:
 data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model,
-              param=param)$data
+ param=param)$data
 
 xx=seq(0,1,0.25)
 loc_to_pred=as.matrix(expand.grid(xx,xx))
 
 W=GeoKrigWeights(,coordx=coords,loc=loc_to_pred,corrmodel=corrmodel,
-       model=model,param=param)
+ model=model,param=param)
 
-dim(W$weights)  ### kriging weights
+dim(W$weights) ### kriging weights
 }
 
 \keyword{Kriging}

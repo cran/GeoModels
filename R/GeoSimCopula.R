@@ -71,7 +71,7 @@ if(copula=="SkewGaussian")
 {
 
 nu <- as.numeric(param$nu)
-if(abs(nu>1)) stop(" nu parameter must be between -1 and 1")
+if(abs(nu) >= 1) stop("nu parameter must be between -1 and 1")
 alpha <- nu / sqrt(1 - nu^2)
    
 param1=c(list(mean=0,sill=1,nugget=param$nugget,skew=alpha),paramcorr)
@@ -132,11 +132,17 @@ unif=pp/(exp(kk)+pp-1)
 
 if(!sim$bivariate){
            if(is.null(dim(X))) {X=as.matrix(rep(1,sim$numcoord*sim$numtime))}
+           mm <- rep(0, sim$numcoord*sim$numtime)
            sel=substr(names(param),1,4)=="mean";
            num_betas=sum(sel) 
-           if(num_betas==1)  mm<-as.numeric(param$mean)
-           if(num_betas>1)   mm<- X%*%as.numeric((param[sel]))
-           param$mean=0;if(num_betas>1) {for(i in 1:(num_betas-1)) param[[paste("mean",i,sep="")]]=0}
+           if(num_betas==1)  mm<-rep(as.numeric(param$mean), sim$numcoord*sim$numtime)
+           if(num_betas>1)   mm<-as.numeric(X%*%as.numeric((param[sel])))
+
+           # Do not reset param$mean, param$mean1, ... here.
+           # This function may simulate several replications in the same call.
+           # If param is modified inside the nrep loop, then from the second
+           # replication onward the mean parameters are zero and the BinomialNeg
+           # marginal becomes qnbinom(..., prob = pnorm(0)) = qnbinom(..., prob = 0.5).
     }       
 ##############################
 ##############################
@@ -240,7 +246,7 @@ if(model=="SkewStudentT")
 {
   vv=as.numeric(param$sill) 
   sk=as.numeric(param$skew)
-  dd=as.numeric(round(1/pp["df"]))
+  dd <- round(1 / as.numeric(param$df))
  simcop=mm+sqrt(vv)*sn::qst(unif, xi=0, omega=1, alpha=sk, nu=dd)
 }
 #######################################
@@ -263,16 +269,13 @@ simcop=mm+sqrt(vv)*uu*exp(0.5*tail*uu^2);
 if(model=="Tukeyh2")
 {
 qtpTukeyh22= function(x,tail1,tail2){
-  ll=1:length(x)
-  sel1=I(x>=0)*ll
-  sel2=I(x<0)*ll
-  x1=x[sel1];        
-  x2=x[sel2]
-  uu1<-qnorm(x1,0,1);
-  uu2<-qnorm(x2,0,1)
-  qq1=uu1*exp(0.5*tail1*uu1^2)
-  qq2=uu2*exp(0.5*tail2*uu2^2)
-  return(c(qq2,qq1))
+  uu <- qnorm(x,0,1)
+  res <- numeric(length(x))
+  sel1 <- uu >= 0
+  sel2 <- uu < 0
+  res[sel1] <- uu[sel1]*exp(0.5*tail1*uu[sel1]^2)
+  res[sel2] <- uu[sel2]*exp(0.5*tail2*uu[sel2]^2)
+  return(res)
 }
 tail1 =as.numeric(param$tail1);tail2 = as.numeric(param$tail2)
 vv=as.numeric(param$sill) 
@@ -311,14 +314,12 @@ simcop=mm+sqrt(vv)*(exp(skew*uu)-1)*exp(0.5*tail*uu^2)/skew
 if(model=="TwoPieceGaussian")
 {
 qtpGaussian = function(x,skew){
-  ll=1:length(x)
-  sel1=I(x>0)*I(x<0.5*(1+skew))*ll
-  sel2=I(x<=1)*I(x>=0.5*(1+skew))*ll
-  x1=x[sel1]
-  x2=x[sel2]
-    qq1=(1+skew)*qnorm(x1/(1+skew))
-    qq2=(1-skew)*qnorm((x2-skew)/(1-skew))
-  return(c(qq1,qq2))
+  res <- numeric(length(x))
+  sel1 <- x > 0 & x < 0.5*(1+skew)
+  sel2 <- x <= 1 & x >= 0.5*(1+skew)
+  res[sel1] <- (1+skew)*qnorm(x[sel1]/(1+skew))
+  res[sel2] <- (1-skew)*qnorm((x[sel2]-skew)/(1-skew))
+  return(res)
 }
 skew = as.numeric(param$skew) 
 vv=as.numeric(param$sill) 
@@ -329,14 +330,12 @@ simcop =mm+sqrt(vv)*qtpGaussian(unif,skew)
 if(model=="TwoPieceStudentT")
 {
 qtpt = function(x,skew,df){
-  ll=1:length(x)
-  sel1=I(x>0)*I(x<0.5*(1+skew))*ll
-  sel2=I(x<=1)*I(x>=0.5*(1+skew))*ll
-  x1=x[sel1]
-  x2=x[sel2]
-    qq1=(1+skew)*qt(x1/(1+skew),df=df)
-    qq2= (1-skew)*qt((x2-skew)/(1-skew),df=df)
-  return(c(qq1,qq2))
+  res <- numeric(length(x))
+  sel1 <- x > 0 & x < 0.5*(1+skew)
+  sel2 <- x <= 1 & x >= 0.5*(1+skew)
+  res[sel1] <- (1+skew)*qt(x[sel1]/(1+skew),df=df)
+  res[sel2] <- (1-skew)*qt((x[sel2]-skew)/(1-skew),df=df)
+  return(res)
 }
 vv=as.numeric(param$sill) 
 skew = as.numeric(param$skew)
@@ -353,14 +352,12 @@ qtukh=function(xx,tail)
 return(q_t)
 }
 qtptukey = function(x,skew,tail){
-  ll=1:length(x)
-  sel1=I(x>0)*I(x<0.5*(1+skew))*ll
-  sel2=I(x<=1)*I(x>=0.5*(1+skew))*ll
-  x1=x[sel1]
-  x2=x[sel2]
-    qq1=(1+skew)*qtukh(xx=x1/(1+skew),tail=tail)
-    qq2= (1-skew)*qtukh(xx=(x2-skew)/(1-skew),tail=tail)
-  return(c(qq1,qq2))
+  res <- numeric(length(x))
+  sel1 <- x > 0 & x < 0.5*(1+skew)
+  sel2 <- x <= 1 & x >= 0.5*(1+skew)
+  res[sel1] <- (1+skew)*qtukh(xx=x[sel1]/(1+skew),tail=tail)
+  res[sel2] <- (1-skew)*qtukh(xx=(x[sel2]-skew)/(1-skew),tail=tail)
+  return(res)
 }
 vv=as.numeric(param$sill) 
 skew = as.numeric(param$skew)
@@ -434,9 +431,9 @@ SIM[[L]]=simcop
     data = SIM,
     distance = sim$distance,
     grid = sim$grid,
-    model = sim$model,
+    model = model,
     method=method,
-    n=sim$n,
+    n=n,
     numcoord = sim$numcoord,
     numtime = sim$numtime,
     param = param,

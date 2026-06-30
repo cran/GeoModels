@@ -1,11 +1,11 @@
 \name{GeoCorrFct_Cop}
 \alias{GeoCorrFct_Cop}
 \encoding{UTF-8}
-\title{Spatial and Spatio-temporal correlation or  covariance of (non) Gaussian random fields (copula models)}
+\title{Spatial and Spatio-temporal correlation or covariance of (non) Gaussian random fields (copula models)}
 \description{
-  The function computes the  correlations of a spatial or spatio-temporal 
-  or a bivariate spatial Gaussian or non Gaussian copula randomm field
-  with a  given  covariance model and a  set of spatial (temporal) distances.
+ The function computes the correlations of a spatial or spatio-temporal 
+ or a bivariate spatial Gaussian or non-Gaussian copula randomm field
+ with a given covariance model and a set of spatial (temporal) distances.
 }
 \usage{
 GeoCorrFct_Cop(x,t=NULL,corrmodel, 
@@ -15,33 +15,33 @@ n=1,covariance=FALSE,variogram=FALSE)
 }
 
 \arguments{
-  \item{x}{A set of spatial distances.}
-  \item{t}{A set of (optional) temporal distances.}
-  \item{corrmodel}{String; the name of a correlation model, for the
-    description see the Section \bold{Details}.}
-  \item{model}{String; the type of RF. See \code{\link{GeoFit}}.}
-  \item{copula}{String; the type of copula. The two options are Gaussian and Clayton.}
-  \item{distance}{String; the name of the spatial distance. The default
-  is \code{Eucl}, the euclidean distance. See \code{\link{GeoFit}}.}
-  \item{param}{A list of parameter values required  for the covariance
-  model.}
-  \item{radius}{Numeric; a value indicating  the radius of the sphere 
-     when using covariance models valid using the great circle distance. 
-     Default value is the radius of the earth in Km (i.e. 6371)} 
-  \item{n}{Numeric; the number of trials in a (negative) binomial random fields.
-         Default is \eqn{1}.}
-  \item{covariance}{Logic; if TRUE then the covariance is returned. Default is FALSE}
-     \item{variogram}{Logic; if FALSE then the covariance/coorelation is returned. Otherwise the associated
-   semivariogram is returned}
-   }
+ \item{x}{A set of spatial distances.}
+ \item{t}{A set of (optional) temporal distances.}
+ \item{corrmodel}{String; the name of a correlation model, for the
+ see \code{\link{GeoCovmatrix}} for the list of implemented correlation models.}
+ \item{model}{String; the type of random field. See \code{\link{GeoFit}}.}
+ \item{copula}{String; the type of copula. The two options are Gaussian and Clayton.}
+ \item{distance}{String; the name of the spatial distance. The default
+ is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}}.}
+ \item{param}{A list of parameter values required for the covariance
+ model.}
+ \item{radius}{Numeric; a value indicating the radius of the sphere 
+ when using covariance models valid using the great circle distance. 
+ Default value is the radius of the earth in Km (i.e. 6371)} 
+ \item{n}{Numeric; the number of trials in a (negative) binomial random fields.
+ Default is \eqn{1}.}
+ \item{covariance}{Logic; if TRUE then the covariance is returned. Default is FALSE}
+ \item{variogram}{Logic; if FALSE then the covariance/coorelation is returned. Otherwise the associated
+ semivariogram is returned}
+ }
 
 
-\value{Returns a vector of  correlations or covariances values associated to a given parametric spatial and temporal correlation models.}
+\value{Returns a vector of correlations or covariances values associated to a given parametric spatial and temporal correlation models.}
 
 
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
 
 \examples{

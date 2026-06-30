@@ -10,9 +10,9 @@ The procedure controls the type of likelihood objects inserted by the users.
 CkType(type)
 }
 \arguments{
-  \item{type}{String; the type of the likelihood objects. If \code{Pairwise} (the
-  default) then the marginal composite likelihood is formed by
-  pairwise marginal likelihoods.}
+ \item{type}{String; the type of the likelihood objects. If \code{Pairwise} (the
+ default) then the marginal composite likelihood is formed by
+ pairwise marginal likelihoods.}
 }
 \value{
 The function returns a numeric positive integer, or \code{NULL} if the type of likelihood is invalid.

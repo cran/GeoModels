@@ -8,43 +8,43 @@ between H1 (with anisotropy estimated) and H0 (anisotropy fixed at ratio = 1 and
 }
 \usage{
 GeoTestIsotropy(data, coordx,
-                start, fixed,
-                optimizer = "bobyqa",
-                model = "Gaussian",
-                corrmodel = "Matern",
-                lower = NULL, upper = NULL,
-                B = 1000,
-                likelihood = NULL,
-                type = NULL,
-                copula = NULL,
-                neighb = 5,
-                parallel = TRUE,
-                ncores = NULL,
-                progress = TRUE)
+ start, fixed,
+ optimizer = "bobyqa",
+ model = "Gaussian",
+ corrmodel = "Matern",
+ lower = NULL, upper = NULL,
+ B = 1000,
+ likelihood = NULL,
+ type = NULL,
+ copula = NULL,
+ neighb = 5,
+ parallel = TRUE,
+ ncores = NULL,
+ progress = TRUE)
 }
 \arguments{
-  \item{data}{Numeric vector of observations (length \code{n}).}
-  \item{coordx}{\code{n x d} matrix with the spatial coordinates of the sites (at least 2 columns for anisotropy analysis).}
-  \item{start}{\emph{Named} list with the parameters \strong{to be estimated}; names must match those expected by \code{CorrParam(corrmodel)} and \code{NuisParam(model)}.}
-  \item{fixed}{\emph{Named} list with the parameters \strong{kept fixed} during estimation; together with \code{start} it must exactly cover the required set of parameters.}
-  \item{optimizer}{Optimization algorithm to be used in \code{GeoFit} (e.g., \code{"bobyqa"}).}
-  \item{model}{Marginal model for the data (e.g., \code{"Gaussian"}).}
-  \item{corrmodel}{Spatial correlation model (e.g., \code{"Matern"}).}
-  \item{lower, upper}{\emph{Named} lists with lower/upper bounds for parameters in \code{start} only. If \code{NULL}, no extra bounds beyond defaults.}
-  \item{B}{Number of parametric bootstrap replications (default \code{1000}).}
-  \item{likelihood}{Type of (composite) likelihood to pass to \code{GeoFit} (e.g., \code{"Marginal"}).}
-  \item{type}{Composite-likelihood type (e.g., \code{"Pairwise"}).}
-  \item{copula}{Copula object for simulation via \code{GeoSimCopula}; if \code{NULL} Gaussian simulation is used.}
-  \item{neighb}{Number of neighbors for composite-likelihood estimation, where applicable.}
-  \item{parallel}{If \code{TRUE}, bootstrap fits are distributed in parallel through \pkg{future}.}
-  \item{ncores}{Number of cores to use in parallel; if \code{NULL} it is chosen automatically up to \code{B} or \code{parallel::detectCores()-1}.}
-  \item{progress}{If \code{TRUE}, show progress bars using \pkg{progressr}.}
+ \item{data}{Numeric vector of observations (length \code{n}).}
+ \item{coordx}{\code{n x d} matrix with the spatial coordinates of the sites (at least 2 columns for anisotropy analysis).}
+ \item{start}{\emph{Named} list with the parameters \strong{to be estimated}; names must match those expected by \code{CorrParam(corrmodel)} and \code{NuisParam(model)}.}
+ \item{fixed}{\emph{Named} list with the parameters \strong{kept fixed} during estimation; together with \code{start} it must exactly cover the required set of parameters.}
+ \item{optimizer}{Optimization algorithm to be used in \code{GeoFit} (e.g., \code{"bobyqa"}).}
+ \item{model}{Marginal model for the data (e.g., \code{"Gaussian"}).}
+ \item{corrmodel}{Spatial correlation model (e.g., \code{"Matern"}).}
+ \item{lower, upper}{\emph{Named} lists with lower/upper bounds for parameters in \code{start} only. If \code{NULL}, no extra bounds beyond defaults.}
+ \item{B}{Number of parametric bootstrap replications (default \code{1000}).}
+ \item{likelihood}{Type of (composite) likelihood to pass to \code{GeoFit} (e.g., \code{"Marginal"}).}
+ \item{type}{Composite-likelihood type (e.g., \code{"Pairwise"}).}
+ \item{copula}{Copula object for simulation via \code{GeoSimCopula}; if \code{NULL} Gaussian simulation is used.}
+ \item{neighb}{Number of neighbors for composite-likelihood estimation, where applicable.}
+ \item{parallel}{If \code{TRUE}, bootstrap fits are distributed in parallel through \pkg{future}.}
+ \item{ncores}{Number of cores to use in parallel; if \code{NULL} it is chosen automatically up to \code{B} or \code{parallel::detectCores()-1}.}
+ \item{progress}{If \code{TRUE}, show progress bars using \pkg{progressr}.}
 }
 \details{
 \code{GeoTestIsotropy} implements a \emph{likelihood ratio test} (LRT) between:
 \itemize{
-  \item \strong{H0}: isotropic model with anisotropy parameters fixed at \code{angle = 0}, \code{ratio = 1};
-  \item \strong{H1}: anisotropic model with \code{angle} and \code{ratio} estimated.
+ \item \strong{H0}: isotropic model with anisotropy parameters fixed at \code{angle = 0}, \code{ratio = 1};
+ \item \strong{H1}: anisotropic model with \code{angle} and \code{ratio} estimated.
 }
 The observed statistic is \eqn{\mathrm{LRT}_{\text{obs}} = 2(\ell_1 - \ell_0)}, truncated at zero if negative.
 The null distribution is approximated by simulating \code{B} datasets under H0 with parameters equal to the H0 fit, and recomputing the LRT.
@@ -66,7 +66,9 @@ An (invisible) list with components:
 
 
 \seealso{
-\code{\link{GeoFit}}, \code{\link{GeoSim}}, \code{\link{GeoSimapprox}}, \code{\link{GeoVarestbootstrap}}
+\code{\link{GeoVariogram}} for empirical variograms,
+  \code{\link{GeoVariogramDir}} for directional variograms,
+  \code{\link{GeoFit}} for covariance-model fitting.
 }
 
 \author{

@@ -65,13 +65,25 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
     upper     <- fit$upper
   }
 
-  ## Backward-compatible defaults for thinning information.
-  ## Old fit objects may not have thin_method.
-  if (is.null(fit$thin_method)) {
-    fit$thin_method <- "bernoulli"
-  }
-  fit$thin_method <- match.arg(fit$thin_method, c("bernoulli", "match"))
+if (is.null(fit$thin_method)) {
+  fit$thin_method <- "bernoulli"
+}
 
+thin_method_canonical <- function(x) {
+  x <- tolower(as.character(x))
+  if (x %in% c("bernoulli")) {
+    return("bernoulli")
+  }
+  if (x %in% c("fixedbudget", "fixed_budget", "targetbalanced")) {
+    return("FixedBudget")
+  }
+  if (x %in% c("match")) {
+    return("match")
+  }
+  stop("Unsupported thin_method: ", x, call. = FALSE)
+}
+
+fit$thin_method <- thin_method_canonical(fit$thin_method)
   if (is.null(fit$p_neighb)) {
     fit$p_neighb <- 1
   }
@@ -222,18 +234,21 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
     c(th, logCompLik = ll)
   }
 
-  ## Stochastic thinning occurs when:
-  ## - thin_method = "match", for any p_neighb, including p_neighb = 1;
-  ## - thin_method = "bernoulli" and p_neighb < 1.
-  is_stochastic_thinning <- function(fit_obj) {
-    tm <- if (!is.null(fit_obj$thin_method)) fit_obj$thin_method else "bernoulli"
-    pn <- if (!is.null(fit_obj$p_neighb)) fit_obj$p_neighb else 1
-
-    if (identical(tm, "match")) return(TRUE)
-    if (identical(tm, "bernoulli") && isTRUE(pn < 1)) return(TRUE)
-
-    FALSE
+is_stochastic_thinning <- function(fit_obj) {
+  tm <- if (!is.null(fit_obj$thin_method)) {
+    thin_method_canonical(fit_obj$thin_method)
+  } else {
+    "bernoulli"
   }
+  pn <- if (!is.null(fit_obj$p_neighb)) fit_obj$p_neighb else 1
+  if (identical(tm, "match")) {
+    return(TRUE)
+  }
+  if (tm %in% c("bernoulli", "FixedBudget") && isTRUE(pn < 1)) {
+    return(TRUE)
+  }
+  FALSE
+}
 
   ## ------------------------------------------------------------------
   ## 7. Helper: call GeoFit
@@ -435,12 +450,12 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
             .options.future = list(
               packages = c("GeoModels", "withr"),
               seed     = TRUE,
-              globals  = structure(TRUE, add = c(
-                "data_files", "fit_essentials", "coords", "X_use",
-                "lower", "upper", "optimizer", "model_est",
-                "num_params", "estimate_worker", "call_geofit", "extract_param",
-                "is_stochastic_thinning"
-              ))
+            globals  = structure(TRUE, add = c(
+  "data_files", "fit_essentials", "coords", "X_use",
+  "lower", "upper", "optimizer", "model_est",
+  "num_params", "estimate_worker", "call_geofit", "extract_param",
+  "thin_method_canonical", "is_stochastic_thinning"
+))
             )
           ) %dofuture% {
             pb(sprintf("k=%d", k))
@@ -458,12 +473,12 @@ GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
           .options.future = list(
             packages = c("GeoModels", "withr"),
             seed     = TRUE,
-            globals  = structure(TRUE, add = c(
-              "data_files", "fit_essentials", "coords", "X_use",
-              "lower", "upper", "optimizer", "model_est",
-              "num_params", "estimate_worker", "call_geofit", "extract_param",
-              "is_stochastic_thinning"
-            ))
+          globals  = structure(TRUE, add = c(
+  "data_files", "fit_essentials", "coords", "X_use",
+  "lower", "upper", "optimizer", "model_est",
+  "num_params", "estimate_worker", "call_geofit", "extract_param",
+  "thin_method_canonical", "is_stochastic_thinning"
+))
           )
         ) %dofuture% {
           estimate_worker(k, data_files, fit_essentials, coords,

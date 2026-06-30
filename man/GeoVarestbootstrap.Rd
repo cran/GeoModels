@@ -1,38 +1,39 @@
-\name{GeoVarestbootstrap}  
+\name{GeoVarestbootstrap} 
 \alias{GeoVarestbootstrap}
 \encoding{UTF-8}
-\title{Update a \code{GeoFit} object   using parametric bootstrap for std error estimation}
+\title{Update a \code{GeoFit} object using parametric bootstrap for std error estimation.}
 \description{
-  The procedure update a \code{GeoFit} object  computing stderr estimation, confidence intervals
-  and p-values  using parametric bootstrap.}
+ The procedure update a \code{GeoFit} object computing stderr estimation, confidence intervals
+ and p-values using parametric bootstrap. Bootstrap is used 
+ to estimate the inverse of the variance covariance matrix. A faster alternative is \code{GeoVarest}.}
 \usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE, 
-  optimizer=NULL, lower=NULL, upper=NULL, 
-  method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL,progress=TRUE)}
+ optimizer=NULL, lower=NULL, upper=NULL, 
+ method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL,progress=TRUE)}
 \arguments{
-  \item{fit}{A fitted object obtained from the
-    \code{\link{GeoFit}}.}
-     \item{K}{The number of simulations in the parametric bootstrap.}
-       \item{sparse}{Logical; if \code{TRUE} then  cholesky decomposition is performed
-  using sparse matrices algorithms (spam packake).}
-        \item{optimizer}{The type of optimization algorithm (see  \code{\link{GeoFit}} for details). If NULL then the optimization algorithm of 
-        the object fit is chosen.}
-        \item{lower}{An optional named list giving the values  for the lower bound of the space parameter
-    when the optimizer is  \code{L-BFGS-B} or \code{nlminb}  or \code{optimize}.}
-       \item{upper}{An optional named list giving the values  for the upper bound of the space parameter
-    when the optimizer is  \code{L-BFGS-B} or \code{nlminb}  or \code{optimize}.}
-       \item{method}{String; The method of simulation. Default is \code{cholesky}. For large data set three options are  \code{TB} or \code{CE} (see the  \code{GeoSimapprox}) function. } 
-         \item{alpha}{ Numeric; The level of the confidence interval. }
-      \item{L}{Numeric; the number of lines in the  turning band method.} 
-      \item{parallel}{Logical; if \code{TRUE} then 
-      the estimation step is  parallelized 
-      }
-       \item{ncores}{Numeric; number of cores involved in parallelization.} 
-      \item{progress}{Logic; If TRUE then a progress bar is shown.}
-     }
-\details{ The function update a \code{GeoFit} object  estimating stderr estimation 
+ \item{fit}{A fitted object obtained from the
+ \code{\link{GeoFit}}.}
+ \item{K}{The number of simulations in the parametric bootstrap.}
+ \item{sparse}{Logical; if \code{TRUE} then cholesky decomposition is performed
+ using sparse matrices algorithms (spam packake).}
+ \item{optimizer}{The type of optimization algorithm (see \code{\link{GeoFit}} for details). If NULL then the optimization algorithm of 
+ the object fit is chosen.}
+ \item{lower}{An optional named list giving the values for the lower bound of the space parameter
+ when the optimizer is \code{L-BFGS-B} or \code{nlminb} or \code{optimize}.}
+ \item{upper}{An optional named list giving the values for the upper bound of the space parameter
+ when the optimizer is \code{L-BFGS-B} or \code{nlminb} or \code{optimize}.}
+ \item{method}{String; The method of simulation. Default is \code{cholesky}. For large data set three options are \code{TB} or \code{CE} (see the \code{GeoSimapprox}) function. } 
+ \item{alpha}{ Numeric; The level of the confidence interval. }
+ \item{L}{Numeric; the number of lines in the turning band method.} 
+ \item{parallel}{Logical; if \code{TRUE} then 
+ the estimation step is parallelized 
+ }
+ \item{ncores}{Numeric; number of cores involved in parallelization.} 
+ \item{progress}{Logic; If TRUE then a progress bar is shown.}
+ }
+\details{ The function updates a \code{GeoFit} object estimating stderr estimation 
 and confidence interval using parametric bootstrap.}
-\value{  
-  Returns an (updated) object of class \code{GeoFit}.
+\value{ 
+ Returns an (updated) object of class \code{GeoFit}.
 }
 
 
@@ -40,7 +41,7 @@ and confidence interval using parametric bootstrap.}
 
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian", Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
 
 \examples{
@@ -62,7 +63,7 @@ x = runif(NN, 0, 1)
 y = runif(NN, 0, 1)
 coords = cbind(x,y)
 # Parameters
-mean=1; mean1=-1.25;  # regression parameters
+mean=1; mean1=-1.25; # regression parameters
  sill=1 # variance
 
 # matrix covariates
@@ -74,9 +75,9 @@ smooth=0.5;scale=0.1; nugget=0;
 
 # simulation
 param=list(smooth=smooth,mean=mean,mean1=mean1,
-              sill=sill,scale=scale,nugget=nugget)
+ sill=sill,scale=scale,nugget=nugget)
 data = GeoSim(coordx=coords, corrmodel=corrmodel,
-                model=model, param=param,X=X)$data
+ model=model, param=param,X=X)$data
 
 I=Inf
 
@@ -87,10 +88,10 @@ lower=list(mean=-I,mean1=-I,scale=0,sill=0)
 upper=list(mean=I,mean1=I,scale=I,sill=I)
 # Maximum pairwise composite-likelihood fitting of the RF:
 fit = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
-              likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
-                   lower=lower,upper=upper,neighb=3,
-                   optimizer="nlminb",X=X,
-                    start=start,fixed=fixed)
+ likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
+ lower=lower,upper=upper,neighb=3,
+ optimizer="nlminb",X=X,
+ start=start,fixed=fixed)
 
 unlist(fit$param)
 
