@@ -3,8 +3,8 @@
 ####################################################
 
 # Simulate approximate spatial and spatio-temporal random felds:
-GeoSimapprox <- function(coordx, coordy=NULL,coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, grid=FALSE,
- max.ext=1,method="TB", L=1000,model='Gaussian', parallel=FALSE,ncores=NULL,
+GeoSimapprox <- function(coordx, coordy=NULL,coordz=NULL,coordt=NULL, coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+ max.ext=1,method="TB", L=10000,model='Gaussian', parallel=FALSE,ncores=NULL,
      n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE)
 {
 ####################################################################
@@ -131,6 +131,13 @@ if(parallel) { if(is.null(ncores)){ n.cores <- coremax - 1 }
          }   
 }
 else n.cores=NULL
+##################################
+## Flag consumed by simu_approx()/tbm2d_uni() calls below: whether the
+## TB simulation should parallelize internally over spatial chunks.
+## Its actual value is decided later (right before running the
+## replicates), based on whether outer (nrep) or inner (points)
+## parallelism is the better fit -- only one of the two is ever active.
+parallel_inner <- FALSE
 ##################################
 
 ##############################################################################
@@ -356,7 +363,7 @@ KK=1;sel=NULL;ssp=double(dime)
 if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
                "TwoPieceStudentT","TwoPieceGaussian"))
 {
-      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
+      simD=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel_inner,n.cores)
       if(!spacetime&&!bivariate) simDD <- c(simD)
       else simDD <- matrix(simD, nrow=numtime, ncol=numcoord,byrow=TRUE)
       param$nugget=0 #ojo
@@ -367,7 +374,7 @@ while(KK<=npoi) {
 for(i in 1:k) {
 
 ################# here the approximated simulation  ##################################################
-simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
+simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel_inner,n.cores)
 ######################################################################################################
 
 namesnuis<-NuisParam(model, bivariate,num_betas=num_betas,copula=NULL)
@@ -434,7 +441,7 @@ if(model %in% c("PoissonWeibull"))   {
  if(model %in% c("Binomial","BinomialLogistic","Poisson","PoissonGamma","PoissonWeibull","PoissonGammaZIP","PoissonZIP","BinomialNeg","BinomialNegZINB"))   {
    if(model %in% c("poisson","Poisson","PoissonGamma","PoissonWeibull"))   {sim=colSums(sel);byrow=TRUE}
     if(model %in% c("PoissonZIP"))   {
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel_inner,n.cores)
      ###
       a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
       sim=a*colSums(sel);
@@ -477,7 +484,7 @@ if(model %in% c("BinomialLogistic"))   {
   if(model %in% c("BinomialNegZINB"))   {
            sim=NULL
           for(p in 1:dime) sim=c(sim,which(cumu[,p]>0,arr.ind=T)[n]-n)
-      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,FALSE,n.cores)
+      a=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel_inner,n.cores)
      ###
           a[a<as.numeric(param$pmu)]=0;a[a!=0]=1
           sim=a*sim
@@ -776,11 +783,21 @@ if(model %in% c("Gaussian","LogGaussian","LogGauss","Tukeygh","Tukeyh","Tukeyh2"
 ##################### end do_one_sim #############################################
 ##################################################################################
 
-cond=dime*nrep
-if (cond > 1000000 && parallel) {
+## Decide ONCE which level of parallelism to use -- outer (across the
+## nrep replicates, via dofuture/foreach) or inner (within a single TB
+## simulation, across spatial chunks, inside tbm2d_uni). The two are
+## never active at the same time to avoid nested-parallelism overhead
+## and oversubscription.
+cost_outer <- dime*nrep                     # total workload across all replicates
+cost_inner <- dime*as.numeric(L)            # workload of a single TB simulation
 
+use_outer <- isTRUE(parallel) && nrep>1 && cost_outer > 1000000
+use_inner <- isTRUE(parallel) && !use_outer && method=="TB" && cost_inner >= 2.5e9
 
- 
+parallel_inner <- use_inner   # read by the simu_approx() calls inside do_one_sim
+
+if (use_outer) {
+
          cat("Performing", nrep, "simulation using",method ," method"," ...\n")
   # Sopprimi i warning
   old_warn <- getOption("warn")
@@ -804,6 +821,18 @@ if (cond > 1000000 && parallel) {
   })
 
 } else {
+
+  if (use_inner) {
+    ## The plan is opened ONCE here, before looping over replicates, and
+    ## reused by every call to tbm2d_uni() (which no longer opens/closes
+    ## its own plan). This avoids paying worker start/stop overhead on
+    ## every single replicate.
+    cat("Performing", nrep, "simulation using",method ,
+        "method (parallel over spatial chunks) ...\n")
+    future::plan(future::multisession, workers = n.cores)
+    on.exit(future::plan(future::sequential), add = TRUE)
+  }
+
   SIM <- progressr::with_progress({
     pb <- if (progress && nrep > 1) progressr::progressor(steps = nrep) else NULL
     results <- vector("list", nrep)

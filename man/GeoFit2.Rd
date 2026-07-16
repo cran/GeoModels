@@ -168,6 +168,21 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{type}{The type of the likelihood objects.}
  \item{X}{The matrix of covariates.}
 }
+
+\references{
+ The methodological references for maximum weighted composite-likelihood
+ fitting of Gaussian and non-Gaussian random fields are reported in
+ \code{\link{GeoFit}}.
+}
+
+\seealso{
+\code{\link{GeoCovmatrix}} for covariance matrix construction,
+  \code{\link{GeoSim}} for simulation,
+  \code{\link{GeoKrig}} for prediction,
+  \code{\link{GeoVariogram}} and \code{\link{GeoWLS}} for variogram-based tools,
+  \code{\link{GeoVarest}} for bootstrap variance estimation.
+}
+
 \author{
 Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com}, \url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},

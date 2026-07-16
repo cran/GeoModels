@@ -8,9 +8,9 @@
 }
 \usage{
 GeoSimapprox(coordx, coordy=NULL, coordz=NULL,coordt=NULL, 
-coordx_dyn=NULL,corrmodel, distance="Eucl",GPU=NULL, 
-grid=FALSE,max.ext=1,
-method="TB", L=1000,model='Gaussian',parallel=FALSE,ncores=NULL,
+coordx_dyn=NULL,corrmodel, distance="Eucl",
+grid=FALSE, max.ext=1,
+method="TB", L=10000,model='Gaussian',parallel=FALSE,ncores=NULL,
 n=1,param,anisopars=NULL, radius=6371,X=NULL,spobj=NULL,
 nrep=1,progress=TRUE)
 }
@@ -37,9 +37,6 @@ nrep=1,progress=TRUE)
  \item{ncores}{Numeric; number of cores involved in parallelization.} 
  \item{distance}{String; the name of the spatial distance. The default
  is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}} for details.}
- \item{GPU}{Numeric; if \code{NULL} (the default) 
- no GPU computation is performed.} 
-
  \item{grid}{Logical; if \code{FALSE} (the default) the data
  are interpreted as spatial or spatio-temporal realisations on a set
  of non-equispaced spatial sites (irregular grid).}
@@ -132,7 +129,7 @@ fields::image.plot( matrix(data1, length(x), length(y), byrow = TRUE) )
 ################################################################
 ###
 ### Example 2. Simulation of a large spatial Tukey-h RF 
-### with GenWend-Matern covariance model
+### with Matern covariance model
 ### using spectral Turning band method
 ### It works for (ir)regular grid
 ###############################################################
@@ -140,12 +137,11 @@ set.seed(68)
 x = runif(50000)
 y = runif(50000)
 coords=cbind(x,y)
-param=list(smooth=0.5,mean=0,sill=1,scale=0.04,nugget=0,tail=0.15,power2=1/4)
+param=list(smooth=0.5,mean=0,sill=1,scale=0.06,nugget=0,tail=0.15)
 # Simulation of a spatial Gaussian RF with Matern correlation function
-data1 <- GeoSimapprox(coords, corrmodel="GenWend_Matern", model="Tukeyh",
- method="TB",param=param)$data
+data1 <- GeoSimapprox(coords, corrmodel="Matern", model="Tukeyh",
+                      method="TB",L=1000,param=param)$data
 quilt.plot(coords,data1)
-
 
 
 ################################################################

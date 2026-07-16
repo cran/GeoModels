@@ -663,6 +663,34 @@ print.GeoFit <- function(x, digits = max(3, getOption("digits") - 3), ...)
   cat("\nModel:", model, "\n")
   cat("\nDistance:", x$distance, "\n")
   cat("\nType of the likelihood objects:", x$type, x$method, "\n")
+
+  ## Pair-thinning information, when available.  For backward
+  ## compatibility with older GeoFit objects, retrieve thin_method from
+  ## the object if present, otherwise from the stored call; if it is not
+  ## available but thinning was used, report the default.
+  p_retained <- NULL
+  if (!is.null(x$p_neighb)) {
+    p_retained <- suppressWarnings(as.numeric(x$p_neighb)[1])
+  } else if (!is.null(x$call) && !is.null(as.list(x$call)$p_neighb)) {
+    p_retained <- suppressWarnings(as.numeric(as.character(as.list(x$call)$p_neighb))[1])
+  }
+
+  thin_method <- NULL
+  if (!is.null(x$thin_method)) {
+    thin_method <- as.character(x$thin_method)[1]
+  } else if (!is.null(x$call) && !is.null(as.list(x$call)$thin_method)) {
+    thin_method <- paste(deparse(as.list(x$call)$thin_method), collapse = "")
+    thin_method <- gsub('^"|"$', "", thin_method)
+    thin_method <- gsub("^'|'$", "", thin_method)
+  }
+
+  if (!is.null(p_retained) && is.finite(p_retained) && p_retained < 1) {
+    if (is.null(thin_method) || !nzchar(thin_method)) thin_method <- "bernoulli"
+    cat("Pair thinning method:", thin_method, "\n")
+    cat("(Expected) Retained pairs (%):",
+        format(100 * p_retained, digits = digits, nsmall = 2), "\n")
+  }
+
   cat("\nCovariance model:", x$corrmodel, "\n")
   cat("\nOptimizer:", x$optimizer, "\n")
   cat("\nNumber of spatial coordinates:", x$numcoord, "\n")

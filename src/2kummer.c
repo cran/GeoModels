@@ -4,17 +4,62 @@
 
 #define CACHE_SIZE 4096
 #define CACHE_MASK 4095
+
+#ifndef KUMMER_ENABLE_CACHE
+#define KUMMER_ENABLE_CACHE 1
+#endif
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define KUMMER_TLS _Thread_local
+#else
+#define KUMMER_TLS
+#endif
+
+typedef enum {
+    KUMMER_FAST = 0,
+    KUMMER_BALANCED = 1,
+    KUMMER_ACCURATE = 2
+} KummerMode;
+
+typedef struct {
+    KummerMode mode;
+    double tol;
+    double epsabs;
+    double epsrel;
+    int max_iter_series;
+    int max_iter_regular;
+    int max_iter_asympt;
+    int quad_limit;
+    int min_digits_required;
+} KummerConfig;
+
+static inline KummerConfig kummer_make_config(KummerMode mode) {
+    switch (mode) {
+        case KUMMER_FAST:
+            return (KummerConfig){KUMMER_FAST, 1e-8, 1e-8, 1e-8, 80, 80, 16, 60, 4};
+        case KUMMER_ACCURATE:
+            return (KummerConfig){KUMMER_ACCURATE, 1e-14, 1e-13, 1e-13, 500, 150, 40, 150, 10};
+        case KUMMER_BALANCED:
+        default:
+            return (KummerConfig){KUMMER_BALANCED, 1e-11, 1e-10, 1e-10, 150, 120, 24, 100, 7};
+    }
+}
+
+static KUMMER_TLS KummerConfig current_kummer_config = {KUMMER_BALANCED, 1e-11, 1e-10, 1e-10, 150, 120, 24, 100, 7};
+static inline const KummerConfig *kummer_cfg(void) { return &current_kummer_config; }
+
 typedef struct {
     double a, b, c, result;
     uint64_t hash;
     uint32_t timestamp;
     uint16_t valid;
     uint16_t hits;
+    uint16_t mode;
 } KummerCacheEntry;
-static KummerCacheEntry cache[CACHE_SIZE];
-static int cache_initialized = 0;
-static uint32_t global_timestamp = 0;
-static uint32_t cache_hits = 0, cache_misses = 0;
+static KUMMER_TLS KummerCacheEntry cache[CACHE_SIZE];
+static KUMMER_TLS int cache_initialized = 0;
+static KUMMER_TLS uint32_t global_timestamp = 0;
+static KUMMER_TLS uint32_t cache_hits = 0, cache_misses = 0;
 // Hash function
 static inline uint64_t fast_hash_v2(double a, double b, double c) {
     uint64_t ia, ib, ic;
@@ -29,6 +74,7 @@ static inline uint64_t fast_hash_v2(double a, double b, double c) {
     hash ^= ib + 0x9E3779B97F4A7C15ULL + (hash << 6) + (hash >> 2);
     hash ^= ic + 0x9E3779B97F4A7C15ULL + (hash << 6) + (hash >> 2);
    
+    hash ^= ((uint64_t)kummer_cfg()->mode + 1ULL) * 0xBF58476D1CE4E5B9ULL;
     return hash;
 }
 // init cache
@@ -42,13 +88,18 @@ static inline void init_cache_optimized(void) {
 }
 // Cache lookup
 static inline int cache_lookup_fast(double a, double b, double c, double *result) {
+#if !KUMMER_ENABLE_CACHE
+    (void)a; (void)b; (void)c; (void)result;
+    return 0;
+#else
+    const KummerConfig *cfg = kummer_cfg();
     init_cache_optimized();
     uint64_t hash = fast_hash_v2(a, b, c);
     int idx = hash & CACHE_MASK;
    
     KummerCacheEntry *entry = &cache[idx];
    
-    if (entry->valid && entry->hash == hash) {
+    if (entry->valid && entry->hash == hash && entry->mode == (uint16_t)cfg->mode) {
         if (entry->a == a && entry->b == b && entry->c == c) {
             *result = entry->result;
             entry->timestamp = ++global_timestamp;
@@ -60,9 +111,15 @@ static inline int cache_lookup_fast(double a, double b, double c, double *result
    
     cache_misses++;
     return 0;
+#endif
 }
 // Cache store
 static inline void cache_store_smart(double a, double b, double c, double result) {
+#if !KUMMER_ENABLE_CACHE
+    (void)a; (void)b; (void)c; (void)result;
+    return;
+#else
+    const KummerConfig *cfg = kummer_cfg();
     uint64_t hash = fast_hash_v2(a, b, c);
     int idx = hash & CACHE_MASK;
    
@@ -90,6 +147,8 @@ static inline void cache_store_smart(double a, double b, double c, double result
     entry->timestamp = ++global_timestamp;
     entry->valid = 1;
     entry->hits = 0;
+    entry->mode = (uint16_t)cfg->mode;
+#endif
 }
 // Parametri
 typedef struct {
@@ -185,7 +244,9 @@ void integrand2_opt(double *u, int n, void *params) {
 //
 static double optimized_series_v2(double a, double b, double x) {
     if (x == 0.0) return 1.0;
-    const double tol = 1e-15;
+    const KummerConfig *cfg = kummer_cfg();
+    const double tol = cfg->tol;
+    const int max_iter = cfg->max_iter_series;
     double sum = 1.0;
     double ck = 0.0;
     double term = (a / (1.0 * b)) * x;
@@ -210,7 +271,7 @@ static double optimized_series_v2(double a, double b, double x) {
     double a_k = a + 2.0;
     double b_k = b + 2.0;
     double prev_sum;
-    for (int k = 3; k <= 500; k++) {
+    for (int k = 3; k <= max_iter; k++) {
         term *= (a_k / ((double)k * b_k)) * x;
         prev_sum = sum;
         {
@@ -247,11 +308,12 @@ void chguit_opt(double a, double b, double x, double *hu, int *id) {
     }
    
     double zero = 0.0, one = 1.0;
-    double epsabs = 1e-13; // MIGLIORATO: era 1e-12
-    double epsrel = 1e-13; // MIGLIORATO: era 1e-12
+    const KummerConfig *cfg = kummer_cfg();
+    double epsabs = cfg->epsabs;
+    double epsrel = cfg->epsrel;
     int last = 0;
-    int limit = 150;
-    int lenw = 600;
+    int limit = cfg->quad_limit;
+    int lenw = 4 * limit;
    
     int *iwork = (int*)calloc(limit, sizeof(int));
     double *work = (double*)calloc(lenw, sizeof(double));
@@ -342,13 +404,14 @@ void chgm_opt(double a, double b, double x, double *hg) {
             double r1 = 1.0, r2 = 1.0;
             const double inv_x = 1.0 / x;
            
-            for (int i = 1; i <= 10; i++) {
+            const KummerConfig *cfg = kummer_cfg();
+            for (int i = 1; i <= cfg->max_iter_asympt; i++) {
                 r1 *= -(a + i - 1.0) * (a - b + i) * inv_x / i;
                 r2 *= -(b - a + i - 1.0) * (a - i) * inv_x / i;
                 sum1 += r1;
                 sum2 += r2;
                
-                if (fabs(r1) + fabs(r2) < 1e-15 * (fabs(sum1) + fabs(sum2))) break;
+                if (fabs(r1) + fabs(r2) < cfg->tol * (fabs(sum1) + fabs(sum2))) break;
             }
            
             double hg1, hg2;
@@ -422,7 +485,8 @@ void chgus_opt(double a, double b, double x, double *hu, int *id) {
     double ab_k = a - b + 1.0;
     double b1_k = 2.0 - b;
    
-    for (int j = 1; j <= 150; j++) {
+    const KummerConfig *cfg = kummer_cfg();
+    for (int j = 1; j <= cfg->max_iter_regular; j++) {
         r1 *= (a_k / ((double)j * b_k)) * x;
         r2 *= (ab_k / ((double)j * b1_k)) * x;
        
@@ -433,7 +497,7 @@ void chgus_opt(double a, double b, double x, double *hu, int *id) {
         if (hua > hmax) hmax = hua;
         if (hua < hmin && hua > 0.0) hmin = hua;
        
-        if (fast_converged(*hu, prev_hu, 1e-15)) break;
+        if (fast_converged(*hu, prev_hu, cfg->tol)) break;
        
         a_k += 1.0;
         b_k += 1.0;
@@ -459,6 +523,7 @@ void chgul_opt(double a, double b, double x, double *hu, int *id) {
         return;
     }
    
+    const KummerConfig *cfg = kummer_cfg();
     double aa = a - b + 1.0;
     int il1 = 0; // a > 0
     int il2 = (aa == floor(aa) && aa <= 0.0);
@@ -489,11 +554,11 @@ void chgul_opt(double a, double b, double x, double *hu, int *id) {
         double a_k = a;
         double ab_k = a - b + 1.0;
        
-        for (int k = 1; k <= 40; k++) {
+        for (int k = 1; k <= cfg->max_iter_asympt; k++) {
             r *= -a_k * ab_k * inv_x / (double)k;
             double ra = fabs(r);
            
-            if (k > 5 && (ra >= r0 || ra < 1e-15 * fabs(*hu))) break;
+            if (k > 5 && (ra >= r0 || ra < cfg->tol * fabs(*hu))) break;
            
             r0 = ra;
             *hu += r;
@@ -516,6 +581,7 @@ void chgubi_opt(double a, double b, double x, double *hu, int *id) {
    
     const double EL = 0.5772156649015329;
     const double gamma_E = EL;
+    const KummerConfig *cfg = kummer_cfg();
    
     int n = (int)fabs(b - 1.0);
     double rn = 1.0, rn1 = 1.0;
@@ -562,7 +628,7 @@ void chgubi_opt(double a, double b, double x, double *hu, int *id) {
     double r = 1.0;
     double hmax = 1.0, hmin = 1.0;
    
-    for (int k = 1; k <= 150; k++) {
+    for (int k = 1; k <= cfg->max_iter_regular; k++) {
         r *= (a0 + k - 1.0) * x / ((n + k) * (double)k);
         double prev_hm1 = hm1;
         hm1 += r;
@@ -571,7 +637,7 @@ void chgubi_opt(double a, double b, double x, double *hu, int *id) {
         if (hu1 > hmax) hmax = hu1;
         if (hu1 < hmin && hu1 > 0.0) hmin = hu1;
        
-        if (fast_converged(hm1, prev_hm1, 1e-15)) break;
+        if (fast_converged(hm1, prev_hm1, cfg->tol)) break;
     }
    
     *id = (hmin > 0.0 && hmax > 0.0) ? (int)(15 - fabs(log10(hmax) - log10(hmin))) : 10;
@@ -593,7 +659,7 @@ void chgubi_opt(double a, double b, double x, double *hu, int *id) {
     double hm2 = ps + 2.0 * EL + s0;
     r = 1.0;
    
-    for (int k = 1; k <= 150; k++) {
+    for (int k = 1; k <= cfg->max_iter_regular; k++) {
         double s1 = 0.0, s2 = 0.0;
        
         double H_k = digamma((double)(k + 1)) + gamma_E;
@@ -614,7 +680,7 @@ void chgubi_opt(double a, double b, double x, double *hu, int *id) {
         double prev_hm2 = hm2;
         hm2 += r * hw;
        
-        if (fast_converged(hm2, prev_hm2, 1e-15)) break;
+        if (fast_converged(hm2, prev_hm2, cfg->tol)) break;
     }
    
     double hm3 = (n == 0) ? 0.0 : 1.0;
@@ -653,6 +719,7 @@ void chgu_opt(double a, double b, double x, double *hu, int *md, int *isfer) {
         return;
     }
    
+    const KummerConfig *cfg = kummer_cfg();
     double aa = a - b + 1.0;
    
     //int il1 = 0; // a > 0
@@ -697,7 +764,7 @@ void chgu_opt(double a, double b, double x, double *hu, int *md, int *isfer) {
         }
     }
    
-    if (a >= 1.0 && id_best < 5) {
+    if (a >= 1.0 && id_best < cfg->min_digits_required) {
         int id;
         double hu_temp;
         chguit_opt(a, b, x, &hu_temp, &id);
@@ -708,7 +775,7 @@ void chgu_opt(double a, double b, double x, double *hu, int *md, int *isfer) {
         }
     }
    
-    if (a < 1.0 && id_best < 5) {
+    if (a < 1.0 && id_best < cfg->min_digits_required) {
         if (b <= a) {
             double a00 = a, b00 = b;
             a = a - b + 1.0;
@@ -746,8 +813,9 @@ void chgu_opt(double a, double b, double x, double *hu, int *md, int *isfer) {
         cache_store_smart(a, b, x, *hu);
     }
 }
-// main function
-double kummer(double a, double b, double c) {
+// main function with selectable speed/accuracy tradeoff
+double kummer_mode(double a, double b, double c, KummerMode mode) {
+    current_kummer_config = kummer_make_config(mode);
     // Casi immediati
     if (a == 0.0) return 1.0;
     if (c == 0.0) return R_NaN;
@@ -763,6 +831,10 @@ double kummer(double a, double b, double c) {
     //
     if (c > 1e50) {
         double result = optimized_pow(c, -a);
+        if (current_kummer_config.mode != KUMMER_FAST) {
+            double corr = 1.0 - a * (a - b + 1.0) / c;
+            result *= corr;
+        }
         cache_store_smart(a, b, c, result);
         return result;
     }
@@ -779,4 +851,9 @@ double kummer(double a, double b, double c) {
     // Store in cache
     cache_store_smart(a, b, c, result);
     return result;
+}
+
+// Default: compromesso precisione/velocita.
+double kummer(double a, double b, double c) {
+    return kummer_mode(a, b, c, KUMMER_BALANCED);
 }

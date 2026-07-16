@@ -4,6 +4,19 @@
 ######################################################################################################
 
 
+### Internal cache environment for covariance utilities
+if (!exists(".GeoModels_env", inherits = FALSE)) {
+  .GeoModels_env <- new.env(parent = emptyenv())
+}
+
+.GeoModels_get_cache <- function(name) {
+  if (is.null(.GeoModels_env[[name]]) ||
+      !is.environment(.GeoModels_env[[name]])) {
+    .GeoModels_env[[name]] <- new.env(parent = emptyenv())
+  }
+  .GeoModels_env[[name]]
+}
+
 ### decomposition of a square  matrix
 MatDecomp <- function(mtx, method) {
   # Controlli preliminari veloci
@@ -198,7 +211,7 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
     }
     # ========================================================================
     # ========================================================================
-    II_cache <- .GeoModels_env$II_global_cache
+    II_cache <- .GeoModels_get_cache("II_global_cache")
     MAX_CACHE_SIZE <- 5000
     # 
     cache_size <- length(names(II_cache))
@@ -363,7 +376,13 @@ quantile_disp <- function(p, model_type, params) {
     "18" = as.numeric(params["mean"]) + sqrt(as.numeric(params["sill"])) * sn::qst(p, xi = 0, omega = 1, alpha = as.numeric(params["skew"]), nu = as.numeric(round(1 / params["df"]))), ## SkewStudentT
     "10" = as.numeric(params["mean"]) + sqrt(as.numeric(params["sill"])) * sn::qsn(p, xi = 0, omega = sqrt((as.numeric(params["skew"])^2 + as.numeric(params["sill"])) / as.numeric(params["sill"])), 
                 alpha = as.numeric(params["skew"]) / sqrt(as.numeric(params["sill"]))), #skewgaussian
-    "34" = as.numeric(params["mean"]) + sqrt(as.numeric(params["sill"])) * p * exp(0.5 * as.numeric(params["tail"]) * p^2),# Tukeyh
+    "34" = {
+      z <- qnorm(p)
+      h <- suppressWarnings(as.numeric(params["tail"]))
+      if (length(h) == 0L || is.na(h)) h <- suppressWarnings(as.numeric(params["h"]))
+      as.numeric(params["mean"]) +
+        sqrt(as.numeric(params["sill"])) * z * exp(0.5 * h * z^2)
+    }, # Tukeyh
     stop(paste("Model not supported:", model_type))
   )
 }
@@ -454,7 +473,7 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
 
   # Cache management
   cache_key <- paste(model_type, paste(nuisance, collapse = "_"), M, sep = "_")
-  ak_cache <- .GeoModels_env$ak_cache
+  ak_cache <- .GeoModels_get_cache("ak_cache")
   if (cache_ak && cache_key %in% names(ak_cache)) {
     ak_coeffs <- ak_cache[[cache_key]]
     if (verbose) message("Coefficients a_k loaded from cache")
@@ -476,7 +495,6 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
     
     if (cache_ak) {
       ak_cache[[cache_key]] <- ak_coeffs
-      .GeoModels_env$ak_cache <- ak_cache
     }
   }
   
@@ -493,15 +511,19 @@ gaussian_copula_cov <- function(rho, model_type, nuisance, M=30, cache_ak = TRUE
   k_vec <- 1:M_eff
   fact_k <- factorial(k_vec)
   outer_term <- (ak_coeffs^2) / fact_k
-  covariances <- sapply(rho, function(r) {
-    if (abs(r) < 1e-12) return(0)  # Correlazione quasi zero → Covarianza zero
+  rho <- as.numeric(rho)
+  if (length(rho) == 0L) return(numeric(0))
+
+  covariances <- vapply(rho, function(r) {
+    if (!is.finite(r) || is.na(r)) return(NA_real_)
+    if (abs(r) < 1e-12) return(0)
+
     terms <- outer_term * r^k_vec
     valid_terms <- is.finite(terms) & abs(terms) > .Machine$double.eps
-    
+
     result <- sum(terms[valid_terms])
-    if (!is.finite(result)) {return(0)}
-    return(result)
-  })
+    if (is.finite(result)) result else 0
+  }, numeric(1))
   
   if (verbose) {
     message(paste("Computed with", M_eff, "coefficients"))
@@ -561,9 +583,11 @@ corr=cr$corr*(1-as.numeric(nuisance['nugget']))
 if(model==11||model==16)  nuisance["n"]=n
 
 
-if(copula=="Gaussian")    cova=gaussian_copula_cov(corr, model,nuisance  )
-#if(copula=="SkewGaussian")cova=skewgaussian_copula_cov(corr, model,nuisance)
-
+if (identical(copula, "Gaussian")) {
+  cova <- gaussian_copula_cov(corr, model, nuisance)
+} else {
+  stop("Only Gaussian copula is currently implemented in Cmatrix_copula().")
+}
 
 vv=variance_disp(model,nuisance)
 
@@ -588,7 +612,4 @@ else  { }
 
 return(varcov)
 } 
-######################################################################################################
-######################################################################################################
-######################################################################################################
 ######################################################################################################

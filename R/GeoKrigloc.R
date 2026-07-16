@@ -1,15 +1,8 @@
 ####################################################
-### File name: GeoKrigloc_optimized.r
-### Optimized version with reduced code duplication,
-### improved efficiency, and fixed parallel globals
-### (top-level worker avoids closure capture)
+### File name: GeoKrigloc.r
 ####################################################
-
-
 ###########################################################################
-##  Top-level worker — defined OUTSIDE GeoKrigloc so that future()      ##
-##  sees NO captured parent environment. This prevents the >4 GiB       ##
-##  globals error caused by serialising the entire GeoKrigloc scope.    ##
+##  Top-level worker — defined OUTSIDE GeoKrigloc 
 ###########################################################################
 
 .perform_kriging_worker <- function(k, neigh, param, corrmodel, distance,
@@ -21,6 +14,12 @@
   local_param <- param
   if (!is.null(M)) local_param$mean <- neigh$M[[k]]
 
+  Xloc_k <- if (!is.null(Xloc)) {
+    if (is.vector(Xloc)) matrix(Xloc[k], nrow = 1L) else Xloc[k, , drop = FALSE]
+  } else NULL
+
+  Mloc_k <- if (!is.null(Mloc)) Mloc[k] else NULL
+
   if (is_space) {
     pr <- GeoKrig(
       loc       = loc[k, ],
@@ -30,8 +29,8 @@
       distance  = distance,
       n         = n,
       X         = neigh$X[[k]],
-      Xloc      = Xloc[k, ],
-      Mloc      = Mloc[k],
+      Xloc      = Xloc_k,
+      Mloc      = Mloc_k,
       type_krig = type_krig,
       sparse    = sparse,
       model     = model,
@@ -55,8 +54,8 @@
         loc       = loc[i, ],
         time      = time[j],
         X         = neigh$X[[k]],
-        Mloc      = Mloc[k],
-        Xloc      = Xloc[k, ],
+        Mloc      = Mloc_k,
+        Xloc      = Xloc_k,
         type_krig = type_krig,
         sparse    = sparse,
         corrmodel = corrmodel,
@@ -77,8 +76,8 @@
         coordx    = neigh$coordx[[k]],
         loc       = loc[i, ],
         X         = neigh$X[[k]],
-        Mloc      = Mloc[k],
-        Xloc      = Xloc[k, ],
+        Mloc      = Mloc_k,
+        Xloc      = Xloc_k,
         type_krig = type_krig,
         sparse    = sparse,
         corrmodel = corrmodel,
@@ -118,10 +117,13 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
   ###########################################################################
 
   setup_parallel <- function(ncores) {
+    coremax <- parallel::detectCores()
+    if (is.na(coremax) || coremax < 1L) coremax <- 1L
+
     n.cores <- if (is.null(ncores)) {
-      max(1, min(4, parallel::detectCores() - 1))
+      max(1, min(4, coremax - 1))
     } else {
-      if (!is.numeric(ncores) || ncores < 1 || ncores > parallel::detectCores())
+      if (!is.numeric(ncores) || ncores < 1 || ncores > coremax)
         stop("Invalid number of cores specified")
       as.integer(ncores)
     }
@@ -132,13 +134,14 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
       future.globals.maxSize = 4 * 1024^3
     )
 
-    future::plan(future::multisession, workers = n.cores)
-    list(n.cores = n.cores, old_opts = old_opts)
+    old_plan <- future::plan()
+
+    list(n.cores = n.cores, old_opts = old_opts, old_plan = old_plan)
   }
 
   cleanup_parallel <- function(cfg) {
     options(cfg$old_opts)
-    future::plan(future::sequential)
+    try(future::plan(cfg$old_plan), silent = TRUE)
     invisible(gc(verbose = FALSE))
   }
 
@@ -366,8 +369,9 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     if (safe_cores < max_cores) {
       warning("Reducing cores from ", max_cores, " to ", safe_cores,
               " to avoid memory pressure.")
-      future::plan(future::multisession, workers = safe_cores)
     }
+
+    future::plan(future::multisession, workers = safe_cores)
 
     cat("Performing local kriging using", safe_cores, "cores...\n")
 

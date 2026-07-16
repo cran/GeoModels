@@ -3,7 +3,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                   n.fold = 0.05, local = FALSE, neighb = NULL, maxdist = NULL,
                   maxtime = NULL, sparse = FALSE, type_krig = "Simple",
                   which = 1, parallel = TRUE, ncores = NULL,
-                  progress = TRUE) {
+                  progress = TRUE, seed = NULL) {
 
   ## ---------- sanity checks ----------
   if (!inherits(fit, "GeoFit"))
@@ -14,6 +14,37 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     stop("parallel must be TRUE or FALSE")
   if (!is.logical(progress))
     stop("progress must be TRUE or FALSE")
+
+  if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+
+    set.seed(as.integer(seed))
+  }
+
+  if (parallel) {
+    if (!requireNamespace("future", quietly = TRUE) ||
+        !requireNamespace("future.apply", quietly = TRUE)) {
+      warning(
+        "Parallel execution requested but future/future.apply is unavailable; using sequential execution.",
+        call. = FALSE
+      )
+      parallel <- FALSE
+    }
+  }
 
   ## Se l'utente non ha progressr installato, disattiviamo il progresso
   has_progressr <- requireNamespace("progressr", quietly = TRUE)
@@ -64,7 +95,7 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       StudentT     = "Gaussian_misp_StudentT",
       Poisson      = "Gaussian_misp_Poisson",
       PoissonZIP   = "Gaussian_misp_PoissonZIP",
-      SkewStudentT = "Gaussian_misp_SkewStudenT",
+      SkewStudentT = "Gaussian_misp_SkewStudentT",
       Tukeygh      = "Gaussian_misp_Tukeygh"
     )
   }
@@ -169,8 +200,9 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       }
     } else {
       n.cores <- choose_cores(ncores)
+      old_plan <- future::plan()
+      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
       future::plan(future::multisession, workers = n.cores)
-      on.exit(future::plan(future::sequential), add = TRUE)
 
       # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
       if (isTRUE(progress)) {
@@ -355,10 +387,11 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       }
     } else {
       n.cores <- choose_cores(ncores)
+      old_plan <- future::plan()
+      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
       future::plan(future::multisession, workers = n.cores)
-      on.exit(future::plan(future::sequential), add = TRUE)
 
-      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
+      #
       if (isTRUE(progress)) {
         progressr::with_progress({
           p <- progressr::progressor(along = 1:K)
@@ -512,10 +545,11 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
       }
     } else {
       n.cores <- choose_cores(ncores)
+      old_plan <- future::plan()
+      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
       future::plan(future::multisession, workers = n.cores)
-      on.exit(future::plan(future::sequential), add = TRUE)
 
-      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
+      # 
       if (isTRUE(progress)) {
         progressr::with_progress({
           p <- progressr::progressor(along = 1:K)
@@ -544,5 +578,6 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
 
   # Output esteso con tutte le metriche
   list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps,
-       lscore = lscore, pit = pit, intscore = intscore, coverage = coverage)
+       lscore = lscore, pit = pit, intscore = intscore, coverage = coverage,
+       seed = seed)
 }

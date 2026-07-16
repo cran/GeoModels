@@ -10,7 +10,8 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
 ### Helper function for conditional skew gaussian simulation 
 ################################################################################# 
 SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
-                                nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, L = NULL, 
+                                nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, L = NULL,
+                                distance = "Eucl", radius = 1, anisopars = NULL,
                                 parallel = FALSE, ncores = 1, progress = FALSE) {
   mm          <- param$mean
   sigma_sqrt  <- sqrt(param$sill)
@@ -24,6 +25,8 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
     GeoW <- GeoKrigWeights(
       coordx   = coord_obs, corrmodel = corrmodel,
       loc      = loc, model = "Gaussian",
+      distance = distance, radius = radius,
+      anisopars = anisopars,
       param    = c(sill = 1, corr_param))
   else stop("Local option cannot be used for gibbs sampling ...\n")
 
@@ -254,7 +257,7 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
         pb(sprintf("Parallel simulation %d/%d completed", i, nrep))
       }
       return(result)
-    }, future.seed = TRUE, future.globals = FALSE)
+    }, future.seed = TRUE, future.globals = TRUE)
   
     # Rimuove risultati nulli e avvisa
     res <- res[!sapply(res, is.null)]
@@ -276,9 +279,10 @@ SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
 ################################################################################# 
 ### Helper function for conditional Gamma simulation - VERSIONE MEMORY-EFFICIENT
 ################################################################################# 
-GammaSimcond <- function(coord_obs, loc, data, param, corrmodel, 
-                         nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, 
-                         L = NULL, parallel = FALSE, ncores = 1, progress = FALSE) {
+GammaSimcond <- function(coord_obs, loc, data, param, corrmodel,
+                         nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL,
+                         L = NULL, distance = "Eucl", radius = 1, anisopars = NULL,
+                         parallel = FALSE, ncores = 1, progress = FALSE) {
   mm <- param$mean
   shape <- round(param$shape)
   keep <- CorrParam(corrmodel)
@@ -286,9 +290,11 @@ GammaSimcond <- function(coord_obs, loc, data, param, corrmodel,
   
   cat("Computing Kriging weights ...\n")
   if (!local) 
-    GeoW <- GeoKrigWeights(coordx = coord_obs, corrmodel = corrmodel, 
-                           loc = loc, model = "Gaussian", param = c(sill = 1, 
-                                                                    corr_param))
+    GeoW <- GeoKrigWeights(coordx = coord_obs, corrmodel = corrmodel,
+                           loc = loc, model = "Gaussian",
+                           distance = distance, radius = radius,
+                           anisopars = anisopars,
+                           param = c(sill = 1, corr_param))
   else stop("Local option cannot be used for gibbs sampling ...\n")
   
   # Pre-calcoli per ottimizzazione
@@ -604,7 +610,7 @@ compute_cond_sim <- function(i, sim_data_list, krig_pred_vec, local_flag,
 ################################################################################# 
 Gauss_cd <- function(data, corrmodel, nrep, method, L,
                      param,
-                     coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
+                     coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius, anisopars,
                      local, neighb, maxdist, maxtime,
                      space, spacetime, bivariate, parallel, ncores, progress) {
   
@@ -631,14 +637,14 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   cat("Performing", nrep, "unconditional simulations ...\n")
   if (method == "Cholesky") {
     sim_args <- list(coordx = coord_sim, coordt = time_sim, corrmodel = corrmodel, progress = FALSE,
-                     X = X_sim, nrep = nrep, distance = distance, radius = radius)
+                     X = X_sim, nrep = nrep, distance = distance, radius = radius, anisopars = anisopars)
     sim_args <- c(sim_args, list(param = param))
     sim_nc <- do.call(GeoSim, sim_args)
   }
   if (method == "TB" || method == "CE") {
     sim_args_approx <- list(coordx = coord_sim, coordt = time_sim, corrmodel = corrmodel, progress = FALSE,
                             method = method, L = L, parallel = parallel,
-                            X = X_sim, nrep = nrep, distance = distance, radius = radius)
+                            X = X_sim, nrep = nrep, distance = distance, radius = radius, anisopars = anisopars)
     sim_args_approx <- c(sim_args_approx, list(param = param))
     sim_nc <- do.call(GeoSimapprox, sim_args_approx)
   }
@@ -649,7 +655,7 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   krig_sim_args <- list(coordx = coord_obs, coordt = coordt_use,
                         data = data, corrmodel = corrmodel,
                         loc = loc, X = X, Xloc = Xloc, Mloc = Mloc, time = time,
-                        distance = distance, radius = radius)
+                        distance = distance, radius = radius, anisopars = anisopars)
   krig_sim_args <- c(krig_sim_args, list(param = param))
 
   if (local) {
@@ -671,7 +677,7 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   weights_args <- list(coordx = coord_obs, coordt = coordt_use,
                        corrmodel = corrmodel, loc = loc, 
                        X = X, Xloc = Xloc, Mloc = Mloc, time = time,
-                       distance = distance, radius = radius)
+                       distance = distance, radius = radius, anisopars = anisopars)
   weights_args <- c(weights_args, list(param = param))
 
   if (local) {
@@ -889,10 +895,9 @@ Gauss_cd <- function(data, corrmodel, nrep, method, L,
   }
   if (!is.null(Mloc) && !is.null(Xloc)) stop("Either Mloc or Xloc must be fixed\n")
   if ((length(param$mean) > 1) && is.null(Mloc)) stop("Mloc must be fixed \n")
+  # Do not anisotropize loc here.  Anisotropy is propagated to
+  # GeoSim/GeoKrig/GeoKrigWeights/GeoKriglocWeights, which handle it consistently.
   loc_orig <- loc
-  if (!is.null(anisopars)) {
-    loc <- GeoAniso(loc, c(anisopars$angle, anisopars$ratio))
-  }
   # Temporal coordinates to use
   coordt_use <- if (spacetime || bivariate) coordt else NULL
 
@@ -937,7 +942,7 @@ if (is.null(copula)) {
   if (model == "Gaussian") {
     res <- Gauss_cd(data, corrmodel, nrep, method, L,
                     param,
-                    coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius,
+                    coord_obs, loc, coordt_use, time, X, Xloc, Mloc, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
   }
@@ -958,7 +963,7 @@ if (is.null(copula)) {
     param_gauss$sill <- 1
 
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
 
@@ -976,7 +981,7 @@ if (is.null(copula)) {
     datanorm <- inverse_lamb((data - mm)/sqrt(vv), tail)
     param$mean <- 0; param$sill <- 1; param$tail <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) mm + sqrt(vv) * r * exp(tail * r^2/2))
@@ -1004,7 +1009,7 @@ if (is.null(copula)) {
     datanorm <- inverse_lamb2((data - mm)/sqrt(vv), tail1, tail2)
     param$mean <- 0; param$sill <- 1; param$tail1 <- NULL; param$tail2 <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     ff <- function(r, mm, vv, tail1, tail2) {
@@ -1028,7 +1033,7 @@ if (is.null(copula)) {
     datanorm <- sinh((asinh((data - mm)/sqrt(vv)) / tail) - skew)
     param$mean <- 0; param$sill <- 1; param$skew <- NULL; param$tail <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) mm + sqrt(vv) * sinh(tail * (asinh(r) + skew)))
@@ -1039,13 +1044,15 @@ if (is.null(copula)) {
   ################################################################################
   if (model == "SkewGaussian") {    
     res <- SkewGaussianSimcond(coord_obs, loc, data, param, corrmodel, local = local, 
-                               neighb = neighb, L = L, nrep = nrep, method = method, 
+                               neighb = neighb, L = L, nrep = nrep, method = method,
+                               distance = distance, radius = radius, anisopars = anisopars,
                                parallel = parallel, ncores = ncores, progress = progress)
   }
 
   if (model == "Gamma") { 
     res <- GammaSimcond(coord_obs, loc, data, param, corrmodel, local = local, 
-                        neighb = neighb, L = L, nrep = nrep, method = method, 
+                        neighb = neighb, L = L, nrep = nrep, method = method,
+                        distance = distance, radius = radius, anisopars = anisopars,
                         parallel = parallel, ncores = ncores, progress = progress)
   }
   
@@ -1057,7 +1064,8 @@ if (is.null(copula)) {
     ck <- gamma((param$shape + 1)/param$shape)
     data.t <- (exp(-mm) * data * ck)^param$shape
     res <- GammaSimcond(coord_obs, loc, data.t, param.weibull, corrmodel, local = local, 
-                        neighb = neighb, L = L, nrep = nrep, method = method, 
+                        neighb = neighb, L = L, nrep = nrep, method = method,
+                        distance = distance, radius = radius, anisopars = anisopars,
                         parallel = parallel, ncores = ncores, progress = progress)
     res <- lapply(res, function(x) exp(mm) * (x^(1/param$shape))/ck)
   }
@@ -1080,7 +1088,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1; param$shape <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1103,7 +1111,7 @@ if (copula == "Gaussian") {
     param_gauss$sill <- 1
 
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
 
@@ -1118,7 +1126,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1; param$shape <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1153,7 +1161,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1; param$skew <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1169,7 +1177,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1; param$shape <- NULL; param$min <- NULL; param$max <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1184,7 +1192,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1; param$df <- NULL
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1198,7 +1206,7 @@ if (copula == "Gaussian") {
     datanorm  <- qnorm(datanorm1)
     param$mean <- 0; param$sill <- 1
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pnorm(r))
@@ -1224,7 +1232,7 @@ if (copula == "Gaussian") {
     param_gauss$sill <- 1
 
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
@@ -1251,7 +1259,7 @@ if (copula == "Gaussian") {
     param_gauss$sill <- 1
 
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
@@ -1277,7 +1285,7 @@ if (copula == "Gaussian") {
     param_gauss$sill <- 1
 
     res <- Gauss_cd(datanorm, corrmodel, nrep, method, L, param_gauss,
-                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius,
+                    coord_obs, loc, coordt_use, time, NULL, NULL, NULL, distance, radius, anisopars,
                     local, neighb, maxdist, maxtime,
                     space, spacetime, bivariate, parallel, ncores, progress)
     res <- lapply(res, function(r) pmin(pmax(pnorm(r), eps), 1 - eps))
@@ -1305,7 +1313,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
 
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel,local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
 
     res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
     res <- lapply(res, function(r) qweibull(r, shape = ss, scale = mm/(gamma(1 + 1/ss))))
@@ -1330,7 +1338,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
 
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel,local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res=lapply(res, function(r) pmin(pmax(sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)), eps), 1 - eps))
     res <- lapply(res, function(u) qlnorm(u, meanlog = eta$loc - vv/2, sdlog = sqrt(vv), log.p = FALSE))
   }
@@ -1345,7 +1353,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel,local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
     res <- lapply(res, function(r) qgamma(r, shape = ss/2, rate = ss/(2 * mm)))
   }
@@ -1362,7 +1370,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
     res <- lapply(res, function(r) pmin + (pmax - pmin) * qbeta(r, shape1 = mm * ss, shape2 = (1 - mm) * ss))
   }
@@ -1377,7 +1385,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
     res <- lapply(res, function(r) mm + sqrt(vv) * qt(r, df = 1/df))
   }
@@ -1391,7 +1399,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
     alpha <- as.numeric(param$skew)
     datanorm  <- sn::qsn(datanorm1, xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res=lapply(res, function(r) sn::psn(r ,xi=0,omega= as.numeric(omega),alpha= as.numeric(alpha)))
     res <- lapply(res, function(r) qnorm(r, mm, sqrt(vv)))
   }
@@ -1417,7 +1425,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
 
     datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
     res <- lapply(res, function(u) qbinom(p = u, size = n, prob = prob_loc))
   }
@@ -1444,7 +1452,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
 
     datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
     res <- lapply(res, function(u) qnbinom(p = u, size = size, prob = prob_loc))
   }
@@ -1470,7 +1478,7 @@ param$skew <- param$nu / sqrt(1 - param$nu * param$nu)
 
     datanorm <- sn::qsn(datanorm1, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha))
     res <- SkewGaussianSimcond(coord_obs, loc, datanorm, param_skew, corrmodel, local=local,neighb=neighb,L=L,
-                            nrep = nrep, method = method, parallel = parallel, ncores = ncores,progress=progress)
+                            nrep = nrep, method = method, distance = distance, radius = radius, anisopars = anisopars, parallel = parallel, ncores = ncores,progress=progress)
     res <- lapply(res, function(r) pmin(pmax(sn::psn(r, xi = 0, omega = as.numeric(omega), alpha = as.numeric(alpha)), eps), 1 - eps))
     res <- lapply(res, function(u) qpois(u, lambda = mu_loc))
   }

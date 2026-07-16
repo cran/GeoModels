@@ -4,9 +4,7 @@
 \encoding{UTF-8}
 \title{Maximum-Likelihood-Based Fitting of Gaussian and non-Gaussian random fields.}
 \description{
- Maximum weighted composite-likelihood fitting for Gaussian and some non-Gaussian
- univariate spatial, spatio-temporal and bivariate spatial random fields.
- The function allows fixing any of the parameters and setting upper/lower bounds in the optimization.
+ Maximum weighted (stochastic) composite-likelihood fitting for Gaussian and some non-Gaussian univariate spatial, spatio-temporal and bivariate spatial random fields. The function allows fixing any of the parameters and setting upper/lower bounds in the optimization.
  Different optimization methods can be used.
 }
 \usage{
@@ -18,7 +16,7 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  method="cholesky", model="Gaussian", n=1, onlyvar=FALSE,
  optimizer="Nelder-Mead", radius=1, score=FALSE,
  sensitivity=FALSE, sparse=FALSE, start=NULL,
- thin_method="bernoulli",type="Pairwise", upper=NULL, 
+ thin_method="bernoulli", type="Pairwise", upper=NULL, 
  varest=FALSE, weighted=FALSE,
  X=NULL, spobj=NULL, spdata=NULL)
 }
@@ -102,8 +100,10 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 
  \item{start}{An optional named list with initial values for parameters to be estimated. Default is \code{NULL} (see Details).}
 
- \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is 
- \code{"FixedBudget"}}. 
+ \item{thin_method}{String; thinning scheme in stochastic weighted pairwise
+ likelihood (used when \code{p_neighb < 1}). Default is \code{"bernoulli"}
+ (independent Bernoulli thinning). An alternative thinning scheme is
+ \code{"FixedBudget"}.}
 
  \item{type}{String; the type of likelihood objects. If \code{"Pairwise"} (default) the composite likelihood is formed by pairwise components (see Details).}
 
@@ -122,9 +122,13 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{spdata}{Character; the name of the data component in the \code{sp} or \code{spacetime} object.}
 }
 \details{
- \code{GeoFit} provides weighted composite likelihood estimation based on pairs and independence composite likelihood estimation
- for Gaussian and non-Gaussian random fields. Specifically, marginal and conditional pairwise likelihoods are available
- for each type of random field.
+ \code{GeoFit} provides weighted and stochastic weighted composite-likelihood
+ estimation based on pairs for Gaussian and non-Gaussian random fields,
+ including nearest-neighbor and stochastic nearest-neighbor pairwise likelihoods;
+ see Caamaño-Carrillo et al. (2024) and Bevilacqua et al. (2026).
+ It also provides independence composite-likelihood estimation. Specifically,
+ marginal and conditional pairwise likelihoods are available for each type of
+ random field.
 
  The optimization method is specified using \code{optimizer}. The default method is \code{Nelder-Mead}; other available methods are
  \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B}, \code{bobyqa}, and \code{nlminb}. In the last three cases,
@@ -212,54 +216,81 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 
 \references{
 
-
  \bold{General Composite-likelihood}:
 
- Varin, C., Reid, N. and Firth, D. (2011). An Overview of Composite
- Likelihood Methods. \emph{Statistica Sinica}, \bold{21}, 5--42.
+ Varin, C., Reid, N. and Firth, D. (2011). An overview of composite
+ likelihood methods. \emph{Statistica Sinica}, \bold{21}, 5--42.
 
- Varin, C. and Vidoni, P. (2005)
- A Note on Composite Likelihood Inference and Model Selection.
- \emph{Biometrika}, \bold{92}, 519--528.
+ Varin, C. and Vidoni, P. (2005). A note on composite likelihood inference
+ and model selection. \emph{Biometrika}, \bold{92}, 519--528.
 
+ \bold{Non-Gaussian random fields}:
 
- \bold{Non Gaussian random fields}: 
+ Alegría, A., Caro, S., Bevilacqua, M., Porcu, E. and Clarke, J. (2017).
+ Estimating covariance functions of multivariate skew-Gaussian random fields
+ on the sphere. \emph{Spatial Statistics}, \bold{22}, 388--402.
+ \doi{10.1016/j.spasta.2017.05.003}
 
- Alegrıa A., Caro S., Bevilacqua M., Porcu E., Clarke J. (2017) \emph{Estimating covariance functions of multivariate skew-Gaussian random fields on the sphere}. Spatial Statistics \bold{22} 388-402
+ Alegría, A., Bevilacqua, M. and Porcu, E. (2016). Likelihood-based inference
+ for multivariate space-time wrapped-Gaussian fields.
+ \emph{Journal of Statistical Computation and Simulation},
+ \bold{86}(13), 2583--2597.
 
- Alegria A., Bevilacqua, M., Porcu, E. (2016) 
- Likelihood-based inference for multivariate space-time wrapped-Gaussian fields. 
- \emph{Journal of Statistical Computation and Simulation}. \bold{86(13)}, 2583--2597.
+ Bevilacqua, M., Caamaño-Carrillo, C. and Gaetan, C. (2020). On modelling
+ positive continuous data with spatio-temporal dependence.
+ \emph{Environmetrics}, \bold{31}(7), e2628. \doi{10.1002/env.2628}
 
- Bevilacqua M., Caamano C., Gaetan C. (2020) On modeling positive continuous data with spatio-temporal dependence. \emph{Environmetrics} \bold{31(7)}
+ Bevilacqua, M., Caamaño-Carrillo, C., Arellano-Valle, R. B. and
+ Morales-Oñate, V. (2021). Non-Gaussian geostatistical modeling using
+ (skew) t processes. \emph{Scandinavian Journal of Statistics},
+ \bold{48}(1), 212--245. \doi{10.1111/sjos.12447}
 
- Bevilacqua M., Caamaño C., Arellano Valle R.B., Morales-Oñate V. (2020) non-Gaussian Geostatistical Modeling using (skew) t Processes. \emph{Scandinavian Journal of Statistics}.
+ Blasi, F., Caamaño-Carrillo, C., Bevilacqua, M. and Furrer, R. (2022).
+ A selective view of climatological data and likelihood estimation.
+ \emph{Spatial Statistics}, \bold{50}, 100596.
+ \doi{10.1016/j.spasta.2022.100596}
 
- Blasi F., Caamaño C., Bevilacqua M., Furrer R. (2022) A selective view of climatological data and likelihood estimation \emph{Spatial Statistics} 10.1016/j.spasta.2022.100596
+ Bevilacqua, M., Caamaño-Carrillo, C., Arellano-Valle, R. B. and
+ Gómez, C. (2022). A class of random fields with two-piece marginal
+ distributions for modeling point-referenced data with spatial outliers.
+ \emph{TEST}, \bold{31}(3), 644--674. \doi{10.1007/s11749-021-00797-5}
 
- Bevilacqua M., Caamaño C., Arellano-Valle R. B., Camilo Gomez C. (2022) A class of random fields with two-piece marginal distributions for modeling point-referenced data with spatial outliers. \emph{Test} 10.1007/s11749-021-00797-5
- 
- Morales-Navarrete D., Bevilacqua M., Caamaño C., Castro L.M. (2022) Modelling Point Referenced Spatial Count Data: A Poisson Process Approach \emph{TJournal of the American Statistical Association} To appear
+ Morales-Navarrete, D., Bevilacqua, M., Caamaño-Carrillo, C. and
+ Castro, L. M. (2024). Modelling point referenced spatial count data:
+ A Poisson process approach. \emph{Journal of the American Statistical
+ Association}, \bold{119}(545), 664--677.
+ \doi{10.1080/01621459.2022.2140053}
 
- Caamaño C., Bevilacqua M., López C., Morales-Oñate V. (2023) Nearest neighbours weighted composite likelihood based on pairs for (non-)Gaussian massive spatial data with an application to Tukey-hh random fields estimation \emph{Computational Statistics and Data Analysis} To appear
+ Bevilacqua, M., Alvarado, E. and Caamaño-Carrillo, C. (2024).
+ A flexible Clayton-like spatial copula with application to bounded support
+ data. \emph{Journal of Multivariate Analysis}, \bold{201}, 105277.
+ \doi{10.1016/j.jmva.2023.105277}
 
- Bevilacqua M., Alvarado E., Caamaño C., (2023) A flexible Clayton-like spatial copula with application to bounded support data \emph{Journal of Multivariate Analysis} To appear 
+ \bold{Weighted composite-likelihood for (non-)Gaussian random fields}:
 
- \bold{Weighted Composite-likelihood for (non-)Gaussian random fields}:
+ Bevilacqua, M., Gaetan, C., Mateu, J. and Porcu, E. (2012).
+ Estimating space and space-time covariance functions for large data sets:
+ a weighted composite likelihood approach.
+ \emph{Journal of the American Statistical Association, Theory and Methods},
+ \bold{107}, 268--280. \doi{10.1080/01621459.2011.646928}
 
- Bevilacqua, M. Gaetan, C., Mateu, J. and Porcu, E. (2012)
- Estimating space and space-time covariance functions for large data
- sets: a weighted composite likelihood approach.
- \emph{Journal of the American Statistical Association, Theory &
- Methods}, \bold{107}, 268--280.
+ Bevilacqua, M. and Gaetan, C. (2015). Comparing composite likelihood methods
+ based on pairs for spatial Gaussian random fields.
+ \emph{Statistics and Computing}, \bold{25}(5), 877--892.
+ \doi{10.1007/s11222-014-9471-3}
 
- Bevilacqua, M., Gaetan, C. (2015) Comparing composite likelihood methods based on pairs for spatial Gaussian random fields. \emph{Statistics and Computing}, \bold{25(5)}, 877-892.
+ Caamaño-Carrillo, C., Bevilacqua, M., López, C. and Morales-Oñate, V. (2024).
+ Nearest neighbours weighted composite likelihood based on pairs for
+ (non-)Gaussian massive spatial data with an application to Tukey-hh random
+ fields estimation. \emph{Computational Statistics and Data Analysis},
+ \bold{191}, 107887. \doi{10.1016/j.csda.2023.107887}
 
- Caamaño C., Bevilacqua M., López C., Morales-Oñate V. (2023) Nearest neighbours weighted composite likelihood based on pairs for (non-)Gaussian massive spatial data with an application to Tukey-hh random fields estimation \emph{Computational Statistics and Data Analysis} To appear
+ Bevilacqua, M., Cuevas-Pacheco, F. and Caamaño-Carrillo, C. (2026).
+Fast stochastic nearest neighbor pairwise composite likelihood for massive
+spatial datasets. \emph{arXiv preprint}, arXiv:2607.06142.
+\doi{10.48550/arXiv.2607.06142}
 
- 
 }
-
 
 
 \seealso{
@@ -279,7 +310,7 @@ Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.resear
 library(GeoModels)
 
 ###############################################################
-############ Examples of spatial Gaussian random fieldss ################
+############ Examples of spatial Gaussian random fields ################
 ###############################################################
 
 
@@ -305,7 +336,7 @@ smooth=0.5
 
 param<-list(mean=mean,mean1=mean1,sill=sill,nugget=nugget,scale=scale,smooth=smooth)
 
-# Simulation of the spatial Gaussian random fields:
+# Simulation of the spatial Gaussian random field:
 data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,X=X)$data
 
 
@@ -313,7 +344,7 @@ data <- GeoSim(coordx=coords,corrmodel=corrmodel, param=param,X=X)$data
 ################################################################
 ###
 ### Example 0. Maximum independence composite likelihood fitting of
-### a Gaussian random fields (no dependence parameters)
+### a Gaussian random field (no dependence parameters)
 ### 
 ###############################################################
 # setting starting parameters to be estimated
@@ -327,7 +358,7 @@ print(fit1)
 ################################################################
 ###
 ### Example 1. Maximum conditional pairwise likelihood fitting of
-### a Gaussian random fields using Nelder-Mead
+### a Gaussian random field using Nelder-Mead
 ### 
 ###############################################################
 # setting fixed and starting parameters to be estimated
@@ -341,8 +372,31 @@ print(fit1)
 
 ################################################################
 ###
-### Example 2. Standard Maximum likelihood fitting of
-### a Gaussian random fields using nlminb
+### Example 2. Maximum stochastic marginal pairwise likelihood 
+### fitting of a Gaussian random field using Nelder-Mead
+### 
+###############################################################
+
+#N=100000 # number of location sites
+#x <- runif(N, 0, 1)
+#y <- runif(N, 0, 1)
+#coords <- cbind(x,y)
+#X=cbind(rep(1,N),runif(N))
+#data <- GeoSimapprox(coordx=coords,method="TB",L=20000,parallel=TRUE,
+#	  corrmodel=corrmodel, param=param,X=X)$data
+#fixed<-list(nugget=nugget)
+#start<-list(mean=mean,mean1=mean1,scale=scale,sill=sill,smooth=smooth)
+
+#fit2 <- GeoFit(data=data,coordx=coords,corrmodel=corrmodel,
+# neighb=3,likelihood="Marginal",optimizer="Nelder-Mead",
+# p_neighb=0.2, thin_method="bernoulli",
+# type="Pairwise", start=start,fixed=fixed,X=X)
+#print(fit2)
+
+################################################################
+###
+### Example 3. Standard Maximum likelihood fitting of
+### a Gaussian random field using nlminb
 ###
 ###############################################################
 # Define the spatial-coordinates of the points:
@@ -371,13 +425,13 @@ print(fit2)
 
 
 ###############################################################
-############ Examples of spatial non-Gaussian random fieldss #############
+############ Examples of spatial non-Gaussian random fields #############
 ###############################################################
 
 
 ################################################################
 ###
-### Example 3. Maximum pairwise likelihood fitting of a Weibull random fields 
+### Example 4. Maximum pairwise likelihood fitting of a Weibull random field 
 ### with Generalized Wendland correlation with Nelder-Mead
 ### 
 ###############################################################
@@ -398,7 +452,7 @@ model="Weibull"
 corrmodel="GenWend"
 param=list(mean=mean,mean1=mean1,scale=scale,
  shape=shape,nugget=nugget,power2=4,smooth=smooth)
-# Simulation of a non stationary weibull random fields:
+# Simulation of a non-stationary Weibull random field:
 data <- GeoSim(coordx=coords, corrmodel=corrmodel,model=model,X=X,
  param=param)$data
 
@@ -407,13 +461,13 @@ fixed<-list(nugget=nugget,power2=4,smooth=smooth)
 start<-list(mean=mean,mean1=mean1,scale=scale,shape=shape)
 
 # Maximum independence likelihood:
-fit <- GeoFit(data=data, coordx=coords, X=X, 
- likelihood="Marginal",type="Independence", corrmodel=corrmodel,
- ,model=model, start=start, fixed=fixed)
+fit <- GeoFit(data=data, coordx=coords, X=X,
+ likelihood="Marginal", type="Independence", corrmodel=corrmodel,
+ model=model, start=start, fixed=fixed)
 print(unlist(fit$param))
 
 ## estimating dependence parameter fixing vector mean parameter
-Xb=as.numeric(X \%*\% c(mean,mean1))
+Xb <- as.numeric(X \%*\% unlist(fit$param)[1:2])
 fixed<-list(nugget=nugget,power2=4,smooth=smooth,mean=Xb)
 start<-list(scale=scale,shape=shape)
 
@@ -439,7 +493,7 @@ print(unlist(fit2$param))
 
 ################################################################
 ###
-### Example 4. Maximum pairwise likelihood fitting of
+### Example 5. Maximum pairwise likelihood fitting of
 ### a Skew-Gaussian spatial random fields with Wendland correlation
 ###
 ###############################################################
@@ -477,8 +531,8 @@ print(unlist(fit1$param))
 
 ################################################################
 ###
-### Example 5. Maximum pairwise likelihood fitting of 
-### a Bernoulli random fields with exponential correlation 
+### Example 6. Maximum pairwise likelihood fitting of 
+### a Bernoulli random field with exponential correlation 
 ###
 ###############################################################
 
@@ -488,10 +542,10 @@ x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
 mean=0.1; mean1=0.8; mean2=-0.5 # regression parameters
-X=cbind(rep(1,N),runif(N),runif(N)) # marix covariates
+X=cbind(rep(1,N),runif(N),runif(N)) # matrix covariates
 corrmodel <- "Wend0"
 param=list(mean=mean,mean1=mean1,mean2=mean2,nugget=0,scale=0.2,power2=4)
-# Simulation of the spatial Binomial-Gaussian random fields:
+# Simulation of the spatial Binomial-Gaussian random field:
 data <- GeoSim(coordx=coords, corrmodel=corrmodel, model="Binomial", n=1,X=X,
  param=param)$data
 
@@ -501,40 +555,42 @@ fixed <- list(power2=4,scale=0.2,nugget=0)
 start <- list(mean=mean,mean1=mean1,mean2=mean2)
 
 # Maximum independence likelihood:
-fit <- GeoFit(data=data, coordx=coords,n=1, X=X, 
- likelihood="Marginal",type="Independence",corrmodel=corrmodel,
- ,model="Binomial", start=start, fixed=fixed)
+fit <- GeoFit(data=data, coordx=coords, n=1, X=X,
+ likelihood="Marginal", type="Independence", corrmodel=corrmodel,
+ model="Binomial", start=start, fixed=fixed)
  
 print(fit)
 
 
 ## estimating dependence parameter fixing vector mean parameter
-Xb=as.numeric(X \%*\% c(mean,mean1,mean2))
+Xb <- as.numeric(X \%*\% unlist(fit$param))
 fixed <- list(nugget=0,power2=4,mean=Xb)
 start <- list(scale=0.2)
-
-# Maximum conditional pairwise likelihood:
-fit1 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=1, 
- likelihood="Conditional",type="Pairwise", neighb=3
- ,model="Binomial", start=start, fixed=fixed)
+lower <- list(scale=0)
+upper <- list(scale=2)
+# Maximum Marginal pairwise likelihood:
+fit1 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel, n=1,
+ likelihood="Marginal", type="Pairwise", neighb=3,
+ model="Binomial", start=start, fixed=fixed,
+ lower=list(scale=0.001), upper=list(scale=1))
  
 print(fit1)
 
 
-## estimating jointly marginal and dependnce parameters
+## estimating jointly marginal and dependence parameters
 fixed <- list(nugget=0,power2=4)
 start <- list(mean=mean,mean1=mean1,mean2=mean2,scale=0.2)
 
 # Maximum conditional pairwise likelihood:
-fit2 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel,n=1, X=X, 
- likelihood="Conditional",type="Pairwise", neighb=3
- ,model="Binomial", start=start, fixed=fixed)
+fit2 <- GeoFit(data=data, coordx=coords, corrmodel=corrmodel, n=1, X=X,
+ likelihood="Marginal", type="Pairwise", neighb=3,
+ model="Binomial", start=start, fixed=fixed)
  
 print(fit2)
 
 
 ###############################################################
-######### Examples of Gaussian spatio-temporal random fieldss ###########
+######### Examples of Gaussian spatio-temporal random fields ###########
 ###############################################################
 set.seed(52)
 # Define the temporal sequence:
@@ -555,13 +611,13 @@ mean=0
 param<-list(mean=0,scale_s=scale_s,scale_t=scale_t,
  smooth_t=smooth_t, smooth_s=smooth_s ,sill=sill,nugget=nugget)
 
-# Simulation of the spatio-temporal Gaussian random fields:
+# Simulation of the spatio-temporal Gaussian random field:
 data <- GeoSim(coordx=coords,coordt=time,corrmodel="Matern_Matern",
  param=param)$data
 
 ################################################################
 ###
-### Example 6. Maximum pairwise likelihood fitting of a
+### Example 7. Maximum pairwise likelihood fitting of a
 ### space time Gaussian random fields with double-exponential correlation
 ###
 ###############################################################
@@ -580,11 +636,11 @@ print(fit)
 
 
 ###############################################################
-######### Examples of a bivariate Gaussian random fields ###########
+######### Examples of a bivariate Gaussian random field ###########
 ###############################################################
 
 ################################################################
-### Example 7. Maximum pairwise likelihood fitting of a
+### Example 8. Maximum pairwise likelihood fitting of a
 ### bivariate Gaussian random fields with separable Bivariate matern 
 ### (cross) correlation model 
 ###############################################################
@@ -598,7 +654,7 @@ coords=cbind(x,y)
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,
  nugget_1=0,nugget_2=0,pcol=0.2)
 
-# Simulation of a spatial bivariate Gaussian random fields:
+# Simulation of a spatial bivariate Gaussian random field:
 data <- GeoSim(coordx=coords, corrmodel="Bi_Matern_sep", 
  param=param)$data
 

@@ -211,14 +211,26 @@ sample_fT_final <- function(n, kappa, d, T0 = NULL, safety = 1.15, batch = 10000
     }
     
     f_vals <- f_T(proposals, kappa, d)
+    denom <- M_vals * g_vals
+    ratio <- ifelse(denom > 0 & is.finite(denom), f_vals / denom, 0)
+    ratio[!is.finite(ratio)] <- 0
+
+    if (any(ratio > 1 + 1e-8, na.rm = TRUE)) {
+      warning("Envelope violation in sample_fT_final: f/(M*g) exceeded 1; clipping acceptance probabilities.")
+    }
+
     u <- runif(n_batch)
-    accept <- u < f_vals / (M_vals * g_vals)
+    accept <- u < pmin(1, pmax(0, ratio))
     
     samples <- c(samples, proposals[accept])
     n_total_proposed <- n_total_proposed + n_batch
   }
+
+  if (length(samples) < n) {
+    stop("sample_fT_final failed: generated fewer than n samples. Increase max_iter or check the GH parameters.")
+  }
   
-  samples[1:min(n, length(samples))]
+  samples[seq_len(n)]
 }
 
 #####################################################################
@@ -406,6 +418,11 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
   N <- 1
   n <- dim(coord)[1]
   d <- dim(coord)[2]
+
+  if (is.null(d) || d != 2) {
+    stop("Current TB/STB implementation supports only 2D spatial coordinates.")
+  }
+
   condition <- FALSE
 
 #########################################################################
@@ -477,76 +494,64 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
   
   Nlocs <- nrow(coord)
   simu <- NULL
-  
+
+  ## Helper: single serial call to the (now cache-friendly) C kernel.
+  ## Used both for the fully-serial path and for each parallel chunk.
+  call_kernel <- function(indexes) {
+    Ninner <- length(indexes)
+    result <- dotCall64::.C64("TBD1d_amp",
+               SIGNATURE = c("double","double","double","double",
+                             "double","double","integer","integer","double"),
+               ux = c(u[,1]), uy = c(u[,2]),
+               sx = c(coord[indexes,1]),
+               sy = c(coord[indexes,2]),
+               phi = phi, amp = amp,
+               L = as.integer(L), n = as.integer(Ninner),
+               result = dotCall64::vector_dc("double", Ninner),
+               INTENT = c("r","r","r","r","r","r","r","r","rw"),
+               PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
+    sqrt(CC) * result / sqrt(L)
+  }
+
   if (!is.null(u)) {
-    if (Nlocs > 100000) {
-      Chunks <- ceiling(Nlocs/100000)
-      limits <- unique(c(seq(0, Nlocs, by = 100000), Nlocs))
-      low_limits <- limits[1:(length(limits)-1)]
-      upp_limits <- limits[2:length(limits)]
-      simu <-  matrix(NA, Nlocs, 1)
-      
-      if (!parallel) {
-        for (i in 1:length(low_limits)) {
-          indexes <- (low_limits[i]+1):upp_limits[i]
-          Ninner <- length(indexes)
-          result <- dotCall64::.C64("TBD1d_amp",
-                     SIGNATURE = c("double","double","double","double",
-                                   "double","double","integer","integer","double"),
-                     ux = c(u[,1]), uy = c(u[,2]), 
-                     sx = c(coord[indexes,1]), 
-                     sy = c(coord[indexes,2]), 
-                     phi = phi, amp = amp,
-                     L = as.integer(L), n = as.integer(Ninner), 
-                     result = dotCall64::vector_dc("double", Ninner), 
-                     INTENT = c("r","r","r","r","r","r","r","r","rw"),
-                     PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-          
-          simu[indexes,1] <- sqrt(CC) * result / sqrt(L)
-        }
-      } else {
-        future::plan(future::multisession, workers = ncores)
-        chunk_list <- lapply(1:Chunks, function(k) {
-          list(indexes = (low_limits[k]+1):upp_limits[k], chunk_id = k)
-        })
-        chunk_results <- future.apply::future_lapply(chunk_list, function(chunk_info) {
-          indexes <- chunk_info$indexes
-          Ninner <- length(indexes)
-          result <- dotCall64::.C64("TBD1d_amp",
-                     SIGNATURE = c("double","double","double","double",
-                                   "double","double","integer","integer","double"),
-                     ux = c(u[,1]), uy = c(u[,2]), 
-                     sx = c(coord[indexes,1]), 
-                     sy = c(coord[indexes,2]), 
-                     phi = phi, amp = amp,
-                     L = as.integer(L), n = as.integer(Ninner), 
-                     result = dotCall64::vector_dc("double", Ninner), 
-                     INTENT = c("r","r","r","r","r","r","r","r","rw"),
-                     PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-          result <- sqrt(CC) * result / sqrt(L)
-          return(list(indexes=indexes, result=result))
-        }, future.seed=TRUE, future.packages="GeoModels")
-        
-        for (chunk_result in chunk_results) {
-          simu[chunk_result$indexes,1] <- chunk_result$result
-        }
-        future::plan(sequential)
+
+   ## Decide whether to parallelize based on the actual workload
+## (Nlocs * L), not on Nlocs alone. The threshold is calibrated so
+## that, for the recommended value L = 50,000 used in the numerical
+## experiments, inner parallelism starts at Nlocs >= 50,000.
+cost <- as.numeric(Nlocs) * as.numeric(L)
+do_parallel <- isTRUE(parallel) && cost >= 2.5e9
+
+    if (do_parallel) {
+
+      n.workers <- if (is.null(ncores)) max(1, parallel::detectCores() - 1) else ncores
+      n.workers <- min(n.workers, Nlocs)  # no point in more chunks than locations
+
+      ## One chunk per worker (balanced), instead of fixed-size 1e5 chunks.
+      ## This function assumes a `future` plan has ALREADY been set by the
+      ## caller (e.g. once, at the top of GeoSimapprox) -- it does not open
+      ## or close any plan itself, to avoid repeated worker start/stop
+      ## overhead and nested-parallelism issues when this is called many
+      ## times (e.g. once per replicate).
+      limits <- unique(round(seq(0, Nlocs, length.out = n.workers + 1)))
+      chunk_list <- lapply(seq_len(length(limits) - 1), function(k)
+        (limits[k] + 1):limits[k + 1])
+
+      simu <- matrix(NA, Nlocs, 1)
+      chunk_results <- future.apply::future_lapply(
+        chunk_list, call_kernel,
+        future.seed = TRUE, future.packages = "GeoModels"
+      )
+
+      for (k in seq_along(chunk_list)) {
+        simu[chunk_list[[k]], 1] <- chunk_results[[k]]
       }
+
     } else {
-      result <- dotCall64::.C64("TBD1d_amp",
-                   SIGNATURE = c("double","double","double","double",
-                                 "double","double","integer","integer","double"),
-                   ux = c(u[,1]), uy = c(u[,2]), 
-                   sx = c(coord[,1]), sy = c(coord[,2]), 
-                   phi = phi, amp = amp,
-                   L = as.integer(L), n = as.integer(Nlocs), 
-                   result = dotCall64::vector_dc("double", Nlocs), 
-                   INTENT = c("r","r","r","r","r","r","r","r","rw"),
-                   PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-      simu <- matrix(sqrt(CC) * result / sqrt(L), Nlocs, 1)
+      simu <- matrix(call_kernel(seq_len(Nlocs)), Nlocs, 1)
     }
   }
-  
+
   return(list(simu=simu, freqs=u, parametersg=parametersg))
 }
 #########################################################

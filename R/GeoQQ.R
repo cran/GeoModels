@@ -37,6 +37,13 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
   if(!inherits(fit,"GeoFit"))  stop("A GeoFit object is needed as input\n")
   if(type!="Q" && type!="D") stop("Type can be Q or D \n")
 
+  pp_tmp <- c(unlist(fit$param), unlist(fit$fixed))
+  mean_pars <- names(pp_tmp)[substr(names(pp_tmp), 1, 4) == "mean"]
+  if (!is.null(fit$X) && length(mean_pars) > 1) {
+    stop("GeoQQ() is intended for residual GeoFit objects when covariates are present. ",
+         "Please use GeoResiduals(fit) before calling GeoQQ().")
+  }
+
   model <- fit$model
   copula <- if(!is.null(fit$copula)) fit$copula else NULL
 
@@ -45,13 +52,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
 
   # Safe extraction: single-bracket returns NA when name is absent (no error)
   MM <- as.numeric(pp["mean"])
-VV <- as.numeric(pp["sill"])
-
-if (!fit$bivariate) {
-
-  needs_mean <- !(model %in% c("Gaussian"))  
-  if (needs_mean && is.na(MM)) stop("'mean' parameter is required")
-}
+  VV <- as.numeric(pp["sill"])
+  if (is.na(MM)) MM <- 0
 
 
   # Which models actually require 'sill' (marginal variance)?
@@ -267,13 +269,14 @@ if (!fit$bivariate) {
       }
 
       if(model %in% c("Tukeyh2")){
-        qtpTukeyh221 <- function(x,tail1,tail2){
-          sel1 <- which(x>=0); sel2 <- which(x<0)
-          x1 <- x[sel1]; x2 <- x[sel2]
-          uu1 <- qnorm(x1,0,1); uu2 <- qnorm(x2,0,1)
-          qq1 <- uu1*exp(0.5*tail1*uu1^2)
-          qq2 <- uu2*exp(0.5*tail2*uu2^2)
-          c(qq2,qq1)
+        qtpTukeyh221 <- function(p, tail1, tail2){
+          u <- qnorm(p)
+          out <- numeric(length(p))
+          sel1 <- which(u >= 0)
+          sel2 <- which(u < 0)
+          if (length(sel1)) out[sel1] <- u[sel1] * exp(0.5 * tail1 * u[sel1]^2)
+          if (length(sel2)) out[sel2] <- u[sel2] * exp(0.5 * tail2 * u[sel2]^2)
+          out
         }
         tail1 <- as.numeric(pp["tail1"]); tail2 <- as.numeric(pp["tail2"])
         q_t  <- MM + sqrt(VV)*qtpTukeyh221(probabilities,  tail1,tail2)
@@ -578,14 +581,15 @@ if (!fit$bivariate) {
 
       if(model %in% c("Tukeyh")){
         inverse_lamb <- function(x,tail) {
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
           val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
           sign(x)*val
         }
         dTukey <- function(z,tail){
-          a <- z*(1 + VGAM::lambertW(tail*z*z))
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
           b <- inverse_lamb(z,tail)
-          c0 <- dnorm(inverse_lamb(z,tail),0,1)
-          b*c0/a
+          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
+          dnorm(b) / den
         }
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
@@ -597,14 +601,15 @@ if (!fit$bivariate) {
       if(model %in% c("Tukeyh2")){
         tail1 <- as.numeric(pp["tail1"]); tail2 <- as.numeric(pp["tail2"])
         inverse_lamb <- function(x,tail){
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
           val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
           sign(x)*val
         }
         d_piece <- function(z, tail){
-          a <- z*(1 + VGAM::lambertW(tail*z*z))
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
           b <- inverse_lamb(z,tail)
-          c0 <- dnorm(inverse_lamb(z,tail),0,1)
-          b*c0/a
+          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
+          dnorm(b) / den
         }
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
@@ -645,14 +650,15 @@ if (!fit$bivariate) {
       if(model %in% c("TwoPieceTukeyh")){
         skew <- as.numeric(pp["skew"]); tail <- as.numeric(pp["tail"])
         inverse_lamb <- function(x,tail){
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
           val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
           sign(x)*val
         }
         dTukeyh <- function(z,tail){
-          a <- z*(1 + VGAM::lambertW(tail*z*z))
+          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
           b <- inverse_lamb(z,tail)
-          c0 <- dnorm(inverse_lamb(z,tail),0,1)
-          b*c0/a
+          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
+          dnorm(b) / den
         }
         xr <- .XL(range(dd, finite=TRUE)); ll <- .GRID(xr)
         z <- (ll-MM)/sqrt(VV)

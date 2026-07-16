@@ -1,45 +1,40 @@
-GeoScatterplot <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL, coordx_dyn = NULL, 
-                           distance = "Eucl", grid = FALSE, maxdist = NULL, neighb = NULL,
-                           times = NULL, numbins = 4, radius = 1, bivariate = FALSE, ...) {
+GeoScatterplot <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+                           coordx_dyn = NULL, distance = "Eucl", grid = FALSE,
+                           maxdist = NULL, neighb = NULL,
+                           times = NULL, numbins = 4, radius = 1,
+                           bivariate = FALSE, ...) {
 
     call <- match.call()
     opar <- par(no.readonly = TRUE)
-    on.exit(par(opar))  
-    model <- "Gaussian"
-    corrmodel <- 'exponential'
-    spatial <- TRUE
-    spacetime <- FALSE
-    maxtime <- ns <- NULL
+    on.exit(par(opar))
+
     type_dist <- CheckDistance(distance)
-  
-    # Check if spatial, spacetime or bivariate and set corresponding parameters
-    if (bivariate) coordt <- c(0, 1)
-    if (!is.null(coordt) && is.numeric(coordt) && is.numeric(times)) {
-        if (length(coordt) > 1 && length(times) >= 1) {
-            spacetime <- TRUE
-        }
+    spacetime <- FALSE
+    maxtime <- NULL
+    maxpairs <- Inf
+
+    if (length(numbins) != 1 || is.na(numbins) || numbins < 1 ||
+        numbins != as.integer(numbins)) {
+        stop("numbins must be a positive integer")
     }
-    
-    # Check for proper value of numbins
-    if (spatial || bivariate) {
-        if (!is.null(numbins) && !is.integer(numbins) && numbins < 0) {
-            stop('Insert a positive integer value for the number of bins\n')
-        }
+    numbins <- as.integer(numbins)
+
+
+    if (bivariate) coordt <- c(0, 1)
+
+    if (!is.null(coordt) && is.numeric(coordt) && !is.null(times) && is.numeric(times)) {
+        if (length(coordt) > 1 && length(times) >= 1) spacetime <- TRUE
     }
 
     if (spacetime) {
-        if (length(times) > 3) {
-            stop('Insert no more than three temporal instants\n')
-        }
-        if (maxtime < min(dist(coordt))) {
-            stop('Maximum temporal distance is too small\n')
+        if (length(times) > 3) stop("Insert no more than three temporal instants")
+        if (!is.null(maxtime) && maxtime < min(stats::dist(coordt))) {
+            stop("Maximum temporal distance is too small")
         }
     }
 
-    n <- 1
-
-    # Handle the case where grid is TRUE
     if (grid) {
+        if (is.null(coordy)) stop("coordy must be provided when grid=TRUE")
         if (is.null(coordz)) {
             a <- as.matrix(expand.grid(coordx, coordy))
             coordx <- a[, 1]
@@ -53,168 +48,228 @@ GeoScatterplot <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = 
         }
     }
 
-    # Handle dynamic coordinates case
     if (is.null(coordx_dyn)) {
-        if (!is.null(coordy)) {
-            if (is.null(coordz)) {
-                coordy <- coordx[, 2]
-                coordx <- coordx[, 1]
-                coords <- cbind(coordx, coordy, 0)
+        if (is.matrix(coordx) || is.data.frame(coordx)) {
+            coordx <- as.matrix(coordx)
+            if (ncol(coordx) == 1) {
+                if (is.null(coordy)) stop("coordy must be provided when coordx has one column")
+                if (is.null(coordz)) coordz <- rep(0, nrow(coordx))
+                coords <- cbind(coordx[, 1], coordy, coordz)
+            } else if (ncol(coordx) == 2) {
+                coords <- cbind(coordx[, 1], coordx[, 2], 0)
             } else {
-                coordz <- coordx[, 3]
-                coordy <- coordx[, 2]
-                coordx <- coordx[, 1]
-                coords <- cbind(coordx, coordy, coordz)
+                coords <- coordx[, 1:3, drop = FALSE]
             }
         } else {
-            if (!bivariate) {
-                coords <- coordx
-                if (is.null(coordz)) coords <- cbind(coords, 0)
-            } else {
-                coords <- rbind(coordx, coordx)
-                if (is.null(coordz)) coords <- cbind(coords, 0)
+            if (is.null(coordy)) {
+                stop("coordy must be provided when coordx is not a coordinate matrix")
             }
+            if (is.null(coordz)) coordz <- rep(0, length(coordx))
+            coords <- cbind(coordx, coordy, coordz)
         }
-        data <- t(data)
+
+        coords <- as.matrix(coords)
+        storage.mode(coords) <- "double"
+
+        if (bivariate) coords <- rbind(coords, coords)
+
+        data <- as.numeric(t(data))
         numcoord <- nrow(coords)
-        ns <- rep(numcoord, length(coordt))
-        if (bivariate) ns <- ns / 2
+
+        if (bivariate) {
+            ns <- rep(numcoord / 2, 2)
+        } else if (!is.null(coordt)) {
+            ns <- rep(numcoord, length(coordt))
+        } else {
+            ns <- numcoord
+        }
     } else {
-        env <- new.env()
-        coords <- do.call(rbind, args = c(coordx_dyn), envir = env) 
-        data <- unlist(data)
-        ns <- lengths(coordx_dyn) / 2 
+        coords <- do.call(rbind, coordx_dyn)
+        coords <- as.matrix(coords)
+        storage.mode(coords) <- "double"
+        if (ncol(coords) == 2) coords <- cbind(coords, 0)
+
+        data <- as.numeric(unlist(data))
+        ns <- lengths(coordx_dyn) / 2
     }
 
-    ##################################################    
+    if (ncol(coords) == 2) coords <- cbind(coords, 0)
+    if (ncol(coords) != 3) stop("coordinates must have two or three columns")
+
+    if (length(data) != nrow(coords)) {
+        stop("length(data) must match the number of coordinate rows after processing")
+    }
+
+    .panel_layout <- function(n) {
+        nc <- ceiling(sqrt(n))
+        nr <- ceiling(n / nc)
+        c(nr, nc)
+    }
+
+    .check_pairs_memory <- function(numcoords) {
+        n_pairs <- numcoords * (numcoords - 1) / 2
+        if (is.finite(maxpairs) && n_pairs > maxpairs) {
+            stop("Too many pairs requested. Reduce maxdist, use neighb, or increase maxpairs.")
+        }
+        as.integer(n_pairs)
+    }
+
+    .extract_pairs <- function(V) {
+        v0 <- V[[8]]
+        v1 <- V[[9]]
+        v2 <- V[[10]]
+        keep <- v0 != -1
+        data.frame(v0 = v0[keep], v1 = v1[keep], v2 = v2[keep])
+    }
+
+    .call_pairs <- function(data, coords, bins, maxdist) {
+        numcoords <- nrow(coords)
+        n_pairs <- .check_pairs_memory(numcoords)
+
+        v0 <- rep(-1, n_pairs)
+        v1 <- rep(NA_real_, n_pairs)
+        v2 <- rep(NA_real_, n_pairs)
+
+        V <- .C("pairs",
+                as.integer(numcoords),
+                as.double(data),
+                as.double(coords[, 1]),
+                as.double(coords[, 2]),
+                as.double(coords[, 3]),
+                as.double(numbins),
+                as.double(bins),
+                as.double(v0),
+                as.double(v1),
+                as.double(v2),
+                as.double(maxdist),
+                as.integer(type_dist),
+                as.double(radius),
+                PACKAGE = "GeoModels",
+                DUP = TRUE,
+                NAOK = TRUE)
+
+        .extract_pairs(V)
+    }
+
+    ##################################################
     ##### Scatterplot based on distances
     ##################################################
 
     if (is.null(neighb)) {
+        if (is.null(maxdist)) stop("maxdist must be provided when neighb is NULL")
+
         if (!bivariate && !spacetime) {
-            numcoords <- nrow(coords)
-            squares <- ceiling(sqrt(numbins))
-            squares_2 <- round(sqrt(numbins))
-            bins <- if (length(maxdist) == 1) seq(0, maxdist, maxdist / numbins) else c(0, maxdist)
-            n_pairs <- (numcoords * (numcoords - 1)) * 0.5
-            v0 <- rep(-1, n_pairs)
-            v1 <- rep(exp(-99), n_pairs)
-            v2 <- rep(exp(-99), n_pairs)
+            if (length(maxdist) != 1) stop("maxdist must be a scalar for the univariate spatial case")
 
-            V <- .C("pairs", as.integer(numcoords), as.double(data), as.double(coords[, 1]), as.double(coords[, 2]), 
-                    as.double(coords[, 3]), as.double(numbins), as.double(bins), as.double(v0), as.double(v1), 
-                    as.double(v2), as.double(maxdist), as.integer(type_dist), as.double(radius), PACKAGE = 'GeoModels', 
-                    DUP = TRUE, NAOK = TRUE) 
+            bins <- seq(0, maxdist, length.out = numbins + 1)
+            vvv <- .call_pairs(data, coords, bins, maxdist)
 
-            v0 <- as.numeric(unlist(V[7])); v0 <- v0[v0 != -1]
-            v1 <- as.numeric(unlist(V[8])); v1 <- v1[v1 != exp(-99)]
-            v2 <- as.numeric(unlist(V[9])); v2 <- v2[v2 != exp(-99)]        
-            vvv <- data.frame(v0, v1, v2)
+            lay <- .panel_layout(numbins)
+            par(mfrow = lay)
 
-            par(mfrow = c(squares_2, squares))
-            for (i in 1:numbins) {
-                v111 <- vvv[vvv$v0 == bins[i], 2]
-                v222 <- vvv[vvv$v0 == bins[i], 3]
+            for (i in seq_len(numbins)) {
+                sel <- vvv$v0 == bins[i]
+                v111 <- vvv$v1[sel]
+                v222 <- vvv$v2[sel]
+
+                main <- paste("(", signif(bins[i], 3), ",", signif(bins[i + 1], 3), "]")
 
                 if (length(v111) == 0 || length(v222) == 0) {
-                    print(paste("There are no points between ", signif(bins[i], 3), "and ", signif(bins[i + 1], 3)))
+                    plot.new()
+                    title(main = main)
+                    mtext("No pairs", side = 3, line = -2)
+                    message("There are no points between ", signif(bins[i], 3),
+                            " and ", signif(bins[i + 1], 3))
                 } else {
-                    main <- paste("(", signif(bins[i], 3), " , ", signif(bins[i + 1], 3), "]")
-                    plot(v111, v222, col = "#481567FF", xlab = "", ylab = "", main = main, ...) 
+                    plot(v111, v222, col = "#481567FF", xlab = "", ylab = "",
+                         main = main, ...)
                     abline(0, 1)
                 }
             }
         }
 
         if (bivariate) {
-            # Bivariate case processing
-            if (length(maxdist) == 1) maxdist <- c(maxdist, maxdist)
-            squares <- ceiling(sqrt(numbins))
-            squares_2 <- round(sqrt(numbins))
-            data1 <- data[1:ns[1]]
+            if (length(maxdist) == 1) maxdist <- rep(maxdist, 2)
+            if (length(maxdist) != 2) stop("maxdist must have length one or two for bivariate=TRUE")
+
+            data1 <- data[seq_len(ns[1])]
             data2 <- data[(ns[1] + 1):(ns[1] + ns[2])]
-            coords1 <- coords[1:ns[1], ]
-            coords2 <- coords[(ns[1] + 1):(ns[1] + ns[2]), ]
-  
-            numcoords1 <- nrow(coords1)
-            bins1 <- seq(0, maxdist[1], maxdist[1] / numbins)
-            n_pairs1 <- (numcoords1 * (numcoords1 - 1)) * 0.5
-            v01 <- rep(-1, n_pairs1)
-            v11 <- rep(exp(-99), n_pairs1)
-            v21 <- rep(exp(-99), n_pairs1)
+            coords1 <- coords[seq_len(ns[1]), , drop = FALSE]
+            coords2 <- coords[(ns[1] + 1):(ns[1] + ns[2]), , drop = FALSE]
 
-            V1 <- .C("pairs", as.integer(numcoords1), as.double(data1), as.double(coords1[, 1]), as.double(coords1[, 2]), 
-                     as.double(coords1[, 3]), as.double(numbins), as.double(bins1), as.double(v01), as.double(v11), 
-                     as.double(v21), as.double(maxdist[1]), as.integer(type_dist), as.double(radius), PACKAGE = 'GeoModels', 
-                     DUP = TRUE, NAOK = TRUE) 
+            bins1 <- seq(0, maxdist[1], length.out = numbins + 1)
+            bins2 <- seq(0, maxdist[2], length.out = numbins + 1)
 
-            numcoords2 <- nrow(coords2)
-            bins2 <- seq(0, maxdist[2], maxdist[2] / numbins)
-            n_pairs2 <- (numcoords2 * (numcoords2 - 1)) * 0.5
-            v02 <- rep(-1, n_pairs2)
-            v12 <- rep(exp(-99), n_pairs2)
-            v22 <- rep(exp(-99), n_pairs2)
+            vvv1 <- .call_pairs(data1, coords1, bins1, maxdist[1])
+            vvv2 <- .call_pairs(data2, coords2, bins2, maxdist[2])
 
-            V2 <- .C("pairs", as.integer(numcoords2), as.double(data2), as.double(coords2[, 1]), as.double(coords2[, 2]), 
-                     as.double(coords2[, 3]), as.double(numbins), as.double(bins2), as.double(v02), as.double(v12), 
-                     as.double(v22), as.double(maxdist[2]), as.integer(type_dist), as.double(radius), PACKAGE = 'GeoModels', 
-                     DUP = TRUE, NAOK = TRUE) 
+            lay <- .panel_layout(2 * numbins)
+            par(mfrow = lay)
 
-            v01 <- as.numeric(unlist(V1[7])); v01 <- v01[v01 != -1]
-            v11 <- as.numeric(unlist(V1[8])); v11 <- v11[v11 != exp(-99)]
-            v21 <- as.numeric(unlist(V1[9])); v21 <- v21[v21 != exp(-99)]        
-            vvv1 <- data.frame(v01, v11, v21)
+            for (i in seq_len(numbins)) {
+                sel <- vvv1$v0 == bins1[i]
+                v111 <- vvv1$v1[sel]
+                v222 <- vvv1$v2[sel]
+                cc <- if (length(v111) > 1 && length(v222) > 1) stats::cor(v111, v222) else NA_real_
+                main <- paste("cor =", signif(cc, 3),
+                              paste("(", signif(bins1[i], 3), ",", signif(bins1[i + 1], 3), "]"))
 
-            v02 <- as.numeric(unlist(V2[7])); v02 <- v02[v02 != -1]
-            v12 <- as.numeric(unlist(V2[8])); v12 <- v12[v12 != exp(-99)]
-            v22 <- as.numeric(unlist(V2[9])); v22 <- v22[v22 != exp(-99)]        
-            vvv2 <- data.frame(v02, v12, v22)
-
-            par(mfrow = c(squares_2, squares * 2))
-            for (i in 1:numbins) {
-                v111_1 <- vvv1[vvv1$v01 == bins1[i], 2]
-                v222_1 <- vvv1[vvv1$v01 == bins1[i], 3]
-                main <- paste("cor =", signif(cor(v111_1, v222_1), 3), paste("(", signif(bins1[i], 3), " , ", signif(bins1[i + 1], 3), "]"))
-                plot(v111_1, v222_1, col = "#481567FF", xlab = "", ylab = "", main = main, ...) 
-                abline(0, 1)
+                if (length(v111) == 0 || length(v222) == 0) {
+                    plot.new(); title(main = main); mtext("No pairs", side = 3, line = -2)
+                } else {
+                    plot(v111, v222, col = "#481567FF", xlab = "", ylab = "",
+                         main = main, ...)
+                    abline(0, 1)
+                }
             }
-            for (i in 1:numbins) {
-                v111_2 <- vvv2[vvv2$v02 == bins2[i], 2]
-                v222_2 <- vvv2[vvv2$v02 == bins2[i], 3]
-                main <- paste("cor =", signif(cor(v111_2, v222_2), 3), paste("(", signif(bins2[i], 3), " , ", signif(bins2[i + 1], 3), "]"))
-                plot(v111_2, v222_2, col = "#481567FF", xlab = "", ylab = "", main = main, ...) 
-                abline(0, 1)
+
+            for (i in seq_len(numbins)) {
+                sel <- vvv2$v0 == bins2[i]
+                v111 <- vvv2$v1[sel]
+                v222 <- vvv2$v2[sel]
+                cc <- if (length(v111) > 1 && length(v222) > 1) stats::cor(v111, v222) else NA_real_
+                main <- paste("cor =", signif(cc, 3),
+                              paste("(", signif(bins2[i], 3), ",", signif(bins2[i + 1], 3), "]"))
+
+                if (length(v111) == 0 || length(v222) == 0) {
+                    plot.new(); title(main = main); mtext("No pairs", side = 3, line = -2)
+                } else {
+                    plot(v111, v222, col = "#481567FF", xlab = "", ylab = "",
+                         main = main, ...)
+                    abline(0, 1)
+                }
             }
         }
     }
 
-    ##################################################    
+    ##################################################
     ##### Scatterplot based on neighborhood
     ##################################################
+
     if (!is.null(neighb)) {
         ln <- length(neighb)
-        squares <- ceiling(sqrt(ln))
-        squares_2 <- round(sqrt(ln))
+        lay <- .panel_layout(ln)
 
         if (!bivariate && !spacetime) {
-            par(mfrow = c(squares_2, squares))
-            for (i in 1:ln) {
-                sel <- GeoNeighIndex(coordx = coords, neighb = neighb[i])  
+            par(mfrow = lay)
+            for (i in seq_len(ln)) {
+                sel <- GeoNeighIndex(coordx = coords, neighb = neighb[i])
                 data1 <- data[sel$colidx]
                 data2 <- data[sel$rowidx]
-                plot(data1, data2, col = "#481567FF", xlab = "", ylab = "", 
+                plot(data1, data2, col = "#481567FF", xlab = "", ylab = "",
                      main = paste("Neighb =", neighb[i]), ...)
+                abline(0, 1)
             }
         }
 
         if (bivariate) {
-            # Add bivariate neighborhood case
+            stop("Neighborhood scatterplot for bivariate=TRUE is not implemented yet")
         }
 
         if (spacetime) {
-            # Add spacetime case
+            stop("Neighborhood scatterplot for spacetime=TRUE is not implemented yet")
         }
     }
-  
-    invisible()
+
+    invisible(call)
 }

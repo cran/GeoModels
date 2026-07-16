@@ -1,8 +1,31 @@
 GeoVarestbootstrap <- function(fit, K = 100, sparse = FALSE,
                                optimizer = NULL, lower = NULL, upper = NULL,
                                method = "cholesky", alpha = 0.95,
-                               L = 1000, parallel = TRUE, ncores = NULL,
-                               progress = TRUE) {
+                               L = 10000, parallel = TRUE, ncores = NULL,
+                               progress = TRUE, seed = NULL) {
+
+  ## ------------------------------------------------------------------
+  ## Optional RNG seed, restoring user RNG state on exit
+  ## ------------------------------------------------------------------
+  if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+
+    set.seed(seed)
+  }
 
   ## ------------------------------------------------------------------
   ## Setup cleanup handlers
@@ -169,10 +192,31 @@ fit$thin_method <- thin_method_canonical(fit$thin_method)
     if (method == "cholesky") {
       data_sim_full <- do.call(GeoSim, c(sim_args, list(sparse = sparse, method = method)))
     } else if (method %in% c("TB", "CE")) {
+      ## GeoSimapprox may parallelize over nrep = K. This phase is
+      ## completed before the bootstrap refits start, so the refit
+      ## parallelism below is not nested.
+      old_plan_after_sim <- NULL
+
+      if (isTRUE(parallel) && requireNamespace("future", quietly = TRUE)) {
+        old_plan_after_sim <- future::plan()
+      }
+
       data_sim_full <- do.call(
         GeoSimapprox,
-        c(sim_args, list(method = method, L = L, parallel = FALSE))
+        c(
+          sim_args,
+          list(
+            method   = method,
+            L        = L,
+            parallel = parallel,
+            ncores   = ncores
+          )
+        )
       )
+
+      if (!is.null(old_plan_after_sim)) {
+        try(future::plan(old_plan_after_sim), silent = TRUE)
+      }
     } else {
       stop("Unsupported method for simulation")
     }
@@ -200,7 +244,7 @@ fit$thin_method <- thin_method_canonical(fit$thin_method)
     ncores   <- 1
   } else {
     if (is.null(parallel)) parallel <- TRUE
-    ncores <- max(1L, min(if (is.null(ncores)) coremax - 1L else ncores, K))
+    ncores <- max(1L, min(if (is.null(ncores)) getOption("mc.cores", 4L) else ncores, K))
   }
 
   ## ------------------------------------------------------------------
@@ -428,8 +472,29 @@ is_stochastic_thinning <- function(fit_obj) {
       result
     }
 
+    ## Il limite fisso precedente (200 MiB) era sotto il default di future
+    ## (500 MiB) e con un fit di grandi dimensioni (es. milioni di punti)
+    ## puo' scatenare lo stesso errore "globals exceed maximum allowed size"
+    ## incontrato in GeoVarest. Lo rendiamo dinamico e proporzionato al
+    ## payload reale delle closure trasferite ai worker.
+    needed_size <- tryCatch({
+      max(vapply(
+        list(call_geofit, extract_param, is_stochastic_thinning,
+             thin_method_canonical, estimate_worker),
+        function(f) as.numeric(utils::object.size(f)),
+        numeric(1)
+      ))
+    }, error = function(e) NA_real_)
+
     old_limit <- getOption("future.globals.maxSize")
-    options(future.globals.maxSize = 200 * 1024^2)
+    safety_margin <- 1.5
+    default_cap   <- 500 * 1024^2
+
+    options(future.globals.maxSize = if (is.na(needed_size)) {
+      max(default_cap, 4 * 1024^3)
+    } else {
+      max(default_cap, needed_size * safety_margin)
+    })
     on.exit(options(future.globals.maxSize = old_limit), add = TRUE)
 
     future::plan(future::multisession, workers = ncores)
@@ -524,7 +589,7 @@ is_stochastic_thinning <- function(fit_obj) {
   if (exists("res_raw", inherits = FALSE)) rm(res_raw)
   gc(verbose = FALSE, full = TRUE)
 
-  ## ------------------------------------------------------------------
+    ## ------------------------------------------------------------------
   ## 10. Post-processing
   ## ------------------------------------------------------------------
   n_successful <- nrow(res)
@@ -545,18 +610,41 @@ is_stochastic_thinning <- function(fit_obj) {
   names(stderr) <- names(fit$param)
 
   numparam <- length(fit$param)
+
   if ((fit$likelihood == "Marginal" && fit$type %in% c("Independence", "Pairwise")) ||
       (fit$likelihood == "Conditional" && fit$type == "Pairwise")) {
-    H       <- fit$sensmat
+
+    H <- as.matrix(fit$sensmat)
+    storage.mode(H) <- "double"
+
+    ## If CompLik2 optimizes the average negative composite likelihood,
+    ## fit$sensmat is on the average-per-pair scale.  For CLAIC/CLBIC,
+    ## fit$logCompLik is on the total composite-likelihood scale, so H
+    ## must be put back on the total scale when the number of pairs is known.
+    if (!is.null(fit$numpairs) &&
+        length(fit$numpairs) == 1L &&
+        is.finite(fit$numpairs) &&
+        fit$numpairs > 0) {
+      H <- H * fit$numpairs
+    }
+
+    H <- (H + t(H)) / 2
+
     penalty <- sum(diag(H %*% invG))
     claic   <- -2 * fit$logCompLik + 2 * penalty
     clbic   <- -2 * fit$logCompLik + log(dimat) * penalty
+
     fit$varimat <- H %*% invG %*% H
+
   } else if (fit$likelihood == "Full" && fit$type == "Standard") {
+
     claic <- -2 * fit$logCompLik + 2 * numparam
     clbic <- -2 * fit$logCompLik + log(dimat) * numparam
+
   } else {
+
     claic <- clbic <- NA_real_
+
   }
 
   ## ------------------------------------------------------------------
@@ -618,6 +706,7 @@ is_stochastic_thinning <- function(fit_obj) {
   fit$bootstrap_success_rate <- n_successful / K
   fit$bootstrap_thin_method <- fit$thin_method
   fit$bootstrap_p_neighb <- fit$p_neighb
+  fit$bootstrap_seed <- seed
   fit$bootstrap_thinning_seed_rule <- "1234567 + k * 9999 for stochastic thinning"
 
   return(fit)

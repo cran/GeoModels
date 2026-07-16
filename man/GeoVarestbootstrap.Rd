@@ -6,9 +6,15 @@
  The procedure update a \code{GeoFit} object computing stderr estimation, confidence intervals
  and p-values using parametric bootstrap. Bootstrap is used 
  to estimate the inverse of the variance covariance matrix. A faster alternative is \code{GeoVarest}.}
-\usage{GeoVarestbootstrap(fit,K=100,sparse=FALSE, 
- optimizer=NULL, lower=NULL, upper=NULL, 
- method="cholesky",alpha=0.95, L=1000,parallel=TRUE,ncores=NULL,progress=TRUE)}
+\usage{
+GeoVarestbootstrap(
+  fit, K = 100, sparse = FALSE,
+  optimizer = NULL, lower = NULL, upper = NULL,
+  method = "cholesky", alpha = 0.95, L = 10000,
+  parallel = TRUE, ncores = NULL, progress = TRUE,
+  seed = NULL
+)
+}
 \arguments{
  \item{fit}{A fitted object obtained from the
  \code{\link{GeoFit}}.}
@@ -27,8 +33,11 @@
  \item{parallel}{Logical; if \code{TRUE} then 
  the estimation step is parallelized 
  }
- \item{ncores}{Numeric; number of cores involved in parallelization.} 
+ \item{ncores}{Numeric; number of cores involved in the parallel score
+ evaluation. If \code{NULL}, the number of cores is chosen automatically as 4.}
  \item{progress}{Logic; If TRUE then a progress bar is shown.}
+  \item{seed}{Optional integer seed for reproducibility of the simulated
+ samples.}
  }
 \details{ The function updates a \code{GeoFit} object estimating stderr estimation 
 and confidence interval using parametric bootstrap.}
@@ -37,7 +46,9 @@ and confidence interval using parametric bootstrap.}
 }
 
 
-\seealso{\code{\link{GeoFit}}.}
+\seealso{
+\code{\link{GeoFit}} for the fitted objects used as input
+}
 
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},

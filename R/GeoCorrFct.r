@@ -247,8 +247,11 @@ if(!bivariate){
                               cova=cc;
                             } 
                         if(tail>1e-05&&abs(eta)<=1e-05){
-                              vs=  sill*(1-2*tail)^(-1.5)     
-                              cc=(-rho/((1+h*(tail-1))*(-1+tail+tail*rho)*(1+tail*(-2+tail-tail*rho^2))^0.5))/vs
+                              ## When skew is approximately zero, Tukey-gh reduces to Tukey-h.
+                              ## This avoids the undefined object `h` previously used here and
+                              ## keeps the formula consistent with the Tukeyh block above.
+                              vs=sill*(1-2*tail)^(-1.5)
+                              cc=(rho*(1-2*tail)^(1.5))/((1-tail)^2-(tail*rho)^2)^(1.5)
                               
                               cova=cc;
                             } 
@@ -914,4 +917,3 @@ persp(cc,x= x$distances,y=x$times, theta = 20, phi = 30,
 ################################################################################################
 invisible()
 }  
-

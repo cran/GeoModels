@@ -2,50 +2,117 @@
 ## Parametric bootstrap test for spatial support
 ########################################
 GeoTestsupp_space <- function(data, coordx,
-                               start, fixed,
-                               model = "Gaussian",
-                               h0 = NULL,
-                               optimizer = "bobyqa",
-                               lower = NULL, upper = NULL,
-                               neighb = 5,
-                               B = 1000,
-                               likelihood = NULL,
-                               type = NULL,
-                               method = "Cholesky",
-                               parallel = TRUE,
-                               ncores = NULL,
-                               progress = TRUE) {
+                              start, fixed,
+                              model = "Gaussian",
+                              h0 = NULL,
+                              optimizer = "bobyqa",
+                              lower = NULL, upper = NULL,
+                              neighb = 5,
+                              B = 1000,
+                              likelihood = NULL,
+                              type = NULL,
+                              method = c("cholesky", "TB"),
+                              L = 1000,
+                              parallel = TRUE,
+                              ncores = NULL,
+                              progress = TRUE,
+                              seed = NULL) {
 
-  ## ====== input validations  ======
+  ## ====== cleanup: preserve user's global future/progress settings ======
+  future_plan_original <- NULL
+  if (requireNamespace("future", quietly = TRUE)) {
+    future_plan_original <- future::plan()
+    on.exit(try(future::plan(future_plan_original), silent = TRUE), add = TRUE)
+  }
+
+  old_handlers <- NULL
+  if (requireNamespace("progressr", quietly = TRUE)) {
+    old_handlers <- progressr::handlers()
+    on.exit({
+      if (length(old_handlers) > 0L) progressr::handlers(old_handlers)
+      else progressr::handlers("default")
+    }, add = TRUE)
+  }
+
+  ## ====== reproducibility: optional seed without side effects ======
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed)) {
+      stop("seed must be NULL or a single finite numeric value", call. = FALSE)
+    }
+
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+
+    set.seed(as.integer(seed))
+  }
+
+  ## ====== input validations ======
+  method <- match.arg(method)
+
   if (!is.matrix(coordx)) coordx <- as.matrix(coordx)
-  if (!is.numeric(data)) data <- as.numeric(data)
-  
-  if (nrow(coordx) != length(data)) 
+  if (!is.numeric(data))  data   <- as.numeric(data)
+
+  if (nrow(coordx) != length(data)) {
     stop("coordx rows (", nrow(coordx), ") must match data length (", length(data), ")")
-  if (B < 1) 
-    stop("B must be at least 1")
-  if (!is.null(neighb) && neighb < 1) 
+  }
+  if (!is.numeric(B) || length(B) != 1L || !is.finite(B) || B < 1) {
+    stop("B must be a positive integer")
+  }
+  B <- as.integer(B)
+
+  if (!is.numeric(L) || length(L) != 1L || !is.finite(L) || L < 1) {
+    stop("L must be a positive integer")
+  }
+  L <- as.integer(L)
+
+  if (!is.logical(progress) || length(progress) != 1L) {
+    stop("progress must be logical (TRUE or FALSE)")
+  }
+  if (!is.null(neighb) && neighb < 1) {
     stop("neighb must be positive")
-  if (!is.null(h0) && (h0 <= 0 || !is.finite(h0))) 
+  }
+  if (!is.null(h0) && (h0 <= 0 || !is.finite(h0))) {
     stop("h0 must be positive and finite")
-  
-  ## ====== COSTANTI ======
+  }
+  if (xor(is.null(likelihood), is.null(type))) {
+    stop("Either specify both 'likelihood' and 'type', or leave both NULL for automatic selection.")
+  }
+
+  ## ====== constants ======
   max_scale_cap <- 1e6
   min_box_width <- 1e-3
   corrmodel <- "GenWend"
   eps <- 1e-6
   NN <- nrow(coordx)
 
-  ## ====== SETUP PROGRESS HANDLERS ======
-  if (progress) {
+  ## ====== setup progress handlers ======
+  use_progressr <- isTRUE(progress) && requireNamespace("progressr", quietly = TRUE)
+  if (isTRUE(progress) && !use_progressr) {
+    warning("progress=TRUE but progressr is not available; progress bars disabled.", call. = FALSE)
+  }
+
+  if (use_progressr) {
     progressr::handlers(global = TRUE)
     progressr::handlers(progressr::handler_txtprogressbar(clear = TRUE))
-  } else {
+  } else if (requireNamespace("progressr", quietly = TRUE)) {
     progressr::handlers("void")
   }
 
-  ## ====== AUTOMATIC LIKELIHOOD SELECTION ======
-  if (is.null(likelihood) || is.null(type)) {
+  ## ====== automatic likelihood selection ======
+  if (is.null(likelihood) && is.null(type)) {
     if (NN > 2000) {
       likelihood <- "Marginal"
       type <- "Pairwise"
@@ -56,20 +123,31 @@ GeoTestsupp_space <- function(data, coordx,
     }
   }
 
-  ## ====== COMPUTE d_min E h0 ======
+  ## ====== robust core handling, before simulation ======
+  coremax <- parallel::detectCores()
+  if (is.na(coremax) || coremax <= 1L) {
+    parallel <- FALSE
+    ncores <- 1L
+  } else {
+    if (is.null(ncores)) ncores <- min(coremax - 1L, B)
+    ncores <- max(1L, min(as.integer(ncores), B, coremax))
+    if (ncores == 1L) parallel <- FALSE
+  }
+
+  ## ====== compute d_min and h0 ======
   nn <- nabor::knn(coordx, coordx, k = 2)
   d_min <- min(nn$nn.dists[, 2])
   h0_val <- if (is.null(h0)) max(eps, d_min - eps) else h0
   if (h0_val <= eps) stop("Invalid h0: must be positive.")
 
-  ## ====== BOUND FINITI PER mean/sill ======
-  dat_sd <- try(sd(as.numeric(data), na.rm = TRUE), silent = TRUE)
+  ## ====== finite bounds for mean/sill ======
+  dat_sd <- try(stats::sd(as.numeric(data), na.rm = TRUE), silent = TRUE)
   if (inherits(dat_sd, "try-error") || !is.finite(dat_sd)) dat_sd <- 1
   dat_sd <- max(dat_sd, 1e-6)
   BIG_M <- max(1e3, 100 * dat_sd)
   SILL_MIN <- 1e-8
 
-  ## ====== U_big PER scale (upper in H1) ======
+  ## ====== U_big for scale upper bound in H1 ======
   mins <- apply(coordx, 2, min)
   maxs <- apply(coordx, 2, max)
   bbox_diag <- sqrt(sum((maxs - mins)^2))
@@ -77,30 +155,35 @@ GeoTestsupp_space <- function(data, coordx,
   U_big <- min(U_big, max_scale_cap)
 
   if (!is.null(h0) && h0 > U_big) {
-    warning(sprintf("Provided h0 (%.4f) exceeds practical upper bound (%.4f); results may be unstable.", h0, U_big))
+    warning(sprintf(
+      "Provided h0 (%.4f) exceeds practical upper bound (%.4f); results may be unstable.",
+      h0, U_big
+    ))
   }
 
   msg <- sprintf("Testing H0: compact support <= %.5f  ", h0_val)
   if (is.null(h0)) msg <- paste0(msg, "  (independence test)")
   message(msg)
 
-  ## ====== parameters validations  ======
+  ## ====== parameter validation ======
   corr_names <- CorrParam(corrmodel)
   nuis_names <- NuisParam(model)
   expected <- sort(unique(c(corr_names, nuis_names)))
   provided <- sort(unique(c(names(start), names(fixed))))
-  
+
   if (!identical(expected, provided)) {
     missing <- setdiff(expected, provided)
     extra <- setdiff(provided, expected)
     msg_parts <- c()
     if (length(missing)) msg_parts <- c(msg_parts, paste0("missing: ", paste(missing, collapse = ", ")))
-    if (length(extra)) msg_parts <- c(msg_parts, paste0("extra: ", paste(extra, collapse = ", ")))
-    stop("Parameter names in start+fixed must match CorrParam(corrmodel)+NuisParam(model). ",
-         paste(msg_parts, collapse = " | "))
+    if (length(extra))   msg_parts <- c(msg_parts, paste0("extra: ",   paste(extra,   collapse = ", ")))
+    stop(
+      "Parameter names in start+fixed must match CorrParam(corrmodel)+NuisParam(model). ",
+      paste(msg_parts, collapse = " | ")
+    )
   }
 
-  ## ====== UTILITY: NORMALIZZA BOUNDS ======
+  ## ====== utility: normalize bounds ======
   start_names_ref <- sort(names(start))
   norm_bounds <- function(b, which = c("lower", "upper"), start_names = start_names_ref) {
     which <- match.arg(which)
@@ -121,15 +204,20 @@ GeoTestsupp_space <- function(data, coordx,
   widen_boxes <- function(lo, up, starts = NULL, positive = character()) {
     nms <- union(names(lo), names(up))
     for (nm in nms) {
-      if (is.null(lo[[nm]]) || !is.finite(lo[[nm]])) 
+      if (is.null(lo[[nm]]) || !is.finite(lo[[nm]])) {
         lo[[nm]] <- if (nm %in% positive) SILL_MIN else -BIG_M
-      if (is.null(up[[nm]]) || !is.finite(up[[nm]])) 
+      }
+      if (is.null(up[[nm]]) || !is.finite(up[[nm]])) {
         up[[nm]] <- BIG_M
-      
+      }
+
       w <- up[[nm]] - lo[[nm]]
       if (!is.finite(w) || w <= 0) {
-        mid <- if (!is.null(starts) && !is.null(starts[[nm]]) && is.finite(starts[[nm]])) 
-          starts[[nm]] else 0
+        mid <- if (!is.null(starts) && !is.null(starts[[nm]]) && is.finite(starts[[nm]])) {
+          starts[[nm]]
+        } else {
+          0
+        }
         lo[[nm]] <- mid - min_box_width / 2
         up[[nm]] <- mid + min_box_width / 2
       } else if (w < min_box_width) {
@@ -137,7 +225,7 @@ GeoTestsupp_space <- function(data, coordx,
         lo[[nm]] <- lo[[nm]] - extra
         up[[nm]] <- up[[nm]] + extra
       }
-      
+
       if (nm %in% positive) {
         if (lo[[nm]] < eps) lo[[nm]] <- eps
         if (up[[nm]] <= lo[[nm]]) up[[nm]] <- lo[[nm]] + min_box_width
@@ -146,10 +234,11 @@ GeoTestsupp_space <- function(data, coordx,
     list(lower = lo, upper = up)
   }
 
-  ## ====== HELPER: DO FIT (passa sempre il dataset) ======
+  ## ====== helper: fit model on a supplied dataset ======
   do_fit <- function(data_, starts, fixeds, lows, ups) {
     GeoFit(
       data = data_, coordx = coordx, corrmodel = corrmodel,
+      model = model,
       start = starts, fixed = fixeds,
       optimizer = optimizer,
       lower = lows, upper = ups,
@@ -157,53 +246,55 @@ GeoTestsupp_space <- function(data, coordx,
     )
   }
 
-  ## ====== FIT H0 ======
+  ## ====== fit H0 ======
   start0 <- start
   fixed0 <- fixed
 
   if (is.null(h0)) {
-    # Test di indipendenza: scale fissata a h0_val
+    ## Independence test: fix scale just below the minimum observed distance.
     if ("scale" %in% names(start0)) {
       start0$scale <- NULL
     }
     fixed0$scale <- h0_val
   }
 
-  # Bounds per H0, solo sui nomi start0
   lower_h0 <- lower
   upper_h0 <- upper
   if (is.null(h0)) {
     if (!is.null(lower_h0) && "scale" %in% names(lower_h0)) lower_h0$scale <- NULL
     if (!is.null(upper_h0) && "scale" %in% names(upper_h0)) upper_h0$scale <- NULL
   }
-  
+
   lower0 <- norm_bounds(lower_h0, "lower", start_names = sort(names(start0)))
   upper0 <- norm_bounds(upper_h0, "upper", start_names = sort(names(start0)))
 
   if (!is.null(h0) && "scale" %in% names(start0)) {
     upper0$scale <- min(
-      if (is.null(upper0$scale) || !is.finite(upper0$scale)) h0_val else upper0$scale, 
+      if (is.null(upper0$scale) || !is.finite(upper0$scale)) h0_val else upper0$scale,
       h0_val
     )
-    if (is.null(lower0$scale) || !is.finite(lower0$scale) || lower0$scale <= 0) 
+    if (is.null(lower0$scale) || !is.finite(lower0$scale) || lower0$scale <= 0) {
       lower0$scale <- eps
+    }
   }
 
-  wb0 <- widen_boxes(lower0, upper0, starts = start0,
-                     positive = intersect(c("sill", "scale"), names(start0)))
+  wb0 <- widen_boxes(
+    lower0, upper0, starts = start0,
+    positive = intersect(c("sill", "scale"), names(start0))
+  )
   lower0 <- wb0$lower
   upper0 <- wb0$upper
 
   fit0 <- do_fit(data, start0, fixed0, lower0, upper0)
 
-  ## ====== FIT H1 ======
+  ## ====== fit H1 ======
   start1 <- start
   fixed1 <- fixed
   if (!("scale" %in% names(start1)) && "scale" %in% names(fixed1)) {
     start1$scale <- fixed1$scale
     fixed1$scale <- NULL
   }
-  
+
   if ("scale" %in% names(start1)) {
     if (!is.finite(start1$scale) || start1$scale <= 0) {
       start1$scale <- max(h0_val * 1.5, eps)
@@ -215,70 +306,88 @@ GeoTestsupp_space <- function(data, coordx,
   upper1 <- norm_bounds(upper, "upper", start_names = sort(names(start1)))
 
   if ("scale" %in% names(start1)) {
-    if (is.null(lower1$scale) || !is.finite(lower1$scale) || lower1$scale <= 0) 
+    if (is.null(lower1$scale) || !is.finite(lower1$scale) || lower1$scale <= 0) {
       lower1$scale <- eps
-    if (is.null(upper1$scale) || !is.finite(upper1$scale) || upper1$scale <= 0) 
+    }
+    if (is.null(upper1$scale) || !is.finite(upper1$scale) || upper1$scale <= 0) {
       upper1$scale <- U_big
+    }
     upper1$scale <- min(upper1$scale, U_big)
   }
 
-  wb1 <- widen_boxes(lower1, upper1, starts = start1,
-                     positive = intersect(c("sill", "scale"), names(start1)))
+  wb1 <- widen_boxes(
+    lower1, upper1, starts = start1,
+    positive = intersect(c("sill", "scale"), names(start1))
+  )
   lower1 <- wb1$lower
   upper1 <- wb1$upper
 
   fit1 <- do_fit(data, start1, fixed1, lower1, upper1)
 
-  ## ====== LRT OSSERVATO (mantiene logCompLik) ======
+  ## ====== observed LRT ======
   ll0 <- fit0$logCompLik
   ll1 <- fit1$logCompLik
   if (ll1 < ll0) {
-    message("Note: H1 log-likelihood (", round(ll1, 3), 
+    message("Note: H1 log-likelihood (", round(ll1, 3),
             ") < H0 log-likelihood (", round(ll0, 3), "), LRT set to 0")
   }
   Lambda_obs <- max(0, 2 * (ll1 - ll0))
 
-  ## ====== EARLY EXIT SE H1 SODDISFA H0 ======
-  if (!is.null(fit1$param$scale) && is.finite(fit1$param$scale) && 
+  ## ====== early exit if unconstrained fit satisfies H0 ======
+  if (!is.null(fit1$param$scale) && is.finite(fit1$param$scale) &&
       fit1$param$scale <= h0_val + 1e-12) {
     cat("Unconstrained fit satisfies H0 (bootstrap not needed)\n")
     return(list(
-      d_min = round(d_min, 5), 
+      d_min = round(d_min, 5),
       h0 = round(h0_val, 5),
-      lambda_obs = 0, 
-      pvalue = 1, 
-      fit_H0 = fit0, 
+      lambda_obs = 0,
+      pvalue = 1,
+      seed = seed,
+      fit_H0 = fit0,
       fit_H1 = fit1
     ))
   }
 
-  ## ====== PARAMETRI H0 PER SIMULAZIONE ======
+  ## ====== H0 parameters for simulation ======
   message("Running parametric bootstrap (B = ", B, ") ...")
   parH0 <- c(fit0$param, fit0$fixed)
   param_H0 <- as.list(parH0[expected])
 
-  ## ====== SIMULAZIONI ======
-  if (method == "Cholesky") {
+  ## ====== simulations ======
+  if (method == "cholesky") {
     data_sim <- GeoModels::GeoSim(
-      coordx = coordx, 
+      coordx = coordx,
       corrmodel = corrmodel,
-      param = param_H0, 
+      param = param_H0,
       model = model,
-      sparse = TRUE, 
+      sparse = TRUE,
       nrep = B,
       progress = FALSE
     )
   } else if (method == "TB") {
+    old_plan_after_sim <- NULL
+    if (isTRUE(parallel) && requireNamespace("future", quietly = TRUE)) {
+      old_plan_after_sim <- future::plan()
+    }
+
     data_sim <- GeoModels::GeoSimapprox(
-      coordx = coordx, 
+      coordx = coordx,
       corrmodel = corrmodel,
       param = param_H0,
       model = model,
+      method = "TB",
+      L = L,
       nrep = B,
+      parallel = parallel,
+      ncores = ncores,
       progress = FALSE
     )
+
+    if (!is.null(old_plan_after_sim)) {
+      try(future::plan(old_plan_after_sim), silent = TRUE)
+    }
   } else {
-    stop("method must be 'Cholesky' or 'TB'.")
+    stop("method must be 'cholesky' or 'TB'.")
   }
 
   get_rep <- function(sim, b) {
@@ -286,18 +395,7 @@ GeoTestsupp_space <- function(data, coordx,
     if (is.list(X)) X[[b]] else X[, b]
   }
 
-  ## ====== GESTIONE CORES ROBUSTA ======
-  coremax <- parallel::detectCores()
-  if (is.na(coremax) || coremax <= 1) {
-    parallel <- FALSE
-    ncores <- 1
-  } else {
-    if (is.null(ncores)) ncores <- min(coremax - 1, B)
-    ncores <- max(1, min(ncores, B, coremax))
-    if (ncores == 1) parallel <- FALSE
-  }
-
-  ## ====== HELPER BOOTSTRAP (usa do_fit con data passati) ======
+  ## ====== bootstrap helper ======
   estimate_fun <- function(Zb) {
     f0 <- suppressWarnings(try(do_fit(Zb, start0, fixed0, lower0, upper0), silent = TRUE))
     f1 <- suppressWarnings(try(do_fit(Zb, start1, fixed1, lower1, upper1), silent = TRUE))
@@ -308,81 +406,102 @@ GeoTestsupp_space <- function(data, coordx,
     max(0, 2 * (f1$logCompLik - f0$logCompLik))
   }
 
-  ## ====== BOOTSTRAP SEQUENZIALE O PARALLELO ======
+  ## ====== sequential or parallel bootstrap ======
   if (!parallel) {
     message(sprintf("Performing %d estimations under H0 and H1 sequentially...", B))
-    if (progress) {
-      progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
+
+    if (use_progressr) {
+      Lambda_boot <- progressr::with_progress({
+        pb <- progressr::progressor(along = seq_len(B))
+        out <- numeric(B)
+        ok <- rep(TRUE, B)
+        for (b in seq_len(B)) {
+          pb(sprintf("b=%d", b))
+          Zb <- get_rep(data_sim, b)
+          val <- estimate_fun(Zb)
+          if (!is.finite(val)) ok[b] <- FALSE else out[b] <- val
+        }
+        out[ok]
+      })
+    } else {
+      Lambda_boot <- numeric(B)
+      ok <- rep(TRUE, B)
+      for (b in seq_len(B)) {
+        Zb <- get_rep(data_sim, b)
+        val <- estimate_fun(Zb)
+        if (!is.finite(val)) ok[b] <- FALSE else Lambda_boot[b] <- val
+      }
+      Lambda_boot <- Lambda_boot[ok]
     }
-    pb <- if (progress) progressr::progressor(along = seq_len(B)) else NULL
-    
-    Lambda_boot <- numeric(B)
-    ok <- rep(TRUE, B)
-    for (b in seq_len(B)) {
-      if (progress) pb(sprintf("b=%d", b))
-      Zb <- get_rep(data_sim, b)
-      val <- estimate_fun(Zb)
-      if (!is.finite(val)) { ok[b] <- FALSE } else { Lambda_boot[b] <- val }
-    }
-    Lambda_boot <- Lambda_boot[ok]
-    
+
   } else {
-    message(sprintf("Performing %d estimations under H0 and H1 using %d cores...", B, ncores))
-    future::plan(future::multisession, workers = ncores)
-    on.exit(future::plan(future::sequential), add = TRUE)
-    if (progress) {
-      progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
-      pb <- progressr::progressor(along = seq_len(B))
-    }
-    b <- NULL
-    Lambda_boot <- foreach::foreach(
-      b = seq_len(B),
-      .combine = c,
-      .options.future = list(
-        packages = "GeoModels",
-        seed = TRUE,
-        stdout = FALSE,
-        conditions = "none"
-      )
-    ) %dofuture% {
-      if (progress) pb(sprintf("b=%d", b))
-      Zb <- get_rep(data_sim, b)
-      f0 <- suppressWarnings(try(
-        GeoFit(
-          data = Zb, coordx = coordx, corrmodel = corrmodel,
-          start = start0, fixed = fixed0, optimizer = optimizer,
-          lower = lower0, upper = upper0,
-          neighb = neighb, likelihood = likelihood, type = type
-        ), silent = TRUE))
-      f1 <- suppressWarnings(try(
-        GeoFit(
-          data = Zb, coordx = coordx, corrmodel = corrmodel,
-          start = start1, fixed = fixed1, optimizer = optimizer,
-          lower = lower1, upper = upper1,
-          neighb = neighb, likelihood = likelihood, type = type
-        ), silent = TRUE))
-      if (inherits(f0, "try-error") || inherits(f1, "try-error") ||
-          !is.finite(f0$logCompLik) || !is.finite(f1$logCompLik)) {
-        as.numeric(NA)
+    if (!requireNamespace("future", quietly = TRUE) ||
+        !requireNamespace("foreach", quietly = TRUE) ||
+        !requireNamespace("doFuture", quietly = TRUE)) {
+      warning("Parallel bootstrap requested but future/foreach/doFuture is unavailable; using sequential evaluation.", call. = FALSE)
+      Lambda_boot <- numeric(B)
+      ok <- rep(TRUE, B)
+      for (b in seq_len(B)) {
+        Zb <- get_rep(data_sim, b)
+        val <- estimate_fun(Zb)
+        if (!is.finite(val)) ok[b] <- FALSE else Lambda_boot[b] <- val
+      }
+      Lambda_boot <- Lambda_boot[ok]
+    } else {
+      message(sprintf("Performing %d estimations under H0 and H1 using %d cores...", B, ncores))
+      future::plan(future::multisession, workers = ncores)
+
+      b <- NULL
+      if (use_progressr) {
+        Lambda_boot <- progressr::with_progress({
+          pb <- progressr::progressor(along = seq_len(B))
+          xx <- foreach::foreach(
+            b = seq_len(B),
+            .combine = c,
+            .options.future = list(
+              packages = c("GeoModels"),
+              seed = TRUE,
+              stdout = FALSE,
+              conditions = "none"
+            )
+          ) %dofuture% {
+            pb(sprintf("b=%d", b))
+            Zb <- get_rep(data_sim, b)
+            estimate_fun(Zb)
+          }
+          xx[is.finite(xx)]
+        })
       } else {
-        as.numeric(max(0, 2 * (f1$logCompLik - f0$logCompLik)))
+        xx <- foreach::foreach(
+          b = seq_len(B),
+          .combine = c,
+          .options.future = list(
+            packages = c("GeoModels"),
+            seed = TRUE,
+            stdout = FALSE,
+            conditions = "none"
+          )
+        ) %dofuture% {
+          Zb <- get_rep(data_sim, b)
+          estimate_fun(Zb)
+        }
+        Lambda_boot <- xx[is.finite(xx)]
       }
     }
-    Lambda_boot <- Lambda_boot[is.finite(Lambda_boot)]
   }
 
-  ## ====== RISULTATI CON WARNING INFORMATIVO ======
+  ## ====== results and diagnostics ======
   failed <- B - length(Lambda_boot)
   if (failed > 0) {
-    warning(sprintf("%d/%d bootstrap replications failed (%.1f%%)", 
-                    failed, B, 100 * failed / B))
+    warning(sprintf(
+      "%d/%d bootstrap replications failed (%.1f%%)",
+      failed, B, 100 * failed / B
+    ))
   }
   if (B > 0 && failed / B > 0.7) {
     warning("High failure rate in bootstrap fits; consider adjusting starts/bounds or reducing model complexity.")
   }
-  
+
   if (!length(Lambda_boot)) {
     warning("No valid bootstrap replications; p-value set to NA")
     pval <- NA_real_
@@ -390,12 +509,12 @@ GeoTestsupp_space <- function(data, coordx,
     pval <- (1 + sum(Lambda_boot >= Lambda_obs)) / (length(Lambda_boot) + 1)
   }
 
-  ## ====== OUTPUT FINALE ======
   res <- list(
     d_min = round(d_min, 5),
     h0 = round(h0_val, 5),
     lambda_obs = round(Lambda_obs, 5),
     pvalue = if (is.na(pval)) NA_real_ else round(pval, 5),
+    seed = seed,
     B_rep = Lambda_boot,
     fit_H0 = fit0,
     fit_H1 = fit1
@@ -411,15 +530,17 @@ GeoTestsupp_space <- function(data, coordx,
   concl <- if (is.na(res$pvalue)) {
     "Bootstrap failed (no valid replications)"
   } else if (is.null(h0)) {
-    if (res$pvalue < 0.05) 
+    if (res$pvalue < 0.05) {
       "Reject H0 => significant spatial dependence detected"
-    else 
+    } else {
       "Do not reject H0 => data consistent with spatial independence"
+    }
   } else {
-    if (res$pvalue < 0.05) 
+    if (res$pvalue < 0.05) {
       sprintf("Reject H0 => compact support significantly > %.4f (stronger dependence)", h0)
-    else 
+    } else {
       sprintf("Do not reject H0 => insufficient evidence that scale > %.4f", h0)
+    }
   }
   cat("Conclusion:", concl, "\n\n")
 

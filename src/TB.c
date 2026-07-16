@@ -17,27 +17,50 @@ void TBD1d(double *ux, double *uy, double *sx, double *sy, double *phi, int *L, 
   }
 }
 
-void TBD1d_amp(double *ux, double *uy,
-               double *sx, double *sy,
-               double *phi, double *amp,
+void TBD1d_amp(double * restrict ux, double * restrict uy,
+               double * restrict sx, double * restrict sy,
+               double * restrict phi, double * restrict amp,
                int *L, int *N,
-               double *result)
+               double * restrict result)
 {
-  int l, j;
-  double arg;
-  int nloc = N[0];
+  int nloc  = N[0];
   int Lfreq = L[0];
+  const double two_pi = 2.0 * M_PI;
 
-  for(j = 0; j < nloc; j++){
-    result[j] = 0.0;
+  /* Precompute 2*pi*ux[l] and 2*pi*uy[l] once: these arrays have length
+     Lfreq (typically 1e4-1e5, a few hundred KB) and are reused for every
+     location below, so they stay resident in L2/L3 cache. This also
+     removes two multiplications from the hot inner loop. */
+  double *a = (double *) R_Calloc(Lfreq, double);
+  double *b = (double *) R_Calloc(Lfreq, double);
+  for (int l = 0; l < Lfreq; l++) {
+    a[l] = two_pi * ux[l];
+    b[l] = two_pi * uy[l];
   }
 
-  for(l = 0; l < Lfreq; l++){
-    for(j = 0; j < nloc; j++){
-      arg = 2.0 * M_PI * (ux[l] * sx[j] + uy[l] * sy[j]) + phi[l];
-      result[j] += amp[l] * cos(arg);
+  /* Loop order: location (j) outer, frequency (l) inner.
+     This is the key change vs. the original (l outer, j inner):
+     with nloc possibly in the millions, looping l outer forced the
+     CPU to stream the whole result/sx/sy arrays (several MB each)
+     back and forth for every single frequency, which is bandwidth-
+     bound and cache-hostile. With j outer, the small per-frequency
+     arrays (a, b, amp, phi) are reused across all locations while
+     sx[j]/sy[j] are read once and the partial sum is accumulated in
+     a scalar register (acc), which the compiler can also auto-
+     vectorize with -O3 since all pointers are restrict-qualified. */
+  for (int j = 0; j < nloc; j++) {
+    const double sxj = sx[j];
+    const double syj = sy[j];
+    double acc = 0.0;
+    for (int l = 0; l < Lfreq; l++) {
+      double arg = a[l] * sxj + b[l] * syj + phi[l];
+      acc += amp[l] * cos(arg);
     }
+    result[j] = acc;
   }
+
+  R_Free(a);
+  R_Free(b);
 }
 
 

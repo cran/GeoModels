@@ -21,10 +21,8 @@
 \usage{
 GeoVarest(fit, K = 100, sparse = FALSE,
  method = c("cholesky", "TB", "CE"),
- alpha = 0.95, L = 1000,
- parallel = TRUE, ncores = NULL, progress = TRUE,
- score_method = c("geofit_score", "finite"),
- eps = 1e-5, seed = NULL)
+ alpha = 0.95, L = 10000,
+ parallel = TRUE, ncores = NULL, progress = TRUE, seed = NULL)
 }
 \arguments{
  \item{fit}{A fitted object obtained from \code{\link{GeoFit}}. The object
@@ -49,18 +47,9 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  parallelized.}
 
  \item{ncores}{Numeric; number of cores involved in the parallel score
- evaluation. If \code{NULL}, the number of cores is chosen automatically.}
+ evaluation. If \code{NULL}, the number of cores is chosen automatically as 4.}
 
  \item{progress}{Logical; if \code{TRUE}, progress information is shown.}
-
- \item{score_method}{String; the method used to compute the composite score
- at the fitted parameter value. If \code{"geofit_score"}, the score returned
- by \code{GeoFit(..., onlyvar = TRUE, score = TRUE)} is used. If
- \code{"finite"}, the score is computed by external finite differences of
- the composite log-likelihood evaluated through \code{GeoFit}.}
-
- \item{eps}{Numeric; finite difference step multiplier used only when
- \code{score_method = "finite"}.}
 
  \item{seed}{Optional integer seed for reproducibility of the simulated
  samples.}
@@ -116,9 +105,7 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  estimates.}
 }
 \seealso{
-\code{\link{GeoFit}} for the fitted objects used as input,
-  \code{\link{GeoVarestbootstrap}} for bootstrap variance estimation,
-  \code{\link{CompLik}} for composite-likelihood calculations.
+\code{\link{GeoFit}} for the fitted objects used as input
 }
 \author{
 Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},
@@ -127,5 +114,63 @@ Víctor Morales Oñate, \email{victor.morales@uv.cl},
 \url{https://sites.google.com/site/moralesonatevictor/},
 Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},
 \url{https://www.researchgate.net/profile/Christian-Caamano}
+}
+\examples{
+
+
+library(GeoModels)
+
+################################################################
+###
+### Example 1. Test on the parameter
+### of a regression model using conditional composite likelihood
+###
+###############################################################
+set.seed(342)
+model="Gaussian" 
+# Define the spatial-coordinates of the points:
+NN=3500
+x = runif(NN, 0, 1)
+y = runif(NN, 0, 1)
+coords = cbind(x,y)
+# Parameters
+mean=1; mean1=-1.25; # regression parameters
+ sill=1 # variance
+
+# matrix covariates
+X=cbind(rep(1,nrow(coords)),runif(nrow(coords)))
+
+# model correlation 
+corrmodel="Matern"
+smooth=0.5;scale=0.1; nugget=0;
+
+# simulation
+param=list(smooth=smooth,mean=mean,mean1=mean1,
+ sill=sill,scale=scale,nugget=nugget)
+data = GeoSim(coordx=coords, corrmodel=corrmodel,
+ model=model, param=param,X=X)$data
+
+I=Inf
+
+fixed=list(nugget=nugget,smooth=smooth)
+start=list(mean=mean,mean1=mean1,scale=scale,sill=sill)
+
+lower=list(mean=-I,mean1=-I,scale=0,sill=0)
+upper=list(mean=I,mean1=I,scale=I,sill=I)
+# Maximum pairwise composite-likelihood fitting of the RF:
+fit = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
+ likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
+ lower=lower,upper=upper,neighb=3,
+ optimizer="nlminb",X=X,
+ start=start,fixed=fixed)
+
+unlist(fit$param)
+
+
+#fit_update=GeoVarest(fit,K=100,parallel=TRUE)
+#fit_update$stderr
+#fit_update$conf.int
+#fit_update$pvalues
+
 }
 \keyword{Composite}

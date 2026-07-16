@@ -6,6 +6,8 @@ Performs an isotropy test based on \emph{parametric bootstrap} by comparing an i
 A user-chosen spatial correlation model is fitted to spatial data, and the test statistic is a likelihood ratio
 between H1 (with anisotropy estimated) and H0 (anisotropy fixed at ratio = 1 and angle = 0). The \emph{p}-value is computed via parametric bootstrap.
 }
+
+
 \usage{
 GeoTestIsotropy(data, coordx,
  start, fixed,
@@ -18,9 +20,12 @@ GeoTestIsotropy(data, coordx,
  type = NULL,
  copula = NULL,
  neighb = 5,
+ method = c("cholesky", "TB"),
+ L = 1000,
  parallel = TRUE,
  ncores = NULL,
- progress = TRUE)
+ progress = TRUE,
+ seed = NULL)
 }
 \arguments{
  \item{data}{Numeric vector of observations (length \code{n}).}
@@ -32,13 +37,16 @@ GeoTestIsotropy(data, coordx,
  \item{corrmodel}{Spatial correlation model (e.g., \code{"Matern"}).}
  \item{lower, upper}{\emph{Named} lists with lower/upper bounds for parameters in \code{start} only. If \code{NULL}, no extra bounds beyond defaults.}
  \item{B}{Number of parametric bootstrap replications (default \code{1000}).}
+ \item{method}{Simulation method used for the parametric bootstrap when \code{copula = NULL}. Options are \code{"cholesky"} for exact Gaussian simulation via \code{GeoSim} and \code{"TB"} for approximate spectral turning-bands simulation via \code{GeoSimapprox}.}
+ \item{L}{Number of spectral components used by \code{GeoSimapprox} when \code{method = "TB"}. Ignored when \code{method = "cholesky"}.}
  \item{likelihood}{Type of (composite) likelihood to pass to \code{GeoFit} (e.g., \code{"Marginal"}).}
  \item{type}{Composite-likelihood type (e.g., \code{"Pairwise"}).}
  \item{copula}{Copula object for simulation via \code{GeoSimCopula}; if \code{NULL} Gaussian simulation is used.}
  \item{neighb}{Number of neighbors for composite-likelihood estimation, where applicable.}
- \item{parallel}{If \code{TRUE}, bootstrap fits are distributed in parallel through \pkg{future}.}
+ \item{parallel}{If \code{TRUE}, parametric simulations with \code{GeoSimapprox} and bootstrap fits are allowed to use parallel execution through \pkg{future}. The two phases are run sequentially, with the previous future plan restored between them.}
  \item{ncores}{Number of cores to use in parallel; if \code{NULL} it is chosen automatically up to \code{B} or \code{parallel::detectCores()-1}.}
  \item{progress}{If \code{TRUE}, show progress bars using \pkg{progressr}.}
+ \item{seed}{Optional integer seed used to make the parametric bootstrap reproducible. If \code{NULL}, the current random-number generator state is left unchanged. When supplied, the function temporarily sets the seed and restores the user's original \code{.Random.seed} on exit.}
 }
 \details{
 \code{GeoTestIsotropy} implements a \emph{likelihood ratio test} (LRT) between:
@@ -49,7 +57,9 @@ GeoTestIsotropy(data, coordx,
 The observed statistic is \eqn{\mathrm{LRT}_{\text{obs}} = 2(\ell_1 - \ell_0)}, truncated at zero if negative.
 The null distribution is approximated by simulating \code{B} datasets under H0 with parameters equal to the H0 fit, and recomputing the LRT.
 The \emph{p}-value is computed as \eqn{(1 + \#\{\mathrm{LRT}_b \ge \mathrm{LRT}_{\text{obs}}\}) / (1 + B_{\text{valid}})}.
-The function includes robust checks on parameter names, bounds, simulation method choice (Cholesky vs TB), and parallelization.
+The simulation method is selected explicitly through \code{method}. For \code{method = "cholesky"}, simulations are generated with \code{GeoSim}; for \code{method = "TB"}, simulations are generated with \code{GeoSimapprox} using \code{L} spectral components. If \code{parallel = TRUE}, \code{GeoSimapprox} may parallelize over the \code{B} simulated replications, and the bootstrap refits may then be parallelized in a separate phase. The function saves and restores the user's \pkg{future} plan and \pkg{progressr} handlers.
+
+If \code{seed} is supplied, the function temporarily calls \code{set.seed(seed)} before the observed fits, H0 simulations, and bootstrap refits. The previous random-number generator state is restored on exit, so using \code{seed} does not permanently modify the user's R session RNG state.
 }
 \value{
 An (invisible) list with components:
@@ -62,6 +72,7 @@ An (invisible) list with components:
 \item{fit_H0}{\code{GeoFit} object fitted under H0.}
 \item{fit_H1}{\code{GeoFit} object fitted under H1.}
 \item{B_rep}{Vector of LRT values obtained on the valid bootstrap replications.}
+\item{seed}{Seed used for the bootstrap, or \code{NULL} if no seed was supplied.}
 }
 
 

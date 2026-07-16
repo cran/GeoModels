@@ -206,16 +206,9 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
     K <- as.integer(K)
 
-    maxt_int <- as.integer(round(maxtime))
-
-    if (!is.finite(maxt_int) || maxt_int < 1L) {
-      maxt_int <- 1L
-    }
-
-    maxt_int <- min(maxt_int, numtime - 1L)
-
-    if (maxt_int <= 0L) {
-      maxt_int <- 0L
+    if (!is.numeric(maxtime) || length(maxtime) != 1L ||
+        is.na(maxtime) || maxtime < 0) {
+      stop("maxtime must be a non-negative numeric scalar.")
     }
 
     if (is.null(coordx_dyn)) {
@@ -249,12 +242,69 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       stop("length(coordt) must equal numtime.")
     }
 
-    dt <- function(t, j) {
-      abs(ct[t + j] - ct[t])
+    if (any(!is.finite(ct))) {
+      stop("coordt must contain finite values.")
     }
 
     glob <- function(idx_local, t) {
       as.integer(idx_local + offset[t])
+    }
+
+    ##############################################################
+    ## Temporal-pair helper
+    ##
+    ## maxtime is interpreted as a temporal-distance threshold in
+    ## the scale of coordt. Thus all pairs with temporal lag
+    ## 0 < |coordt[to] - coordt[from]| <= maxtime are retained.
+    ## For regularly spaced time points coordt = 1, ..., n and
+    ## maxtime = q, this coincides with the old behavior based on
+    ## index lags 1, ..., q.
+    ##############################################################
+
+    make_time_pairs <- function(ct, maxtime) {
+
+      nt <- length(ct)
+
+      if (nt <= 1L || maxtime <= 0) {
+        return(data.frame(
+          from = integer(0),
+          to = integer(0),
+          lag_time = numeric(0)
+        ))
+      }
+
+      out <- vector("list", nt - 1L)
+      out_i <- 1L
+
+      for (from in seq_len(nt - 1L)) {
+
+        to <- (from + 1L):nt
+        lag_time <- abs(ct[to] - ct[from])
+
+        keep <- is.finite(lag_time) & lag_time > 0 & lag_time <= maxtime
+
+        if (!any(keep)) {
+          next
+        }
+
+        out[[out_i]] <- data.frame(
+          from = rep.int(from, sum(keep)),
+          to = to[keep],
+          lag_time = lag_time[keep]
+        )
+
+        out_i <- out_i + 1L
+      }
+
+      if (out_i == 1L) {
+        return(data.frame(
+          from = integer(0),
+          to = integer(0),
+          lag_time = numeric(0)
+        ))
+      }
+
+      do.call(rbind, out[seq_len(out_i - 1L)])
     }
 
     knn_dir <- function(ref, query, K,
@@ -329,7 +379,9 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       }
     }
 
-    if (maxt_int == 0L) {
+    time_pairs <- make_time_pairs(ct, maxtime)
+
+    if (nrow(time_pairs) == 0L) {
 
       sol <- do.call(rbind, out)
 
@@ -345,63 +397,63 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     ## 2) Pure temporal same-site
     ##############################################################
 
-    for (j in seq_len(maxt_int)) {
-      for (t in seq_len(numtime - j)) {
+    for (rr in seq_len(nrow(time_pairs))) {
 
-        bb <- min(ns[t], ns[t + j])
+      t_from <- time_pairs$from[rr]
+      t_to   <- time_pairs$to[rr]
 
-        if (bb <= 0L) {
-          next
-        }
+      bb <- min(ns[t_from], ns[t_to])
 
-        ii <- seq_len(bb)
-
-        out[[out_i]] <- cbind(
-          glob(ii, t + j),
-          glob(ii, t),
-          rep.int(dt(t, j), bb),
-          rep.int(0, bb)
-        )
-
-        out_i <- out_i + 1L
+      if (bb <= 0L) {
+        next
       }
+
+      ii <- seq_len(bb)
+
+      out[[out_i]] <- cbind(
+        glob(ii, t_to),
+        glob(ii, t_from),
+        rep.int(time_pairs$lag_time[rr], bb),
+        rep.int(0, bb)
+      )
+
+      out_i <- out_i + 1L
     }
 
     ##############################################################
     ## 3) Spatio-temporal cross-time
     ##############################################################
 
-    for (j in seq_len(maxt_int)) {
-      for (t in seq_len(numtime - j)) {
+    for (rr in seq_len(nrow(time_pairs))) {
 
-        Xn <- getX(t)
-        Xt <- getX(t + j)
+      t_from <- time_pairs$from[rr]
+      t_to   <- time_pairs$to[rr]
 
-        lagt_val <- dt(t, j)
+      Xn <- getX(t_from)
+      Xt <- getX(t_to)
 
-        inf <- knn_dir(
-          ref = Xn,
-          query = Xt,
-          K = K,
-          drop_self = FALSE,
-          x_equals_y = FALSE
-        )
+      inf <- knn_dir(
+        ref = Xn,
+        query = Xt,
+        K = K,
+        drop_self = FALSE,
+        x_equals_y = FALSE
+      )
 
-        if (length(inf$tar) > 0L) {
+      if (length(inf$tar) > 0L) {
 
-          sel <- is.finite(inf$d) & (inf$d > 0)
+        sel <- is.finite(inf$d) & (inf$d > 0)
 
-          if (any(sel)) {
+        if (any(sel)) {
 
-            out[[out_i]] <- cbind(
-              glob(inf$tar[sel], t + j),
-              glob(inf$nei[sel], t),
-              rep.int(lagt_val, sum(sel)),
-              as.numeric(inf$d[sel])
-            )
+          out[[out_i]] <- cbind(
+            glob(inf$tar[sel], t_to),
+            glob(inf$nei[sel], t_from),
+            rep.int(time_pairs$lag_time[rr], sum(sel)),
+            as.numeric(inf$d[sel])
+          )
 
-            out_i <- out_i + 1L
-          }
+          out_i <- out_i + 1L
         }
       }
     }
@@ -992,39 +1044,47 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
   ## Coordinate parsing
   ##############################################################
 
-  if (!is.null(coordy)) {
+  if (is.null(coordx_dyn)) {
 
-    if (is.null(coordz)) {
+    if (is.null(coordx)) {
+      stop("coordx must be provided when coordx_dyn is NULL.")
+    }
 
-      coordy <- coordx[, 2]
-      coordx <- coordx[, 1]
-      coords <- cbind(coordx, coordy)
-
+    if (is.null(coordy)) {
+      coords <- as.matrix(coordx)
     } else {
+      coords <- if (is.null(coordz)) {
+        cbind(coordx, coordy)
+      } else {
+        cbind(coordx, coordy, coordz)
+      }
+      coords <- as.matrix(coords)
+    }
 
-      coordz <- coordx[, 3]
-      coordy <- coordx[, 2]
-      coordx <- coordx[, 1]
-      coords <- cbind(coordx, coordy, coordz)
+    storage.mode(coords) <- "double"
+
+    if (!(ncol(coords) %in% c(2L, 3L))) {
+      stop("coordx must be a coordinate matrix with 2 or 3 columns, or coordx/coordy/(coordz) must be coordinate vectors.")
+    }
+
+    if (bivariate && (nrow(coords) %% 2L != 0L)) {
+      stop("For bivariate = TRUE with common coordinates, coordx must have an even number of rows.")
     }
 
     numcoord <- nrow(coords)
 
   } else {
 
-    if (!bivariate) {
-      coords <- coordx
-      numcoord <- nrow(coords)
+    if (!is.list(coordx_dyn)) {
+      stop("coordx_dyn must be a list.")
     }
 
-    if (bivariate) {
-      if (is.null(coordx_dyn)) {
-        coords <- coordx
-        numcoord <- nrow(coords)
-      } else {
-        coords <- 1
-        numcoord <- 1
-      }
+    if (!bivariate) {
+      coords <- NULL
+      numcoord <- nrow(coordx_dyn[[1L]])
+    } else {
+      coords <- 1
+      numcoord <- 1
     }
   }
 

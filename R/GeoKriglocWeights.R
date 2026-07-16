@@ -99,10 +99,10 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
   .ensure_plan <- function() {
     if (parallel && !.plan_set) {
       future::plan(future::multisession, workers = max(1, parallel::detectCores() - 1))
-      on.exit(future::plan(future::sequential), add = TRUE)
       .plan_set <<- TRUE
     }
   }
+  if (parallel) on.exit(future::plan(future::sequential), add = TRUE)
 
   ###########################################################################
   ##  Loop Kriging - SPACE
@@ -121,6 +121,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         neigh_X = neigh$X,
         neigh_M = neigh$M,
         loc = loc,
+        loc_aniso = loc_aniso,
         Xloc = Xloc,
         Mloc = Mloc,
         param = param,
@@ -156,7 +157,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         
         weights_result <- GeoKrigWeights(
           coordx = coords_neigh,
-          loc = matrix(vars$loc[i, ], nrow=1), 
+          loc = matrix(vars$loc_aniso[i, ], nrow = 1),
           corrmodel = vars$corrmodel,
           distance = vars$distance, 
           n = vars$n, 
@@ -166,7 +167,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
           sparse = vars$sparse, 
           model = vars$model, 
           param = param_local,
-          anisopars = vars$anisopars, 
+          anisopars = NULL,
           radius = vars$radius,
           copula = vars$copula, 
           method = vars$method,
@@ -181,7 +182,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         worker_fn,
         vars = essential_vars,
         future.seed = TRUE,
-        future.globals = FALSE
+        future.globals = TRUE
       )
       
     } else {
@@ -202,7 +203,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         
         weights_result = GeoKrigWeights(
           coordx = coords_neigh,
-          loc = matrix(loc[i, ], nrow=1), 
+          loc = matrix(loc_aniso[i, ], nrow = 1),
           corrmodel = corrmodel,
           distance = distance, 
           n = n, 
@@ -212,7 +213,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
           sparse = sparse, 
           model = model, 
           param = param_local,
-          anisopars = anisopars, 
+          anisopars = NULL,
           radius = radius,
           copula = copula, 
           method = method,
@@ -253,7 +254,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
           weights_result = GeoKrigWeights(
             coordx = coords_neigh, 
             coordt = neigh$coordt[[k]], 
-            loc = matrix(loc[i, ], nrow=1),
+            loc = matrix(loc_aniso[i, ], nrow = 1),
             time = time[j], 
             X = if(!is.null(neigh$X)) neigh$X[[k]] else NULL,
             Mloc = if(!is.null(Mloc)) Mloc[idx_st] else NULL,
@@ -263,7 +264,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
             distance = distance, 
             model = model, 
             param = param_local,
-            anisopars = anisopars, 
+            anisopars = NULL,
             radius = radius,
             copula = copula, 
             n = n, 
@@ -297,6 +298,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         neigh_X = neigh$X,
         neigh_M = neigh$M,
         loc = loc,
+        loc_aniso = loc_aniso,
         Xloc = Xloc,
         Mloc = Mloc,
         param = param,
@@ -330,7 +332,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         
         weights_result <- GeoKrigWeights(
           coordx = coords_neigh,
-          loc = matrix(vars$loc[i, ], nrow=1), 
+          loc = matrix(vars$loc_aniso[i, ], nrow = 1),
           corrmodel = vars$corrmodel,
           distance = vars$distance, 
           n = vars$n, 
@@ -340,7 +342,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
           sparse = vars$sparse, 
           model = vars$model, 
           param = param_local,
-          anisopars = vars$anisopars, 
+          anisopars = NULL,
           radius = vars$radius,
           copula = vars$copula, 
           method = vars$method,
@@ -355,7 +357,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         worker_fn,
         vars = essential_vars,
         future.seed = TRUE,
-        future.globals = FALSE
+        future.globals = TRUE
       )
       
     } else {
@@ -376,7 +378,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
         
         weights_result = GeoKrigWeights(
           coordx = coords_neigh,
-          loc = matrix(loc[i, ], nrow=1), 
+          loc = matrix(loc_aniso[i, ], nrow = 1),
           corrmodel = corrmodel,
           distance = distance, 
           n = n, 
@@ -386,7 +388,7 @@ GeoKriglocWeights <- function(coordx, coordy=NULL, coordz=NULL, coordt=NULL, coo
           sparse = sparse, 
           model = model, 
           param = param_local,
-          anisopars = anisopars, 
+          anisopars = NULL,
           radius = radius,
           copula = copula, 
           method = method,

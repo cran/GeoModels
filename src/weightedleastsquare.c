@@ -18,34 +18,50 @@ static int find_bin(double* bins, int nbins, double lags) {
 
 
 
-// Calculates the pairs of coordinates and stores the distances within the given bins:
 void pairs(int *ncoords, double *data, double *coordx, double *coordy, double *coordz,
            double *numbins, double *bins, double *v0, double *v1, double *v2,
-           double *maxdist, int *typ, double *radius) 
+           double *maxdist, int *typ, double *radius)
 {
     int ncrd = *ncoords;
     int numbin = (int)(*numbins);
     double max_dist = *maxdist;
+    double b0, step;
     int k = 0;
+    if (ncrd < 2 || numbin < 1 || max_dist < 0.0) return;
+
+    b0 = bins[0];
+    step = bins[1] - bins[0];
+    if (step <= 0.0) return;
 
     for (int i = 0; i < ncrd - 1; i++) {
         double xi = coordx[i];
         double yi = coordy[i];
         double zi = coordz[i];
         double di = data[i];
-
+        if (ISNAN(di)) continue;
         for (int j = i + 1; j < ncrd; j++) {
-            double distance = dist(typ[0], xi, coordx[j], yi, coordy[j], zi, coordz[j], *radius);
-
-            if (distance <= max_dist) {
-               // int bin_idx = find_bin(bins, numbin - 1, distance);
-                int bin_idx = find_bin(bins, numbin, distance);
-                if (bin_idx != -1) {
-                    v0[k] = bins[bin_idx];
-                    v1[k] = di;
-                    v2[k] = data[j];
-                    k++;
-    }}}}}
+            double dj = data[j];
+            double distance;
+            int bin_idx;
+            if (ISNAN(dj)) continue;
+            distance = dist(typ[0], xi, coordx[j],
+                            yi, coordy[j],
+                            zi, coordz[j],
+                            *radius);
+            if (distance > max_dist) continue;
+            bin_idx = (int)((distance - b0) / step);
+            /* Include exactly max_dist in the last bin. */
+            if (bin_idx == numbin && distance == max_dist) bin_idx = numbin - 1;
+            if (bin_idx >= 0 && bin_idx < numbin &&
+                distance >= bins[bin_idx] && distance <= bins[bin_idx + 1]) {
+                v0[k] = bins[bin_idx];
+                v1[k] = di;
+                v2[k] = dj;
+                k++;
+            }
+        }
+    }
+}
 
 // binned spatial variogram:
 void Binned_Variogram2(double *bins, double *coordx, double *coordy, double *coordz, double *coordt,
@@ -406,19 +422,32 @@ void Binned_Variogram_biv2(
 
 /***********************************************************************************************************************************/
 // variogram cloud:
-void Cloud_Variogram2(double *bins, double *coordx, double *coordy,double *coordz, double *coordt,double *data, int *lbins, double *moms, int *nbins)
+void Cloud_Variogram2(double *bins, double *coordx, double *coordy, double *coordz, double *coordt, double *data, int *lbins, double *moms, int *nbins)
 {
-  int  h=0,i=0, j=0, n=0;double lags=0.0,x,y;
- //Computes the cloud moments:
-  for(i=0;i<(ncoord[0]-1);i++)
-    for(j=(i+1);j<ncoord[0];j++){
-          dist(type[0],coordx[i],coordx[j],coordy[i],coordy[j],coordz[i],coordz[j],*REARTH);
-      bins[h]=lags;
-        x=data[n+i ];  y=data[n+j ];
-        if(!(ISNAN(x)||ISNAN(y))){
-	        moms[h]+=0.5*pow(x-y,2);
-        lbins[h]=1;
-        h++;}}
+  int h = 0, i = 0, j = 0, n = 0;
+  double lags = 0.0, x, y, diff;
+
+  /* Computes the variogram cloud: one entry per pair. */
+  for (i = 0; i < (ncoord[0] - 1); i++) {
+    for (j = i + 1; j < ncoord[0]; j++) {
+      lags = dist(type[0],
+                  coordx[i], coordx[j],
+                  coordy[i], coordy[j],
+                  coordz[i], coordz[j],
+                  *REARTH);
+
+      x = data[n + i];
+      y = data[n + j];
+
+      if (!(ISNAN(x) || ISNAN(y))) {
+        diff = x - y;
+        bins[h] = lags;
+        moms[h] = 0.5 * diff * diff;
+        lbins[h] = 1;
+        h++;
+      }
+    }
+  }
   return;
 }
 /***********************************************************************************************************************************/

@@ -4518,13 +4518,41 @@ double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11
 
 
 
+#ifndef ST_TEMP_EPS_LAG
+#define ST_TEMP_EPS_LAG 1.0e-12
+#endif
 
-/* ============================================================================
-   TABELLE GAUSS-LEGENDRE PRECOMPUTE
-   ============================================================================ */
+#ifndef ST_TEMP_ALPHA_SEP_TOL
+#define ST_TEMP_ALPHA_SEP_TOL 1.0e-10
+#endif
 
+static inline double inv_logit_stable(double x)
+{
+    if (x >= 0.0) {
+        double e = exp(-x);
+        return 1.0 / (1.0 + e);
+    } else {
+        double e = exp(x);
+        return e / (1.0 + e);
+    }
+}
 
-/* 16 nodi Gauss-Legendre su [-1, 1] */
+static inline double ts_gpos(double beta, double alpha)
+{
+    /* ((1+beta)^alpha - 1) / alpha, stable for small beta */
+    if (beta <= 0.0) return 0.0;
+    return expm1(alpha * log1p(beta)) / alpha;
+}
+
+static inline double ts_power_onepb(double beta, double exponent)
+{
+    return exp(exponent * log1p(beta));
+}
+
+/* ==========================================================================
+   GAUSS-LEGENDRE TABLES
+   ========================================================================== */
+
 static const int N_GL16 = 16;
 static const double GL16_NODES[16] = {
     -0.989400934991649932596154, -0.944575023073232576077989,
@@ -4548,7 +4576,6 @@ static const double GL16_WEIGHTS[16] = {
     0.062253523938647892862844, 0.027152459411754094851781
 };
 
-/* 32 nodi Gauss-Legendre su [-1, 1] */
 static const int N_GL32 = 32;
 static const double GL32_NODES[32] = {
     -0.997263861849481563544981, -0.985611511545268335400175,
@@ -4588,17 +4615,14 @@ static const double GL32_WEIGHTS[32] = {
     0.016274394730905670605170, 0.007018610009470096600407
 };
 
-
-/* ============================================================================
-   SUPPORTO: COEFFICIENTI
-   ============================================================================ */
-/* ============================================================================
-   SUPPORTO: COEFFICIENTI A_{k,i}
-   ============================================================================ */
+/* ==========================================================================
+   COEFFICIENTS A_{k,i}
+   ========================================================================== */
 
 #define MAX_K_CACHE 40
 
-static double compute_A_raw(int k, int i) {
+static double compute_A_raw(int k, int i)
+{
     if (i < 0 || i > k) return 0.0;
 
     double log_term =
@@ -4612,8 +4636,8 @@ static double compute_A_raw(int k, int i) {
     return exp(log_term);
 }
 
-/**/
-static double compute_A_cached(int k, int i) {
+static double compute_A_cached(int k, int i)
+{
     if (i < 0 || i > k) return 0.0;
 
     if (k > MAX_K_CACHE) {
@@ -4633,32 +4657,18 @@ static double compute_A_cached(int k, int i) {
     return A_cache[k][i];
 }
 
-/* ============================================================================
-   BELL POLYNOMIAL COMPLETO
+/* ==========================================================================
+   COMPLETE BELL POLYNOMIALS
    B_n = sum_{k=1}^n binom(n-1,k-1) x_k B_{n-k}
-   con binomi aggiornati ricorsivamente.
-   ============================================================================ */
+   ========================================================================== */
 
-/* ============================================================================
-   BELL POLYNOMIAL COMPLETI IN UNA SOLA DP
-
-   Ricorrenza:
-   B_n = sum_{k=1}^n binom(n-1,k-1) x_k B_{n-k}
-
-   Input:
-   - max_m: ordine massimo
-   - x[1..max_m]
-   - b[0..max_m] output
-
-   Costo: O(max_m^2), una sola allocazione fatta dal chiamante.
-   ============================================================================ */
-
-static void complete_bell_all_fast(int max_m, const double *x, double *b) {
+static void complete_bell_all_fast(int max_m, const double *x, double *b)
+{
     b[0] = 1.0;
 
     for (int n = 1; n <= max_m; ++n) {
         double acc = 0.0;
-        double binom = 1.0;  /* binom(n-1, 0) */
+        double binom = 1.0;
 
         for (int k = 1; k <= n; ++k) {
             acc += binom * x[k] * b[n - k];
@@ -4672,29 +4682,70 @@ static void complete_bell_all_fast(int max_m, const double *x, double *b) {
     }
 }
 
-/* ============================================================================
-   CLOSED FORM: SEMI-INTEGER SMOOTHNESS
-   ============================================================================ */
+/* ==========================================================================
+   HARD-CODED CLOSED FORMS FOR MOST COMMON SEMI-INTEGER CASES
+   ========================================================================== */
 
-/* ============================================================================
-   CLOSED FORM: SEMI-INTEGER SMOOTHNESS
+static inline double cov_st_05_05(double h, double u,
+                                  double scale_s, double scale_t,
+                                  double alpha)
+{
+    double beta = h / scale_s + u / scale_t;
+    if (beta < ST_TEMP_EPS_LAG) return 1.0;
 
-   nu_s = ks + 1/2
-   nu_t = kt + 1/2
+    return exp(-ts_gpos(beta, alpha));
+}
 
-   Implementa:
-   E[ M_s(W h) M_t(W u) ]
+static inline double cov_st_15_05(double h, double u,
+                                  double scale_s, double scale_t,
+                                  double alpha)
+{
+    double xs = h / scale_s;
+    double xt = u / scale_t;
+    double beta = xs + xt;
+    if (beta < ST_TEMP_EPS_LAG) return 1.0;
 
-   con Laplace:
-   Phi(t) = exp(-g(t)),
-   g(t) = ((1+t)^alpha - 1) / alpha.
+    double p1 = ts_power_onepb(beta, alpha - 1.0);
+    return exp(-ts_gpos(beta, alpha)) * (1.0 + xs * p1);
+}
 
-   Per i momenti pesati:
-   E[W^m exp(-tW)] = (-1)^m Phi^(m)(t).
+static inline double cov_st_05_15(double h, double u,
+                                  double scale_s, double scale_t,
+                                  double alpha)
+{
+    double xs = h / scale_s;
+    double xt = u / scale_t;
+    double beta = xs + xt;
+    if (beta < ST_TEMP_EPS_LAG) return 1.0;
 
-   Qui x[m] = -g^(m)(t), quindi
-   Phi^(m)(t) = exp(-g(t)) B_m(x1,...,xm).
-   ============================================================================ */
+    double p1 = ts_power_onepb(beta, alpha - 1.0);
+    return exp(-ts_gpos(beta, alpha)) * (1.0 + xt * p1);
+}
+
+static inline double cov_st_15_15(double h, double u,
+                                  double scale_s, double scale_t,
+                                  double alpha)
+{
+    double xs = h / scale_s;
+    double xt = u / scale_t;
+    double beta = xs + xt;
+    if (beta < ST_TEMP_EPS_LAG) return 1.0;
+
+    double l1p = log1p(beta);
+    double g   = expm1(alpha * l1p) / alpha;
+    double p1  = exp((alpha - 1.0) * l1p);
+    double p2  = p1 * p1;
+    double p3  = exp((alpha - 2.0) * l1p);
+
+    return exp(-g) *
+        (1.0 + beta * p1 + xs * xt * (p2 - (alpha - 1.0) * p3));
+}
+
+/* ==========================================================================
+   GENERAL CLOSED FORM FOR SEMI-INTEGER SMOOTHNESS
+
+   nu_s = ks + 1/2, nu_t = kt + 1/2
+   ========================================================================== */
 
 static double cov_st_semi_integer(double h, double u,
                                   double scale_s, double scale_t,
@@ -4703,53 +4754,39 @@ static double cov_st_semi_integer(double h, double u,
 {
     double beta = h / scale_s + u / scale_t;
 
-    if (beta < 1e-12) return 1.0;
+    if (beta < ST_TEMP_EPS_LAG) return 1.0;
 
     int max_m = ks + kt;
 
-    if (max_m > 40) {
+    if (max_m > MAX_K_CACHE) {
         warning("cov_st_semi_integer: max_m=%d too large, returning NA.", max_m);
         return NA_REAL;
     }
 
-    double onepb = 1.0 + beta;
-
-    /*
-       g_pos(t) = ((1+t)^alpha - 1) / alpha
-       Phi(t) = exp(-g_pos(t))
-    */
-    double g_pos = (R_pow(onepb, alpha) - 1.0) / alpha;
+    double l1p = log1p(beta);
+    double g_pos = expm1(alpha * l1p) / alpha;
     double exp_neg_g = exp(-g_pos);
 
-    /*
-       Derivate di g_pos:
-       g'(t) = (1+t)^(alpha-1)
-       g^(m)(t) = (alpha-1)(alpha-2)...(alpha-m+1)(1+t)^(alpha-m), m>=2
-    */
     double *g_derivs = (double *)R_alloc(max_m + 1, sizeof(double));
     g_derivs[0] = 0.0;
 
     if (max_m >= 1) {
-        g_derivs[1] = R_pow(onepb, alpha - 1.0);
+        g_derivs[1] = exp((alpha - 1.0) * l1p);
     }
 
     if (max_m >= 2) {
         double coef = alpha - 1.0;
-        double pow_term = R_pow(onepb, alpha - 2.0);
+        double pow_term = exp((alpha - 2.0) * l1p);
 
         g_derivs[2] = coef * pow_term;
 
         for (int m = 3; m <= max_m; ++m) {
             coef *= (alpha - (double)m + 1.0);
-            pow_term /= onepb;
+            pow_term *= exp(-l1p);
             g_derivs[m] = coef * pow_term;
         }
     }
 
-    /*
-       Per Phi(t)=exp(-g_pos(t)), il composito usa:
-       x[m] = d^m(-g_pos)/dt^m = -g_pos^(m)(t)
-    */
     double *x = (double *)R_alloc(max_m + 1, sizeof(double));
     x[0] = 0.0;
 
@@ -4757,42 +4794,20 @@ static double cov_st_semi_integer(double h, double u,
         x[m] = -g_derivs[m];
     }
 
-    /*
-       Calcolo tutti i Bell polynomial una sola volta:
-       bell[m] = B_m(x1,...,xm)
-    */
     double *bell = (double *)R_alloc(max_m + 1, sizeof(double));
     complete_bell_all_fast(max_m, x, bell);
 
-    /*
-       weighted_moment[m] senza il fattore exp(-g):
-       E[W^m exp(-beta W)] = (-1)^m exp(-g) Bell_m
-    */
     double *moment_part = (double *)R_alloc(max_m + 1, sizeof(double));
     for (int m = 0; m <= max_m; ++m) {
         moment_part[m] = (m & 1) ? -bell[m] : bell[m];
     }
 
-    /*
-       Coefficienti A_{ks,i}, A_{kt,j}.
-       Ora usano cache.
-    */
     double *As = (double *)R_alloc(ks + 1, sizeof(double));
     double *At = (double *)R_alloc(kt + 1, sizeof(double));
 
-    for (int i = 0; i <= ks; ++i) {
-        As[i] = compute_A_cached(ks, i);
-    }
+    for (int i = 0; i <= ks; ++i) As[i] = compute_A_cached(ks, i);
+    for (int j = 0; j <= kt; ++j) At[j] = compute_A_cached(kt, j);
 
-    for (int j = 0; j <= kt; ++j) {
-        At[j] = compute_A_cached(kt, j);
-    }
-
-    /*
-       Potenze:
-       ph[i] = (2h/scale_s)^(ks-i)
-       pu[j] = (2u/scale_t)^(kt-j)
-    */
     double base_h = 2.0 * h / scale_s;
     double base_u = 2.0 * u / scale_t;
 
@@ -4800,14 +4815,10 @@ static double cov_st_semi_integer(double h, double u,
     double *pu = (double *)R_alloc(kt + 1, sizeof(double));
 
     ph[ks] = 1.0;
-    for (int i = ks - 1; i >= 0; --i) {
-        ph[i] = ph[i + 1] * base_h;
-    }
+    for (int i = ks - 1; i >= 0; --i) ph[i] = ph[i + 1] * base_h;
 
     pu[kt] = 1.0;
-    for (int j = kt - 1; j >= 0; --j) {
-        pu[j] = pu[j + 1] * base_u;
-    }
+    for (int j = kt - 1; j >= 0; --j) pu[j] = pu[j + 1] * base_u;
 
     double sum_total = 0.0;
 
@@ -4818,28 +4829,28 @@ static double cov_st_semi_integer(double h, double u,
         for (int j = 0; j <= kt; ++j) {
             int mt = kt - j;
             int mij = ms + mt;
-
-            double term_t = At[j] * pu[j];
-
-            sum_total += term_s * term_t * moment_part[mij];
+            sum_total += term_s * At[j] * pu[j] * moment_part[mij];
         }
     }
 
     return exp_neg_g * sum_total;
 }
 
-/* ============================================================================
-   COEFFICIENTI STEHFEST — N_steh=16 per ~8 cifre di precisione
-   ============================================================================ */
+/* ==========================================================================
+   STEHFEST COEFFICIENTS FOR GENERAL NON-SEMI-INTEGER CASE
+   ========================================================================== */
 
-const int N_steh = 16; /* FIX: era 10, portato a 16 */
+#define N_STEHFEST 16
 
-static void stehfest_coeffs(int N, double *V) {
+static void stehfest_coeffs(int N, double *V)
+{
     int n2 = N / 2;
+
     for (int i = 1; i <= N; ++i) {
-        double sum  = 0.0;
+        double sum = 0.0;
         int k_min = (i + 1) / 2;
         int k_max = (i < n2) ? i : n2;
+
         for (int k = k_min; k <= k_max; ++k) {
             double dk = (double)k;
             double di = (double)i;
@@ -4853,101 +4864,108 @@ static void stehfest_coeffs(int N, double *V) {
                 lgamma(2.0 * dk - di + 1.0);
             sum += exp(log_term);
         }
-        int sign = ((i + n2) % 2 == 0) ? 1 : -1;
-        V[i] = sign * sum;
+
+        V[i] = (((i + n2) % 2) == 0) ? sum : -sum;
     }
 }
 
-
-/* ============================================================================
-   GRIGLIA LOG-UNIFORME DENSITÀ TEMPERED-STABLE
-   ============================================================================ */
+/* ==========================================================================
+   LOG-UNIFORM GRID FOR THE TEMPERED-STABLE DENSITY
+   ========================================================================== */
 
 #define N_GRID 2000
+
 static double f_grid[N_GRID];
 static double w_grid[N_GRID];
-static double last_alpha      = -1.0;
-static int    grid_initialized = 0;
+static double last_alpha = -1.0;
+static int grid_initialized = 0;
 
-/* FIX: rimossi grid_w_min/max statici e grid_dw — ora gestiti dentro precompute */
 static double grid_w_min  = 0.0;
 static double grid_w_max  = 0.0;
 static double grid_log_min = 0.0;
 static double grid_log_max = 0.0;
 static double grid_dlog    = 0.0;
 
-static void precompute_density_grid(double alpha) {
+static void precompute_density_grid(double alpha)
+{
     if (alpha <= 0.0 || alpha >= 1.0) {
         warning("precompute_density_grid: alpha=%g outside (0,1).", alpha);
         return;
     }
 
-    static double V[32]; /* sufficiente per N_steh <= 32 */
+    static double V[32];
     if (!grid_initialized) {
-        stehfest_coeffs(N_steh, V);
+        stehfest_coeffs(N_STEHFEST, V);
         grid_initialized = 1;
     }
 
-    /* FIX: griglia log-uniforme con w_min=1e-4 per catturare il picco vicino a 0 */
-    grid_w_min   = 1e-4;
+    grid_w_min   = 1.0e-4;
     grid_w_max   = 20.0;
     grid_log_min = log(grid_w_min);
     grid_log_max = log(grid_w_max);
-    grid_dlog    = (grid_log_max - grid_log_min) / (N_GRID - 1.0);
+    grid_dlog    = (grid_log_max - grid_log_min) / ((double)N_GRID - 1.0);
 
     double ln2 = log(2.0);
 
     for (int i = 0; i < N_GRID; ++i) {
-        double w  = exp(grid_log_min + i * grid_dlog);
+        double w = exp(grid_log_min + (double)i * grid_dlog);
         w_grid[i] = w;
 
         double sum = 0.0;
-        for (int k = 1; k <= N_steh; ++k) {
-            double s          = (double)k * ln2 / w;
-            double one_plus_s = 1.0 + s;
-            if (one_plus_s <= 0.0) continue;
-            double pow_term = R_pow(one_plus_s, alpha);
-            double expo_arg = -(pow_term - 1.0) / alpha;
+        for (int k = 1; k <= N_STEHFEST; ++k) {
+            double s = (double)k * ln2 / w;
+            double expo_arg = -ts_gpos(s, alpha);
+
             if (expo_arg < -745.0) continue;
-            if (expo_arg >  709.0) { sum = 0.0; break; }
+            if (expo_arg >  709.0) {
+                sum = 0.0;
+                break;
+            }
+
             sum += V[k] * exp(expo_arg);
         }
 
-        double f  = (ln2 / w) * sum;
-        f_grid[i] = (f > 0.0) ? f : 0.0;
+        double f = (ln2 / w) * sum;
+        f_grid[i] = (f > 0.0 && R_FINITE(f)) ? f : 0.0;
     }
 
-    /* check normalizzazione */
     double mass = 0.0;
-    for (int i = 0; i < N_GRID - 1; i++)
-        mass += 0.5 * (f_grid[i] + f_grid[i + 1]) * (w_grid[i + 1] - w_grid[i]);
-    if (fabs(mass - 1.0) > 0.01)
-        warning("precompute_density_grid: alpha=%.3f copre massa=%.4f (atteso 1.0).",
+    for (int i = 0; i < N_GRID - 1; ++i) {
+        mass += 0.5 * (f_grid[i] + f_grid[i + 1]) *
+                (w_grid[i + 1] - w_grid[i]);
+    }
+
+    if (fabs(mass - 1.0) > 0.01) {
+        warning("precompute_density_grid: alpha=%.6f covers mass=%.6f, expected 1.",
                 alpha, mass);
+    }
 
     last_alpha = alpha;
 }
 
-
-/* Interpolazione O(1) su griglia log-uniforme */
-static double interp_density_fast(double w, double alpha) {
+static double interp_density_fast(double w, double alpha)
+{
     if (w <= 0.0) return 0.0;
-    if (alpha != last_alpha) precompute_density_grid(alpha);
+
+    if (fabs(alpha - last_alpha) > 1.0e-15) {
+        precompute_density_grid(alpha);
+    }
+
     if (w < grid_w_min || w > grid_w_max) return 0.0;
 
-    double z   = (log(w) - grid_log_min) / grid_dlog;
-    int    idx = (int)z;
-    if (idx < 0)           idx = 0;
+    double z = (log(w) - grid_log_min) / grid_dlog;
+    int idx = (int)z;
+
+    if (idx < 0) idx = 0;
     if (idx >= N_GRID - 1) idx = N_GRID - 2;
 
-    double t = z - idx;
+    double t = z - (double)idx;
     return f_grid[idx] + t * (f_grid[idx + 1] - f_grid[idx]);
 }
 
-
-/* ============================================================================
-   INTEGRAZIONE GAUSS-LEGENDRE
-   ============================================================================ */
+/* ==========================================================================
+   GAUSS-LEGENDRE INTEGRATION FOR GENERAL SMOOTHNESS
+   ========================================================================== */
 
 static double integrate_region_GL(double a, double b, int n_nodes,
                                   const double *nodes, const double *weights,
@@ -4957,11 +4975,11 @@ static double integrate_region_GL(double a, double b, int n_nodes,
 {
     if (b <= a) return 0.0;
 
-    double half = (b - a) / 2.0;
-    double mid  = (a + b) / 2.0;
+    double half = 0.5 * (b - a);
+    double mid  = 0.5 * (a + b);
     double sum  = 0.0;
 
-    for (int i = 0; i < n_nodes; i++) {
+    for (int i = 0; i < n_nodes; ++i) {
         double w = mid + half * nodes[i];
         if (w <= 0.0) continue;
 
@@ -4975,14 +4993,15 @@ static double integrate_region_GL(double a, double b, int n_nodes,
     return half * sum;
 }
 
-
 static double cov_st_general_adaptive(double h, double u,
                                       double scale_s, double scale_t,
                                       double nu_s, double nu_t, double alpha)
 {
-    if (h < 1e-12 && u < 1e-12) return 1.0;
+    if (h < ST_TEMP_EPS_LAG && u < ST_TEMP_EPS_LAG) return 1.0;
 
-    if (last_alpha != alpha) precompute_density_grid(alpha);
+    if (fabs(alpha - last_alpha) > 1.0e-15) {
+        precompute_density_grid(alpha);
+    }
 
     const double WMAX    = 20.0;
     const double arg_max = 30.0;
@@ -4992,73 +5011,92 @@ static double cov_st_general_adaptive(double h, double u,
     if (u > 0.0) w_max_eff = fmin(w_max_eff, arg_max * scale_t / u);
     if (w_max_eff < 0.2) w_max_eff = 0.2;
     if (w_max_eff > WMAX) w_max_eff = WMAX;
-double res = 0.0;
 
-double a0 = 0.0;
-double b0 = fmin(2.0, w_max_eff);
+    double res = 0.0;
 
-double a1 = 2.0;
-double b1 = fmin(8.0, w_max_eff);
+    double a0 = 0.0;
+    double b0 = fmin(2.0, w_max_eff);
 
-double a2 = 8.0;
-double b2 = w_max_eff;
+    double a1 = 2.0;
+    double b1 = fmin(8.0, w_max_eff);
 
-/* [0, min(2,w_max_eff)] con GL32 */
-if (b0 > a0) {
-    res += integrate_region_GL(a0, b0, N_GL32, GL32_NODES, GL32_WEIGHTS,
-                               h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+    double a2 = 8.0;
+    double b2 = w_max_eff;
+
+    if (b0 > a0) {
+        res += integrate_region_GL(a0, b0, N_GL32, GL32_NODES, GL32_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+    }
+
+    if (b1 > a1) {
+        res += integrate_region_GL(a1, b1, N_GL16, GL16_NODES, GL16_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+    }
+
+    if (b2 > a2) {
+        res += integrate_region_GL(a2, b2, N_GL16, GL16_NODES, GL16_WEIGHTS,
+                                   h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+    }
+
+    return res;
 }
 
-/* [2, min(8,w_max_eff)] con GL16 */
-if (b1 > a1) {
-    res += integrate_region_GL(a1, b1, N_GL16, GL16_NODES, GL16_WEIGHTS,
-                               h, u, scale_s, scale_t, nu_s, nu_t, alpha);
-}
+/* ==========================================================================
+   MAIN FUNCTION
 
-/* [8, w_max_eff] con GL16 */
-if (b2 > a2) {
-    res += integrate_region_GL(a2, b2, N_GL16, GL16_NODES, GL16_WEIGHTS,
-                               h, u, scale_s, scale_t, nu_s, nu_t, alpha);
-}
-
-return res;
-}
-
-
-/* ============================================================================
-   FUNZIONE PRINCIPALE
-   ============================================================================ */
+   alpha argument is eta = logit(alpha_model).
+   Returns correlation, not covariance. Multiply by variance outside.
+   ========================================================================== */
 
 double CorFunWitMattemp(double h, double u,
                         double scale_s, double scale_t,
                         double smooth_s, double smooth_t,
                         double alpha)
 {
-
-    alpha=exp(alpha)/(1+exp(alpha));
     double nu_s = smooth_s;
     double nu_t = smooth_t;
 
-    if (h < 1e-12 && u < 1e-12) return 1.0;
+    if (h < 0.0) h = -h;
+    if (u < 0.0) u = -u;
 
-    /* semi-integer check */
-    const double eps = 1e-8;
+    if (scale_s <= 0.0 || scale_t <= 0.0 || nu_s <= 0.0 || nu_t <= 0.0) {
+        return NA_REAL;
+    }
+
+    if (h < ST_TEMP_EPS_LAG && u < ST_TEMP_EPS_LAG) return 1.0;
+
+    /* Here `alpha` is the unconstrained optimizer parameter eta. */
+    double alpha_ts = inv_logit_stable(alpha);
+
+    /* Boundary alpha=1: separable Matern product. */
+    if (alpha_ts > 1.0 - ST_TEMP_ALPHA_SEP_TOL) {
+        return CorFunWitMat(h, scale_s, nu_s) * CorFunWitMat(u, scale_t, nu_t);
+    }
+
+    const double eps = 1.0e-8;
     double ks_d = nu_s - 0.5;
     double kt_d = nu_t - 0.5;
     int ks = (int)round(ks_d);
     int kt = (int)round(kt_d);
 
-    bool is_semi_s = (fabs(ks_d - (double)ks) < eps && ks >= 0);
-    bool is_semi_t = (fabs(kt_d - (double)kt) < eps && kt >= 0);
+    int is_semi_s = (fabs(ks_d - (double)ks) < eps && ks >= 0);
+    int is_semi_t = (fabs(kt_d - (double)kt) < eps && kt >= 0);
 
-    /* FIX: i casi speciali (0.5,0.5), (1.5,0.5), ecc. sono gia'
-       catturati qui — i quattro if hard-coded sono stati rimossi
-       perche' erano dead code (unreachable). */
-    if (is_semi_s && is_semi_t)
-        {
-        return cov_st_semi_integer(h, u, scale_s, scale_t, ks, kt, alpha);
+    if (is_semi_s && is_semi_t) {
+        if (ks == 0 && kt == 0) {
+            return cov_st_05_05(h, u, scale_s, scale_t, alpha_ts);
+        }
+        if (ks == 1 && kt == 0) {
+            return cov_st_15_05(h, u, scale_s, scale_t, alpha_ts);
+        }
+        if (ks == 0 && kt == 1) {
+            return cov_st_05_15(h, u, scale_s, scale_t, alpha_ts);
+        }
+        if (ks == 1 && kt == 1) {
+            return cov_st_15_15(h, u, scale_s, scale_t, alpha_ts);
+        }
+        return cov_st_semi_integer(h, u, scale_s, scale_t, ks, kt, alpha_ts);
     }
 
-    /* caso generale: nu non semi-intero */
-    return cov_st_general_adaptive(h, u, scale_s, scale_t, nu_s, nu_t, alpha);
+    return cov_st_general_adaptive(h, u, scale_s, scale_t, nu_s, nu_t, alpha_ts);
 }

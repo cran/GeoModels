@@ -1,4 +1,3 @@
-
 ####################################################
 ### File name: GeoResiduals.r
 ####################################################
@@ -6,10 +5,15 @@
 GeoResiduals<-function(fit)
 
 {
+call <- match.call()
 if(!inherits(fit,"GeoFit"))  stop("A GeoFit object is needed as input\n")
 ######
 extmean=FALSE
-if(!fit$bivariate) {if(length(fit$fixed$mean)>1) {extmean=TRUE; mmext=fit$fixed$mean;fit$fixed$mean=0}}  ## external fixed mean
+if(!fit$bivariate) {
+    if(!is.null(fit$fixed$mean) && length(fit$fixed$mean)>1) {
+        extmean=TRUE; mmext=fit$fixed$mean;fit$fixed$mean=0
+    }
+}  ## external fixed mean
 ###
 nm=names(fit$param); nf=names(fit$fixed)
 fit$param=unlist(fit$param); fit$fixed=unlist(fit$fixed)
@@ -37,28 +41,28 @@ beta2=beta2[!is.na(beta2)]
 copula=fit$copula
 
 
-##### if X null X shuld be a matrix of 1
-  if(is.null(fit$X)) {
-   if(is.null(fit$coordx_dyn)) fit$X=matrix(1,nrow=length(fit$coordx)*length(fit$coordt),ncol=1)    
-   else {fit$X =lapply(fit$coordx_dyn, function(mat) matrix(1, nrow = nrow(mat), ncol = 1))
-         fit$X=as.matrix(do.call(rbind,fit$X)) }
-   }
-   else {
-       if(!is.null(fit$coordx_dyn))  fit$X=as.matrix(do.call(rbind,fit$X)) 
-   }
+#################################
+#### extracting data ########
+#################################
+if(is.list(fit$coordx_dyn)) dd=unlist(fit$data)
+else dd=c(t(fit$data))
 
+##### if X is NULL, use an intercept-only design matrix with the correct length
+##### This is important for purely spatial objects, where coordt can be NULL.
+if(is.null(fit$X)) {
+    fit$X=matrix(1,nrow=length(dd),ncol=1)
+} else {
+    if(!is.null(fit$coordx_dyn) && is.list(fit$X)) fit$X=as.matrix(do.call(rbind,fit$X))
+    else fit$X=as.matrix(fit$X)
+}
+
+if(nrow(fit$X)!=length(dd)) stop("number of rows of X does not match the number of observations\n")
 
 #################################
 #### computing mean ########
 #################################
 if(extmean) mu=mmext
 else mu=fit$X%*%beta2  
-
-#################################
-#### computing residuals ########
-#################################
-if(is.list(fit$coordx_dyn)) dd=unlist(fit$data)
-else dd=c(t(fit$data))
 
 
 ############################################################
@@ -111,7 +115,9 @@ if(model=="Gaussian_misp_Poisson")
 #########
 #}
 
-fit$X=as.matrix(rep(1,length(dd)))
+if(!exists("res1")) stop("residuals are not implemented for this model in GeoResiduals()\n")
+
+fit$X <- matrix(1, nrow = length(dd), ncol = 1)
 
 #### updating  object
 mm=0
@@ -119,7 +125,7 @@ names(mm)="mean"
 nuis_update=c(mm,nuisance[!sel])
 fit$param=c(nuis_update,paramcorr)
 fit$numbetas=1
-fit$X=as.matrix(rep(1,length(c(fit$data))))
+fit$X <- matrix(1, nrow = length(dd), ncol = 1)
 
 #if(!is.null(copula)){
 #############################################
@@ -166,15 +172,14 @@ obj=as.list(fit$param)
 fit$param=obj[nm]
 fit$fixed=obj[nf]
 
+.drop_empty_na <- function(z) {
+    if(length(z)==0) return(z)
+    keep <- !vapply(z, function(v) length(v)==0L || all(is.na(v)), logical(1))
+    z[keep]
+}
 
-#### servono?
- a=fit$param;b=fit$fixed
-ll=replace(a, is.na(a),a[match(names(b),names(a))][is.na(b)])
-ll[lengths(ll) == 0] <- NA
-fit$param=ll
-### deleting NA
-fit$param=fit$param[!is.na(fit$param)]
-fit$fixed=fit$fixed[!is.na(fit$fixed)]
+fit$param=.drop_empty_na(fit$param)
+fit$fixed=.drop_empty_na(fit$fixed)
 
 
 ###adding mean and variance if missing for some reason

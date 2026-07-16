@@ -1,17 +1,23 @@
 \name{GeoPit}
 \alias{GeoPit}
 \encoding{UTF-8}
-\title{Probability integral or normal score tranformation}
+\title{Probability integral or normal score transformation}
 \description{
- The procedure for a given GeoFit object applies the probability integral tranformation or the normal score transformation to the data
+For a given \code{\link{GeoFit}}, the procedure applies either the
+probability integral transformation or the normal score transformation
+to the data.
 }
-\usage{GeoPit(object,type="Uniform")}
+\usage{GeoPit(object, type = "Uniform")}
 \arguments{
- \item{object}{A GeoFit object}.
-\item{type}{The type of transformation. If "Uniform" then the probability integral tranformation is performed.
-If "Gaussian" then the normal score transformation is performed. }
-}
+ \item{object}{An object of class \code{\link{GeoFit}},
+ \code{\link{GeoKrig}}, or \code{\link{GeoKrigloc}}. For fitted models
+ with covariates, the \code{\link{GeoFit}} object must first be transformed
+ by \code{\link{GeoResiduals}}.}
 
+ \item{type}{The type of transformation. If \code{"Uniform"}, the
+ probability integral transformation is performed. If \code{"Gaussian"},
+ the normal score transformation is performed.}
+}
 \value{Returns an (updated) object of class \code{GeoFit}}
 
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},

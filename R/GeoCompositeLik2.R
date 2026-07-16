@@ -70,7 +70,9 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
         )$res
     }
 
-    return(-result)
+    ## Optimizers work on the average negative composite log-likelihood.
+    ## obj_scale is defined after the pair selection and is constant in theta.
+    return(-result / obj_scale)
 }
 ##################################################################
 ##################################################################
@@ -99,7 +101,9 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
                         corrmodel,data1, data2, n,paramcorr,weigthed, res=res,Mean[colidx],Mean[rowidx],other_nuis,
           INTENT =    c(rep("r",6),"w", rep("r", 3)),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$res
-        return(-result)
+        ## Optimizers work on the average negative composite log-likelihood.
+        ## obj_scale is defined after the pair selection and is constant in theta.
+        return(-result / obj_scale)
       }
 
    ##################################################################################################
@@ -255,6 +259,11 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
 
    if(is.null(neighb)) {colidx=colidx+1; rowidx=rowidx+1}
    data1=data[colidx]; data2=data[rowidx]
+
+   ## Constant scaling of the objective.  The optimizer and numerical score
+   ## use the average pairwise objective, while CompLikelihood$value is
+   ## converted back to the total composite log-likelihood below.
+   obj_scale <- max(1, length(data1))
 
    if((model==11||model==49||model==51)&&length(n)>1) {n1=n[colidx];n2=n[rowidx];n=c(n1,n2)}
 
@@ -443,7 +452,7 @@ if(!onlyvar){
         opt_msg  <- if(!is.null(CompLikelihood$message)) CompLikelihood$message else NULL
         min_obj  <- CompLikelihood$value
 
-        CompLikelihood$value = -min_obj
+        CompLikelihood$value = -min_obj * obj_scale
         names(CompLikelihood$par)<- namesparam
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
@@ -457,7 +466,7 @@ if(!onlyvar){
         opt_code <- CompLikelihood$convergence
         min_obj  <- CompLikelihood$value
 
-        CompLikelihood$value = -min_obj
+        CompLikelihood$value = -min_obj * obj_scale
         names(CompLikelihood$par)<- namesparam
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
@@ -472,7 +481,7 @@ if(!onlyvar){
         opt_msg  <- if(!is.null(CompLikelihood$message)) CompLikelihood$message else NULL
         min_obj  <- CompLikelihood$value
 
-        CompLikelihood$value = -min_obj
+        CompLikelihood$value = -min_obj * obj_scale
         names(CompLikelihood$par)<- namesparam
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
@@ -488,7 +497,7 @@ if(!onlyvar){
 
         CompLikelihood$par <- CompLikelihood$estimate
         names(CompLikelihood$par)<- namesparam
-        CompLikelihood$value <- -min_obj
+        CompLikelihood$value <- -min_obj * obj_scale
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
                                                  optimizer, opt_code, NULL,
@@ -504,7 +513,7 @@ if(!onlyvar){
         min_obj  <- CompLikelihood$fval
 
         names(CompLikelihood$par)<- namesparam
-        CompLikelihood$value <- -min_obj
+        CompLikelihood$value <- -min_obj * obj_scale
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
                                                  optimizer, opt_code, opt_msg,
@@ -519,7 +528,7 @@ if(!onlyvar){
         min_obj  <- CompLikelihood$objective
 
         names(CompLikelihood$par)<- namesparam
-        CompLikelihood$value <- -min_obj
+        CompLikelihood$value <- -min_obj * obj_scale
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
                                                  optimizer, opt_code, opt_msg,
@@ -534,7 +543,7 @@ if(!onlyvar){
 
         CompLikelihood$par <- param
         names(CompLikelihood$par)<- namesparam
-        CompLikelihood$value <- -min_obj
+        CompLikelihood$value <- -min_obj * obj_scale
         CompLikelihood$counts <- NULL
 
         CompLikelihood <- set_success_or_failure(CompLikelihood, min_obj, CompLikelihood$par,
@@ -552,10 +561,10 @@ if(!onlyvar){
           CompLikelihood$opt_message <- NULL
           CompLikelihood$opt_warning <- NULL
           CompLikelihood$warning <- NULL
-          if(!bivariate) CompLikelihood$value = - comploglik2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
+          if(!bivariate) CompLikelihood$value = - obj_scale * comploglik2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                               data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
                              n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,cond_pair=cond_pair)
-          else CompLikelihood$value = -comploglik_biv2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
+          else CompLikelihood$value = - obj_scale * comploglik_biv2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                 data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
                              n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,cond_pair=cond_pair)
           if(hessian)

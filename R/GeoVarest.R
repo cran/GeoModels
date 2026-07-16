@@ -1,17 +1,16 @@
 # GeoVarest: parametric score bootstrap for GeoModels
-# Estimates J = Var{score(theta_hat)} and then G^{-1} = H^{-1} J H^{-1}.
+# Estimates J = Var{score(theta_hat)} using GeoFit(score=TRUE),
+# then G^{-1} = H^{-1} J H^{-1}.
 
 GeoVarest <- function(fit, K = 100, sparse = FALSE,
                       method = c("cholesky", "TB", "CE"),
-                      alpha = 0.95, L = 1000,
+                      alpha = 0.95, L = 10000,
                       parallel = TRUE, ncores = NULL, progress = TRUE,
-                      score_method = c("geofit_score", "finite"),
-                      eps = 1e-5, seed = NULL) {
+                      seed = NULL) {
 
   `%||%` <- function(a, b) if (!is.null(a)) a else b
 
   method <- match.arg(method)
-  score_method <- match.arg(score_method)
 
   ## ---------------------------------------------------------------
   ## 0. Checks
@@ -29,15 +28,30 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
     stop("alpha must be a single numeric in (0,1)", call. = FALSE)
   }
 
-  if (!is.numeric(eps) || length(eps) != 1L || !is.finite(eps) || eps <= 0) {
-    stop("eps must be a positive finite number", call. = FALSE)
-  }
 
   if (is.null(fit$sensmat)) {
     stop("Sensitivity matrix is missing: use sensitivity = TRUE in GeoFit", call. = FALSE)
   }
 
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+
+    set.seed(seed)
+  }
 
   ## ---------------------------------------------------------------
   ## Progress handlers
@@ -67,14 +81,46 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   }
 
   gm_fun <- function(name) {
-    if (exists(name, mode = "function", inherits = TRUE)) {
-      return(get(name, mode = "function", inherits = TRUE))
-    }
     if (requireNamespace("GeoModels", quietly = TRUE) &&
         exists(name, envir = asNamespace("GeoModels"), inherits = FALSE)) {
       return(getFromNamespace(name, "GeoModels"))
     }
+    if (exists(name, mode = "function", inherits = TRUE)) {
+      return(get(name, mode = "function", inherits = TRUE))
+    }
     stop("Function ", name, " is not available. Load GeoModels first.", call. = FALSE)
+  }
+
+
+  set_proj_env_for_workers <- function() {
+    get_proj_path <- function() {
+      path <- Sys.getenv("PROJ_DATA", unset = "")
+
+      if (!nzchar(path)) {
+        path <- Sys.getenv("PROJ_LIB", unset = "")
+      }
+
+     # if (!nzchar(path) && requireNamespace("sf", quietly = TRUE)) {
+     #   path <- tryCatch(sf::sf_proj_info("path"), error = function(e) "")
+     # }
+
+      if (length(path) != 1L || !nzchar(path)) {
+        return("")
+      }
+
+      normalizePath(path, winslash = "/", mustWork = FALSE)
+    }
+
+    proj_path <- get_proj_path()
+
+    if (!nzchar(proj_path)) {
+      return(character(0))
+    }
+
+    Sys.setenv(PROJ_DATA = proj_path)
+    Sys.setenv(PROJ_LIB  = proj_path)
+
+    c(PROJ_DATA = proj_path, PROJ_LIB = proj_path)
   }
 
   GeoFit_fun <- gm_fun("GeoFit")
@@ -217,10 +263,32 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
       )
     } else {
       GeoSimapprox_fun <- gm_fun("GeoSimapprox")
+
+      ## GeoSimapprox may parallelize over nrep = K. This simulation phase
+      ## is completed before score evaluation starts, so the score
+      ## parallelism below is not nested. We defensively restore the current
+      ## future plan before entering the score phase.
+      old_plan_before_sim <- NULL
+      if (isTRUE(parallel) && requireNamespace("future", quietly = TRUE)) {
+        old_plan_before_sim <- future::plan()
+      }
+
       data_sim_full <- do.call(
         GeoSimapprox_fun,
-        c(sim_args, list(method = method, L = L, parallel = FALSE))
+        c(
+          sim_args,
+          list(
+            method   = method,
+            L        = L,
+            parallel = parallel,
+            ncores   = ncores
+          )
+        )
       )
+
+      if (!is.null(old_plan_before_sim)) {
+        try(future::plan(old_plan_before_sim), silent = TRUE)
+      }
     }
   } else {
     if (method != "cholesky") {
@@ -333,93 +401,6 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
     }
   }
 
-  comp_value <- function(current_data, par, seed_value) {
-    capture.output({
-      ff <- geofit_onlyvar(
-        current_data = current_data,
-        par          = par,
-        want_score   = FALSE,
-        seed_value   = seed_value
-      )
-    }, file = nullfile())
-
-    val <- if (!is.null(ff$logCompLik)) ff$logCompLik else ff$logLik
-    val <- as.numeric(val)
-
-    if (length(val) != 1L || !is.finite(val)) {
-      stop("non-finite log composite likelihood", call. = FALSE)
-    }
-
-    val
-  }
-
-  finite_score <- function(current_data, par, seed_value) {
-    par <- as.numeric(par)
-    names(par) <- names(theta_hat)
-
-    g <- rep(NA_real_, length(par))
-    names(g) <- names(par)
-
-    f0 <- comp_value(current_data, par, seed_value)
-
-    lower_num <- rep(-Inf, length(par))
-    upper_num <- rep( Inf, length(par))
-    names(lower_num) <- names(upper_num) <- names(par)
-
-    if (!is.null(lower)) {
-      ll <- as.numeric(unlist(lower, use.names = TRUE))
-      names(ll) <- names(unlist(lower, use.names = TRUE))
-      lower_num[names(ll)] <- ll
-    }
-
-    if (!is.null(upper)) {
-      uu <- as.numeric(unlist(upper, use.names = TRUE))
-      names(uu) <- names(unlist(upper, use.names = TRUE))
-      upper_num[names(uu)] <- uu
-    }
-
-    for (j in seq_along(par)) {
-      pj <- par[j]
-      nm <- names(par)[j]
-      h  <- eps * max(1, abs(pj))
-
-      can_f <- is.finite(pj + h) && pj + h < upper_num[nm]
-      can_b <- is.finite(pj - h) && pj - h > lower_num[nm]
-
-      if (can_f && can_b) {
-        pf <- pb <- par
-        pf[j] <- pj + h
-        pb[j] <- pj - h
-
-        g[j] <- (
-          comp_value(current_data, pf, seed_value) -
-          comp_value(current_data, pb, seed_value)
-        ) / (2 * h)
-
-      } else if (can_f) {
-        pf <- par
-        pf[j] <- pj + h
-
-        g[j] <- (
-          comp_value(current_data, pf, seed_value) - f0
-        ) / h
-
-      } else if (can_b) {
-        pb <- par
-        pb[j] <- pj - h
-
-        g[j] <- (
-          f0 - comp_value(current_data, pb, seed_value)
-        ) / h
-
-      } else {
-        stop("parameter '", nm, "' is too close to its bounds", call. = FALSE)
-      }
-    }
-
-    list(score = g, logCompLik = f0)
-  }
-
   geofit_score <- function(current_data, par, seed_value) {
     capture.output({
       ff <- geofit_onlyvar(
@@ -436,9 +417,9 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
       stop("GeoFit returned an invalid score", call. = FALSE)
     }
 
-    ## In CompLik2 the numerical score is the gradient of -cl.
-    ## The sign does not affect J = Var(score), but this makes it
-    ## consistent with finite_score(), which differentiates cl.
+    ## In CompLik2 the numerical score is the gradient of the minimized
+    ## objective, i.e. -CL/npairs when the normalized CompLik2 is used.
+    ## Change sign so J is based on the composite-likelihood score.
     sc <- -sc
     names(sc) <- names(theta_hat)
 
@@ -456,11 +437,7 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
     tryCatch({
       seed_thin <- as.integer(1234567L + k * 9999L)
 
-      out <- if (score_method == "finite") {
-        finite_score(current_data, theta_hat, seed_thin)
-      } else {
-        geofit_score(current_data, theta_hat, seed_thin)
-      }
+      out <- geofit_score(current_data, theta_hat, seed_thin)
 
       c(as.numeric(out$score), logCompLik = as.numeric(out$logCompLik))
 
@@ -498,7 +475,7 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
     } else {
       ncores <- max(
         1L,
-        min(if (is.null(ncores)) coremax - 1L else as.integer(ncores), K)
+        min(if (is.null(ncores)) getOption("mc.cores", 4L) else as.integer(ncores), K)
       )
     }
   }
@@ -506,6 +483,53 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   if (use_parallel) {
     old_plan <- future::plan()
     on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
+
+    ## Il payload esportato ai worker (fit, coords, neighb, ecc. catturati
+    ## dalle closure geofit_onlyvar/geofit_score/make_score) e'
+    ## necessario per rifare la verosimiglianza composita su ogni dataset
+    ## simulato: con dataset grandi puo' legittimamente superare il default
+    ## di 500 MiB di future.globals.maxSize. Alziamo il limite in modo
+    ## dinamico, proporzionato alla dimensione reale, e lo ripristiniamo a
+    ## fine chiamata per non alterare in modo permanente le opzioni globali
+    ## dell'utente (rilevante soprattutto trattandosi di una funzione di
+    ## pacchetto).
+    needed_size <- tryCatch({
+      max(vapply(
+        list(make_score, geofit_onlyvar, geofit_score),
+        function(f) as.numeric(utils::object.size(f)),
+        numeric(1)
+      ))
+    }, error = function(e) NA_real_)
+
+    old_max_size <- getOption("future.globals.maxSize")
+    on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
+
+    safety_margin <- 1.5
+    default_cap   <- 500 * 1024^2
+
+    options(future.globals.maxSize = if (is.na(needed_size)) {
+      max(default_cap, 4 * 1024^3)
+    } else {
+      max(default_cap, needed_size * safety_margin)
+    })
+
+    old_proj_data <- Sys.getenv("PROJ_DATA", unset = NA)
+    old_proj_lib  <- Sys.getenv("PROJ_LIB",  unset = NA)
+
+    on.exit({
+      if (is.na(old_proj_data)) {
+        Sys.unsetenv("PROJ_DATA")
+      } else {
+        Sys.setenv(PROJ_DATA = old_proj_data)
+      }
+      if (is.na(old_proj_lib)) {
+        Sys.unsetenv("PROJ_LIB")
+      } else {
+        Sys.setenv(PROJ_LIB = old_proj_lib)
+      }
+    }, add = TRUE)
+
+    rscript_envs <- set_proj_env_for_workers()
 
     future::plan(future::multisession, workers = ncores)
 
@@ -702,7 +726,7 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   fit$conf.int.bootstrap_percentile <- NULL
   fit$pvalues_bootstrap <- NULL
 
-  fit$bootstrap_type <- paste0("parametric_score_J_", score_method)
+  fit$bootstrap_type <- "parametric_score_J_geofit_score"
   fit$bootstrap_K <- K
   fit$bootstrap_successful <- n_successful
   fit$bootstrap_success_rate <- n_successful / K

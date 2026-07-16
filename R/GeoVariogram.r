@@ -437,14 +437,25 @@ GeoVariogram <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, co
 
     if(!memdist){
       fname <- paste(fname,"2",sep="")
-      EV <- .C("Binned_Variogram2",
-               bins=bins,
-               as.double(coordx), as.double(coordy), as.double(coordz),
-               as.double(coordt), as.double(data),
-               lenbins=as.integer(lenbins),
-               moments=as.double(moments),
-               as.integer(numbins),
-               PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+
+      coordt_arg <- if (is.null(coordt)) 0 else coordt
+
+      EV <- dotCall64::.C64(
+        fname,
+        SIGNATURE = c("double", "double", "double", "double", "double",
+                      "double", "integer", "double", "integer"),
+        INTENT = c("rw", "r", "r", "r", "r", "r", "rw", "rw", "r"),
+        bins = bins,
+        coordx = as.double(coordx),
+        coordy = as.double(coordy),
+        coordz = as.double(coordz),
+        coordt = as.double(coordt_arg),
+        data = as.double(data),
+        lenbins = as.integer(lenbins),
+        moments = as.double(moments),
+        numbins = as.integer(numbins),
+        NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0
+      )
 
       bins    <- EV$bins
       lenbins <- EV$lenbins
@@ -505,8 +516,15 @@ GeoVariogram <- function(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, co
   }
 
   # Cleanup globale
-  if(!memdist) .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-  else .C('DeleteGlobalVar2', PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+  if(!memdist) {
+    dotCall64::.C64('DeleteGlobalVar',
+                    SIGNATURE = character(0), INTENT = character(0),
+                    PACKAGE = 'GeoModels', VERBOSE = 0, NAOK = TRUE)
+  } else {
+    dotCall64::.C64('DeleteGlobalVar2',
+                    SIGNATURE = character(0), INTENT = character(0),
+                    PACKAGE = 'GeoModels', VERBOSE = 0, NAOK = TRUE)
+  }
 
   GeoVariogram <- list(bins=bins,
                        bint=bint,
