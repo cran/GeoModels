@@ -614,20 +614,11 @@ is_stochastic_thinning <- function(fit_obj) {
   if ((fit$likelihood == "Marginal" && fit$type %in% c("Independence", "Pairwise")) ||
       (fit$likelihood == "Conditional" && fit$type == "Pairwise")) {
 
+    ## With the updated CompLik2, fit$sensmat is already the Hessian
+    ## of the total negative composite log-likelihood.  No additional
+    ## multiplication by fit$numpairs is required here.
     H <- as.matrix(fit$sensmat)
     storage.mode(H) <- "double"
-
-    ## If CompLik2 optimizes the average negative composite likelihood,
-    ## fit$sensmat is on the average-per-pair scale.  For CLAIC/CLBIC,
-    ## fit$logCompLik is on the total composite-likelihood scale, so H
-    ## must be put back on the total scale when the number of pairs is known.
-    if (!is.null(fit$numpairs) &&
-        length(fit$numpairs) == 1L &&
-        is.finite(fit$numpairs) &&
-        fit$numpairs > 0) {
-      H <- H * fit$numpairs
-    }
-
     H <- (H + t(H)) / 2
 
     penalty <- sum(diag(H %*% invG))
@@ -648,7 +639,7 @@ is_stochastic_thinning <- function(fit_obj) {
   }
 
   ## ------------------------------------------------------------------
-  ## 10.1 Confidence intervals and bootstrap p-values
+  ## 10.1 Bootstrap percentile confidence intervals
   ## ------------------------------------------------------------------
   theta_hat <- as.numeric(fit$param)
   names(theta_hat) <- names(fit$param)
@@ -658,27 +649,6 @@ is_stochastic_thinning <- function(fit_obj) {
   colnames(q_boot) <- c("Lower_perc", "Upper_perc")
   fit$conf.int.bootstrap_percentile <- t(q_boot)
   rownames(fit$conf.int.bootstrap_percentile) <- c("Lower", "Upper")
-
-  positive_params <- c(
-    "sill", "sill_1", "sill_2", "nugget", "nugget_1",
-    "nugget_2", "scale", "scale_1", "scale_2",
-    "smooth", "shape", "df", "sigma2", "tail",
-    "tail1", "tail2"
-  )
-
-  pval_boot <- vapply(seq_along(theta_hat), function(j) {
-    nm <- names(theta_hat)[j]
-    if (any(vapply(positive_params, function(p) grepl(p, nm), logical(1)))) {
-      return(NA_real_)
-    }
-    bj      <- param_mat[, j]
-    pj_low  <- mean(bj <= 0, na.rm = TRUE)
-    pj_high <- mean(bj >= 0, na.rm = TRUE)
-    pmin(1, 2 * min(pj_low, pj_high))
-  }, numeric(1))
-  names(pval_boot) <- names(theta_hat)
-
-  fit$pvalues_bootstrap <- pval_boot
 
   ## ------------------------------------------------------------------
   ## 11. Final output
@@ -699,6 +669,7 @@ is_stochastic_thinning <- function(fit_obj) {
 
   fit$pvalues <- 2 * stats::pnorm(-abs(pp / stderr))
   names(fit$pvalues) <- names(fit$param)
+  fit$pvalues_type <- "Wald p-values based on parametric-bootstrap variance"
 
   fit$bootstrap_type <- "parametric"
   fit$bootstrap_K <- K

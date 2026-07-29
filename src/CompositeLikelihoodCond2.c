@@ -964,7 +964,7 @@ void Comp_Cond_BinomNNGauss2mem(int *cormod, double *data1, double *data2,
 
 #define P_CLAMP 1e-10
 
-    int    i, uu, vv, n1, n2, valid_pairs = 0;
+    int    i, uu, vv, n1, n2;
     double u, v, bl, weights, ai, aj, corr, l2;
     double p1, p2, p11;
 
@@ -1007,11 +1007,11 @@ void Comp_Cond_BinomNNGauss2mem(int *cormod, double *data1, double *data2,
         l2 = dbinom(vv, n2, p2, 1);
         if (!R_FINITE(l2)) continue;
 
-        valid_pairs++;
+
         *res += weights * (log(bl) - l2);
     }
 
-    if (valid_pairs < npairs[0] / 2) { *res = LOW; return; }
+  
 
     if (!R_FINITE(*res)) *res = LOW;
 }
@@ -1071,7 +1071,7 @@ void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2,
  
 #define P_CLAMP 1e-10
  
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double u, v, bl, weights, ai, aj, corr, l2;
     double p1, p2, p11, joint;
  
@@ -1111,8 +1111,7 @@ void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2,
  
         bl = log(joint) - l2;
         if (!R_FINITE(bl)) continue;
- 
-        valid_pairs++;
+
         *res += weights * bl;
     }
  
@@ -1121,7 +1120,7 @@ void Comp_Cond_BinomnegGauss2mem(int *cormod, double *data1, double *data2,
 #undef P_CLAMP
  
     /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
 
@@ -1311,7 +1310,7 @@ void Comp_Cond_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2,
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double u, v, bl, weights, ai, aj, corr, l2, joint;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -1345,14 +1344,14 @@ void Comp_Cond_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2,
         bl = log(joint) - l2;
         if (!R_FINITE(bl)) continue;
  
-        valid_pairs++;
+
         *res += weights * bl;
     }
  
     free(lgamma_cache);
  
     /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
 /************************************************/
@@ -2515,7 +2514,7 @@ void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
 #define P_CLAMP 1e-10
  
     double total       = 0.0;
-    int    valid_pairs = 0;
+
  
     for (int i = 0; i < npairs_val; i++) {
  
@@ -2556,7 +2555,7 @@ void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
         const double bl = log(biv) - l2;
         if (!R_FINITE(bl)) continue;
  
-        valid_pairs++;
+
         total += weights * bl;
     }
  
@@ -2564,8 +2563,7 @@ void Comp_Cond_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
  
 #undef P_CLAMP
  
-    /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs_val + 1) / 2) { *res = LOW; return; }
+
     *res = R_FINITE(total) ? total : LOW;
 }
 
@@ -2756,7 +2754,7 @@ void Comp_Cond_BinomnegGaussZINB_st2mem(int *cormod, double *data1, double *data
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double u, v, bl, weights, ai, aj, corr, l2, joint;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -2791,14 +2789,13 @@ void Comp_Cond_BinomnegGaussZINB_st2mem(int *cormod, double *data1, double *data
         bl = log(joint) - l2;
         if (!R_FINITE(bl)) continue;
  
-        valid_pairs++;
+
         *res += weights * bl;
     }
  
     free(lgamma_cache);
  
-    /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
 /************************************************/

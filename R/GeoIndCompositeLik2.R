@@ -348,13 +348,6 @@ compindloglik2 <- function(param, data, fixed, fan, n, namesnuis, namesparam, X,
     mm <- as.numeric(nuisance[sel])
     other_nuis <- as.numeric(nuisance[!sel])
     
-    # gestione speciale per mm ~ 0
-    if(fan %in% c("Ind_Pair_BinomGauss", "Ind_Pair_BinomGauss_misp", 
-                  "Ind_Pair_BinomnegGauss", "Ind_Pair_BinomnegGaussZINB")) {
-        zero_idx <- which(abs(mm) < 1e-16)
-        if(length(zero_idx) > 0) mm[zero_idx] <- sign(mm[zero_idx] + 1e-12) * 1e-6
-    }
-    
     Mean <- if(is.null(MM)) c(X %*% mm) else c(MM)
     result <- indloglik(fan, data, Mean, other_nuis)
     if(!is.finite(result)) result <- 1e8
@@ -443,7 +436,20 @@ lookup <- c(
 model2name <- setNames(rep(names(lookup), lengths(lookup)),
                        unlist(lookup, use.names = FALSE))
 fname <- paste0("Ind_Pair_", model2name[ as.character(model) ])
-if (is.na(fname)) stop("Unknown model: ", model)
+if (is.na(fname)) {
+  stop(
+    "Independence likelihood is not implemented for model code ",
+    model,
+    call. = FALSE
+  )
+}
+
+if (bivariate) {
+  stop(
+    "Independence likelihood initialization is not implemented for bivariate models",
+    call. = FALSE
+  )
+}
 
 ########################################################################                                            
     if(sensitivity) hessian=TRUE
@@ -469,29 +475,91 @@ if(!is.null(copula))
            {param=param[names(param)!='nu'];a=2; names(a)="nu";
            if(is.null(unlist(fixed['nu']))) fixed=c(fixed,a)}}
 
-namesparam=names(param)
-###updating upper and lower bound if necessary
-sel=pmatch(namesparam,namesupper)
-lower=lower[sel]
-upper=upper[sel]
-#### not exactly zero for the mean parameters starting values
-sel=substr(names(param),1,4)=="mean"&param==0
-param[sel]=0.1
-param=as.numeric(param)
+namesparam <- names(param)
+
+## Match bounds by parameter name.  Bounds supplied by WlsStart may also
+## contain correlation parameters, which have already been removed here.
+subset_ind_bound <- function(bound, target_names) {
+  if (is.null(bound) || length(bound) == 0L)
+    return(rep(NA_real_, length(target_names)))
+
+  bb <- unlist(bound, use.names = TRUE)
+
+  if (!is.null(names(bb)) && all(target_names %in% names(bb)))
+    return(as.numeric(bb[target_names]))
+
+  if (length(bb) == length(target_names))
+    return(as.numeric(bb))
+
+  rep(NA_real_, length(target_names))
+}
+
+lower <- subset_ind_bound(lower, namesparam)
+upper <- subset_ind_bound(upper, namesparam)
+names(lower) <- namesparam
+names(upper) <- namesparam
+
+## Backward-compatible initialization used by the previous implementation.
+## This changes only the starting point; the likelihood itself is not altered.
+sel_mean_zero <- startsWith(names(param), "mean") &
+                 is.finite(param) &
+                 param == 0
+param[sel_mean_zero] <- 0.1
+
+param <- as.numeric(param)
+
+## CompIndLik2 has native implementations for these optimizers.  Other
+## GeoFit optimizers are mapped to Nelder-Mead for the preliminary fit.
+supported_ind_optimizers <- c(
+  "L-BFGS-B", "BFGS", "SANN", "Nelder-Mead",
+  "nlm", "nlminb", "bobyqa"
+)
+
+if (!(optimizer %in% supported_ind_optimizers)) {
+  warning(
+    "Optimizer '", optimizer,
+    "' is not implemented for independence likelihood; using Nelder-Mead",
+    call. = FALSE
+  )
+  optimizer <- "Nelder-Mead"
+}
+
+## Bounded optimizers require finite marginal bounds.  If the spatial
+## bounds cannot be matched to the marginal parameters, use Nelder-Mead.
+if (optimizer %in% c("L-BFGS-B", "nlminb", "bobyqa") &&
+    (any(!is.finite(lower)) || any(!is.finite(upper)))) {
+  warning(
+    "Finite marginal bounds are unavailable; using Nelder-Mead for the independence fit",
+    call. = FALSE
+  )
+  optimizer <- "Nelder-Mead"
+}
 
    if(!onlyvar){
   ##############################.  spatial or space time ############################################
    if(!bivariate)           {
-    if(length(param)==1) {
-      
-         optimizer="optimize"  
-         if(is.na(lower)||is.na(upper))  {
-            if(model %in% c(2,14,16,45,11,30,36)) {lower=-5;upper=5}
-            else                            {lower=-1e+10;upper=1e+10}
-           }
-         else{
-             if(model %in% c(2,14,16,45,11,30,36)) {lower=-5;upper=5}
-         }  
+    if (length(param) == 1L) {
+
+      optimizer <- "optimize"
+      lower <- as.numeric(lower[1])
+      upper <- as.numeric(upper[1])
+
+      if (!is.finite(lower) || !is.finite(upper) || lower >= upper) {
+        pname <- namesparam[1]
+        p0 <- param[1]
+
+        if (startsWith(pname, "mean")) {
+          lower <- p0 - 20 * (1 + abs(p0))
+          upper <- p0 + 20 * (1 + abs(p0))
+        } else {
+          stop(
+            "Finite lower and upper bounds are required for the one-parameter independence fit of '",
+            pname, "'",
+            call. = FALSE
+          )
+        }
+      }
+
      CompLikelihood <- optimize(f= compindloglik2,    
                               data=data, fixed=fixed, fan=fname,  lower=lower, n=n,
                                namesnuis=namesnuis,namesparam=namesparam, maximum = FALSE,
@@ -591,7 +659,7 @@ param=as.numeric(param)
       ########################################################################################   
       ########################################################################################
     # check the optimisation outcome
-      if(optimizer=='Nelder-Mead'||optimizer=='SANN'){
+      if (optimizer %in% c('Nelder-Mead', 'SANN')){
         CompLikelihood$value = -CompLikelihood$value
         names(CompLikelihood$par)<- namesparam
         if(CompLikelihood$convergence == 0)
@@ -647,6 +715,22 @@ param=as.numeric(param)
         else {CompLikelihood$convergence <- "Optimization may have failed" }
         if(CompLikelihood$objective==-1.0e8) CompLikelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
     }
+    if (optimizer == 'bobyqa') {
+      names(CompLikelihood$par) <- namesparam
+      CompLikelihood$value <- -CompLikelihood$fval
+      ierr <- if (!is.null(CompLikelihood$ierr)) CompLikelihood$ierr else
+              if (!is.null(CompLikelihood$ierror)) CompLikelihood$ierror else NA_integer_
+      if (isTRUE(ierr == 0L)) {
+        CompLikelihood$convergence <- 'Successful'
+      } else {
+        msg <- if (!is.null(CompLikelihood$msg)) CompLikelihood$msg else
+               'Optimization may have failed'
+        CompLikelihood$convergence <- msg
+      }
+      if (is.null(CompLikelihood$counts))
+        CompLikelihood$counts <- CompLikelihood$feval
+    }
+
     if(optimizer=='optimize'){
     param<-CompLikelihood$minimum
     CompLikelihood$par<-param  
@@ -718,8 +802,18 @@ names(CompLikelihood$score)=namesparam
 
 
 
-if(hessian) CompLikelihood$sensmat=CompLikelihood$hessian
+if (sensitivity || varest)
+  CompLikelihood$sensmat <- CompLikelihood$hessian
+else
+  CompLikelihood$sensmat <- NULL
+
+if (is.null(CompLikelihood$claic))  CompLikelihood$claic <- NULL
+if (is.null(CompLikelihood$clbic))  CompLikelihood$clbic <- NULL
+if (is.null(CompLikelihood$stderr)) CompLikelihood$stderr <- NULL
+if (is.null(CompLikelihood$varcov)) CompLikelihood$varcov <- NULL
+if (is.null(CompLikelihood$varimat)) CompLikelihood$varimat <- NULL
+if (is.null(CompLikelihood$counts)) CompLikelihood$counts <- NULL
+if (is.null(CompLikelihood$message)) CompLikelihood$message <- NULL
 
     return(CompLikelihood)
   }
-

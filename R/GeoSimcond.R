@@ -9,275 +9,736 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
 ################################################################################# 
 ### Helper function for conditional skew gaussian simulation 
 ################################################################################# 
-SkewGaussianSimcond <- function(coord_obs, loc, data, param, corrmodel,
-                                nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL, L = NULL,
-                                distance = "Eucl", radius = 1, anisopars = NULL,
-                                parallel = FALSE, ncores = 1, progress = FALSE) {
-  mm          <- param$mean
-  sigma_sqrt  <- sqrt(param$sill)
-  eta         <- param$skew
-  keep        <- CorrParam(corrmodel)
-  corr_param  <- param[keep]
-  
-  cat("Computing Kriging weights ...\n")
-  
-  if (!local)
-    GeoW <- GeoKrigWeights(
-      coordx   = coord_obs, corrmodel = corrmodel,
-      loc      = loc, model = "Gaussian",
-      distance = distance, radius = radius,
-      anisopars = anisopars,
-      param    = c(sill = 1, corr_param))
-  else stop("Local option cannot be used for gibbs sampling ...\n")
+SkewGaussianSimcond <- function(
+    coord_obs, loc, data, param, corrmodel,
+    nrep = 1, method = "Cholesky", local = FALSE,
+    neighb = NULL, L = NULL,
+    distance = "Eucl", radius = 1, anisopars = NULL,
+    parallel = FALSE, ncores = 1, progress = FALSE,
+    n_iter = 1000L, batch_size = NULL, max_batch_mb = 256
+) {
 
-  # Pre-calcoli per ottimizzazione
-  Sigma.mat.inv <- MatInv(mtx = GeoW$covmatrix)
+  ##########################################################################
+  ## Parameters and checks
+  ##########################################################################
+
+  mm         <- as.numeric(param$mean)
+  sill       <- as.numeric(param$sill)
+  skew       <- as.numeric(param$skew)
+  sigma_sqrt <- sqrt(sill)
+
+  if (length(mm) != 1L || !is.finite(mm)) {
+    stop("SkewGaussianSimcond currently requires a scalar mean.")
+  }
+
+  if (length(sill) != 1L || !is.finite(sill) || sill <= 0) {
+    stop("param$sill must be strictly positive.")
+  }
+
+  if (length(skew) != 1L || !is.finite(skew)) {
+    stop("param$skew must be finite.")
+  }
+
+  if (length(nrep) != 1L || !is.finite(nrep) || nrep < 1) {
+    stop("nrep must be at least 1.")
+  }
+
+  if (length(n_iter) != 1L || !is.finite(n_iter) || n_iter < 1) {
+    stop("n_iter must be at least 1.")
+  }
+
+  if (local) {
+    stop(
+      "Local prediction cannot be used with the ",
+      "skew-Gaussian Gibbs sampler."
+    )
+  }
+
+  if (!(method %in% c("Cholesky", "TB", "CE"))) {
+    stop("method must be one of 'Cholesky', 'TB', or 'CE'.")
+  }
+
+  nrep  <- as.integer(nrep)
+  n_iter <- as.integer(n_iter)
+
+  coord_obs <- as.matrix(coord_obs)
+  loc       <- as.matrix(loc)
+  data      <- as.numeric(data)
+
   M0 <- nrow(coord_obs)
   N0 <- nrow(loc)
+
+  if (length(data) != M0) {
+    stop(
+      "The length of data must match the number ",
+      "of observed locations."
+    )
+  }
+
+  if (N0 < 1L) {
+    stop("loc must contain at least one prediction location.")
+  }
+
+  ##########################################################################
+  ## Standardized latent representation
+  ##
+  ## Y(s) = mm + skew |G1(s)| + sqrt(sill) G2(s)
+  ##
+  ## Z(s) = gamma |G1(s)| + G2(s),
+  ## gamma = skew / sqrt(sill)
+  ##########################################################################
+
+  gamma <- skew / sigma_sqrt
+  z_obs <- (data - mm) / sigma_sqrt
+
+  if (any(!is.finite(z_obs))) {
+    stop("The standardized observations contain non-finite values.")
+  }
+
+  gaussian_case <- isTRUE(gamma == 0)
+
+  keep       <- CorrParam(corrmodel)
+  corr_param <- param[keep]
+
+  latent_param <- c(
+    corr_param,
+    mean = 0,
+    nugget = 0,
+    sill = 1
+  )
+
+  ##########################################################################
+  ## Gaussian covariance matrix and kriging weights
+  ##########################################################################
+
+  cat("Computing Kriging weights ...\n")
+
+  GeoW <- GeoKrigWeights(
+    coordx = coord_obs,
+    corrmodel = corrmodel,
+    loc = loc,
+    model = "Gaussian",
+    distance = distance,
+    radius = radius,
+    anisopars = anisopars,
+    param = latent_param
+  )
+
   Wglob <- GeoW$weights
-  mm_loc <- mm
-  s_sqrt <- sigma_sqrt
-  
-  # Pre-calcoli costanti per evitare ricalcoli
-  sign_eta <- sign(eta)
-  abs_eta <- abs(eta)
-  eta_over_s_sqrt <- eta / s_sqrt
-  sqrt_param_sill <- sqrt(param$sill)
-  Z_trans_factor <- sign_eta * sigma_sqrt  # Pre-calcolo per Z.trans
-  
-  # Gaussian simulations
-  if (method == "TB" || method == "CE") {
-    Gauss.all <- GeoSimapprox(
-      coordx   = rbind(coord_obs, loc),
-      corrmodel = corrmodel, method = method, model = "Gaussian",
-      param    = c(corr_param, mean = 0, nugget = 0), L = L,
-      nrep     = 2 * nrep, progress = FALSE,
-      parallel = FALSE
-    )
-  } else {
-    Gauss.all <- GeoSim(
-      coordx   = rbind(coord_obs, loc),
-      corrmodel = corrmodel, model = "Gaussian",
-      param    = c(corr_param, mean = 0, nugget = 0),
-      nrep     = 2 * nrep, progress = FALSE
-    )
-  }
-  
-  pair_idx <- split(seq_len(2 * nrep), ceiling(seq_len(2 * nrep) / 2))
 
-  ####### OTTIMIZZAZIONE: INI VAL SAMPLER FUNCTION VETTORIZZATA #######
-  Ini.val.fun.vectorized <- function(x_vec, A) {
-    if (length(A) != 2) stop("A deve essere un vettore di lunghezza 2")
-    
-    n <- length(x_vec)
-    result_matrix <- matrix(0, nrow = 2, ncol = n)
-    
-    # Chiamata vettorizzata più efficiente
-    for (i in seq_len(n)) {
-      vvv <- dotCall64::.C64("rnorm_constraint_simple",
-                             SIGNATURE = c("double", "double", "double", "double", "double"), 
-                             A = as.double(A),
-                             b = as.double(x_vec[i]),
-                             mu = as.double(c(0, 0)),
-                             sigma = as.double(1),
-                             result = double(2),
-                             INTENT = c("r", "r", "r", "r", "w"),
-                             VERBOSE = 0, 
-                             NAOK = TRUE, 
-                             PACKAGE = "GeoModels"
-                             )$result
-      result_matrix[, i] <- vvv
-    }
-    return(result_matrix)
+  if (is.null(Wglob)) {
+    stop("GeoKrigWeights did not return the kriging weights.")
   }
-  ####### END INI VAL SAMPLER FUNCTION #######
-  
-  # Funzione helper per Gibbs sampling - evita duplicazione
-  run_skew_gibbs_sampler <- function(Z_trans, M0, Sigma.mat.inv, sigma_sqrt, abs_eta, sqrt_param_sill, eta) {
-    # Genera valori iniziali in modo ottimizzato
-    A_vec <- c(sqrt_param_sill, eta)
-    ini.vals <- Ini.val.fun.vectorized(Z_trans, A_vec)
-    
-    if (!is.matrix(ini.vals) || nrow(ini.vals) != 2 || ncol(ini.vals) != M0) {
-      stop("Errore nella generazione dei valori iniziali")
-    }
-    
-    # Gibbs sampler
-    gibbs.result <- dotCall64::.C64(
-      "skew_gaussian_gibbs_sampler",
-      SIGNATURE = c("double", "integer", "double", "double", "integer", "double", "double"), 
-      data_obs     = as.double(Z_trans),
-      n            = as.integer(M0),
-      Sigma_mat_inv = as.double(Sigma.mat.inv),
-      eta          = as.double(c(sigma_sqrt, abs_eta)),
-      n_iter       = as.integer(1000),
-      data_x       = as.double(ini.vals[1, ]),
-      data_y       = as.double(ini.vals[2, ]),
-      INTENT = c("r", "r", "r", "r", "r", "rw", "rw"), 
-      VERBOSE = 0, 
-      NAOK = TRUE, 
-      PACKAGE = "GeoModels"
+
+  if (is.null(dim(Wglob))) {
+    Wglob <- matrix(Wglob, nrow = M0)
+  }
+
+  if (nrow(Wglob) == M0) {
+    weights_orientation <- 1L
+  } else if (ncol(Wglob) == M0) {
+    weights_orientation <- 2L
+  } else {
+    stop(
+      "The dimensions of the kriging weights ",
+      "are not compatible with the data."
     )
-    
-    if (is.null(gibbs.result$data_x) || is.null(gibbs.result$data_y)) {
-      return(NULL)
-    }
-    
-    return(list(data_x = gibbs.result$data_x, data_y = gibbs.result$data_y))
   }
-  
-  # Funzione helper per processamento simulazione ottimizzata
-  process_skew_simulation <- function(gibbs_result, idx_xy, Gauss_data, M0, N0, Wglob, 
-                                      sign_eta, eta_over_s_sqrt, mm_loc) {
-    simX <- Gauss_data[[idx_xy[1]]]
-    simY <- Gauss_data[[idx_xy[2]]]
-    
-    # Processamento X
-    sim.train.x <- simX[seq_len(M0)]
-    sim.valid.x <- simX[(M0 + 1):(N0 + M0)]
-    sk.pred.x <- as.numeric(crossprod(Wglob, gibbs_result$data_x - sim.train.x))
-    geosim.x <- sim.valid.x + sk.pred.x
-    
-    # Processamento Y
-    sim.train.y <- simY[seq_len(M0)]
-    sim.valid.y <- simY[(M0 + 1):(N0 + M0)]
-    sk.pred.y <- as.numeric(crossprod(Wglob, gibbs_result$data_y - sim.train.y))
-    geosim.y <- sim.valid.y + sk.pred.y
-    
-    # Calcolo finale ottimizzato - operazioni vettorizzate
-    res_i <- sign_eta * geosim.x + eta_over_s_sqrt * abs(geosim.y)
-    return(mm_loc + res_i)
-  }
-  
-  if (!parallel) {
-    cat("Performing", nrep, "conditional simulations ...\n")
-    
-    if (progress) {
-      progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
-      pb <- progressr::progressor(along = seq_len(nrep))
+
+  # The precision matrix is unnecessary when gamma = 0.
+  if (gaussian_case) {
+
+    Sigma.mat.inv <- numeric(0L)
+
+  } else {
+
+    if (is.null(GeoW$covmatrix)) {
+      stop(
+        "GeoKrigWeights did not return the ",
+        "latent covariance matrix."
+      )
     }
-    
+
+    Sigma.mat.inv <- MatInv(mtx = GeoW$covmatrix)
+
+    if (any(!is.finite(Sigma.mat.inv))) {
+      stop(
+        "The inverse latent covariance matrix ",
+        "contains non-finite values."
+      )
+    }
+  }
+
+  all_coord <- rbind(coord_obs, loc)
+
+  ##########################################################################
+  ## Batch size
+  ##########################################################################
+
+  fields_per_rep <- if (gaussian_case) 1L else 2L
+
+  if (is.null(batch_size)) {
+
+    if (length(max_batch_mb) != 1L ||
+        !is.finite(max_batch_mb) ||
+        max_batch_mb <= 0) {
+      stop("max_batch_mb must be strictly positive.")
+    }
+
+    bytes_per_rep <- fields_per_rep * (M0 + N0) * 8
+
+    batch_size <- floor(
+      max_batch_mb * 1024^2 / max(bytes_per_rep, 1)
+    )
+
+    batch_size <- max(
+      1L,
+      min(nrep, as.integer(batch_size))
+    )
+
+  } else {
+
+    if (length(batch_size) != 1L ||
+        !is.finite(batch_size) ||
+        batch_size < 1) {
+      stop("batch_size must be at least 1.")
+    }
+
+    batch_size <- max(
+      1L,
+      min(nrep, as.integer(batch_size))
+    )
+  }
+
+  ##########################################################################
+  ## Normalize the output of GeoSim or GeoSimapprox
+  ##########################################################################
+
+  normalize_simulations <- function(x, expected) {
+
+    if (is.list(x)) {
+
+      if (length(x) != expected) {
+        stop(
+          "Unexpected number of unconditional ",
+          "Gaussian simulations."
+        )
+      }
+
+      return(x)
+    }
+
+    if (is.matrix(x)) {
+
+      if (ncol(x) == expected) {
+        return(
+          lapply(
+            seq_len(expected),
+            function(j) x[, j]
+          )
+        )
+      }
+
+      if (nrow(x) == expected) {
+        return(
+          lapply(
+            seq_len(expected),
+            function(j) x[j, ]
+          )
+        )
+      }
+    }
+
+    if (expected == 1L) {
+      return(list(as.numeric(x)))
+    }
+
+    stop(
+      "Unexpected format of the unconditional ",
+      "Gaussian simulations."
+    )
+  }
+
+  ##########################################################################
+  ## Generate one batch of unconditional Gaussian simulations
+  ##########################################################################
+
+  generate_batch <- function(current_nrep) {
+
+    current_fields <- fields_per_rep * current_nrep
+
+    if (method %in% c("TB", "CE")) {
+
+      sim_obj <- GeoSimapprox(
+        coordx = all_coord,
+        corrmodel = corrmodel,
+        method = method,
+        model = "Gaussian",
+        param = latent_param,
+        L = L,
+        nrep = current_fields,
+        progress = FALSE,
+        parallel = FALSE,
+        distance = distance,
+        radius = radius,
+        anisopars = anisopars
+      )
+
+    } else {
+
+      sim_obj <- GeoSim(
+        coordx = all_coord,
+        corrmodel = corrmodel,
+        model = "Gaussian",
+        param = latent_param,
+        nrep = current_fields,
+        progress = FALSE,
+        distance = distance,
+        radius = radius,
+        anisopars = anisopars
+      )
+    }
+
+    sim_data <- normalize_simulations(
+      sim_obj$data,
+      current_fields
+    )
+
+    if (gaussian_case) {
+
+      tasks <- lapply(
+        seq_len(current_nrep),
+        function(j) {
+          list(
+            g2 = as.numeric(sim_data[[j]])
+          )
+        }
+      )
+
+    } else {
+
+      tasks <- lapply(
+        seq_len(current_nrep),
+        function(j) {
+          list(
+            g1 = as.numeric(sim_data[[2L * j - 1L]]),
+            g2 = as.numeric(sim_data[[2L * j]])
+          )
+        }
+      )
+    }
+
+    rm(sim_obj, sim_data)
+
+    tasks
+  }
+
+  ##########################################################################
+  ## Self-contained worker
+  ##
+  ## Only the Gaussian simulations required by the current task are passed
+  ## to the worker. The complete batch is not captured as a global object.
+  ##########################################################################
+
+  worker_fun <- function(
+      task, z_obs, M0, N0, gamma, mm, skew, sigma_sqrt,
+      Sigma_mat_inv, Wglob, weights_orientation,
+      n_iter, gaussian_case
+  ) {
+
+    tryCatch({
+
+      apply_weights <- function(delta) {
+
+        if (weights_orientation == 1L) {
+          as.numeric(crossprod(Wglob, delta))
+        } else {
+          as.numeric(Wglob %*% delta)
+        }
+      }
+
+      conditional_field <- function(
+          simulation,
+          latent_obs
+      ) {
+
+        if (length(simulation) != M0 + N0) {
+          stop(
+            "An unconditional Gaussian simulation ",
+            "has an incorrect length."
+          )
+        }
+
+        sim_obs <- simulation[seq_len(M0)]
+        sim_loc <- simulation[M0 + seq_len(N0)]
+
+        sim_loc + apply_weights(
+          latent_obs - sim_obs
+        )
+      }
+
+      ######################################################################
+      ## Gaussian special case
+      ######################################################################
+
+      if (gaussian_case) {
+
+        g2_loc <- conditional_field(
+          task$g2,
+          z_obs
+        )
+
+        return(
+          list(
+            ok = TRUE,
+            value = mm + sigma_sqrt * g2_loc
+          )
+        )
+      }
+
+      ######################################################################
+      ## Initial state satisfying
+      ##
+      ## z_i = gamma |G1_i| + G2_i
+      ######################################################################
+      g1_init <- stats::rnorm(M0)
+      g2_init <- z_obs - gamma * abs(g1_init)
+      ######################################################################
+      ## Exact Gibbs kernel implemented in C
+      ######################################################################
+      gibbs_result <- dotCall64::.C64(
+        "skew_gaussian_gibbs_sampler",
+        SIGNATURE = c(
+          "double", "integer", "double", "double",
+          "integer", "double", "double"
+        ),
+        data_obs = as.double(z_obs),
+        n = as.integer(M0),
+        Sigma_mat_inv = as.double(Sigma_mat_inv),
+        eta = as.double(c(gamma, 0)),
+        n_iter = as.integer(n_iter),
+        data_x = as.double(g1_init),
+        data_y = as.double(g2_init),
+        INTENT = c(
+          "r", "r", "r", "r",
+          "r", "rw", "rw"
+        ),
+        VERBOSE = 0,
+        NAOK = FALSE,
+        PACKAGE = "GeoModels"
+      )
+
+      g1_obs <- as.numeric(gibbs_result$data_x)
+      g2_obs <- as.numeric(gibbs_result$data_y)
+
+      if (length(g1_obs) != M0 ||
+          length(g2_obs) != M0 ||
+          any(!is.finite(g1_obs)) ||
+          any(!is.finite(g2_obs))) {
+        stop(
+          "The Gibbs sampler returned invalid ",
+          "latent values."
+        )
+      }
+
+      ######################################################################
+      ## Check the nonlinear restriction
+      ######################################################################
+      constraint_error <- max(
+        abs(
+          z_obs -
+            gamma * abs(g1_obs) -
+            g2_obs
+        )
+      )
+      constraint_tolerance <- 1e-7 * (
+        1 + max(abs(z_obs))
+      )
+
+      if (!is.finite(constraint_error) ||
+          constraint_error > constraint_tolerance) {
+        stop(
+          "The Gibbs output does not satisfy the ",
+          "skew-Gaussian constraint."
+        )
+      }
+      ######################################################################
+      ## Gaussian substitution conditional simulations
+      ######################################################################
+
+      g1_loc <- conditional_field(
+        task$g1,
+        g1_obs
+      )
+
+      g2_loc <- conditional_field(
+        task$g2,
+        g2_obs
+      )
+
+      ######################################################################
+      ## Back transformation
+      ##
+      ## Y(s) = mm + skew |G1(s)| + sqrt(sill) G2(s)
+      ######################################################################
+
+      list(
+        ok = TRUE,
+        value =
+          mm +
+          skew * abs(g1_loc) +
+          sigma_sqrt * g2_loc
+      )
+
+    }, error = function(e) {
+
+      list(
+        ok = FALSE,
+        error = conditionMessage(e)
+      )
+    })
+  }
+
+  ##########################################################################
+  ## Parallel configuration
+  ##########################################################################
+
+  if (parallel && nrep > 1L) {
+
+    if (is.null(ncores) ||
+        length(ncores) != 1L ||
+        !is.finite(ncores)) {
+      coremax <- parallel::detectCores()
+      ncores <- if (is.na(coremax) || coremax < 2L) {
+        1L
+      } else {
+        coremax - 1L
+      }
+    }
+    ncores <- max(
+      1L,
+      min(as.integer(ncores), nrep)
+    )
+    parallel <- ncores > 1L
+  } else {
+    parallel <- FALSE
+    ncores <- 1L
+  }
+  if (parallel) {
+    old_plan <- future::plan()
+
+    on.exit(
+      future::plan(old_plan),
+      add = TRUE
+    )
+
+    old_limit <- getOption(
+      "future.globals.maxSize"
+    )
+
+    static_size <- sum(
+      as.numeric(object.size(Sigma.mat.inv)),
+      as.numeric(object.size(Wglob)),
+      as.numeric(object.size(z_obs))
+    )
+
+    required_limit <- max(
+      500 * 1024^2,
+      2 * static_size + max_batch_mb * 1024^2
+    )
+
+    if (!is.null(old_limit)) {
+      required_limit <- max(
+        required_limit,
+        old_limit
+      )
+    }
+
+    options(
+      future.globals.maxSize = required_limit
+    )
+    on.exit(
+      options(
+        future.globals.maxSize = old_limit
+      ),
+      add = TRUE
+    )
+    future::plan(
+      future::multisession,
+      workers = ncores
+    )
+  }
+  ##########################################################################
+  ## Batch execution
+  ##########################################################################
+
+  run_batches <- function(progressor) {
+
     res <- vector("list", nrep)
-    
-    # Pre-calcolo Z.trans una volta sola per tutte le simulazioni
-    Z_trans <- Z_trans_factor * data
-    
-    for (i in seq_len(nrep)) {
-      # Gibbs sampling usando funzione helper
-      gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
-                                             sigma_sqrt, abs_eta, sqrt_param_sill, eta)
-      
-      if (is.null(gibbs_result)) {
-        warning(paste("Gibbs sampler fallito alla simulazione", i))
-        next
-      }
-      
-      # Processamento usando funzione helper ottimizzata
-      idx_xy <- pair_idx[[i]]
-      res[[i]] <- process_skew_simulation(gibbs_result, idx_xy, Gauss.all$data, 
-                                          M0, N0, Wglob, sign_eta, eta_over_s_sqrt, mm_loc)
-      
-      if (progress) {
-        pb(sprintf("Simulation %d/%d completed", i, nrep))
-      }
-    }
-    
-  } else {
-    cat("Performing", nrep, "conditional simulations using", ncores, "cores ...\n")
-    
-    if (progress) {
-      progressr::handlers(global = TRUE)
-      progressr::handlers("txtprogressbar")
-      pb <- progressr::progressor(along = seq_len(nrep))
-    }
-    
-    # Ottimizzazione memoria: limite più conservativo
-    old_limit <- options(future.globals.maxSize = 1500 * 1024^2)  # 1.5 GB
-    on.exit(options(old_limit), add = TRUE)
-    
-    # Variabili essenziali ottimizzate - solo pre-calcoli
-    essential_vars <- list(
-      eta = eta,
-      abs_eta = abs_eta,
-      sign_eta = sign_eta,
-      eta_over_s_sqrt = eta_over_s_sqrt,
-      sigma_sqrt = sigma_sqrt,
-      sqrt_param_sill = sqrt_param_sill,
-      Z_trans = Z_trans_factor * data,  # Pre-calcolato
-      M0 = M0,
-      N0 = N0,
-      Sigma.mat.inv = Sigma.mat.inv,
-      Wglob = Wglob,
-      mm_loc = mm_loc,
-      pair_idx = pair_idx,
-      Gauss_data = Gauss.all$data
+    failure_messages <- character(0L)
+    batch_starts <- seq.int(
+      1L,
+      nrep,
+      by = batch_size
     )
-    
-    # Worker function ottimizzata
-    run_simulation_worker <- function(i, vars) {
-      # Estrai variabili pre-calcolate
-      eta <- vars$eta
-      abs_eta <- vars$abs_eta
-      sign_eta <- vars$sign_eta
-      eta_over_s_sqrt <- vars$eta_over_s_sqrt
-      sigma_sqrt <- vars$sigma_sqrt
-      sqrt_param_sill <- vars$sqrt_param_sill
-      Z_trans <- vars$Z_trans
-      M0 <- vars$M0
-      N0 <- vars$N0
-      Sigma.mat.inv <- vars$Sigma.mat.inv
-      Wglob <- vars$Wglob
-      mm_loc <- vars$mm_loc
-      pair_idx <- vars$pair_idx
-      Gauss_data <- vars$Gauss_data
-      
-      # Gibbs sampling
-      gibbs_result <- run_skew_gibbs_sampler(Z_trans, M0, Sigma.mat.inv, 
-                                             sigma_sqrt, abs_eta, sqrt_param_sill, eta)
-      
-      if (is.null(gibbs_result)) {
-        warning(paste("Gibbs sampler fallito alla simulazione", i))
-        return(NULL)
-      }
-      
-      # Processamento ottimizzato
-      idx_xy <- pair_idx[[i]]
-      return(process_skew_simulation(gibbs_result, idx_xy, Gauss_data, 
-                                     M0, N0, Wglob, sign_eta, eta_over_s_sqrt, mm_loc))
-    }
-    
-    # Parallelizzazione
-    future::plan(future::multisession, workers = ncores)
-    on.exit(future::plan(future::sequential), add = TRUE)
-    
-    res <- future.apply::future_lapply(seq_len(nrep), function(i) {
-      result <- run_simulation_worker(i, essential_vars)
-      if (progress) {
-        pb(sprintf("Parallel simulation %d/%d completed", i, nrep))
-      }
-      return(result)
-    }, future.seed = TRUE, future.globals = TRUE)
-  
-    # Rimuove risultati nulli e avvisa
-    res <- res[!sapply(res, is.null)]
-    failed_sims <- nrep - length(res)
-    if (failed_sims > 0) {
-      warning(paste(failed_sims, "simulazioni su", nrep, "sono fallite"))
-    }
-  }
-  
-  return(res)
-} 
+    for (batch_start in batch_starts) {
 
+      batch_end <- min(
+        nrep,
+        batch_start + batch_size - 1L
+      )
+      current_indices <- batch_start:batch_end
+      current_nrep <- length(current_indices)
+      tasks <- generate_batch(current_nrep)
+      if (parallel && current_nrep > 1L) {
+
+        batch_result <- future.apply::future_lapply(
+          tasks,
+          worker_fun,
+          z_obs = z_obs,
+          M0 = M0,
+          N0 = N0,
+          gamma = gamma,
+          mm = mm,
+          skew = skew,
+          sigma_sqrt = sigma_sqrt,
+          Sigma_mat_inv = Sigma.mat.inv,
+          Wglob = Wglob,
+          weights_orientation = weights_orientation,
+          n_iter = n_iter,
+          gaussian_case = gaussian_case,
+          future.seed = TRUE,
+
+          # One future chunk per worker. This avoids repeatedly
+          # serializing Sigma.mat.inv and Wglob for every simulation.
+          future.scheduling = 1,
+
+          # worker_fun is self-contained and all data are passed
+          # explicitly.
+          future.globals = FALSE,
+
+          future.packages = c(
+            "GeoModels",
+            "dotCall64"
+          )
+        )
+
+      } else {
+
+        batch_result <- lapply(
+          tasks,
+          worker_fun,
+          z_obs = z_obs,
+          M0 = M0,
+          N0 = N0,
+          gamma = gamma,
+          mm = mm,
+          skew = skew,
+          sigma_sqrt = sigma_sqrt,
+          Sigma_mat_inv = Sigma.mat.inv,
+          Wglob = Wglob,
+          weights_orientation = weights_orientation,
+          n_iter = n_iter,
+          gaussian_case = gaussian_case
+        )
+      }
+
+      for (j in seq_along(batch_result)) {
+
+        global_index <- current_indices[j]
+
+        if (isTRUE(batch_result[[j]]$ok)) {
+
+          res[[global_index]] <-
+            batch_result[[j]]$value
+
+        } else {
+
+          failure_messages <- c(
+            failure_messages,
+            sprintf(
+              "simulation %d: %s",
+              global_index,
+              batch_result[[j]]$error
+            )
+          )
+        }
+
+        progressor()
+      }
+
+      rm(tasks, batch_result)
+      gc(verbose = FALSE)
+    }
+
+    ########################################################################
+    ## Remove failed simulations
+    ########################################################################
+
+    failed <- vapply(
+      res,
+      is.null,
+      logical(1L)
+    )
+    if (any(failed)) {
+      details <- if (length(failure_messages)) {
+        paste(
+          utils::head(failure_messages, 3L),
+          collapse = "; "
+        )
+      } else {
+        "unknown error"
+      }
+      warning(
+        sprintf(
+          "%d simulations out of %d failed. %s",
+          sum(failed),
+          nrep,
+          details
+        ),
+        call. = FALSE
+      )
+      res <- res[!failed]
+    }
+    if (!length(res)) {
+      stop("All conditional simulations failed.")
+    }
+
+    res
+  }
+  ##########################################################################
+  ## Run
+  ##########################################################################
+  cat(
+    "Performing",
+    nrep,
+    "conditional simulations",
+    if (parallel) {
+      paste0(" using ", ncores, " cores")
+    } else {
+      ""
+    },
+    "...\n"
+  )
+  if (progress) {
+    progressr::handlers(global = TRUE)
+    progressr::handlers("txtprogressbar")
+    res <- progressr::with_progress({
+      p <- progressr::progressor(
+        steps = nrep
+      )
+      run_batches(p)
+    })
+  } else {
+    res <- run_batches(
+      function(...) invisible(NULL)
+    )
+  }
+  res
+}
 ################################################################################# 
 ### Helper function for conditional Gamma simulation 
 ################################################################################# 
-################################################################################# 
-### Helper function for conditional Gamma simulation - VERSIONE CORRETTA
-################################################################################# 
-################################################################################# 
-### Helper function for conditional Gamma simulation - VERSIONE MEMORY-EFFICIENT
 ################################################################################# 
 GammaSimcond <- function(coord_obs, loc, data, param, corrmodel,
                          nrep = 1, method = "Cholesky", local = FALSE, neighb = NULL,

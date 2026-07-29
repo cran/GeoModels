@@ -1,4 +1,3 @@
-# GeoVarest: parametric score bootstrap for GeoModels
 # Estimates J = Var{score(theta_hat)} using GeoFit(score=TRUE),
 # then G^{-1} = H^{-1} J H^{-1}.
 
@@ -126,7 +125,14 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   GeoFit_fun <- gm_fun("GeoFit")
   GeoSim_fun <- gm_fun("GeoSim")
 
-  if (length(fit$coordt) == 1L) fit$coordt <- NULL
+  ## Use an internal representation for purely spatial models without
+  ## modifying the GeoFit object returned to the user. GeoFit may store
+  ## absence of time as the scalar 0, whereas GeoSim/GeoFit internal calls
+  ## should receive NULL.
+  coordt_use <- fit$coordt
+  if (is.null(coordt_use) || length(coordt_use) <= 1L) {
+    coordt_use <- NULL
+  }
 
   fit$thin_method <- fit$thin_method %||% "bernoulli"
   fit$p_neighb    <- fit$p_neighb %||% 1
@@ -240,7 +246,7 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   ## ---------------------------------------------------------------
   sim_args <- list(
     coordx     = coords,
-    coordt     = fit$coordt,
+    coordt     = coordt_use,
     coordx_dyn = fit$coordx_dyn,
     anisopars  = fit$anisopars,
     corrmodel  = fit$corrmodel,
@@ -362,7 +368,7 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
         start       = make_start(par),
         fixed       = fit$fixed,
         coordx      = coords,
-        coordt      = fit$coordt,
+        coordt      = coordt_use,
         coordx_dyn  = fit$coordx_dyn,
         copula      = fit$copula,
         anisopars   = fit$anisopars,
@@ -411,17 +417,30 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
       )
     }, file = nullfile())
 
-    sc <- as.numeric(unlist(ff$score, use.names = TRUE))
+    sc_raw <- unlist(ff$score, use.names = TRUE)
 
-    if (length(sc) != num_params || any(!is.finite(sc))) {
+    if (length(sc_raw) != num_params || any(!is.finite(sc_raw))) {
       stop("GeoFit returned an invalid score", call. = FALSE)
     }
 
-    ## In CompLik2 the numerical score is the gradient of the minimized
-    ## objective, i.e. -CL/npairs when the normalized CompLik2 is used.
-    ## Change sign so J is based on the composite-likelihood score.
-    sc <- -sc
-    names(sc) <- names(theta_hat)
+    ## Keep the score aligned with fit$param by name whenever names are
+    ## available.  This is safer for models whose internal nuisance/correlation
+    ## parameter order differs from the user-facing order.
+    target_names <- names(theta_hat)
+    score_names <- names(sc_raw)
+
+    if (!is.null(score_names) &&
+        length(score_names) == num_params &&
+        all(target_names %in% score_names)) {
+      sc_raw <- sc_raw[target_names]
+    }
+
+    ## CompLik2 computes the numerical gradient of the average negative
+    ## composite log-likelihood and then rescales it to the total negative
+    ## composite log-likelihood. Therefore ff$score is -grad(CL).
+    ## Reverse the sign to obtain the composite-likelihood score.
+    sc <- -as.numeric(sc_raw)
+    names(sc) <- target_names
 
     val <- if (!is.null(ff$logCompLik)) ff$logCompLik else ff$logLik
     val <- as.numeric(val)
@@ -646,20 +665,77 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   J <- (J + t(J)) / 2
   rownames(J) <- colnames(J) <- names(theta_hat)
 
-  Hinv <- safe_inverse(H, "H/sensmat")
+  ## ---------------------------------------------------------------
+  ## Numerically stable sandwich through diagonal rescaling
+  ##
+  ## Let D = diag{1 / sqrt(diag(H))}. Then
+  ##   Hs = D H D,  Js = D J D,
+  ## and, in exact arithmetic,
+  ##   H^{-1} J H^{-1}
+  ##     = D Hs^{-1} Js Hs^{-1} D.
+  ##
+  ## This is algebraically identical to the unscaled sandwich, but it
+  ## avoids unstable inversion when parameters have very different scales.
+  ## ---------------------------------------------------------------
+  hdiag <- diag(H)
 
-  Ginv <- Hinv %*% J %*% Hinv
+  if (any(!is.finite(hdiag)) || any(hdiag <= 0)) {
+    stop(
+      "The sensitivity matrix has non-positive or non-finite diagonal elements.",
+      call. = FALSE
+    )
+  }
+
+  scale_vec <- 1 / sqrt(hdiag)
+  names(scale_vec) <- names(theta_hat)
+
+  D <- diag(scale_vec, nrow = num_params, ncol = num_params)
+  rownames(D) <- colnames(D) <- names(theta_hat)
+
+  H_scaled <- D %*% H %*% D
+  H_scaled <- (H_scaled + t(H_scaled)) / 2
+  rownames(H_scaled) <- colnames(H_scaled) <- names(theta_hat)
+
+  J_scaled <- D %*% J %*% D
+  J_scaled <- (J_scaled + t(J_scaled)) / 2
+  rownames(J_scaled) <- colnames(J_scaled) <- names(theta_hat)
+
+  H_scaled_inv <- safe_inverse(H_scaled, "scaled H/sensmat")
+  rownames(H_scaled_inv) <- colnames(H_scaled_inv) <- names(theta_hat)
+
+  Ginv_scaled <- H_scaled_inv %*% J_scaled %*% H_scaled_inv
+  Ginv_scaled <- (Ginv_scaled + t(Ginv_scaled)) / 2
+  rownames(Ginv_scaled) <- colnames(Ginv_scaled) <- names(theta_hat)
+
+  ## Transform the covariance matrix back to the original parameter scale.
+  Ginv <- D %*% Ginv_scaled %*% D
   Ginv <- (Ginv + t(Ginv)) / 2
   rownames(Ginv) <- colnames(Ginv) <- names(theta_hat)
 
-  G <- safe_inverse(Ginv, "Ginv/varcov")
+  ## H^{-1} on the original parameter scale, retained for compatibility.
+  Hinv <- D %*% H_scaled_inv %*% D
+  Hinv <- (Hinv + t(Hinv)) / 2
+  rownames(Hinv) <- colnames(Hinv) <- names(theta_hat)
+
+  ## Invert the covariance on the scaled parameter system.  Directly
+  ## inverting Ginv on the original scale can recreate the same purely
+  ## unit-driven ill-conditioning that motivated the scaling of H.
+  G_scaled <- safe_inverse(Ginv_scaled, "scaled Ginv/varcov")
+  rownames(G_scaled) <- colnames(G_scaled) <- names(theta_hat)
+
+  Dinv <- diag(1 / scale_vec, nrow = num_params, ncol = num_params)
+  rownames(Dinv) <- colnames(Dinv) <- names(theta_hat)
+
+  G <- Dinv %*% G_scaled %*% Dinv
+  G <- (G + t(G)) / 2
   rownames(G) <- colnames(G) <- names(theta_hat)
 
   stderr <- sqrt(pmax(0, diag(Ginv)))
   names(stderr) <- names(theta_hat)
 
-  penalty <- sum(diag(Hinv %*% J))
-  penalty_alt <- sum(diag(H %*% Ginv))
+  ## Equivalent to tr(H^{-1} J), evaluated on the stable scaled system.
+  penalty <- sum(diag(H_scaled_inv %*% J_scaled))
+  penalty_alt <- sum(diag(H_scaled %*% Ginv_scaled))
 
   fit_loglik <- if (!is.null(fit$logCompLik)) fit$logCompLik else fit$logLik
   fit_loglik <- as.numeric(fit_loglik)
@@ -695,6 +771,19 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   fit$Jmat <- J
   fit$Hinv <- Hinv
 
+  ## Numerical diagnostics for the rescaled sensitivity matrix.
+  fit$H_scaled <- H_scaled
+  fit$J_scaled <- J_scaled
+  fit$Ginv_scaled <- Ginv_scaled
+  fit$godambe_scaled <- G_scaled
+  fit$parameter_scaling <- scale_vec
+  fit$H_scaled_condition <- kappa(H_scaled)
+  fit$H_scaled_eigenvalues <- eigen(
+    H_scaled,
+    symmetric = TRUE,
+    only.values = TRUE
+  )$values
+
   fit$claic <- claic
   fit$clic <- claic
   fit$clbic <- clbic
@@ -708,8 +797,12 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
   colnames(fit$conf.int) <- names(theta_hat)
   rownames(fit$conf.int) <- c("Lower", "Upper")
 
-  fit$pvalues <- 2 * stats::pnorm(-abs(theta_hat / stderr))
-  names(fit$pvalues) <- names(theta_hat)
+  fit$pvalues_godambe <- 2 * stats::pnorm(-abs(theta_hat / stderr))
+  names(fit$pvalues_godambe) <- names(theta_hat)
+
+  ## Keep the standard component name for compatibility with GeoModels.
+  fit$pvalues <- fit$pvalues_godambe
+  fit$pvalues_type <- "Wald p-values based on score-bootstrap Godambe variance"
 
   fit$scores <- score_mat
   fit$score_logCompLik <- score_out[, "logCompLik"]
@@ -719,12 +812,6 @@ GeoVarest <- function(fit, K = 100, sparse = FALSE,
     error = errors[!valid],
     stringsAsFactors = FALSE
   )
-
-  fit$estimates <- score_out
-  attr(fit$estimates, "content") <- "scores at theta_hat, not refitted parameter estimates"
-
-  fit$conf.int.bootstrap_percentile <- NULL
-  fit$pvalues_bootstrap <- NULL
 
   fit$bootstrap_type <- "parametric_score_J_geofit_score"
   fit$bootstrap_K <- K

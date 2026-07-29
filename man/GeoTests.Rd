@@ -3,9 +3,10 @@
 \encoding{UTF-8}
 \title{Statistical Hypothesis Tests for Nested Models}
 \description{
- The function performs statistical hypothesis tests for nested models
- based on composite or standard likelihood versions of Wald-type and
- Wilks-type (likelihood ratio) statistics.
+Performs Wald and likelihood-ratio tests for successively nested
+\code{GeoFit} models. Standard likelihood fits can be compared using
+Wald or Wilks tests, whereas composite likelihood fits can be compared
+using Wald or Satterthwaite-adjusted composite likelihood-ratio tests.
 }
 
 \usage{
@@ -13,264 +14,291 @@ GeoTests(object1, object2, \dots, statistic)
 }
 
 \arguments{
- \item{object1}{An object of class \code{GeoFit}.}
- \item{object2}{An object of class \code{GeoFit} that is a nested
- model within \code{object1}.}
- \item{\dots}{Further successively nested objects.}
- \item{statistic}{String; the name of the statistic used within the
- hypothesis test (see Details).}
+  \item{object1}{An unrestricted fitted model of class \code{GeoFit}.}
+  \item{object2}{A restricted fitted model of class \code{GeoFit}, nested
+  within \code{object1}.}
+  \item{\dots}{Further fitted models of class \code{GeoFit}, ordered from
+  less restricted to more restricted. Adjacent models are compared.}
+  \item{statistic}{A character string specifying the test statistic.
+  Available choices are \code{"Wald"}, \code{"Wilks"}, and
+  \code{"WilksS"}. See Details.}
 }
 
-
 \details{
- The implemented hypothesis tests for nested models are based on the
- following statistics:
- \enumerate{
- \item Wald-type (\code{Wald});
- \item Likelihood ratio or Wilks-type (\code{Wilks} under standard likelihood); 
- For composite likelihood available variants of the basic version are:
- \itemize{
- \item Rotnitzky and Jewell adjustment (\code{WilksRJ});
- \item Satterhwaite adjustment (\code{WilksS});
- \item Chandler and Bate adjustment (\code{WilksCB});
- \item Pace, Salvan and Sartori adjustment (\code{WilksPSS});
- }
- }
+The models must be supplied from the unrestricted model to successively
+more restricted models. For each adjacent pair, the tested parameters are
+the parameters estimated in the unrestricted model but fixed in the
+restricted model. Each tested parameter must therefore occur explicitly
+in the \code{fixed} component of the restricted fit.
 
- More specifically,
- consider an \eqn{p}-dimensional random vector \eqn{\mathbf{Y}}{Y} with
- probability density function \eqn{f(\mathbf{y};\mathbf{\theta})}{f(y;theta)},
-where \eqn{\mathbf{\theta} \in \Theta}{theta in Theta} is a
-\eqn{q}-dimensional vector of parameters. Suppose that
-\eqn{\mathbf{\theta}=(\mathbf{\psi},\mathbf{\tau})}{theta=(psi, tau)}
- can be partitioned in a \eqn{q'}-dimensional subvector \eqn{\psi}{psi}
- and \eqn{q''}-dimensional subvector \eqn{\tau}{tau}. Assume also to be
- interested in testing the specific values of the vector
- \eqn{\psi}{psi}. Then, one can use some statistical
- hypothesis tests for testing the null hypothesis \eqn{H_0:
- \psi=\psi_0}{H_0: psi=psi_0} against the alternative \eqn{H_1:
- \psi \neq \psi_0}{H_1: psi <> psi_0}. Composite likelihood versions
-of 'Wald' statistis have the usual asymptotic
-chi-square distribution with \eqn{q'} degree of freedom. The Wald-type statistic is
-\deqn{W=(\hat{\psi}-\psi_0)^T (G^{\psi \psi})^{-1}(\hat{\theta})(\hat{\psi}-\psi_0),}{%
-W=(hat{psi}-psi_0)^T (G^{psi psi})^{-1} (hat{theta})(hat{psi}-psi_0),}
-where \eqn{G_{\psi \psi}}{G_{psi psi}} is the \eqn{q' \times q'}{q' x q'}
- submatrix of the Godambe or Fisher information pertaining to \eqn{\psi}{psi} and
- \eqn{\hat{\theta}}{hat{theta}} is the maximum likelihood estimator from
- the full model. 
- This statistic can be called from the
- routine \code{GeoTests} assigning at the argument \code{statistic}
- the value: \code{Wald}.
+The function checks that adjacent models use the same data, coordinates,
+design matrix, marginal model, correlation model, likelihood type, pair
+construction, and other relevant fitting options. Common fixed parameters
+must have the same values in the two models.
 
- Alternatively to the Wald-type statistic one can use the
- composite version of the Wilks-type or likelihood ratio statistic, given by
- \deqn{W=2[C \ell(\hat{\mathbf{\theta}};\mathbf{y}) - C \ell\{\mathbf{\psi}_0,
- \hat{\mathbf{\tau}}(\mathbf{\psi}_0);\mathbf{y}\}].}{%
- W=2[Cl(hat{theta};y) - Cl{psi_0, hat{tau}(psi_0);y}].}
- In the composite likelihood case, the asymptotic distribution of the composite 
- likelihood ratio statistic is given by
- \deqn{W \dot{\sim} \sum_{i} \lambda_i \chi^2,}{%
- W ~ sum_i lambda_i Chi^2_i,}
- for \eqn{i=1,\ldots,q'}{i=1,...,q'}, where \eqn{\chi^2_i}{Chi^2_i} are
- \eqn{q'} iid copies of a chi-square one random variable and
- \eqn{\lambda_1,\ldots,\lambda_{q'}}{lambda_1,...,lambda_{q'}}
- are the eigenvalues of the matrix \eqn{(H^{\psi \psi})^{-1} G^{\psi
- \psi}}{(H^{psi psi})^-1 G^{psi psi}}. There exist several adjustments
- to the composite likelihood ratio statistic in order to get an
- approximated \eqn{\chi^2_{q'}}{Chi^2_{q'}}. For example, Rotnitzky and Jewell
- (1990) proposed the adjustment \eqn{W'= W / \bar{\lambda}}{W'= W /
- bar{lambda}} where \eqn{\bar{\lambda}}{bar{lambda}} is the average
- of the eigenvalues \eqn{\lambda_i}{lambda_i}. This statistic can be
- called within the routine by the value: \code{WilksRJ}. A better
- solution is proposed by Satterhwaite (1946) defining \eqn{W''=\nu W /
- (q' \bar{\lambda})}{W''= nu W / (q' bar{lambda})}, where \eqn{\nu=(\sum_i
- \lambda)^2 / \sum_i \lambda^2_i}{nu = sum_i lambda / sum_i lambda^2_i} for
-\eqn{i=1\ldots,q'}{i=1...,q'}, is the effective number of the degree of
-freedom. Note that in this case the distribution of the likelihood ratio
- statistic is a chi-square random variable with \eqn{\nu}{nu} degree of
- freedom. This statistic can be called from the routine assigning the
- value: \code{WilksS}. For the adjustments suggested by Chandler and
- Bate (2007) we refere to the article (see
- \bold{References}). This versions can be called from the routine assigning
- respectively the values: \code{WilksCB}.
+The following statistics are available:
 
+\itemize{
+  \item \code{"Wald"}: available for both standard and composite
+  likelihood fits. The statistic is
+  \deqn{
+  W_{\mathrm{Wald}} =
+  (\widehat{\boldsymbol\psi}-\boldsymbol\psi_0)^\top
+  \widehat V_{\psi\psi}^{-1}
+  (\widehat{\boldsymbol\psi}-\boldsymbol\psi_0),
+  }
+  where \eqn{\boldsymbol\psi} is the vector of tested parameters and
+  \eqn{\widehat V_{\psi\psi}} is the corresponding block of the estimated
+  covariance matrix of the unrestricted estimator. Under the null
+  hypothesis, the statistic is asymptotically chi-squared with degrees of
+  freedom equal to the number of restrictions. For composite likelihood
+  fits, \code{varcov} must contain the Godambe covariance matrix, usually
+  obtained by applying \code{GeoVarest} to the unrestricted fit.
+
+  \item \code{"Wilks"}: available only for standard full-likelihood fits.
+  The statistic is
+  \deqn{
+  W_{\mathrm{Wilks}} =
+  2\{\ell(\widehat{\boldsymbol\theta})-
+  \ell(\widetilde{\boldsymbol\theta})\},
+  }
+  where \eqn{\widehat{\boldsymbol\theta}} and
+  \eqn{\widetilde{\boldsymbol\theta}} are the unrestricted and restricted
+  maximum likelihood estimates, respectively. Under standard regularity
+  conditions, the statistic is asymptotically chi-squared with degrees of
+  freedom equal to the number of restrictions.
+
+  \item \code{"WilksS"}: available only for composite likelihood fits,
+  including marginal, conditional, and difference composite likelihoods.
+  Let
+  \deqn{
+  W_{CL}=2\{\ell_{CL}(\widehat{\boldsymbol\theta})-
+  \ell_{CL}(\widetilde{\boldsymbol\theta})\}.
+  }
+  Its asymptotic null distribution is generally a weighted sum
+  \deqn{
+  W_{CL}\ \dot{\sim}\ \sum_{j=1}^{r}\lambda_j\chi^2_{1,j},
+  }
+  where \eqn{r} is the number of restrictions. In the implementation,
+  \eqn{\lambda_1,\ldots,\lambda_r} are the eigenvalues of
+  \deqn{
+  H_{\mathrm{eff}}V_{\psi\psi}, \qquad
+  H_{\mathrm{eff}}=\{(H^{-1})_{\psi\psi}\}^{-1},
+  }
+  with \eqn{H} the sensitivity matrix and
+  \eqn{V=H^{-1}JH^{-1}} the Godambe covariance matrix from the unrestricted
+  fit. The Satterthwaite moment-matching constants are
+  \deqn{
+  \nu=\frac{(\sum_j\lambda_j)^2}{\sum_j\lambda_j^2},
+  \qquad
+  \kappa=\frac{\sum_j\lambda_j^2}{\sum_j\lambda_j},
+  }
+  and the adjusted statistic
+  \deqn{
+  W_S=\frac{W_{CL}}{\kappa}
+  }
+  is compared with a chi-squared distribution having \eqn{\nu} degrees of
+  freedom. The unrestricted fit must contain both \code{sensmat} and the
+  Godambe covariance matrix \code{varcov}; these can be obtained using
+  \code{sensitivity = TRUE} in \code{GeoFit}, followed by \code{GeoVarest}.
+}
+
+For a composite likelihood-ratio comparison, the unrestricted and
+restricted fits must be based on exactly the same retained pairs. This is
+automatic for deterministic pair constructions. With stochastic thinning,
+the two fits must use the same thinning realization; \code{GeoTests} checks
+that their \code{rowidx} and \code{colidx} components are identical and
+stops otherwise.
+
+The matrices used by \code{"WilksS"} are evaluated at the unrestricted
+fit. Under the null hypothesis, this is a consistent plug-in evaluation
+because the unrestricted and restricted estimators converge to the same
+parameter value.
 }
 
 \value{
- An object of class \code{c("data.frame")}. The object contain a table
- with the results of the tested models. The rows represent the
- responses for each model and the columns the following results:
- \item{Num.Par}{The number of the model's parameters.}
- \item{Diff.Par}{The difference between the number of parameters of the model in the previous row
- and those in the actual row.}
- \item{Df}{The effective number of degree of freedom of the chi-square distribution.}
- \item{Chisq}{The observed value of the statistic.}
- \item{Pr(>chisq)}{The p-value of the quantile
- \code{Chisq} computed using a chi-squared distribution with \code{Df} degrees
- of freedom.}
+A data frame containing one row for each supplied model. The first row
+corresponds to the unrestricted model and contains missing test results.
+Each subsequent row reports the comparison between that model and the
+model in the preceding row. The columns are:
+
+\describe{
+  \item{Num.Par}{Number of estimated parameters in the model.}
+  \item{Diff.Par}{Number of restrictions relative to the preceding model.}
+  \item{Df}{Degrees of freedom used for the reference chi-squared
+  distribution. For \code{"WilksS"}, this is the Satterthwaite effective
+  degrees of freedom and need not be an integer.}
+  \item{Chisq}{Observed value of the test statistic.}
+  \item{Pr(>chisq)}{Upper-tail p-value from the chi-squared reference
+  distribution with the reported degrees of freedom.}
+}
 }
 
 \references{
 
-Chandler, R. E., and Bate, S. (2007). Inference for Clustered Data Using the
-Independence log-likelihood. \emph{Biometrika}, \bold{94}, 167--183.
-
-Rotnitzky, A. and Jewell, N. P. (1990). Hypothesis Testing of Regression
-Parameters in Semiparametric Generalized Linear Models for Cluster
-Correlated Data. \emph{Biometrika}, \bold{77}, 485--497.
+Kent, J. T. (1982). Robust Properties of Likelihood Ratio Tests.
+\emph{Biometrika}, \bold{69}, 19--27.
 
 Satterthwaite, F. E. (1946). An Approximate Distribution of Estimates of
 Variance Components. \emph{Biometrics Bulletin}, \bold{2}, 110--114.
 
 Varin, C., Reid, N. and Firth, D. (2011). An Overview of Composite
 Likelihood Methods. \emph{Statistica Sinica}, \bold{21}, 5--42.
-
 }
 
-\author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
-Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+\author{
+Moreno Bevilacqua,
+\email{moreno.bevilacqua89@gmail.com},
+\url{https://sites.google.com/view/moreno-bevilacqua/home},
+Víctor Morales Oñate,
+\email{victor.morales@uv.cl},
+\url{https://sites.google.com/site/moralesonatevictor/},
+Christian Caamaño-Carrillo,
+\email{chcaaman@ubiobio.cl},
+\url{https://www.researchgate.net/profile/Christian-Caamano}
 }
 
 \seealso{
- \command{\link{GeoFit}}.
+\code{\link{GeoFit}}, \code{\link{GeoVarest}}.
 }
+
 \examples{
-
-
 library(GeoModels)
 
 ################################################################
-###
-### Example 1. Test on the parameter
-### of a regression model using conditional composite likelihood
-###
-###############################################################
+### Example 1. Test of a regression coefficient using
+### conditional pairwise composite likelihood
+################################################################
 set.seed(342)
-model="Gaussian" 
-# Define the spatial-coordinates of the points:
-NN=1500
-x = runif(NN, 0, 1)
-y = runif(NN, 0, 1)
-coords = cbind(x,y)
-# Parameters
-mean=1; mean1=-1.25; # regression parameters
-nugget=0; sill=1
+model <- "Gaussian"
 
-# matrix covariates
-X=cbind(rep(1,nrow(coords)),runif(nrow(coords)))
+NN <- 1500
+x <- runif(NN, 0, 1)
+y <- runif(NN, 0, 1)
+coords <- cbind(x, y)
 
-# model correlation 
-corrmodel="Wend0"
-power2=4;c_supp=0.15
+mean <- 1
+mean1 <- -1.25
+nugget <- 0
+sill <- 1
 
-# simulation
-param=list(power2=power2,mean=mean,mean1=mean1,
- sill=sill,scale=c_supp,nugget=nugget)
-data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param,X=X)$data
+X <- cbind(1, runif(nrow(coords)))
 
-I=Inf
-##### H1: (regressian mean)
-fixed=list(nugget=nugget,power2=power2)
-start=list(mean=mean,mean1=mean1,scale=c_supp,sill=sill)
+corrmodel <- "Wend0"
+power2 <- 4
+c_supp <- 0.15
 
-lower=list(mean=-I,mean1=-I,scale=0,sill=0)
-upper=list(mean=I,mean1=I,scale=I,sill=I)
-# Maximum pairwise composite-likelihood fitting of the RF:
-fitH1 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
- likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
- lower=lower,upper=upper,neighb=3,
- optimizer="nlminb",X=X,
- start=start,fixed=fixed)
+param <- list(
+  power2 = power2, mean = mean, mean1 = mean1,
+  sill = sill, scale = c_supp, nugget = nugget
+)
 
-unlist(fitH1$param)
+data <- GeoSim(
+  coordx = coords, corrmodel = corrmodel,
+  model = model, param = param, X = X
+)$data
 
-##### H0: (constant mean i.e beta1=0)
-fixed=list(power2=power2,nugget=nugget,mean1=0)
-start=list(mean=mean,scale=c_supp,sill=sill)
-lower0=list(mean=-I,scale=0,sill=0)
-upper0=list(mean=I,scale=I,sill=I)
-# Maximum pairwise composite-likelihood fitting of the RF:
-fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
- likelihood="Conditional",type="Pairwise",sensitivity=TRUE,
- lower=lower0,upper=upper0,neighb=3,
- optimizer="nlminb",X=X,
- start=start,fixed=fixed)
-unlist(fitH0$param)
+I <- Inf
 
-# not run
-##fitH1=GeoVarest(fitH1,K=100)
-##fitH0=GeoVarest(fitH0,K=100)
+## H1: regression mean with a nonzero slope
+fixed <- list(nugget = nugget, power2 = power2)
+start <- list(mean = mean, mean1 = mean1, scale = c_supp, sill = sill)
+lower <- list(mean = -I, mean1 = -I, scale = 0, sill = 0)
+upper <- list(mean = I, mean1 = I, scale = I, sill = I)
 
-# Composite likelihood Wald and ratio statistic statistic tests
-# rejecting null hypothesis beta1=0
-##GeoTests(fitH1, fitH0 ,statistic='Wald')
-##GeoTests(fitH1, fitH0 , statistic='WilksS')
-##GeoTests(fitH1, fitH0 , statistic='WilksCB')
+fitH1 <- GeoFit(
+  data = data, coordx = coords, corrmodel = corrmodel,
+  model = model, likelihood = "Conditional", type = "Pairwise",
+  sensitivity = TRUE, lower = lower, upper = upper, neighb = 3,
+  optimizer = "nlminb", X = X, start = start, fixed = fixed
+)
 
+## H0: constant mean, that is, mean1 = 0
+fixed0 <- list(power2 = power2, nugget = nugget, mean1 = 0)
+start0 <- list(mean = mean, scale = c_supp, sill = sill)
+lower0 <- list(mean = -I, scale = 0, sill = 0)
+upper0 <- list(mean = I, scale = I, sill = I)
 
+fitH0 <- GeoFit(
+  data = data, coordx = coords, corrmodel = corrmodel,
+  model = model, likelihood = "Conditional", type = "Pairwise",
+  sensitivity = TRUE, lower = lower0, upper = upper0, neighb = 3,
+  optimizer = "nlminb", X = X, start = start0, fixed = fixed0
+)
 
+\dontrun{
+## GeoVarest is needed on the unrestricted fit to estimate its
+## Godambe covariance matrix. Increase K for final analyses.
+fitH1 <- GeoVarest(fitH1, K = 100, seed = 1234)
+
+GeoTests(fitH1, fitH0, statistic = "Wald")
+GeoTests(fitH1, fitH0, statistic = "WilksS")
+}
 
 ################################################################
-###
-### Example 2. Parametric test of Gaussianity
-### using SinhAsinh random fields using standard likelihood
-###
-###############################################################
+### Example 2. Test of Gaussianity for a Sinh--arcsinh random field
+### using the standard full likelihood
+################################################################
 set.seed(99)
-model="SinhAsinh" 
-# Define the spatial-coordinates of the points:
-NN=200
-x = runif(NN, 0, 1)
-y = runif(NN, 0, 1)
-coords = cbind(x,y)
-# Parameters
-mean=0; nugget=0; sill=1
-### skew and tail parameters
-skew=0;tail=1 ## H0 is Gaussianity
-# underlying model correlation 
-corrmodel="Wend0"
-power2=4;c_supp=0.2
+model <- "SinhAsinh"
 
-# simulation from Gaussian model (H0)
-param=list(power2=power2,skew=skew,tail=tail,
- mean=mean,sill=sill,scale=c_supp,nugget=nugget)
-data = GeoSim(coordx=coords, corrmodel=corrmodel,model=model, param=param)$data
+NN <- 200
+x <- runif(NN, 0, 1)
+y <- runif(NN, 0, 1)
+coords <- cbind(x, y)
 
+mean <- 0
+nugget <- 0
+sill <- 1
+skew <- 0
+tail <- 1
 
-##### H1: SinhAsinh model
-fixed=list(power2=power2,nugget=nugget,mean=mean)
-start=list(scale=c_supp,skew=skew,tail=tail,sill=sill)
+corrmodel <- "Wend0"
+power2 <- 4
+c_supp <- 0.2
 
-lower=list(scale=0,skew=-I, tail=0,sill=0)
-upper=list(scale=I,skew= I,tail=I,sill=I)
-# Maximum pairwise composite-likelihood fitting of the RF:
-fitH1 = GeoFit2(data=data,coordx=coords,corrmodel=corrmodel, model=model,
- likelihood="Full",type="Standard",varest=TRUE,
- lower=lower,upper=upper,
- optimizer="nlminb",
- start=start,fixed=fixed)
+param <- list(
+  power2 = power2, skew = skew, tail = tail,
+  mean = mean, sill = sill, scale = c_supp, nugget = nugget
+)
 
-unlist(fitH1$param)
+data <- GeoSim(
+  coordx = coords, corrmodel = corrmodel,
+  model = model, param = param
+)$data
 
-##### H0: Gaussianity (i.e tail1=1, skew=0 fixed)
-fixed=list(power2=power2,nugget=nugget,mean=mean,tail=1,skew=0)
-start=list(scale=c_supp,sill=sill)
-lower=list(scale=0,sill=0)
-upper=list(scale=2,sill=5)
-# Maximum pairwise composite-likelihood fitting of the RF:
-fitH0 = GeoFit(data=data,coordx=coords,corrmodel=corrmodel, model=model,
- likelihood="Full",type="Standard",varest=TRUE,
- lower=lower,upper=upper,
- optimizer="nlminb",
- start=start,fixed=fixed)
+## H1: unrestricted Sinh--arcsinh model
+fixed <- list(power2 = power2, nugget = nugget, mean = mean)
+start <- list(scale = c_supp, skew = skew, tail = tail, sill = sill)
+lower <- list(scale = 0, skew = -I, tail = 0, sill = 0)
+upper <- list(scale = I, skew = I, tail = I, sill = I)
 
-unlist(fitH0$param)
+fitH1 <- GeoFit2(
+  data = data, coordx = coords, corrmodel = corrmodel,
+  model = model, likelihood = "Full", type = "Standard",
+  varest = TRUE, lower = lower, upper = upper,
+  optimizer = "nlminb", start = start, fixed = fixed
+)
 
-# Standard likelihood Wald and ratio statistic statistic tests
-# not rejecting null hypothesis tail=1,skew=0 (Gaussianity)
-GeoTests(fitH1, fitH0,statistic='Wald')
-GeoTests(fitH1, fitH0,statistic='Wilks')
+## H0: Gaussianity, that is, skew = 0 and tail = 1
+fixed0 <- list(
+  power2 = power2, nugget = nugget, mean = mean,
+  tail = 1, skew = 0
+)
+start0 <- list(scale = c_supp, sill = sill)
+lower0 <- list(scale = 0, sill = 0)
+upper0 <- list(scale = 2, sill = 5)
 
+fitH0 <- GeoFit(
+  data = data, coordx = coords, corrmodel = corrmodel,
+  model = model, likelihood = "Full", type = "Standard",
+  varest = TRUE, lower = lower0, upper = upper0,
+  optimizer = "nlminb", start = start0, fixed = fixed0
+)
+
+GeoTests(fitH1, fitH0, statistic = "Wald")
+GeoTests(fitH1, fitH0, statistic = "Wilks")
 }
+
 \keyword{spatial}
+\keyword{htest}

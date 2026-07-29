@@ -96,7 +96,9 @@ getInvC <- function(covmatrix, CC, mse = TRUE) {
     })
     vec <- spam::forwardsolve(U, CC)
     Invc <- spam::backsolve(U, vec)
-    mse_val <- if (mse) as.matrix(spam::crossprod.spam(vec)) else NULL
+    #mse_val <- if (mse) as.matrix(spam::crossprod.spam(vec)) else NULL
+    mse_val <- if (mse) as.matrix(crossprod(vec)) else NULL
+    
   }
   list(a = Invc, b = mse_val)
 }

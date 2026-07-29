@@ -517,6 +517,15 @@ double psi(int i, int j, double p1, double p2, double p12,double**cache);
 double cov_binom_neg(int m,double p11,double p1, double p2);
 double biv_poisbin (int NN,  int u, int v, double p01,double p10,double p11);
 double biv_poisbinneg(int NN, int u, int v, double p01,double p10,double p11);
+double log_biv_binomneg(
+    int NN,
+    int u,
+    int v,
+    double p1,
+    double p2,
+    double p11,
+    const double *lgamma_cache,
+    int cache_size);
 double biv_two_piece_bimodal(double rho,double zi,double zj,double sill,double nuu,double delta,double eta,
              double p11,double mui,double muj);
 double cor_pois(double rho,double mi,double mj);

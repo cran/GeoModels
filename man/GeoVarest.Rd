@@ -76,9 +76,7 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  Differently from \code{\link{GeoVarestbootstrap}}, this function does not
  refit the model for each simulated data set. It estimates the variability
  matrix of the score and then computes the sandwich/Godambe covariance
- matrix. As a consequence, the component \code{estimates} returned by this
- function contains simulated scores evaluated at \eqn{\hat\theta}, not
- bootstrap parameter estimates.
+ matrix.
 }
 \value{
  Returns an updated object of class \code{GeoFit}. The following components
@@ -101,8 +99,7 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  successful score evaluations.}
  \item{score_failures}{Data frame with failed score evaluations, if any.}
  \item{estimates}{Matrix containing the successful scores and the associated
- composite log-likelihood values. These are not refitted parameter
- estimates.}
+ composite log-likelihood values.}
 }
 \seealso{
 \code{\link{GeoFit}} for the fitted objects used as input

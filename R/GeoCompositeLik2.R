@@ -567,43 +567,155 @@ if(!onlyvar){
           else CompLikelihood$value = - obj_scale * comploglik_biv2(param=CompLikelihood$par ,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
                 data1=data1,data2=data2, fixed=fixed, fan=fname,type_cop=type_cop,
                              n=n,namescorr=namescorr,namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,weigthed=weigthed,X=X,MM=MM,aniso=aniso,cond_pair=cond_pair)
-          if(hessian)
-          {
-               if(!bivariate)
-                CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(param),method="Richardson",  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2,fixed=fixed,fan=fname,n=n,type_cop=type_cop,
-                              namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                              weigthed=weigthed,X=X,MM=MM,aniso=aniso,cond_pair=cond_pair)
-               if(bivariate)
-               CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(param),method="Richardson",colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                             data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,type_cop=type_cop,
-                             namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                             weigthed=weigthed,X=X,MM=MM,aniso=aniso,cond_pair=cond_pair)
-               rownames(CompLikelihood$hessian)=namesparam
-               colnames(CompLikelihood$hessian)=namesparam
-          }
+          ## The sensitivity matrix, when requested, is computed once below
+          ## using the numerically scaled parameterization.
   }
 
 #####################################
-if((sensitivity||varest))
-  {
-if(!bivariate)  { if(is.null(CompLikelihood$hessian)) {CompLikelihood$hessian=matrix(c(1,2,3,2),2,2) }
-                  if( min(eigen( CompLikelihood$hessian )$values) <0)
-                                  {
-                                 CompLikelihood$hessian=numDeriv::hessian(func=comploglik2,x=as.numeric(CompLikelihood$par),method="Richardson",   colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                                                        data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
-                                                        namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,
-                                                        weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
-                                   }
-                 }
-if(bivariate)   CompLikelihood$hessian=numDeriv::hessian(func=comploglik_biv2,x=as.numeric(CompLikelihood$par),method="Richardson", colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                          data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
-                          namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam, namesaniso=namesaniso,
-                          weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)
+if (sensitivity || varest)
+{
+  ## The objective used by the optimizer is the average negative
+  ## composite log-likelihood, -CL / obj_scale.  The sensitivity matrix
+  ## must be returned on the scale of the total negative composite
+  ## log-likelihood.
+  ##
+  ## Numerical differentiation on the original parameter scale can be
+  ## unstable when parameters have very different magnitudes.  We first
+  ## obtain a preliminary Hessian, use its diagonal to define a local
+  ## rescaling, recompute the Hessian in the scaled parameterization, and
+  ## finally transform it back to the original parameter scale.  In exact
+  ## arithmetic this gives the same Hessian; the change is only numerical.
 
-rownames(CompLikelihood$hessian)=namesparam
-colnames(CompLikelihood$hessian)=namesparam
+  theta_hat <- as.numeric(CompLikelihood$par)
+  names(theta_hat) <- namesparam
+  ntheta <- length(theta_hat)
+
+  if (!bivariate) {
+    objective_theta <- function(theta) {
+      comploglik2(
+        param = theta,
+        colidx = colidx,
+        rowidx = rowidx,
+        corrmodel = corrmodel,
+        coords = coords,
+        data1 = data1,
+        data2 = data2,
+        fixed = fixed,
+        fan = fname,
+        n = n,
+        namescorr = namescorr,
+        namesnuis = namesnuis,
+        namesparam = namesparam,
+        namesaniso = namesaniso,
+        weigthed = weigthed,
+        X = X,
+        MM = MM,
+        aniso = aniso,
+        type_cop = type_cop,
+        cond_pair = cond_pair
+      )
+    }
+  } else {
+    objective_theta <- function(theta) {
+      comploglik_biv2(
+        param = theta,
+        colidx = colidx,
+        rowidx = rowidx,
+        corrmodel = corrmodel,
+        coords = coords,
+        data1 = data1,
+        data2 = data2,
+        fixed = fixed,
+        fan = fname,
+        n = n,
+        namescorr = namescorr,
+        namesnuis = namesnuis,
+        namesparam = namesparam,
+        namesaniso = namesaniso,
+        weigthed = weigthed,
+        X = X,
+        MM = MM,
+        aniso = aniso,
+        type_cop = type_cop,
+        cond_pair = cond_pair
+      )
+    }
   }
+
+  ## Preliminary Hessian of the average negative composite
+  ## log-likelihood.  It is used only to select numerically appropriate
+  ## perturbation scales.  Multiplying by obj_scale here would make every
+  ## perturbation unnecessarily smaller by sqrt(obj_scale).
+  H0_average <- numDeriv::hessian(
+    func = objective_theta,
+    x = theta_hat,
+    method = "Richardson"
+  )
+
+  H0_average <- (H0_average + t(H0_average)) / 2
+
+  ## Local diagonal rescaling.  Use the estimated curvature whenever it is
+  ## finite and positive.  A parameter-based fallback is used only for
+  ## invalid or zero preliminary diagonal entries; no global curvature floor
+  ## is imposed, because legitimate curvatures can differ by many orders of
+  ## magnitude.
+  hdiag <- abs(diag(H0_average))
+  valid_diag <- is.finite(hdiag) & hdiag > 0
+
+  fallback_scale <- pmax(abs(theta_hat), 1)
+  scale_vec <- numeric(ntheta)
+  scale_vec[valid_diag] <- 1 / sqrt(hdiag[valid_diag])
+  scale_vec[!valid_diag] <- fallback_scale[!valid_diag]
+
+  if (any(!is.finite(scale_vec)) || any(scale_vec <= 0)) {
+    stop(
+      "Unable to construct a finite positive parameter scaling for the sensitivity matrix.",
+      call. = FALSE
+    )
+  }
+
+  A <- diag(scale_vec, nrow = ntheta, ncol = ntheta)
+
+  objective_scaled <- function(eta) {
+    theta <- theta_hat + as.vector(A %*% eta)
+    objective_theta(theta)
+  }
+
+  ## Hessian with respect to eta, where theta = theta_hat + A eta.
+  ## numDeriv still differentiates the average objective; restore the scale
+  ## of the total negative composite log-likelihood only after the stable
+  ## numerical differentiation has been completed.
+  H_scaled_average <- numDeriv::hessian(
+    func = objective_scaled,
+    x = rep(0, ntheta),
+    method = "Richardson"
+  )
+
+  H_scaled_average <- (H_scaled_average + t(H_scaled_average)) / 2
+  H_scaled <- obj_scale * H_scaled_average
+
+  ## Since H_eta = A H_theta A, transform back as
+  ## H_theta = A^{-1} H_eta A^{-1}.
+  Ainv <- diag(1 / scale_vec, nrow = ntheta, ncol = ntheta)
+  CompLikelihood$hessian <- Ainv %*% H_scaled %*% Ainv
+  CompLikelihood$hessian <-
+    (CompLikelihood$hessian + t(CompLikelihood$hessian)) / 2
+
+  rownames(CompLikelihood$hessian) <- namesparam
+  colnames(CompLikelihood$hessian) <- namesparam
+
+  ## Store numerical diagnostics as attributes of sensmat/hessian.
+  names(scale_vec) <- namesparam
+  rownames(H_scaled) <- namesparam
+  colnames(H_scaled) <- namesparam
+
+  attr(CompLikelihood$hessian, "parameter_scaling") <- scale_vec
+  attr(CompLikelihood$hessian, "scaled_hessian") <- H_scaled
+  attr(CompLikelihood$hessian, "scaled_hessian_average") <- H_scaled_average
+  attr(CompLikelihood$hessian, "scaled_condition") <- kappa(H_scaled)
+  attr(CompLikelihood$hessian, "scaled_eigenvalues") <-
+    eigen(H_scaled, symmetric = TRUE, only.values = TRUE)$values
+}
 
 CompLikelihood$score=NULL
 if(score)
@@ -634,7 +746,11 @@ if(score)
                                         weigthed=weigthed, X=X, MM=MM, aniso=aniso,
                                         cond_pair=cond_pair)
 
-  names(CompLikelihood$score)=namesparam
+  ## numDeriv differentiates the normalized objective -CL / obj_scale.
+  ## Restore the gradient to the scale of the total negative composite
+  ## log-likelihood. GeoVarest will only need to reverse its sign.
+  CompLikelihood$score <- obj_scale * CompLikelihood$score
+  names(CompLikelihood$score) <- namesparam
 }
 ####################################
        serious_failure <- is.null(CompLikelihood$value) ||

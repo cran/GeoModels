@@ -588,86 +588,221 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 
 /*********************************************************/
 
-/**********************************************************************/
-void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1, double *data2,
-        int *N1, int *N2, double *par, int *weigthed, double *res,
-        double *mean1, double *mean2, double *nuis, int *type_cop, int *cond)
+
+
+void Comp_Pair_BinomnegGauss2mem(
+    int *cormod,
+    double *data1,
+    double *data2,
+    int *N1,
+    int *N2,
+    double *par,
+    int *weigthed,
+    double *res,
+    double *mean1,
+    double *mean2,
+    double *nuis,
+    int *type_cop,
+    int *cond)
 {
+    int i;
+    int used_pairs = 0;
+    int failed = 0;
+
+    int N;
+    int cache_size;
+    double *lgamma_cache;
+
+    double nugget;
+    double one_minus_nugget;
+
+    const double P_CLAMP = 1e-10;
+
+    (void) type_cop;
+    (void) cond;
+
     *res = 0.0;
 
-    double nugget = nuis[0];
-    if (nugget < 0.0 || nugget >= 1.0) { *res = LOW; return; }
-    double one_minus_nugget = 1.0 - nugget;
+    nugget = nuis[0];
 
-#define P_CLAMP 1e-10
-
-    int N = N1[0];
-    if (N <= 0) { *res = LOW; return; }
-
-    /* FIX 1: scansione preliminare per trovare il massimo di u,v nei dati,
-     * cosi' la cache copre esattamente cio' che serve senza spreco             */
-    int MAX_UV = 0;
-    for (int k = 0; k < npairs[0]; k++) {
-        if (!ISNAN(data1[k]) && data1[k] > MAX_UV) MAX_UV = (int)data1[k];
-        if (!ISNAN(data2[k]) && data2[k] > MAX_UV) MAX_UV = (int)data2[k];
+    if (!R_FINITE(nugget) ||
+        nugget < 0.0 ||
+        nugget >= 1.0) {
+        *res = LOW;
+        return;
     }
-    /* FIX 3: dimensione sicura — copre tutti gli indici di lgammafn usati
-     * nelle aux_*: al massimo si accede a indici fino a N + u + v           */
-    int cache_size = N + 2 * MAX_UV + 10;
-    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
-    if (!lgamma_cache) { *res = LOW; return; }
-    for (int k = 0; k < cache_size; k++)
-        lgamma_cache[k] = lgammafn(k + 1);
 
-    int    i, uu, vv, valid_pairs = 0;
-    double weights, ai, aj, corr, p1, p2, p11, bl;
+    one_minus_nugget = 1.0 - nugget;
+
+    N = N1[0];
+
+    if (N <= 0 || N == INT_MAX) {
+        *res = LOW;
+        return;
+    }
+
+    /*
+     * This model assumes one common integer r = N at all locations.
+     * Do not silently ignore site-specific values.
+     */
+    for (i = 0; i < npairs[0]; i++) {
+        if (N1[i] != N || N2[i] != N) {
+            *res = LOW;
+            return;
+        }
+    }
+
+    /*
+     * All cached factorial arguments used by the log-pmf are between
+     * 0 and N-1.  N+1 entries are sufficient and avoid scanning the data.
+     */
+    cache_size = N + 1;
+
+    lgamma_cache =
+        (double *) malloc((size_t) cache_size * sizeof(double));
+
+    if (lgamma_cache == NULL) {
+        *res = LOW;
+        return;
+    }
+
+    for (i = 0; i < cache_size; i++)
+        lgamma_cache[i] = lgammafn(i + 1.0);
 
     for (i = 0; i < npairs[0]; i++) {
 
-        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
-        if (data1[i] < 0.0  || data2[i] < 0.0)  continue;
+        double weights = 1.0;
+        double u_raw;
+        double v_raw;
+        int u;
+        int v;
 
-        weights = 1.0;
-        if (*weigthed) {
-            weights = CorFunBohman(lags[i], maxdist[0]);
-            if (weights <= 0.0) continue;
+        double ai;
+        double aj;
+        double corr;
+        double p1;
+        double p2;
+        double p11;
+        double lower_p11;
+        double upper_p11;
+        double log_bl;
+
+        if (ISNAN(data1[i]) || ISNAN(data2[i]))
+            continue;
+
+        u_raw = data1[i];
+        v_raw = data2[i];
+
+        /*
+         * Negative-binomial observations must be non-negative integers.
+         * Avoid silently truncating non-integer values.
+         */
+        if (!R_FINITE(u_raw) ||
+            !R_FINITE(v_raw) ||
+            u_raw < 0.0 ||
+            v_raw < 0.0 ||
+            u_raw > (double) INT_MAX ||
+            v_raw > (double) INT_MAX ||
+            fabs(u_raw - nearbyint(u_raw)) > 1e-8 ||
+            fabs(v_raw - nearbyint(v_raw)) > 1e-8) {
+            failed = 1;
+            break;
         }
 
-        uu = (int) data1[i];
-        vv = (int) data2[i];
+        u = (int) nearbyint(u_raw);
+        v = (int) nearbyint(v_raw);
+
+        if (*weigthed) {
+            weights = CorFunBohman(lags[i], maxdist[0]);
+
+            if (!R_FINITE(weights)) {
+                failed = 1;
+                break;
+            }
+
+            if (weights <= 0.0)
+                continue;
+        }
+
         ai = mean1[i];
         aj = mean2[i];
 
-        corr = clamp_corr(CorFct(cormod, lags[i], 0, par, 0, 0));
-        p1   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(ai, 0.0, 1.0, 1, 0)));
-        p2   = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, pnorm(aj, 0.0, 1.0, 1, 0)));
-        p11  = pbnorm22(ai, aj, one_minus_nugget * corr);
-
-        /* FIX 4: sottrae P_CLAMP per evitare p11 == min(p1,p2) esattamente,
-         * che farebbe ritornare 0.0 a biv_binomneg per il check p11 > fmin() */
-        p11  = fmax(fmax(0.0, p1 + p2 - 1.0),
-                    fmin(fmin(p1, p2) - P_CLAMP, p11));
-
-        /* FIX 1: passa la cache allocata una sola volta */
-        bl = biv_binomneg(N, uu, vv, p1, p2, p11, lgamma_cache, cache_size);
-
-        if (!R_FINITE(bl) || bl <= 0.0) {
-            *res += weights * LOG_FLOOR;
-            continue;
+        if (!R_FINITE(ai) || !R_FINITE(aj)) {
+            failed = 1;
+            break;
         }
-        valid_pairs++;
-        *res += weights * log(bl);
+
+        corr = clamp_corr(
+            CorFct(cormod, lags[i], 0, par, 0, 0)
+        );
+
+        if (!R_FINITE(corr)) {
+            failed = 1;
+            break;
+        }
+
+        p1 = pnorm(ai, 0.0, 1.0, 1, 0);
+        p2 = pnorm(aj, 0.0, 1.0, 1, 0);
+
+        p1 = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, p1));
+        p2 = fmax(P_CLAMP, fmin(1.0 - P_CLAMP, p2));
+
+        p11 = pbnorm22(
+            ai,
+            aj,
+            one_minus_nugget * corr
+        );
+
+        if (!R_FINITE(p11)) {
+            failed = 1;
+            break;
+        }
+
+        /*
+         * Enforce only the exact Frechet bounds.  Do not subtract
+         * P_CLAMP from min(p1,p2), because equality is admissible.
+         */
+        lower_p11 = fmax(0.0, p1 + p2 - 1.0);
+        upper_p11 = fmin(p1, p2);
+
+        p11 = fmin(
+            upper_p11,
+            fmax(lower_p11, p11)
+        );
+
+        log_bl = log_biv_binomneg(
+            N,
+            u,
+            v,
+            p1,
+            p2,
+            p11,
+            lgamma_cache,
+            cache_size
+        );
+
+        /*
+         * With the log-sum-exp implementation, underflow is no longer a
+         * valid reason for a zero probability.  A non-finite log-pmf now
+         * indicates an invalid parameter/data combination.
+         */
+        if (!R_FINITE(log_bl)) {
+            failed = 1;
+            break;
+        }
+
+        *res += weights * log_bl;
+        used_pairs++;
     }
 
     free(lgamma_cache);
 
-    /* FIX 2: (npairs[0]+1)/2 invece di npairs[0]/2 — corretto per N piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
-    if (!R_FINITE(*res)) *res = LOW;
-
-#undef P_CLAMP
+    if (failed ||
+        used_pairs == 0 ||
+        !R_FINITE(*res)) {
+        *res = LOW;
+    }
 }
-
 
 /******************************************************/
 void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1, double *data2,
@@ -684,7 +819,7 @@ void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1, double *data2,
  
 #define P_CLAMP 1e-10
  
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double u, v, bl, weights, ai, aj, corr, p1, p2, p11;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -721,14 +856,14 @@ void Comp_Pair_BinomnegBinary2mem(int *cormod, double *data1, double *data2,
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
+    
         *res += weights * log(bl);
     }
  
 #undef P_CLAMP
  
     /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
 /*********************************************************/
@@ -759,7 +894,7 @@ void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1, double *data2,
  
 #define P_CLAMP 1e-10
  
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double u, v, bl, weights, ai, aj, corr, p1, p2, p11;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -798,7 +933,7 @@ void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1, double *data2,
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
+    
         *res += weights * log(bl);
     }
  
@@ -807,7 +942,7 @@ void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1, double *data2,
 #undef P_CLAMP
  
     /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
 /*********************************************************/
@@ -843,7 +978,7 @@ void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2,
         lgamma_cache[k] = lgammafn(k + 1);
  
     double total       = 0.0;
-    int    valid_pairs = 0;
+;
  
     for (int i = 0; i < n_pairs; i++) {
  
@@ -869,14 +1004,14 @@ void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1, double *data2,
             total += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
+    
         total += weights * log(zinb_val);
     }
  
     free(lgamma_cache);
  
-    /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (n_pairs + 1) / 2) { *res = LOW; return; }
+
+
     *res = R_FINITE(total) ? total : LOW;
 }
 
@@ -965,7 +1100,7 @@ void Comp_Pair_BinomNNGauss2mem(int *cormod, double *data1, double *data2,
 
 #define P_CLAMP 1e-10
 
-    int    i, uu, vv, valid_pairs = 0;
+    int    i, uu, vv;
     double corr, p1, p2, p11, bl, weights, ai, aj;
 
     for (i = 0; i < npairs[0]; i++) {
@@ -1002,11 +1137,10 @@ void Comp_Pair_BinomNNGauss2mem(int *cormod, double *data1, double *data2,
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
         *res += weights * log(bl);
     }
 
-    if (valid_pairs < npairs[0] / 2) { *res = LOW; return; }
+
 
     if (!R_FINITE(*res)) *res = LOW;
 }
@@ -2952,7 +3086,7 @@ void Comp_Pair_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
-    int    i, uu, ww, valid_pairs = 0;
+    int    i, uu, ww;
     double bl, weights, u, w, a, b, corr, p1, p2, psj;
  
 #define P_CLAMP 1e-10
@@ -2990,7 +3124,6 @@ void Comp_Pair_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
         *res += weights * log(bl);
     }
  
@@ -2999,7 +3132,7 @@ void Comp_Pair_BinomnegGauss_st2mem(int *cormod, double *data1, double *data2,
 #undef P_CLAMP
  
     /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+
     if (!R_FINITE(*res)) *res = LOW;
 }
  
@@ -3028,7 +3161,7 @@ void Comp_Pair_BinomnegLogi_st2mem(int *cormod, double *data1, double *data2,
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
-    int    i, uu, ww, valid_pairs = 0;
+    int    i, uu, ww;
     double bl, weights, u, w, a, b, corr, p1, p2, psj;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -3059,14 +3192,11 @@ void Comp_Pair_BinomnegLogi_st2mem(int *cormod, double *data1, double *data2,
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
         *res += weights * log(bl);
     }
  
     free(lgamma_cache);
  
-    /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
     if (!R_FINITE(*res)) *res = LOW;
 }
 
@@ -3099,7 +3229,7 @@ void Comp_Pair_BinomnegGaussZINB_st2mem(int *cormod, double *data1, double *data
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
-    int    i, uu, ww, valid_pairs = 0;
+    int    i, uu, ww;
     double bl, weights, u, w, a, b, corr;
  
     for (i = 0; i < npairs[0]; i++) {
@@ -3129,14 +3259,12 @@ void Comp_Pair_BinomnegGaussZINB_st2mem(int *cormod, double *data1, double *data
             *res += weights * LOG_FLOOR;
             continue;
         }
-        valid_pairs++;
         *res += weights * log(bl);
     }
  
     free(lgamma_cache);
  
-    /* FIX 2: soglia robusta per npairs piccolo */
-    if (valid_pairs < (npairs[0] + 1) / 2) { *res = LOW; return; }
+  
     if (!R_FINITE(*res)) *res = LOW;
 }
 

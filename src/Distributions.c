@@ -1877,160 +1877,442 @@ double log_biv_skewlaplace(double rho, double z1, double z2, double m1, double m
     return R_NegInf;
 }
 
-/**********************************************************************/
-double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11,
-                               double *lgamma_cache, int cache_size)
+
+
+static double logspace_add_binomneg(double logx, double logy)
 {
-    int i = 0;
-    double dens = 0.0;
+    if (ISNAN(logx) || ISNAN(logy))
+        return R_NaN;
 
-    double lgamma_NN_u_1 = lgammafn(NN - 1 + u + 1);
-    double base_prob     = 1 + p11 - (p01 + p10);
-    double diff_p01      = p01 - p11;
-    double diff_p10      = p10 - p11;
+    if (logx == R_NegInf)
+        return logy;
 
-#define LG(k) ((k) >= 0 && (k) < cache_size ? lgamma_cache[(k)] : lgammafn((k) + 1))
+    if (logy == R_NegInf)
+        return logx;
 
-    for (i = fmax_int(0, NN - u - 1); i <= NN - 1; i++) {
+    if (logx == R_PosInf || logy == R_PosInf)
+        return R_PosInf;
 
-        double lgamma_i1     = LG(i);
-        double lgamma_NN_i   = LG(NN - i - 1);
-        double lgamma_u_NN_i = lgammafn(u - NN + 1 + i + 1);
-
-        /* lgamma_NN_i sottratto DUE VOLTE: corretto per il coefficiente
-         * multinomiale della formula g2 del paper (slot 2 e 3 identici) */
-        double log_coeff = lgamma_NN_u_1 - lgamma_i1 - lgamma_NN_i - lgamma_NN_i - lgamma_u_NN_i;
-        double coeff     = exp(log_coeff);
-
-        double term1 = R_pow(p11, i + 1);
-
-        double term2;
-        if (fabs(base_prob) < 1e-10)
-            term2 = exp((u - NN + 1 + i) * log1p(p11 - (p01 + p10)));
-        else
-            term2 = R_pow(base_prob, u - NN + 1 + i);
-
-        double term3 = R_pow(diff_p01, NN - 1 - i);
-        double term4 = R_pow(diff_p10, NN - 1 - i);
-
-        dens += coeff * term1 * term2 * term3 * term4;
+    {
+        double m = fmax(logx, logy);
+        return m + log1p(exp(-fabs(logx - logy)));
     }
-
-#undef LG
-    return dens;
 }
 
-/**********************************************************************/
-double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11,
-                        double *lgamma_cache, int cache_size)
+
+/*
+ * Returns log(p^exponent), with the convention 0^0 = 1.
+ * The exponents appearing in the bivariate pmf must be non-negative.
+ */
+static double log_prob_power_binomneg(double p, int exponent)
 {
-    int    a = 0, i = 0;
-    double dens1 = 0.0, dens2 = 0.0;
+    if (exponent < 0 || !R_FINITE(p) || p < 0.0 || p > 1.0)
+        return R_NaN;
+
+    if (exponent == 0)
+        return 0.0;
+
+    if (p == 0.0)
+        return R_NegInf;
+
+    return ((double) exponent) * log(p);
+}
+
+
+/*
+ * Add a log-term to a log-sum.  Terms equal to -Inf correspond to an
+ * exact zero contribution and can be skipped.  NaN/+Inf signal failure.
+ */
+static int add_log_term_binomneg(double *logsum, double logterm)
+{
+    if (ISNAN(logterm) || logterm == R_PosInf)
+        return 0;
+
+    if (logterm != R_NegInf)
+        *logsum = logspace_add_binomneg(*logsum, logterm);
+
+    return 1;
+}
+
+
+/**********************************************************************/
+/* Log-pmf for u < v: h1 in the paper                                  */
+/**********************************************************************/
+
+static double log_aux_biv_binomneg(
+    int NN,
+    int u,
+    int v,
+    double x,
+    double y,
+    double p11,
+    const double *lgamma_cache,
+    int cache_size)
+{
+    int a, i;
+    double logdens1 = R_NegInf;
+    double logdens2 = R_NegInf;
+
+    double base_prob   = 1.0 + p11 - x - y;
+    double diff_x      = x - p11;
+    double diff_y      = y - p11;
+    double one_minus_y = 1.0 - y;
 
     double lgamma_NN_u = lgammafn(NN + u);
     double lgamma_v_u  = lgammafn(v - u);
-    double base_prob   = 1 + p11 - (x + y);
-    double diff_x      = x - p11;
-    double diff_y      = y - p11;
-    double one_minus_y = 1 - y;
 
-#define LG(k) ((k) >= 0 && (k) < cache_size ? lgamma_cache[(k)] : lgammafn((k) + 1))
+#define LG_BN(k) \
+    (((k) >= 0 && (k) < cache_size) ? \
+        lgamma_cache[(k)] : lgammafn((k) + 1.0))
 
-    /* --- Prima sommatoria (primo blocco di g1 nel paper) --- */
-    for (a = fmax_int(0, u - v + NN - 1); a <= NN - 2; a++) {
+    if (NN <= 0 || u < 0 || v <= u)
+        return R_NaN;
 
-        double lgamma_NN_a_1        = LG(NN - a - 2);
-        double pow_y_NN_a_1         = R_pow(y,           NN - a - 1);
-        double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a + 1);
+    /*
+     * The Frechet constraints imply that these four probabilities are
+     * non-negative.  Allow only tiny round-off violations.
+     */
+    if (base_prob < -1e-12 ||
+        diff_x < -1e-12 ||
+        diff_y < -1e-12 ||
+        one_minus_y < -1e-12)
+        return R_NaN;
 
-        for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
+    base_prob   = fmax(0.0, base_prob);
+    diff_x      = fmax(0.0, diff_x);
+    diff_y      = fmax(0.0, diff_y);
+    one_minus_y = fmax(0.0, one_minus_y);
 
-            double lgamma_i1      = LG(i);
-            double lgamma_NN_i    = LG(NN - i - 1);
-            double lgamma_a_i_1   = LG(a - i);
-            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
+    /* First sum in h1. */
+    for (a = fmax_int(0, u - v + NN - 1);
+         a <= NN - 2;
+         a++) {
 
-            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i
-                                - lgamma_a_i_1 - lgamma_u_a_i_1;
-            double coeff1 = exp(log_coeff1);
+        int exp_y           = NN - a - 1;
+        int exp_one_minus_y = v - u - NN + a + 1;
 
-            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 2);
-            double log_coeff2      = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a_1;
-            double coeff2          = exp(log_coeff2);
+        double log_y =
+            log_prob_power_binomneg(y, exp_y);
 
-            double pow_p11 = R_pow(p11, i + 1);
-            double pow_base_prob;
-            if (fabs(base_prob) < 1e-10)
-                pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
-            else
-                pow_base_prob = R_pow(base_prob, u - a + i);
+        double log_one_minus_y =
+            log_prob_power_binomneg(one_minus_y, exp_one_minus_y);
 
-            double pow_diff_x = R_pow(diff_x, NN - i - 1);
-            double pow_diff_y = R_pow(diff_y, a - i);
+        if (ISNAN(log_y) || ISNAN(log_one_minus_y))
+            return R_NaN;
 
-            dens1 += coeff1 * coeff2 * pow_p11 * pow_base_prob
-                   * pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a_1;
+        for (i = fmax_int(0, a - u);
+             i <= fmin_int(a, NN - 1);
+             i++) {
+
+            int exp_p11  = i + 1;
+            int exp_base = u - a + i;
+            int exp_dx   = NN - i - 1;
+            int exp_dy   = a - i;
+
+            double log_coeff1 =
+                lgamma_NN_u
+                - LG_BN(i)
+                - LG_BN(NN - i - 1)
+                - LG_BN(a - i)
+                - lgammafn(u - a + i + 1.0);
+
+            double log_coeff2 =
+                lgamma_v_u
+                - lgammafn(v + a - NN - u + 2.0)
+                - LG_BN(NN - a - 2);
+
+            double logterm =
+                log_coeff1
+                + log_coeff2
+                + log_prob_power_binomneg(p11, exp_p11)
+                + log_prob_power_binomneg(base_prob, exp_base)
+                + log_prob_power_binomneg(diff_x, exp_dx)
+                + log_prob_power_binomneg(diff_y, exp_dy)
+                + log_one_minus_y
+                + log_y;
+
+            if (!add_log_term_binomneg(&logdens1, logterm))
+                return R_NaN;
         }
     }
 
-    /* --- Seconda sommatoria (secondo blocco di g1 nel paper) --- */
-    for (a = fmax_int(0, u - v + NN); a <= NN - 1; a++) {
+    /* Second sum in h1. */
+    for (a = fmax_int(0, u - v + NN);
+         a <= NN - 1;
+         a++) {
 
-        double lgamma_NN_a          = LG(NN - a - 1);
-        double pow_y_NN_a           = R_pow(y,           NN - a);
-        double pow_one_minus_y_base = R_pow(one_minus_y, v - u - NN + a);
+        int exp_y           = NN - a;
+        int exp_one_minus_y = v - u - NN + a;
 
-        for (i = fmax_int(0, a - u); i <= fmin_int(a, NN - 1); i++) {
+        double log_y =
+            log_prob_power_binomneg(y, exp_y);
 
-            double lgamma_i1      = LG(i);
-            double lgamma_NN_i    = LG(NN - i - 1);
-            double lgamma_a_i_1   = LG(a - i);
-            double lgamma_u_a_i_1 = lgammafn(u - a + i + 1);
+        double log_one_minus_y =
+            log_prob_power_binomneg(one_minus_y, exp_one_minus_y);
 
-            double log_coeff1 = lgamma_NN_u - lgamma_i1 - lgamma_NN_i
-                                - lgamma_a_i_1 - lgamma_u_a_i_1;
-            double coeff1 = exp(log_coeff1);
+        if (ISNAN(log_y) || ISNAN(log_one_minus_y))
+            return R_NaN;
 
-            double lgamma_v_a_NN_u = lgammafn(v + a - NN - u + 1);
-            double log_coeff2      = lgamma_v_u - lgamma_v_a_NN_u - lgamma_NN_a;
-            double coeff2          = exp(log_coeff2);
+        for (i = fmax_int(0, a - u);
+             i <= fmin_int(a, NN - 1);
+             i++) {
 
-            double pow_p11 = R_pow(p11, i);
-            double pow_base_prob;
-            if (fabs(base_prob) < 1e-10)
-                pow_base_prob = exp((u - a + i) * log1p(p11 - (x + y)));
-            else
-                pow_base_prob = R_pow(base_prob, u - a + i);
+            int exp_p11  = i;
+            int exp_base = u - a + i;
+            int exp_dx   = NN - i;
+            int exp_dy   = a - i;
 
-            double pow_diff_x = R_pow(diff_x, NN - i);
-            double pow_diff_y = R_pow(diff_y, a - i);
+            double log_coeff1 =
+                lgamma_NN_u
+                - LG_BN(i)
+                - LG_BN(NN - i - 1)
+                - LG_BN(a - i)
+                - lgammafn(u - a + i + 1.0);
 
-            dens2 += coeff1 * coeff2 * pow_p11 * pow_base_prob
-                   * pow_diff_x * pow_diff_y * pow_one_minus_y_base * pow_y_NN_a;
+            double log_coeff2 =
+                lgamma_v_u
+                - lgammafn(v + a - NN - u + 1.0)
+                - LG_BN(NN - a - 1);
+
+            double logterm =
+                log_coeff1
+                + log_coeff2
+                + log_prob_power_binomneg(p11, exp_p11)
+                + log_prob_power_binomneg(base_prob, exp_base)
+                + log_prob_power_binomneg(diff_x, exp_dx)
+                + log_prob_power_binomneg(diff_y, exp_dy)
+                + log_one_minus_y
+                + log_y;
+
+            if (!add_log_term_binomneg(&logdens2, logterm))
+                return R_NaN;
         }
     }
 
-#undef LG
-    return dens1 + dens2;
+#undef LG_BN
+
+    return logspace_add_binomneg(logdens1, logdens2);
 }
 
+
 /**********************************************************************/
-double biv_binomneg(int NN, int u, int v, double p01, double p10, double p11,
-                    double *lgamma_cache, int cache_size)
+/* Log-pmf for u = v: h2 in the paper                                  */
+/**********************************************************************/
+
+static double log_aux_biv_binomneg_simple(
+    int NN,
+    int u,
+    double p1,
+    double p2,
+    double p11,
+    const double *lgamma_cache,
+    int cache_size)
 {
-    if (p01 < 0.0 || p01 > 1.0 || p10 < 0.0 || p10 > 1.0 ||
-        p11 < 0.0 || p11 > 1.0)
+    int i;
+    double logdens = R_NegInf;
+
+    double p00 = 1.0 + p11 - p1 - p2;
+    double p10 = p1 - p11;
+    double p01 = p2 - p11;
+
+    double lgamma_NN_u = lgammafn(NN + u);
+
+#define LG_BN_SIMPLE(k) \
+    (((k) >= 0 && (k) < cache_size) ? \
+        lgamma_cache[(k)] : lgammafn((k) + 1.0))
+
+    if (NN <= 0 || u < 0)
+        return R_NaN;
+
+    if (p00 < -1e-12 || p10 < -1e-12 || p01 < -1e-12)
+        return R_NaN;
+
+    p00 = fmax(0.0, p00);
+    p10 = fmax(0.0, p10);
+    p01 = fmax(0.0, p01);
+
+    for (i = fmax_int(0, NN - u - 1);
+         i <= NN - 1;
+         i++) {
+
+        int exp_p11 = i + 1;
+        int exp_p00 = u - NN + 1 + i;
+        int exp_p10 = NN - i - 1;
+        int exp_p01 = NN - i - 1;
+
+        double log_coeff =
+            lgamma_NN_u
+            - LG_BN_SIMPLE(i)
+            - 2.0 * LG_BN_SIMPLE(NN - i - 1)
+            - lgammafn(u - NN + i + 2.0);
+
+        double logterm =
+            log_coeff
+            + log_prob_power_binomneg(p11, exp_p11)
+            + log_prob_power_binomneg(p00, exp_p00)
+            + log_prob_power_binomneg(p10, exp_p10)
+            + log_prob_power_binomneg(p01, exp_p01);
+
+        if (!add_log_term_binomneg(&logdens, logterm))
+            return R_NaN;
+    }
+
+#undef LG_BN_SIMPLE
+
+    return logdens;
+}
+
+
+
+/**********************************************************************/
+/* Compatibility wrappers for the previous public auxiliary functions */
+/**********************************************************************/
+
+double aux_biv_binomneg(
+    int NN,
+    int u,
+    int v,
+    double x,
+    double y,
+    double p11,
+    double *lgamma_cache,
+    int cache_size)
+{
+    double logp = log_aux_biv_binomneg(
+        NN, u, v, x, y, p11,
+        lgamma_cache, cache_size
+    );
+
+    if (ISNAN(logp))
+        return R_NaN;
+
+    if (logp == R_NegInf || logp < log(DBL_MIN))
         return 0.0;
 
-    if (p11 > fmin(p01, p10))
+    if (logp == R_PosInf)
+        return R_PosInf;
+
+    return exp(logp);
+}
+
+
+double aux_biv_binomneg_simple(
+    int NN,
+    int u,
+    double p1,
+    double p2,
+    double p11,
+    double *lgamma_cache,
+    int cache_size)
+{
+    double logp = log_aux_biv_binomneg_simple(
+        NN, u, p1, p2, p11,
+        lgamma_cache, cache_size
+    );
+
+    if (ISNAN(logp))
+        return R_NaN;
+
+    if (logp == R_NegInf || logp < log(DBL_MIN))
         return 0.0;
 
-    if (u < v)
-        return aux_biv_binomneg(NN, u, v, p01, p10, p11, lgamma_cache, cache_size);
-    else if (u == v)
-        return aux_biv_binomneg_simple(NN, u, p01, p10, p11, lgamma_cache, cache_size);
-    else
-        return aux_biv_binomneg(NN, v, u, p10, p01, p11, lgamma_cache, cache_size);
+    if (logp == R_PosInf)
+        return R_PosInf;
+
+    return exp(logp);
+}
+
+
+/**********************************************************************/
+/* Stable log-pmf dispatcher                                           */
+/**********************************************************************/
+
+double log_biv_binomneg(
+    int NN,
+    int u,
+    int v,
+    double p1,
+    double p2,
+    double p11,
+    const double *lgamma_cache,
+    int cache_size)
+{
+    double lower_p11;
+    double upper_p11;
+
+    if (NN <= 0 || u < 0 || v < 0)
+        return R_NaN;
+
+    if (!R_FINITE(p1) || !R_FINITE(p2) || !R_FINITE(p11))
+        return R_NaN;
+
+    if (p1 < 0.0 || p1 > 1.0 ||
+        p2 < 0.0 || p2 > 1.0)
+        return R_NaN;
+
+    lower_p11 = fmax(0.0, p1 + p2 - 1.0);
+    upper_p11 = fmin(p1, p2);
+
+    /*
+     * Reject genuine Frechet violations, but correct tiny numerical
+     * deviations produced by the bivariate Gaussian cdf evaluation.
+     */
+    if (p11 < lower_p11 - 1e-12 ||
+        p11 > upper_p11 + 1e-12)
+        return R_NaN;
+
+    p11 = fmin(upper_p11, fmax(lower_p11, p11));
+
+    if (u < v) {
+        return log_aux_biv_binomneg(
+            NN, u, v, p1, p2, p11,
+            lgamma_cache, cache_size
+        );
+    }
+
+    if (u == v) {
+        return log_aux_biv_binomneg_simple(
+            NN, u, p1, p2, p11,
+            lgamma_cache, cache_size
+        );
+    }
+
+    return log_aux_biv_binomneg(
+        NN, v, u, p2, p1, p11,
+        lgamma_cache, cache_size
+    );
+}
+
+
+/**********************************************************************/
+/* Compatibility wrapper: returns the probability, as before           */
+/**********************************************************************/
+
+double biv_binomneg(
+    int NN,
+    int u,
+    int v,
+    double p1,
+    double p2,
+    double p11,
+    double *lgamma_cache,
+    int cache_size)
+{
+    double logp = log_biv_binomneg(
+        NN, u, v, p1, p2, p11,
+        lgamma_cache, cache_size
+    );
+
+    if (ISNAN(logp))
+        return R_NaN;
+
+    if (logp == R_NegInf || logp < log(DBL_MIN))
+        return 0.0;
+
+    if (logp == R_PosInf)
+        return R_PosInf;
+
+    return exp(logp);
 }
 
 /**********************************************************************/

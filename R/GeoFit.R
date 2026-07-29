@@ -195,6 +195,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (is.null(coordx_dyn)) {
       coordx <- unname(coordx)
       coordy <- unname(coordy)
+      coordz <- unname(coordz)
     }
 
     initparam <- WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
@@ -477,12 +478,12 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (is.null(unlist(ff))) ff <- NULL
 
     ## special case: maxdist and neighb = NULL
-    if (likelihood != "Full") {
-      if (is.null(neighb) && is.numeric(maxdist) && likelihood == "Marginal") {
-        fitted$value <- 2 * fitted$value
-        initparam$numpairs <- 2 * initparam$numpairs
-      }
-    }
+   # if (likelihood != "Full") {
+   #   if (is.null(neighb) && is.numeric(maxdist) && likelihood == "Marginal") {
+   #     fitted$value <- 2 * fitted$value
+   #     initparam$numpairs <- 2 * initparam$numpairs
+   #   }
+   # }
 
     if (!is.null(coordt) && is.null(coordx_dyn)) {
       if (is.null(coordz)) {
@@ -495,8 +496,8 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       }
     }
 
-    if (model %in% c("Weibull","Poisson","Binomial","Gamma","PoissoGamma","Gaussian_misp_PoissonGamma",
-                     "LogLogistic","BinomialNeg","Bernoulli","Geometric","Binary_misp_BinomialNeg",
+    if (model %in% c("Weibull","Poisson","Binomial","Gamma","PoissonGamma","Gaussian_misp_PoissonGamma",
+                     "LogLogistic","BinomialNeg","BinomNeg","Bernoulli","Geometric","Binary_misp_BinomialNeg",
                      "Gaussian_misp_Poisson","PoissonZIP","PoissonGammaZIP","PoissonGammaZIP1",
                      "Gaussian_misp_PoissonZIP","BinomialNegZINB","PoissonZIP1","Gaussian_misp_PoissonZIP1",
                      "BinomialNegZINB1","Beta2","Kumaraswamy2","Beta","Kumaraswamy")) {
@@ -506,7 +507,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     conf.int <- NULL
     pvalues <- NULL
 
-    if (all(initparam$coordz == 0)) initparam$coordz <- NULL
+    if (!is.null(initparam$coordz) && all(initparam$coordz == 0)) initparam$coordz <- NULL
 
     if (likelihood == "Full" && type == "Standard") {
       if (varest) {
@@ -563,6 +564,8 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       optimizer = optimizer,
       param = as.list(fitted$par),
       p_neighb = p_neighb,
+      thin_method = thin_method,
+      memdist = memdist,
       nozero = initparam$setup$nozero,
       score = fitted$score,
       maxdist = maxdist,

@@ -1,25 +1,30 @@
 \name{GeoFit2}
 \alias{GeoFit2}
 \encoding{UTF-8}
-\title{Maximum-Likelihood-Based Fitting of Gaussian and non-Gaussian random fields.}
+\title{Fitting Gaussian and Non-Gaussian Random Fields with Automatic Marginal Initialization}
 \description{
- Maximum weighted composite-likelihood fitting for Gaussian and some non-Gaussian
- univariate spatial, spatio-temporal and bivariate spatial random fields.
- A first preliminary estimation is performed using independence composite-likelihood for the
- marginal parameters of the model. The estimates are then used as starting values in the second final estimation step. The function allows fixing any of the parameters and setting upper/lower bounds in the optimization.
+ A starting-value wrapper around \code{\link{GeoFit}}. The function optionally
+ performs a preliminary fit under spatial independence to estimate available
+ marginal parameters, uses those estimates to update the corresponding supplied
+ starting values, and then calls \code{GeoFit} for the requested final fit.
+ If the preliminary independence fit is unavailable or fails, the original
+ starting values are retained.
 }
 \usage{
-GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
- coordx_dyn=NULL, copula=NULL, corrmodel, distance="Eucl",
- fixed=NULL, anisopars=NULL, est.aniso=c(FALSE,FALSE),
- grid=FALSE, likelihood="Marginal", lower=NULL, maxdist=Inf,
- neighb=NULL, p_neighb=1, maxtime=Inf, memdist=TRUE,
- method="cholesky", model="Gaussian", n=1, onlyvar=FALSE,
- optimizer="Nelder-Mead", radius=1, score=FALSE,
- sensitivity=FALSE, sparse=FALSE, start=NULL,
- thin_method="bernoulli", type="Pairwise", upper=NULL,
- varest=FALSE, weighted=FALSE, X=NULL, 
- spobj=NULL, spdata=NULL)
+GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+ coordx_dyn = NULL, copula = NULL, corrmodel = NULL,
+ distance = "Eucl", fixed = NULL, anisopars = NULL,
+ est.aniso = c(FALSE, FALSE), grid = FALSE,
+ likelihood = "Marginal", lower = NULL, maxdist = Inf,
+ neighb = NULL, p_neighb = 1, maxtime = Inf, memdist = TRUE,
+ method = "cholesky", model = "Gaussian", n = 1,
+ onlyvar = FALSE, optimizer = "Nelder-Mead", radius = 1,
+ score = FALSE, sensitivity = FALSE, sparse = FALSE,
+ start = NULL, thin_method = "bernoulli", type = "Pairwise",
+ upper = NULL, varest = FALSE, weighted = FALSE, X = NULL,
+ spobj = NULL, spdata = NULL, independence_start = TRUE,
+ independence_optimizer = "Nelder-Mead",
+ warn_independence_failure = TRUE)
 }
 \arguments{
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
@@ -102,8 +107,7 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{start}{An optional named list with initial values for parameters used by the numerical routines in the maximization procedure.
  Default is \code{NULL} (see Details).}
 
- \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is 
- \code{"FixedBudget"}}. 
+ \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is \code{"FixedBudget"}.}
 
  \item{type}{String; the type of the likelihood objects. If \code{"Pairwise"} (default) then the marginal composite likelihood is formed by pairwise marginal likelihoods (see Details).}
 
@@ -120,16 +124,48 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{spobj}{An object of class \code{sp} or \code{spacetime}.}
 
  \item{spdata}{Character; the name of data in the \code{sp} or \code{spacetime} object.}
+
+
+ \item{independence_start}{Logical; if \code{TRUE} (default), \code{GeoFit2}
+ attempts a preliminary marginal fit under spatial independence before the final
+ fit. The preliminary fit is skipped when the requested fit already has
+ \code{type="Independence"} or when the correlation model is bivariate.}
+
+ \item{independence_optimizer}{String; optimizer used only for the preliminary
+ independence fit. Default is \code{"Nelder-Mead"}. The optimizer used for the
+ final fit is still specified by \code{optimizer}.}
+
+ \item{warn_independence_failure}{Logical; if \code{TRUE} (default), a warning
+ is issued when the preliminary independence fit is unavailable or fails. In
+ that case the supplied \code{start} values are used unchanged.}
 }
 \details{
- The function \code{GeoFit2} is similar to \code{\link{GeoFit}}.
- However, \code{GeoFit2} performs a preliminary estimation using maximum independence composite likelihood
- for the marginal parameters of the model and then uses the obtained estimates as starting values in the final
- weighted composite likelihood estimation (that includes both marginal and dependence parameters).
- This provides robust starting values for the marginal parameters in the optimization algorithm.
+ \code{GeoFit2} does not implement a second fitting engine. It is a wrapper
+ around the canonical \code{\link{GeoFit}} function.
 
- Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
- controls the thinning scheme (default \code{"bernoulli"}).
+ When \code{independence_start=TRUE}, the function first constructs a
+ preliminary call to \code{GeoFit} with \code{likelihood="Marginal"} and
+ \code{type="Independence"}. The preliminary fit estimates the marginal
+ parameters available for the selected model. Only parameters whose names occur
+ both in the preliminary estimates and in the user-supplied \code{start} list
+ are replaced. Dependence parameters and all unmatched starting values are left
+ unchanged.
+
+ The final model is then fitted by calling \code{GeoFit} with the original
+ requested likelihood, likelihood-object type, optimizer, bounds, pair-selection
+ settings, and the updated starting values. Consequently, the objective function,
+ parameter constraints, and returned standard \code{GeoFit} components are the
+ same as in a direct call to \code{GeoFit}; only the starting values may differ.
+
+ The preliminary initialization is skipped for bivariate correlation models and
+ when \code{type="Independence"}. If an independence likelihood is not
+ implemented for the selected model, or if the preliminary optimization fails,
+ the final fit still proceeds using the supplied starting values. This behavior
+ can be controlled with \code{warn_independence_failure}.
+
+ Stochastic thinning of nearest-neighbor pairs in the final fit can be enabled
+ through \code{p_neighb < 1}; \code{thin_method} specifies the thinning
+ scheme.
 }
 \value{
  Returns an object of class \code{GeoFit}.
@@ -167,6 +203,15 @@ GeoFit2(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{varcov}{The variance-covariance matrix of the estimates.}
  \item{type}{The type of the likelihood objects.}
  \item{X}{The matrix of covariates.}
+ \item{start_original}{The named list of starting values supplied by the user.}
+ \item{start_used}{The named list of starting values passed to the final
+ \code{GeoFit} call after any successful marginal initialization.}
+ \item{independence_fit}{The preliminary independence \code{GeoFit} object, or
+ \code{NULL} when the preliminary fit was skipped or failed.}
+ \item{independence_start_message}{A character string describing why the
+ preliminary initialization was unavailable or failed, or \code{NULL} when no
+ such message was generated.}
+
 }
 
 \references{
@@ -239,7 +284,7 @@ start<-list(mean=mean,mean1=mean1,scale=scale,sill=sill)
 ### 
 ###############################################################
 fit1 <- GeoFit2(data=data,coordx=coords,corrmodel=corrmodel, 
- optimizer="BFGS",neighb=3,likelihood="Conditional",
+ neighb=3,likelihood="Conditional",
  type="Pairwise", start=start,fixed=fixed,X=X)
 print(fit1)
 
