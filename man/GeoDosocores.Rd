@@ -4,8 +4,7 @@
 \title{
 Computation of drop-one predictive scores}
 \description{
- The function computes RMSE, MAE, LSCORE, CRPS predictive scores based on drop-one 
-prediction for a spatial, spatiotemporal and bivariate Gaussian random fields}
+ The function computes RMSE, MAE, MAD, logarithmic score and CRPS from exact drop-one linear-prediction identities based on a \code{GeoCovmatrix} object.}
 \usage{
 GeoDoScores(data, method="cholesky", matrix)
 }
@@ -14,22 +13,22 @@ GeoDoScores(data, method="cholesky", matrix)
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) 
  or a a(\eqn{t \times d}{t x d})-matrix (a single spatio-temporal realisation).
  or a a(\eqn{2 \times d}{2 x d})-matrix (a single bivariate realisation).}
- \item{method}{String; the type of matrix decomposition used in the computation of the predictive scores. Default is \code{cholesky}. The other possible choices is \code{svd}.} 
+ \item{method}{String; matrix decomposition used for dense covariance matrices. Possible values are \code{"cholesky"} (default) and \code{"svd"}. Sparse covariance matrices use the sparse Cholesky path and therefore require \code{"cholesky"}.} 
  \item{matrix}{An object returned by \code{\link{GeoCovmatrix}}.}
 }
 
 \details{
- For a given covariance matrix object (\code{\link{GeoCovmatrix}})
- and a given spatial, spatiotemporal or bivariare realization
- from a Gaussian random field,
- the function computes four predictive scores based on drop-one prediction.}
+ Let \eqn{Q=\Sigma^{-1}} and let \eqn{r} denote the data after subtraction of the model mean. The drop-one residual and conditional variance are computed without repeatedly refitting the model:
+ \deqn{e_i^{(-i)} = (Qr)_i/Q_{ii}, \qquad v_i^{(-i)}=1/Q_{ii}.}
+ The standardized residual is \eqn{z_i=(Qr)_i/\sqrt{Q_{ii}}}. The logarithmic score uses \eqn{\frac{1}{2}\{\log(2\pi v_i^{(-i)})+z_i^2\}}, and the Gaussian CRPS uses its standard closed-form expression with the normal density \eqn{\phi} and distribution function \eqn{\Phi}. The SVD path solves the linear system through the SVD itself rather than passing an SVD object to triangular solvers.}
 
 \value{
  Returns a list containing the following information:
  \item{RMSE}{Root-mean-square error predictive score}
- \item{MAE}{Mean absolute error predictive score}
- \item{LSCORE}{Logarithmic predictive score}
- \item{CRPS}{Continuous ranked probability predictive score}
+ \item{MAE}{Mean absolute drop-one prediction error.}
+ \item{MAD}{Median absolute drop-one prediction error.}
+ \item{LSCORE}{Mean Gaussian negative log predictive density for the drop-one predictions.}
+ \item{CRPS}{Mean Gaussian continuous ranked probability score for the drop-one predictions.}
 }
 
 

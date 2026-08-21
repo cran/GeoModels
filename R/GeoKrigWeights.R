@@ -24,7 +24,7 @@ GeoKrigWeights <- function(
   weights_orientation <- "nobs_by_nloc"
 
   method <- gsub("[[:blank:]]", "", method)
-  model <- gsub("[[:blank:]]", "", model)
+  model <- .GeoPredictionCanonicalModel(gsub("[[:blank:]]", "", model))
   corrmodel <- gsub("[[:blank:]]", "", corrmodel)
   distance <- gsub("[[:blank:]]", "", distance)
 
@@ -43,16 +43,40 @@ GeoKrigWeights <- function(
   ## for Gaussian latent weights, so do not silently return approximate/wrong
   ## weights for models whose cross-covariance requires model-specific code.
   if (!identical(model, "Gaussian")) {
-    stop("GeoKrigWeights_updated currently supports model = 'Gaussian' reliably. ",
-         "Use the original full model-specific version for non-Gaussian weights, ",
-         "or extend this function model by model.")
+    stop("GeoKrigWeights currently returns validated weights only for model = 'Gaussian'. ",
+         "For non-Gaussian prediction use GeoKrig() or GeoKrigloc().", call. = FALSE)
   }
   if (!is.null(copula)) {
-    stop("GeoKrigWeights_updated currently supports copula = NULL only. ",
-         "For conditional simulation with copulas, call it on the latent Gaussian scale.")
+    stop("GeoKrigWeights currently requires copula = NULL; conditional-simulation ",
+         "code must request weights on the latent Gaussian scale.", call. = FALSE)
   }
   if (bivariate && !(which == 1 || which == 2)) {
     stop("which parameter must be 1 or 2")
+  }
+
+  if (spacetime && !is.null(coordx_dyn)) {
+    coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+      coordx_dyn, coordt = coordt, context = "GeoKrigWeights"
+    )
+    .GeoValidateDynamicRows(X, coordx_dyn, name = "X",
+                            context = "GeoKrigWeights")
+  }
+
+  biv_info <- NULL
+  if (bivariate) {
+    biv_info <- .GeoBivariateCoordinateInfo(
+      coordx = coordx, coordy = coordy, coordz = coordz,
+      coordx_dyn = coordx_dyn, grid = grid,
+      context = "GeoKrigWeights"
+    )
+    if (biv_info$dynamic) {
+      coordx_dyn <- biv_info$blocks
+      coordx <- coordy <- coordz <- NULL
+    }
+    if (!is.null(X)) {
+      X <- .GeoBivariateDesign(X, biv_info$ns,
+                               context = "GeoKrigWeights")
+    }
   }
 
   ## Location matrix
@@ -65,18 +89,42 @@ GeoKrigWeights <- function(
     stop("loc parameter must be a matrix N x 2 or N x 3")
   }
 
+
+  .GeoValidate3D(
+    coordx = coordx, coordy = coordy, coordz = coordz,
+    coordx_dyn = coordx_dyn, distance = distance, grid = grid,
+    context = "GeoKrigWeights"
+  )
+  .GeoValidate3D(
+    coordx = loc, distance = distance, grid = FALSE,
+    context = "GeoKrigWeights prediction locations"
+  )
+  .GeoValidateCoordinateCompatibility(
+    coordx = coordx, coordy = coordy, coordz = coordz,
+    coordx_dyn = coordx_dyn, loc = loc, context = "GeoKrigWeights"
+  )
+
   if (spacetime && is.null(time)) {
     stop("At least one temporal instant is needed for space-time kriging\n")
   }
   if (is.null(time)) time <- 0
 
-  ## X/Xloc checks.  They are mostly irrelevant for simple Gaussian covariance
-  ## weights, but keeping them coherent avoids hidden dimension bugs when the
-  ## object is passed downstream.
-  if (!is.null(X) && !is.matrix(X)) X <- as.matrix(X)
-  if (!is.null(Xloc)) {
-    if (is.vector(Xloc)) Xloc <- matrix(Xloc, nrow = 1) else Xloc <- as.matrix(Xloc)
-  }
+  ## Mean inputs are normalized after dimat/dimat2 are known.
+  if (!is.null(X) && !is.matrix(X) && !is.list(X)) X <- as.matrix(X)
+  Mobs <- if (!bivariate) .GeoMean_external(param) else NULL
+  if (!is.null(Mobs) && !is.null(X))
+    stop("A fixed observation mean and X cannot be used together.")
+  if (!is.null(Mloc) && !is.null(Xloc))
+    stop("Use either Mloc or Xloc, not both.")
+  if (!is.null(Mobs) && is.null(Mloc))
+    stop("Mloc is required when the observation mean is supplied as a vector.")
+  if (!is.null(X) && is.null(Xloc) && is.null(Mloc))
+    stop("Xloc or Mloc is required when X is supplied.")
+  if (is.null(X) && !is.null(Xloc))
+    stop("X must be supplied when Xloc is used.")
+  if (is.null(X) && is.null(Mobs) &&
+      length(setdiff(.GeoMean_supplied_names(param), "mean")))
+    stop("Parameters mean1, mean2, ... require an explicit design matrix X; without X the mean is intercept-only.")
 
   ## Prediction locations in the metric used by Corr_c.
   ## GeoCovmatrix handles the observed covariance.  For the cross-covariance we
@@ -105,10 +153,12 @@ GeoKrigWeights <- function(
   ############################################################################
   ## Build covariance matrix at observed sites
   ############################################################################
+  param_cov <- param
+  if (!is.null(Mobs)) param_cov$mean <- 0
   covmatrix <- GeoCovmatrix(
     coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
     coordx_dyn = coordx_dyn, corrmodel = corrmodel, distance = distance,
-    grid = grid, model = model, n = n, param = param,
+    grid = grid, model = model, n = n, param = param_cov,
     anisopars = anisopars, radius = radius, sparse = sparse,
     copula = copula, X = X
   )
@@ -122,23 +172,44 @@ GeoKrigWeights <- function(
   }
   dimat2 <- numloc * tloc
 
-  if (is.null(X)) {
-    X <- covmatrix$X
-  } else {
-    X <- as.matrix(X)
-    if (nrow(X) != dimat) stop("X has wrong number of rows")
-  }
+  if (!bivariate) {
+    if (is.null(X)) X <- covmatrix$X
+    X <- .GeoMean_design(X, n = dimat, name = "X")
+    p_mean <- ncol(X)
+    invisible(.GeoMean_beta(param_cov, p_mean))
+    if (!is.null(Mobs) && length(Mobs) != dimat)
+      stop("The fixed observation mean must have one value per observation.")
 
-  if (is.null(Xloc)) {
-    if (!is.null(X) && ncol(as.matrix(X)) > 1L) {
-      stop("Xloc is missing but X has more than one column")
+    if (!is.null(Mloc)) {
+      if (!is.numeric(Mloc) || any(!is.finite(Mloc)))
+        stop("Mloc must be finite and numeric.")
+      Mloc <- as.numeric(Mloc)
+      if (length(Mloc) == 1L) Mloc <- rep(Mloc, dimat2)
+      if (length(Mloc) != dimat2)
+        stop("Mloc must have one value per prediction point/time combination.")
+      Xloc <- NULL
+    } else {
+      Xloc <- .GeoMean_design(Xloc, n = dimat2, p = p_mean, name = "Xloc")
     }
-    Xloc <- matrix(1, nrow = dimat2, ncol = 1L)
   } else {
-    Xloc <- as.matrix(Xloc)
-    if (nrow(Xloc) != dimat2) stop("Xloc has wrong number of rows")
-    if (!is.null(X) && ncol(Xloc) != ncol(as.matrix(X))) {
-      stop("Xloc and X must have the same number of columns")
+    X <- .GeoBivariateDesign(
+      if (is.null(X)) covmatrix$X else X,
+      covmatrix$ns, context = "GeoKrigWeights"
+    )
+    p_mean <- ncol(X)
+    invisible(.GeoBivariateValidateMeanParameters(
+      covmatrix$param, p_mean, context = "GeoKrigWeights"
+    ))
+    if (!is.null(Mloc)) {
+      if (!is.numeric(Mloc) || any(!is.finite(Mloc)))
+        stop("Mloc must be finite and numeric.")
+      Mloc <- as.numeric(Mloc)
+      if (length(Mloc) == 1L) Mloc <- rep(Mloc, dimat2)
+      if (length(Mloc) != dimat2)
+        stop("Mloc must have one value per prediction location.")
+      Xloc <- NULL
+    } else {
+      Xloc <- .GeoMean_design(Xloc, n = dimat2, p = p_mean, name = "Xloc")
     }
   }
 
@@ -203,7 +274,7 @@ GeoKrigWeights <- function(
   corrparam <- covmatrix$param[covmatrix$namescorr]
 
   if (!(covmatrix$model %in% c(1))) {
-    stop("Internal error: this updated function is restricted to Gaussian model code")
+    stop("Internal error: GeoKrigWeights is restricted to Gaussian model code.", call. = FALSE)
   }
 
   cc_call <- dotCall64::.C64(
@@ -228,11 +299,8 @@ GeoKrigWeights <- function(
   rho <- cc_call$corri
 
   if (bivariate) {
-    vvar <- if (which == 1L) {
-      covmatrix$param["sill_1"] + covmatrix$param["nugget_1"]
-    } else {
-      covmatrix$param["sill_2"] + covmatrix$param["nugget_2"]
-    }
+    ## Corr_c evaluates the bivariate covariance model directly.  The returned
+    ## vector already includes marginal sills and cross-covariance scaling.
     corri <- rho
   } else {
     nug <- as.numeric(covmatrix$param["nugget"])
@@ -243,7 +311,11 @@ GeoKrigWeights <- function(
     vvar <- sill
   }
 
-  CC <- matrix(corri * as.numeric(vvar), nrow = dimat, ncol = dimat2)
+  CC <- if (bivariate) {
+    matrix(corri, nrow = dimat, ncol = dimat2)
+  } else {
+    matrix(corri * as.numeric(vvar), nrow = dimat, ncol = dimat2)
+  }
   if (nrow(CC) != dimat || ncol(CC) != dimat2) {
     stop("Wrong dimension of cross-covariance matrix CC")
   }
@@ -268,10 +340,13 @@ GeoKrigWeights <- function(
     coordx = covmatrix$coordx,
     coordy = covmatrix$coordy,
     coordz = covmatrix$coordz,
+    coordx_dyn = covmatrix$coordx_dyn,
     bivariate = bivariate,
     spacetime = covmatrix$spacetime,
     param = covmatrix$param,
     xloc = Xloc,
+    Mloc = Mloc,
+    mean_obs = Mobs,
     tloc = tloc,
     loc = loc,
     loc_metric = loc_metric,

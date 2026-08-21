@@ -1,5 +1,55 @@
 #include "header.h"
 
+/* Small process/thread-local caches for constants that depend only on the
+   current correlation parameters. Correlations and lags are never cached. */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define CORRFCT_TLS _Thread_local
+#else
+#define CORRFCT_TLS
+#endif
+
+typedef struct {
+    int valid;
+    int kind;
+    double power;
+    double smooth;
+    double factor;
+} ReparamScaleContext;
+
+static CORRFCT_TLS ReparamScaleContext reparam_scale_ctx[4];
+static CORRFCT_TLS unsigned int reparam_scale_next_ctx = 0U;
+
+static inline double get_reparam_scale_factor(int kind, double power, double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (reparam_scale_ctx[i].valid &&
+            reparam_scale_ctx[i].kind == kind &&
+            reparam_scale_ctx[i].power == power &&
+            reparam_scale_ctx[i].smooth == smooth)
+            return reparam_scale_ctx[i].factor;
+    }
+
+    ReparamScaleContext *ctx = &reparam_scale_ctx[reparam_scale_next_ctx];
+    reparam_scale_next_ctx = (reparam_scale_next_ctx + 1U) & 3U;
+    ctx->valid = 1;
+    ctx->kind = kind;
+    ctx->power = power;
+    ctx->smooth = smooth;
+
+    if (kind == 1) {
+        /* GenWend_Matern: same expression previously evaluated per pair. */
+        ctx->factor = exp((lgammafn(2.0 * smooth + power + 1.0) -
+                           lgammafn(power)) / (1.0 + 2.0 * smooth));
+    } else {
+        /* Hypergeometric_Matern: same expression previously evaluated per pair. */
+        ctx->factor = exp((lgammafn((power + 1.0) / 2.0 + smooth) +
+                           lgammafn((power + 3.0) / 2.0 + 2.0 * smooth) -
+                           lgamma((power + 2.0) / 2.0 + smooth) -
+                           lgamma(power / 2.0)) / (1.0 + 2.0 * smooth));
+    }
+    return ctx->factor;
+}
+
 // check the validity of the parameters' range:
 double CheckCor(int *cormod, double *par)
 {
@@ -62,14 +112,28 @@ double CheckCor(int *cormod, double *par)
       
             if(scale<=0 ||smooth<-0.5||R_power1>(1.5+smooth) ) rho=-2;
       break;
-          case 26: // Generalised wendland hole
-          case 29:  
-               R_power1=par[0];
-        scale=par[1];
-        smooth=par[2];
-       //if(scale<=0 ||  R_power1>(1.5+smooth) ||smooth<0) rho=-2;
-      
-            if(scale<=0 ||smooth<-0.5||R_power1>(3.5+smooth) ) rho=-2;
+          case 26: // Generalised Wendland hole: GW_{a,xi,nu,d,k}
+        /* Package mapping: power1 = k, power2 = nu, scale = a, smooth = xi.
+           In d=2 the paper requires k in N, xi > -1/2 and
+           nu >= nu_min(xi, 2+2k) = xi + 3/2 + k. */
+        R_power=par[0];
+        R_power1=par[1];
+        scale=par[2];
+        smooth=par[3];
+        if(scale<=0 || smooth<=-0.5 || R_power<0 ||
+           fabs(R_power-nearbyint(R_power))>1e-10 ||
+           R_power1 < smooth + 1.5 + nearbyint(R_power)) rho=-2;
+      break;
+          case 29: // Reparameterized hole GW_{nu*a,xi-1/2,nu,d,k}
+        /* Here the public smooth parameter is xi, while CorFct() evaluates
+           the original family at xi-1/2 and support nu*a. */
+        R_power=par[0];
+        R_power1=par[1];
+        scale=par[2];
+        smooth=par[3];
+        if(scale<=0 || smooth<=0 || R_power<0 ||
+           fabs(R_power-nearbyint(R_power))>1e-10 ||
+           R_power1 < smooth + 1.0 + nearbyint(R_power)) rho=-2;
       break;
            case 27: // Matern hole
                R_power1=par[0];
@@ -233,7 +297,7 @@ double CheckCor(int *cormod, double *par)
         scale_t=par[4];
         sep=par[5];
         smooth=par[6];
-   if(scale_s<=0||scale_t<=0 || R_power<(2.5+2*smooth) || R_power_s>2|| R_power_s<0||sep<0 ||sep >1|| R_power_s<(3.5+smooth)||smooth<0)  rho=-2;
+   if(scale_s<=0||scale_t<=0 || R_power<(2.5+2*smooth) || R_power_s>2|| R_power_s<0||sep<0 ||sep >1|| R_power_t<(3.5+smooth)||smooth<0)  rho=-2;
     break;
          case 89:
         scale_s=par[0];
@@ -618,9 +682,7 @@ case 23: // hyperg correlation  parameter with matern my version
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
-        sep=exp(  (lgammafn((R_power1+1)/2+smooth)+lgammafn((R_power1+2+1)/2+2*smooth)
-                       -lgamma((R_power1+2)/2+smooth)-lgamma(R_power1/2) )/ (1+2*smooth) 
-               );
+        sep=get_reparam_scale_factor(2, R_power1, smooth);
   rho=CorFunHyperg(h,R_power1, smooth, 2*scale*sep);
         break;
  case 30: // hyperg correlation  parameter with matern emery version
@@ -677,7 +739,7 @@ case 23: // hyperg correlation  parameter with matern my version
         R_power1=1/par[0];
         scale=par[1];
         smooth=par[2];
-        sep=exp(  (lgammafn(2*smooth+R_power1+1)-lgammafn(R_power1))/ (1+2*smooth) );
+        sep=get_reparam_scale_factor(1, R_power1, smooth);
         rho=CorFunW_gen(h, R_power1, smooth,  scale * sep);
         break;  
      case 7: // emery second parametrization
@@ -1839,14 +1901,6 @@ double CorFunGenCauchy2(double lag, double R_power1, double R_power2, double sca
 }
 
 
-double CorFunWitMatCau(double h, double scale12,double smo12)
-{
-double C,B,dd=h*h;
-B=1/bessel_k(1,smo12,1);
-C=R_pow(1+dd/(scale12),-smo12/2)*bessel_k(sqrt(1+dd/(scale12)),smo12,1);
-return(C*B);
-}
-
 
 
 double CorFunGenWitMatCau(double h, double scale,double smoo,double beta)
@@ -1876,23 +1930,7 @@ double CorFunStable(double lag, double R_power, double scale)
   rho=exp(-R_pow(lag/scale,R_power));
   return rho;
 }
-// Double Stable class of correlation models:
-/*double CorFunDobStable(double lag, double R_power_s, double R_power_t, double scale_s, double scale_t, double tsep)
-{
-  double rho=0.0;
-  // Computes the correlation:
-  rho=exp(-R_pow(lag/scale_s,R_power_s)-R_pow(tsep/scale_t,R_power_t));
-  return rho;
-  }*/
-// Sferical class of correlation models:
-double CorFunSferical(double lag, double scale)
-{
-    double rho=0.0,x=0;
-    x=lag/scale;
-   if(x<=1) {rho=  R_pow(1-x,2)*(1+x/2);}   else {rho=0;}
-   // if(x<=1) {rho=1-1.5 * x+ 0.5 * R_pow(x,3);}  else {rho=0;}
-  return rho;
-}
+
 
 // Wave  correlation model:
 double CorFunWave(double lag, double scale)
@@ -1945,6 +1983,40 @@ double CorFunWitMat(double lag, double scale, double smooth)
 }*/
 
 
+/* Small parameter-only cache used by correlation kernels. */
+typedef struct {
+    int valid;
+    double smooth;
+    int is_half_integer;
+    int k;
+    double log_den;
+} MaternKernelContext;
+
+static CORRFCT_TLS MaternKernelContext matern_corr_ctx[4];
+static CORRFCT_TLS unsigned int matern_corr_next_ctx = 0U;
+
+static inline const MaternKernelContext *get_matern_context(double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (matern_corr_ctx[i].valid &&
+            matern_corr_ctx[i].smooth == smooth)
+            return &matern_corr_ctx[i];
+    }
+
+    MaternKernelContext *ctx = &matern_corr_ctx[matern_corr_next_ctx];
+    matern_corr_next_ctx = (matern_corr_next_ctx + 1U) & 3U;
+
+    double k_real = smooth - 0.5;
+    double k_round = round(k_real);
+
+    ctx->valid = 1;
+    ctx->smooth = smooth;
+    ctx->is_half_integer = fabs(k_real - k_round) < 1e-10;
+    ctx->k = (int)k_round;
+    ctx->log_den = (smooth - 1.0) * log(2.0) + lgammafn(smooth);
+    return ctx;
+}
+
 // Whittle–Matérn correlation function (ibrida)
 
 
@@ -1961,30 +2033,25 @@ double CorFunWitMat(double lag, double scale, double smooth)
     if (a < 1e-12)
         return 1.0;
 
-    // ---- check half-integer ν = k + 1/2 ----
-    double k_real = smooth - 0.5;
-    double k_round = round(k_real);
-    int is_half_integer = fabs(k_real - k_round) < 1e-10;
-    int k = (int)k_round;
+    const MaternKernelContext *ctx = get_matern_context(smooth);
 
-    if (is_half_integer)
+    if (ctx->is_half_integer)
     {
-        if (k == 0)
+        if (ctx->k == 0)
             return exp(-a);
-        if (k == 1)
+        if (ctx->k == 1)
             return exp(-a) * (1.0 + a);
-        if (k == 2)
+        if (ctx->k == 2)
             return exp(-a) * (1.0 + a + (a * a) / 3.0);
-        if (k == 3)
+        if (ctx->k == 3)
             return exp(-a) * (1.0 + a + 0.4 * a * a + (a * a * a) / 15.0);
     }
 
-    // ---- general case ----
+    // General case: only the lag-dependent Bessel term remains in the pair loop.
     double log_besselk = log(bessel_k(a, smooth, 2));  // scaled: e^a Kν(a)
     double log_num = smooth * log(a) + log_besselk - a;
-    double log_den = (smooth - 1.0) * log(2.0) + log(gammafn(smooth));
 
-    return exp(log_num - log_den);
+    return exp(log_num - ctx->log_den);
 }
 
 
@@ -2056,6 +2123,87 @@ double CorFunW2(double lag, double scale, double smoo)
 }
 
 
+typedef struct {
+    int valid;
+    double beta;
+    double gamma;
+    double smooth;
+    double a;
+    double b;
+    double c;
+    double log_norm;
+    double exponent;
+} Hyperg2KernelContext;
+
+static CORRFCT_TLS Hyperg2KernelContext hyperg2_corr_ctx[4];
+static CORRFCT_TLS unsigned int hyperg2_corr_next_ctx = 0U;
+
+static inline const Hyperg2KernelContext *get_hyperg2_context(double beta,
+                                                               double gamma,
+                                                               double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (hyperg2_corr_ctx[i].valid &&
+            hyperg2_corr_ctx[i].beta == beta &&
+            hyperg2_corr_ctx[i].gamma == gamma &&
+            hyperg2_corr_ctx[i].smooth == smooth)
+            return &hyperg2_corr_ctx[i];
+    }
+
+    Hyperg2KernelContext *ctx = &hyperg2_corr_ctx[hyperg2_corr_next_ctx];
+    hyperg2_corr_next_ctx = (hyperg2_corr_next_ctx + 1U) & 3U;
+    ctx->valid = 1;
+    ctx->beta = beta;
+    ctx->gamma = gamma;
+    ctx->smooth = smooth;
+    ctx->a = beta - smooth;
+    ctx->b = gamma - smooth;
+    ctx->c = beta - smooth + gamma - 1.0;
+    ctx->log_norm = lgammafn(beta - 1.0) + lgammafn(gamma - 1.0) -
+                    lgammafn(ctx->c) - lgammafn(smooth - 1.0);
+    ctx->exponent = ctx->c - 1.0;
+    return ctx;
+}
+
+typedef struct {
+    int valid;
+    double power;
+    double smooth;
+    double a;
+    double b;
+    double c;
+    double log_norm;
+    double exponent;
+} HypergKernelContext;
+
+static CORRFCT_TLS HypergKernelContext hyperg_corr_ctx[4];
+static CORRFCT_TLS unsigned int hyperg_corr_next_ctx = 0U;
+
+static inline const HypergKernelContext *get_hyperg_context(double power,
+                                                             double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (hyperg_corr_ctx[i].valid &&
+            hyperg_corr_ctx[i].power == power &&
+            hyperg_corr_ctx[i].smooth == smooth)
+            return &hyperg_corr_ctx[i];
+    }
+
+    HypergKernelContext *ctx = &hyperg_corr_ctx[hyperg_corr_next_ctx];
+    hyperg_corr_next_ctx = (hyperg_corr_next_ctx + 1U) & 3U;
+    ctx->valid = 1;
+    ctx->power = power;
+    ctx->smooth = smooth;
+    ctx->a = power / 2.0;
+    ctx->b = (power + 2.0) / 2.0 + smooth;
+    ctx->c = power + 1.5 + 2.0 * smooth;
+    ctx->log_norm = lgammafn(smooth + (power + 1.0) / 2.0) +
+                    lgammafn(2.0 * smooth + (power + 3.0) / 2.0) -
+                    lgammafn(ctx->c) - lgammafn(smooth + 0.5);
+    ctx->exponent = power + 0.5 + 2.0 * smooth;
+    return ctx;
+}
+
 double CorFunHyperg2(double lag, double R_power, double R_power1, double smooth, double scale)
 {
     const double d = 2.0;
@@ -2065,24 +2213,13 @@ double CorFunHyperg2(double lag, double R_power, double R_power1, double smooth,
     if (x <= epsilon) return 1.0;
     if (x >= 1.0)     return 0.0;
 
-    double beta = R_power;
-    double gamma = R_power1;
-    double a = beta - smooth;
-    double b = gamma - smooth;
-    double c = beta - smooth + gamma - d / 2.0;
-
-    double logg1 = lgammafn(beta - d / 2.0);
-    double logg2 = lgammafn(gamma - d / 2.0);
-    double logg3 = lgammafn(c);
-    double logg4 = lgammafn(smooth - d / 2.0);
-
+    (void)d;
+    const Hyperg2KernelContext *ctx = get_hyperg2_context(R_power, R_power1, smooth);
     double one_minus_x2 = 1.0 - x * x;
-    double pow_term = R_pow(one_minus_x2, c - 1.0);  // usa R_pow se preferisci la tua funzione
+    double pow_term = R_pow(one_minus_x2, ctx->exponent);
+    double hyperg = hypergeo2(ctx->a, ctx->b, ctx->c, one_minus_x2);
 
-    double hyperg = hypergeo2(a, b, c, one_minus_x2);
-
-    double rho = exp(logg1 + logg2 - logg3 - logg4) * pow_term * hyperg;
-    return rho;
+    return exp(ctx->log_norm) * pow_term * hyperg;
 }
 
 double CorFunHyperg(double lag, double R_power, double smooth, double scale)
@@ -2094,28 +2231,115 @@ double CorFunHyperg(double lag, double R_power, double smooth, double scale)
     if (x <= epsilon) return 1.0;
     if (x >= 1.0)     return 0.0;
 
+    (void)d;
     double x2 = x * x;
     double one_minus_x2 = 1.0 - x2;
+    const HypergKernelContext *ctx = get_hyperg_context(R_power, smooth);
+    double log_term1 = log(one_minus_x2) * ctx->exponent;
+    double hyperg = hypergeo2(ctx->a, ctx->b, ctx->c, one_minus_x2);
 
-    double rp_half = R_power / 2.0;
-    double rp_d_half_smooth = (R_power + d) / 2.0 + smooth;
-    double rp_d1_half_2smooth = R_power + (d + 1.0) / 2.0 + 2.0 * smooth;
-
-    // log-gamma
-    double logg1 = lgammafn(smooth + (R_power + 1.0) / 2.0);
-    double logg2 = lgammafn(2.0 * smooth + (d + R_power + 1.0) / 2.0);
-    double logg3 = lgammafn(rp_d1_half_2smooth);
-    double logg4 = lgammafn(smooth + 0.5);
-
-    double exponent = R_power + (d - 1.0) / 2.0 + 2.0 * smooth;
-    double log_term1 = log(one_minus_x2) * exponent;
-
-    double hyperg = hypergeo2(rp_half, rp_d_half_smooth, rp_d1_half_2smooth, one_minus_x2);
-
-    double log_rho = logg1 + logg2 - logg3 - logg4 + log_term1;
-    return exp(log_rho) * hyperg;
+    return exp(ctx->log_norm + log_term1) * hyperg;
 }
 
+
+/* Parameter-only caches for correlation kernels.
+   GeoFit evaluates the same kernel for many lags at a fixed parameter vector.
+   Keep only constants that do not depend on the lag; correlations themselves
+   are never cached here. Four tiny slots also cover the three parameter sets
+   used by bivariate correlation models without changing the public API. */
+typedef struct {
+    int valid;
+    double power;
+    double smooth;
+    int is_integer;
+    int k;
+    double norm;
+    double hyper_a;
+    double hyper_b;
+    double hyper_c;
+    double exponent;
+    double Lk;
+    double cj0;
+} GenWendKernelContext;
+
+static CORRFCT_TLS GenWendKernelContext genwend_ctx[4];
+static CORRFCT_TLS unsigned int genwend_next_ctx = 0U;
+
+static inline const GenWendKernelContext *get_genwend_context(double power, double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (genwend_ctx[i].valid &&
+            genwend_ctx[i].power == power &&
+            genwend_ctx[i].smooth == smooth)
+            return &genwend_ctx[i];
+    }
+
+    GenWendKernelContext *ctx = &genwend_ctx[genwend_next_ctx];
+    genwend_next_ctx = (genwend_next_ctx + 1U) & 3U;
+
+    double intpart;
+    ctx->valid = 1;
+    ctx->power = power;
+    ctx->smooth = smooth;
+    ctx->is_integer = (fabs(modf(smooth, &intpart)) < 1e-10);
+    ctx->k = (int)(smooth + 0.5);
+    ctx->norm = 0.0;
+    ctx->hyper_a = 0.0;
+    ctx->hyper_b = 0.0;
+    ctx->hyper_c = 0.0;
+    ctx->exponent = 0.0;
+    ctx->Lk = 0.0;
+    ctx->cj0 = 0.0;
+
+    if (ctx->is_integer) {
+        if (ctx->k >= 4) {
+            ctx->Lk = exp(ctx->k * M_LN2 + lgammafn(ctx->k + 1.0) -
+                          lgammafn(2.0 * ctx->k + 1.0));
+            ctx->cj0 = exp(lgammafn(2.0 * ctx->k + power + 1.0) -
+                           lgammafn(ctx->k + power + 1.0));
+        }
+    } else {
+        ctx->norm = exp(lgammafn(smooth) +
+                        lgammafn(2.0 * smooth + power + 1.0) -
+                        lgammafn(2.0 * smooth) -
+                        lgammafn(smooth + power + 1.0)) *
+                    R_pow(2.0, -power - 1.0);
+        ctx->hyper_a = power / 2.0;
+        ctx->hyper_b = (power + 1.0) / 2.0;
+        ctx->hyper_c = smooth + power + 1.0;
+        ctx->exponent = smooth + power;
+    }
+
+    return ctx;
+}
+
+typedef struct {
+    int valid;
+    double power;
+    double smooth;
+    double norm;
+} KummerKernelContext;
+
+static CORRFCT_TLS KummerKernelContext kummer_corr_ctx[4];
+static CORRFCT_TLS unsigned int kummer_corr_next_ctx = 0U;
+
+static inline double get_kummer_normalizer(double power, double smooth)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (kummer_corr_ctx[i].valid &&
+            kummer_corr_ctx[i].power == power &&
+            kummer_corr_ctx[i].smooth == smooth)
+            return kummer_corr_ctx[i].norm;
+    }
+
+    KummerKernelContext *ctx = &kummer_corr_ctx[kummer_corr_next_ctx];
+    kummer_corr_next_ctx = (kummer_corr_next_ctx + 1U) & 3U;
+    ctx->valid = 1;
+    ctx->power = power;
+    ctx->smooth = smooth;
+    ctx->norm = exp(lgammafn(smooth + power) - lgammafn(smooth));
+    return ctx->norm;
+}
 
 /* Optimized Wendland correlation function */
 /* generalized wendland function*/
@@ -2135,12 +2359,11 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
     if (x >= 1.0)
         return 0.0;
 
-    double intpart;
-    int is_integer = (fabs(modf(smooth, &intpart)) < 1e-10);
-    int k = (int)(smooth + 0.5);
+    const GenWendKernelContext *ctx = get_genwend_context(R_power1, smooth);
+    const int k = ctx->k;
 
-    // 1) Casi piccoli hard-coded
-    if (is_integer)
+    // 1) Small integer cases are kept in closed form.
+    if (ctx->is_integer)
     {
         if (k == 0)
             return R_pow(1.0 - x, R_power1);
@@ -2168,26 +2391,16 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
         }
     }
 
-    // 2) Caso intero generale (k >= 4): polinomio P_k con ricorrenza corretta
-    if (is_integer)
+    // 2) General integer case (k >= 4). Parameter-only factors are cached.
+    if (ctx->is_integer)
     {
         double mu = R_power1;
         double t = x;
-
-        // L_k = 2^k * k! / (2k)!
-        double logLk = k * M_LN2 + lgammafn(k + 1.0) - lgammafn(2.0 * k + 1.0);
-        double Lk = exp(logLk);
-
-        // c_{0,k}(mu) = Γ(2k+μ+1) / Γ(k+μ+1)
-        double logcj = lgammafn(2.0 * k + mu + 1.0) - lgammafn(k + mu + 1.0);
-        double cj = exp(logcj);
-
-        double sum = cj * R_pow(t, k); // j=0
+        double cj = ctx->cj0;
+        double sum = cj * R_pow(t, k);
 
         for (int j = 1; j <= k; j++)
         {
-            // *** FIX QUI ***
-            // ratio = ((k + j)*(k - j + 1)) / (2*j*(k + j + mu))
             double ratio = ((k + j) * (k - j + 1.0)) / (2.0 * j * (k + j + mu));
             cj *= ratio;
 
@@ -2195,18 +2408,15 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
             sum += cj * term;
         }
 
-        double Pk = Lk * sum;
+        double Pk = ctx->Lk * sum;
         return R_pow(1.0 - x, R_power1 + k) * Pk;
     }
 
-    // 3) Caso non intero: formula generale ipergeometrica
-    return exp(lgammafn(smooth) + lgammafn(2.0 * smooth + R_power1 + 1.0)
-             - lgammafn(2.0 * smooth)
-             - lgammafn(smooth + R_power1 + 1.0))
-         * R_pow(2.0, -R_power1 - 1.0)
-         * R_pow(1.0 - x * x, smooth + R_power1)
-         * hypergeo2(R_power1 / 2.0, (R_power1 + 1.0) / 2.0,
-                     smooth + R_power1 + 1.0, 1.0 - x * x);
+    // 3) Non-integer case. Gamma normalization and hypergeometric parameters
+    // depend only on (power, smooth), so compute them once per parameter set.
+    return ctx->norm
+         * R_pow(1.0 - x * x, ctx->exponent)
+         * hypergeo2(ctx->hyper_a, ctx->hyper_b, ctx->hyper_c, 1.0 - x * x);
 }
 
 
@@ -2260,17 +2470,17 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
 /* kummer function*/
 double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
 {
-  double rho=0.0,x=0.0;
-    x=lag/scale;
-    if(x<1e-32) rho=1;
-    else
-    rho=exp((lgammafn(smooth+R_power)-(lgammafn(smooth))))*kummer(R_power,1-smooth,0.5*x*x);
-    return(rho);
-}    
+    double x = lag / scale;
+    if (x < 1e-32)
+        return 1.0;
+
+    return get_kummer_normalizer(R_power, smooth) *
+           kummer(R_power, 1.0 - smooth, 0.5 * x * x);
+}
 
 
 
-double CorFunWitMathole(double lag, double scale, double smooth, double R_power1)
+static double CorFunWitMathole_baseline(double lag, double scale, double smooth, double R_power1)
 {
     double rho = 0.0;
     double d = 2.0;
@@ -2443,59 +2653,501 @@ double CorFunWitMathole(double lag, double scale, double smooth, double R_power1
 
 
 
+/* Exact fast path for the most commonly used first two hole orders.  The
+   turning-bands representation reduces to the ordinary Matern and its first
+   two derivatives, so only 2 (k=1) or 3 (k=2) Bessel-K evaluations are
+   needed.  Half-integer smoothness keeps the existing elementary branch. */
+double CorFunWitMathole(double lag, double scale, double smooth, double R_power1)
+{
+    if (scale <= 0.0 || smooth <= 0.0)
+        return CorFunWitMathole_baseline(lag, scale, smooth, R_power1);
+
+    const double x = lag / scale;
+    if (x < 1e-32)
+        return 1.0;
+
+    const int k = (int)R_power1;
+    if (k == 0)
+        return CorFunWitMat(lag, scale, smooth);
+
+    const double half_real = smooth - 0.5;
+    const int is_half_integer = fabs(half_real - floor(half_real)) < 1e-10;
+    if (is_half_integer || (k != 1 && k != 2))
+        return CorFunWitMathole_baseline(lag, scale, smooth, R_power1);
+
+    const MaternKernelContext *ctx = get_matern_context(smooth);
+    const double pref = exp(smooth * log(x) - x - ctx->log_den);
+    const double b0 = bessel_k(x, fabs(smooth), 2);
+    const double b1 = bessel_k(x, fabs(smooth - 1.0), 2);
+    const double c0 = pref * b0;
+    const double c1 = -pref * b1;
+
+    if (k == 1) {
+        const double rho = c0 + 0.5 * x * c1;
+        return R_FINITE(rho) ? rho :
+            CorFunWitMathole_baseline(lag, scale, smooth, R_power1);
+    }
+
+    const double b2 = bessel_k(x, fabs(smooth - 2.0), 2);
+    const double c2 = pref * (b2 - b1 / x);
+    const double rho = c0 + 0.875 * x * c1 + 0.125 * x * x * c2;
+    return R_FINITE(rho) ? rho :
+        CorFunWitMathole_baseline(lag, scale, smooth, R_power1);
+}
+
+
 
 /*******************************************************************************/
 /*******************************************************************************/
 /*******************************************************************************/
+#define GW_HOLE_MAX_K 32
+
+/* Derivatives with respect to x=h/a of the standard generalized Wendland
+ * correlation GW_{a,xi,nu}.  Proposition 2 of the hole-effect construction is
+ * obtained by applying the turning-bands operator to this base correlation in
+ * dimension d+2k.  Working with derivatives of the regular base correlation
+ * avoids the removable Gamma-function poles present in some 3F2 -> 2F1
+ * representations (notably xi = 1/2, 3/2, ...).
+ */
+typedef struct {
+    int valid;
+    double nu;
+    double xi;
+    double exponent;
+    double K;
+    double a0, b0, c0;
+    double h1_factor, h2_factor;
+    double p1_factor, p2_factor;
+} GenWendHoleSmallContext;
+
+static CORRFCT_TLS GenWendHoleSmallContext genwend_hole_small_ctx[4];
+static CORRFCT_TLS unsigned int genwend_hole_small_next_ctx = 0U;
+
+static inline const GenWendHoleSmallContext *get_genwend_hole_small_context(double nu,
+                                                                             double xi)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (genwend_hole_small_ctx[i].valid &&
+            genwend_hole_small_ctx[i].nu == nu &&
+            genwend_hole_small_ctx[i].xi == xi)
+            return &genwend_hole_small_ctx[i];
+    }
+
+    GenWendHoleSmallContext *ctx =
+        &genwend_hole_small_ctx[genwend_hole_small_next_ctx];
+    genwend_hole_small_next_ctx = (genwend_hole_small_next_ctx + 1U) & 3U;
+
+    const double a = nu / 2.0;
+    const double b = (nu + 1.0) / 2.0;
+    const double c = xi + nu + 1.0;
+    const double logK = lgammafn(xi) + lgammafn(2.0 * xi + nu + 1.0) -
+                        lgammafn(2.0 * xi) - lgammafn(xi + nu + 1.0) -
+                        (nu + 1.0) * M_LN2;
+
+    if (!R_FINITE(logK) || c == 0.0 || c == -1.0) {
+        ctx->valid = 0;
+        return NULL;
+    }
+
+    ctx->valid = 1;
+    ctx->nu = nu;
+    ctx->xi = xi;
+    ctx->exponent = xi + nu;
+    ctx->K = exp(logK);
+    ctx->a0 = a;
+    ctx->b0 = b;
+    ctx->c0 = c;
+    ctx->h1_factor = a * b / c;
+    ctx->h2_factor = a * (a + 1.0) * b * (b + 1.0) /
+                     (c * (c + 1.0));
+    ctx->p1_factor = ctx->exponent;
+    ctx->p2_factor = ctx->exponent * (ctx->exponent - 1.0);
+    return ctx;
+}
+
+typedef struct {
+    int valid;
+    double nu;
+    double xi;
+    double A, B, C;
+    double D, E, F;
+    double p;
+    double L;
+    double H1_factor, H2_factor;
+    double G1_factor, G2_factor;
+} GenWendHoleConnectionContext;
+
+static CORRFCT_TLS GenWendHoleConnectionContext genwend_hole_conn_ctx[4];
+static CORRFCT_TLS unsigned int genwend_hole_conn_next_ctx = 0U;
+
+static inline int is_nonpositive_integer(double x)
+{
+    return x <= 0.0 && fabs(x - nearbyint(x)) < 1e-12;
+}
+
+static inline const GenWendHoleConnectionContext *
+get_genwend_hole_connection_context(double nu, double xi)
+{
+    for (int i = 0; i < 4; ++i) {
+        if (genwend_hole_conn_ctx[i].valid &&
+            genwend_hole_conn_ctx[i].nu == nu &&
+            genwend_hole_conn_ctx[i].xi == xi)
+            return &genwend_hole_conn_ctx[i];
+    }
+
+    GenWendHoleConnectionContext *ctx =
+        &genwend_hole_conn_ctx[genwend_hole_conn_next_ctx];
+    genwend_hole_conn_next_ctx = (genwend_hole_conn_next_ctx + 1U) & 3U;
+    ctx->valid = 0;
+
+    ctx->nu = nu;
+    ctx->xi = xi;
+    ctx->A = (1.0 - nu) / 2.0 - xi;
+    ctx->B = -nu / 2.0 - xi;
+    ctx->C = 0.5 - xi;
+    ctx->D = 1.0 - nu / 2.0;
+    ctx->E = (1.0 - nu) / 2.0;
+    ctx->F = xi + 1.5;
+    ctx->p = 2.0 * xi + 1.0;
+
+    /* The connection formula (paper Eq. 3.5 with k=0) is numerically useful
+       near the origin because its Gauss hypergeometric argument is x^2 rather
+       than 1-x^2.  Avoid parameter values where that representation has a
+       removable pole and let the established implementation handle them. */
+    if (is_nonpositive_integer(ctx->C) ||
+        is_nonpositive_integer(ctx->C + 1.0) ||
+        is_nonpositive_integer(ctx->C + 2.0) ||
+        ctx->F == 0.0 || ctx->F == -1.0)
+        return NULL;
+
+    const double zgamma = -xi - 0.5;
+    const double gamma_z = gammafn(zgamma);
+    if (!R_FINITE(gamma_z) || gamma_z == 0.0)
+        return NULL;
+
+    const double log_abs_L =
+        lgammafn(2.0 * xi + 1.0 + nu) + log(fabs(gamma_z)) -
+        lgammafn(xi + 0.5) - lgammafn(nu) -
+        (1.0 + 2.0 * xi) * M_LN2;
+    if (!R_FINITE(log_abs_L))
+        return NULL;
+
+    ctx->L = copysign(exp(log_abs_L), gamma_z);
+    if (!R_FINITE(ctx->L))
+        return NULL;
+
+    ctx->H1_factor = ctx->A * ctx->B / ctx->C;
+    ctx->H2_factor = ctx->A * (ctx->A + 1.0) *
+                     ctx->B * (ctx->B + 1.0) /
+                     (ctx->C * (ctx->C + 1.0));
+    ctx->G1_factor = ctx->D * ctx->E / ctx->F;
+    ctx->G2_factor = ctx->D * (ctx->D + 1.0) *
+                     ctx->E * (ctx->E + 1.0) /
+                     (ctx->F * (ctx->F + 1.0));
+    ctx->valid = 1;
+    return ctx;
+}
+
+/* Power-series evaluator used only by the x^2 connection formula below.
+ * Here 0 <= z <= 0.81.  Under the Hole-model validity constraints the
+ * Gauss series still converges rapidly, while this wider interval avoids the
+ * numerically unstable overlap of the legacy representation just above
+ * x=0.5.  It also avoids the generic
+ * 2F1 transformations that are intended for arguments close to one. */
+static int gw_hyp2f1_small_z(double a, double b, double c, double z, double *value)
+{
+    if (!R_FINITE(a) || !R_FINITE(b) || !R_FINITE(c) || !R_FINITE(z) ||
+        z < 0.0 || z > 0.81)
+        return 0;
+    if (z == 0.0 || a == 0.0 || b == 0.0) {
+        *value = 1.0;
+        return 1;
+    }
+
+    double sum = 1.0;
+    double term = 1.0;
+    double corr = 0.0;
+
+    for (int n = 1; n <= 10000; ++n) {
+        const double an = a + (double)(n - 1);
+        const double bn = b + (double)(n - 1);
+        const double cn = c + (double)(n - 1);
+        const double den = cn * (double)n;
+        if (!R_FINITE(den) || den == 0.0)
+            return 0;
+
+        term *= (an * bn / den) * z;
+        if (!R_FINITE(term))
+            return 0;
+
+        const double y = term - corr;
+        const double t = sum + y;
+        corr = (t - sum) - y;
+        sum = t;
+
+        if (term == 0.0 ||
+            fabs(term) <= 8.0 * DBL_EPSILON * fmax(1.0, fabs(sum))) {
+            *value = sum;
+            return R_FINITE(sum);
+        }
+    }
+    return 0;
+}
+
+/* Direct connection-form evaluation of the first two hole orders.
+ *
+ * The standard GW correlation is written as
+ *   C(x) = H(x^2) + L x^p G(x^2),  p = 2 xi + 1.
+ * Applying the turning-bands operator analytically and simplifying before
+ * evaluation avoids the removable singularity in C'' near x=0.  This is
+ * equivalent to differentiating the connection formula, but never forms
+ * x^(p-2) on its own. */
+static int GW_hole_connection_rho(double x, double nu, double xi,
+                                  int k, double *rho)
+{
+    if ((k != 1 && k != 2) || x <= 0.0 || x > 0.9)
+        return 0;
+
+    const GenWendHoleConnectionContext *ctx =
+        get_genwend_hole_connection_context(nu, xi);
+    if (ctx == NULL)
+        return 0;
+
+    const double z = x * x;
+    double h0, h1s, g0, g1s;
+    if (!gw_hyp2f1_small_z(ctx->A, ctx->B, ctx->C, z, &h0) ||
+        !gw_hyp2f1_small_z(ctx->A + 1.0, ctx->B + 1.0,
+                           ctx->C + 1.0, z, &h1s) ||
+        !gw_hyp2f1_small_z(ctx->D, ctx->E, ctx->F, z, &g0) ||
+        !gw_hyp2f1_small_z(ctx->D + 1.0, ctx->E + 1.0,
+                           ctx->F + 1.0, z, &g1s))
+        return 0;
+
+    const double h1 = ctx->H1_factor * h1s;
+    const double g1 = ctx->G1_factor * g1s;
+    const double xp = R_pow(x, ctx->p);
+    if (!R_FINITE(h1) || !R_FINITE(g1) || !R_FINITE(xp))
+        return 0;
+
+    if (k == 1) {
+        *rho = h0 + z * h1 +
+               ctx->L * xp * ((ctx->p + 2.0) * 0.5 * g0 + z * g1);
+        return R_FINITE(*rho);
+    }
+
+    double h2s, g2s;
+    if (!gw_hyp2f1_small_z(ctx->A + 2.0, ctx->B + 2.0,
+                           ctx->C + 2.0, z, &h2s) ||
+        !gw_hyp2f1_small_z(ctx->D + 2.0, ctx->E + 2.0,
+                           ctx->F + 2.0, z, &g2s))
+        return 0;
+
+    const double h2 = ctx->H2_factor * h2s;
+    const double g2 = ctx->G2_factor * g2s;
+    const double z2 = z * z;
+    const double g0coef = (ctx->p + 2.0) * (ctx->p + 4.0) / 8.0;
+    const double g1coef = (ctx->p + 4.0) * 0.5;
+
+    *rho = h0 + 2.0 * z * h1 + 0.5 * z2 * h2 +
+           ctx->L * xp * (g0coef * g0 + g1coef * z * g1 +
+                          0.5 * z2 * g2);
+    return R_FINITE(*rho);
+}
+
+static int GW_standard_derivatives_x(double x, double nu, double xi,
+                                     int order, double *deriv)
+{
+    if (order < 0 || order > GW_HOLE_MAX_K ||
+        !R_FINITE(x) || !R_FINITE(nu) || !R_FINITE(xi) ||
+        x <= 0.0 || x >= 1.0 || nu <= 0.0 || xi <= -0.5)
+        return 0;
+
+    /* xi=0 is the Askey model and admits elementary derivatives. */
+    if (fabs(xi) < 1e-12) {
+        const double omx = 1.0 - x;
+        double falling = 1.0;
+        deriv[0] = R_pow(omx, nu);
+        for (int m = 1; m <= order; ++m) {
+            falling *= (nu - (double)(m - 1));
+            deriv[m] = ((m % 2) ? -1.0 : 1.0) * falling *
+                       R_pow(omx, nu - (double)m);
+        }
+        return 1;
+    }
+
+    const double y0 = 1.0 - x * x;
+
+    /* For k=1 evaluate the chain rule directly and reuse all quantities that
+       depend only on (nu,xi).  The analogous direct second-derivative form can
+       be numerically unstable when y=1-x^2 is close to one, so k=2 deliberately
+       uses the historical Taylor construction below. */
+    if (order == 1) {
+        const GenWendHoleSmallContext *ctx =
+            get_genwend_hole_small_context(nu, xi);
+        if (ctx == NULL || y0 <= 0.0)
+            return 0;
+
+        const double H0 = hypergeo2(ctx->a0, ctx->b0, ctx->c0, y0);
+        const double P0 = R_pow(y0, ctx->exponent);
+        if (!R_FINITE(H0) || !R_FINITE(P0)) return 0;
+
+        const double H1 = ctx->h1_factor *
+            hypergeo2(ctx->a0 + 1.0, ctx->b0 + 1.0, ctx->c0 + 1.0, y0);
+        const double P1 = ctx->p1_factor * R_pow(y0, ctx->exponent - 1.0);
+        if (!R_FINITE(H1) || !R_FINITE(P1)) return 0;
+
+        deriv[0] = ctx->K * P0 * H0;
+        deriv[1] = ctx->K * (-2.0 * x) * (P1 * H0 + P0 * H1);
+        return R_FINITE(deriv[0]) && R_FINITE(deriv[1]);
+    }
+    const double aa = nu / 2.0;
+    const double bb = (nu + 1.0) / 2.0;
+    const double cc = xi + nu + 1.0;
+    const double exponent = xi + nu;
+
+    if (y0 <= 0.0 || cc <= 0.0) return 0;
+
+    /* Constant in equation (2.6), evaluated in log scale.  For
+       -1/2 < xi < 0 both Gamma(xi) and Gamma(2xi) are negative, so their
+       signs cancel; for xi>0 all Gamma factors are positive. */
+    const double logK = lgammafn(xi) + lgammafn(2.0 * xi + nu + 1.0) -
+                        lgammafn(2.0 * xi) - lgammafn(xi + nu + 1.0) -
+                        (nu + 1.0) * M_LN2;
+    if (!R_FINITE(logK)) return 0;
+    const double K = exp(logK);
+
+    /* delta(t) = y(x+t)-y(x) = -2*x*t-t^2.  powdelta[j][m] is the
+       coefficient of t^m in delta(t)^j. */
+    double powdelta[GW_HOLE_MAX_K + 1][GW_HOLE_MAX_K + 1] = {{0.0}};
+    powdelta[0][0] = 1.0;
+    for (int j = 1; j <= order; ++j) {
+        for (int m = 1; m <= order; ++m) {
+            double v = -2.0 * x * powdelta[j - 1][m - 1];
+            if (m >= 2) v -= powdelta[j - 1][m - 2];
+            powdelta[j][m] = v;
+        }
+    }
+
+    double pseries[GW_HOLE_MAX_K + 1] = {0.0};
+    double hseries[GW_HOLE_MAX_K + 1] = {0.0};
+
+    double fall_exp = 1.0;
+    double poch_a = 1.0, poch_b = 1.0, poch_c = 1.0;
+    double fact = 1.0;
+
+    for (int j = 0; j <= order; ++j) {
+        if (j > 0) {
+            fall_exp *= (exponent - (double)(j - 1));
+            poch_a *= (aa + (double)(j - 1));
+            poch_b *= (bb + (double)(j - 1));
+            poch_c *= (cc + (double)(j - 1));
+            fact *= (double)j;
+        }
+
+        const double pcoef = (fall_exp / fact) *
+                             R_pow(y0, exponent - (double)j);
+        const double hf = hypergeo2(aa + (double)j, bb + (double)j,
+                                    cc + (double)j, y0);
+        if (!R_FINITE(pcoef) || !R_FINITE(hf) || poch_c == 0.0) return 0;
+        const double hcoef = (poch_a * poch_b / (poch_c * fact)) * hf;
+
+        for (int m = 0; m <= order; ++m) {
+            pseries[m] += pcoef * powdelta[j][m];
+            hseries[m] += hcoef * powdelta[j][m];
+        }
+    }
+
+    for (int m = 0; m <= order; ++m) {
+        double coef = 0.0;
+        for (int j = 0; j <= m; ++j)
+            coef += pseries[j] * hseries[m - j];
+        deriv[m] = K * gammafn((double)m + 1.0) * coef;
+        if (!R_FINITE(deriv[m])) return 0;
+    }
+    return 1;
+}
+
+/* Exact turning-bands implementation of the (d,k)-hole-effect generalized
+ * Wendland correlation.  GeoModels' spatial implementation uses d=2.
+ * Public mapping: power1=k, power2=nu, scale=a, smooth=xi.
+ */
 double CorFunW_genhole(double lag, double R_power1, double smooth, double scale, double kk)
 {
     const double d = 2.0;
-    double x = lag / scale;
-    if (x < 1e-32) return 1.0;
+    const double x = lag / scale;
+    const int k = (int) nearbyint(kk);
 
-    double mu = R_power1;
-    int k = (int)kk;
-    if (k == 0) {
-        return CorFunW_gen(lag, mu, smooth, scale);
-    } else if (x <= 1.0) {
-        double alpha = smooth + (d + 1.0) / 2.0 + k;
-        double beta  = alpha + mu / 2.0;
-        double gama  = beta + 0.5;
-        double x2 = x * x;
-        int n;
-        double cc = 1.0 + d / 2.0 + k;
-        double A = 0.0;
-        for (n = 0; n <= k; n++) {
-            double sign = (n % 2 == 0) ? 1.0 : -1.0;
-            double poch1 = poch(cc - beta, n);
-            double poch2 = poch(cc - gama, n);
-            double poch3 = poch(cc - alpha, n);
-            double poch4 = poch(-n, n);
-            double a1 = sign * poch1 * poch2 / (poch4 * poch3);
-            double a2 = gammafn(n + 1.0) * gammafn(k - n + 1.0) / gammafn(k + 1.0);
-            double a3 = R_pow(x, 2 * n);
-            double a4 = hypergeo2(cc - beta + n, cc - gama + n, cc - alpha + n, x2);
-            A += (a1 * a3 * a4) / a2;
+    if (!R_FINITE(x) || !R_FINITE(R_power1) || !R_FINITE(smooth) ||
+        !R_FINITE(scale) || !R_FINITE(kk) || scale <= 0.0)
+        return R_NaN;
+    if (x <= 1e-10) return 1.0;
+    if (x >= 1.0) return 0.0;
+    if (k < 0 || fabs(kk - (double)k) > 1e-10) return R_NaN;
+    if (k == 0) return CorFunW_gen(lag, R_power1, smooth, scale);
+
+    /* The stack implementation covers all practical k used by the package.
+       Larger k is rejected rather than returning a numerically corrupted
+       covariance. */
+    if (k > GW_HOLE_MAX_K) return R_NaN;
+
+    /* For k=1,2 and x<=0.9 use the stable connection formula directly.
+       It is exact and avoids forming singular intermediate derivatives near
+       the origin.  If the connection representation has a removable pole for
+       a special xi, fall through to the established implementation. */
+    if (k == 1 || k == 2) {
+        double rho_conn;
+        if (GW_hole_connection_rho(x, R_power1, smooth, k, &rho_conn)) {
+            if (rho_conn > 1.0 && rho_conn < 1.0 + 1e-12) rho_conn = 1.0;
+            return rho_conn;
         }
-        double uu = d / 2.0 + k;
-        double B1 = gammafn(beta - uu) * gammafn(gama - uu) * gammafn(d / 2.0) * gammafn(uu - alpha);
-        double B2 = gammafn(uu) * gammafn(alpha - uu) * gammafn(beta - alpha) * gammafn(gama - alpha);
-        double B = B1 / B2;
-        double tt = 1.0 + alpha;
-        double C = 0.0;
-        for (n = 0; n <= k; n++) {
-            double sign = ((n + k) % 2 == 0) ? 1.0 : -1.0;
-            double c1 = sign * poch(1.0 - alpha, k - n) * poch(1.0 + alpha - beta, n) * poch(1.0 + alpha - gama, n) / poch(1.0 + alpha - uu, n);
-            double c2 = gammafn(n + 1.0) * gammafn(k - n + 1.0) / gammafn(k + 1.0);
-            double c3 = R_pow(x, 2.0 * alpha - d - 2.0 * (k - n));
-            double c4 = hypergeo2(tt - beta + n, tt - gama + n, tt - d / 2.0 - k + n, x2);
-            C += (c1 * c3 * c4) / c2;
-        }
-        return A + B * C;
-    } else {
-        return 0.0;
     }
+
+    double deriv[GW_HOLE_MAX_K + 1] = {0.0};
+    if (!GW_standard_derivatives_x(x, R_power1, smooth, k, deriv))
+        return R_NaN;
+
+    /* Lemma 2, equation (7.2).  Because x=h/a,
+       h^m d^m/dh^m C(h/a) = x^m d^m/dx^m C(x). */
+    if (k == 1) {
+        double rho = deriv[0] + 0.5 * x * deriv[1];
+        if (!R_FINITE(rho)) return R_NaN;
+        if (rho > 1.0 && rho < 1.0 + 1e-12) rho = 1.0;
+        return rho;
+    }
+    if (k == 2) {
+        double rho = deriv[0] + 0.875 * x * deriv[1] +
+                     0.125 * x * x * deriv[2];
+        if (!R_FINITE(rho)) return R_NaN;
+        if (rho > 1.0 && rho < 1.0 + 1e-12) rho = 1.0;
+        return rho;
+    }
+
+    double rho = 0.0;
+    for (int q = 0; q <= k; ++q) {
+        const int rmax = (q == 0) ? 0 : q - 1;
+        for (int r = 0; r <= rmax; ++r) {
+            const int m = q - r;
+            const double sign = (r % 2) ? -1.0 : 1.0;
+            const double num = poch((double)(k - q + 1), q) *
+                               poch((double)q, r) *
+                               poch((double)(q - r), r);
+            const double den = R_pow(2.0, (double)(q + r)) *
+                               gammafn((double)q + 1.0) *
+                               gammafn((double)r + 1.0) *
+                               poch(d / 2.0, q);
+            const double term = sign * (num / den) *
+                                R_pow(x, (double)m) * deriv[m];
+            rho += term;
+        }
+    }
+
+    if (!R_FINITE(rho)) return R_NaN;
+    /* Numerical roundoff may create tiny endpoint overshoots, but negative
+       correlations are a defining feature and must never be truncated. */
+    if (rho > 1.0 && rho < 1.0 + 1e-12) rho = 1.0;
+    return rho;
 }
+
 /*******************************************************************************/
 double Corschoenberg(double lag,double scale)
 {
@@ -2506,20 +3158,8 @@ double d=2;
 double d2=d*0.5;
 rho=gammafn(d2)*R_pow(x*0.5,1-d2)*bessel_j(x,d2-1);
 return(rho);
-}    
-
-
-
-
-
-double CorFunWend0_tap(double lag,double scale,double smoo)
-{
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1) rho=  R_pow(1-x,smoo+3);
-    else rho=0;
-    return rho;
 }
+
 double CorFunWend1_tap(double lag,double scale,double smoo)
 {
     double rho=0.0,x=0;
@@ -2528,87 +3168,16 @@ double CorFunWend1_tap(double lag,double scale,double smoo)
     else rho=0;
     return rho;
 }
-double CorFunWend2_tap(double lag,double scale,double smoo)
-{
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1) rho=R_pow(1-x,smoo+7)*(1+(smoo+7)*x+R_pow(smoo+7,2)*R_pow(x,2)/3);
-    else rho=0;
-    return rho;
-}
-double CorFunWend1(double lag,double scale)
-{
-  double rho=0.0,x=0;
-    x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,2)*(1+0.5*x);
-  else rho=0;
-  return rho;
-}
-double CorFunWend2(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,4)*(1+4*x);
-  else rho=0;
-  return rho;
-}
-double CorFunWend3(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,6)*(1+6*x+(35/3)*x*x);
-  else rho=0;
-  return rho;
-}
-double CorFunWend5(double lag,double scale)
-{
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1) rho=R_pow(1-x,7)*(1+7*x+(48/3)*x*x);
-    else rho=0;
-    return rho;
-}
 
-double CorFunWend4(double lag,double scale)
-{
-    double rho=0.0,x=0;
-    x=lag/scale;
-    if(x<=1) rho=R_pow(1-x,5)*(1+5*x);
-    else rho=0;
-    return rho;
-}
-double CorFunWendhole1(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,4)*(1-3*x);
-  else rho=0;
-  return rho;
-}
-double CorFunWendhole2(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,5)*(1+4*x-18*R_pow(x,2));
-  else rho=0;
-  return rho;
-}
-double CorFunWendhole3(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,6)*(1+5*x-3.666667*R_pow(x,2)-70.36111*R_pow(x,3));
-  else rho=0;
-  return rho;
-}
-double CorFunWendhole(double lag,double scale)
-{
-  double rho=0.0,x=0;
-     x=lag/scale;
-  if(x<=1) rho=R_pow(1-x,5)*(1+5*x-27*R_pow(x,2));
-  else rho=0;
-  return rho;
-}
+
+
+
+
+
+
+
+
+
 /************************************************************************************************/
 /************************************************************************************************/
 /************************************************************************************************/
@@ -2660,7 +3229,7 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
            p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
            p11=1-2*p+p00;
            dd=cov_binom_neg(nn[0],psj,p1,p2);
-           rho[h]=p11*dd +  (R_pow(nn[0],2)*(1-p1)*(1-p2)/(p1*p2)) *(p11-R_pow((1-p),2));
+           rho[h]=p11*dd +  (R_pow((double) nn[0],2)*(1-p1)*(1-p2)/(p1*p2)) *(p11-R_pow((1-p),2));
           /// rho[h]=p11*dd +  (R_pow(nn[0],2)* p1*p2 /( (1-p1)*(1-p2) )) *(p11-R_pow((1-p),2));
          }
       }
@@ -2693,12 +3262,14 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
        {
           
            mui=exp(mean[i]);muj=exp(mean[j]);
-           ai=mui*(1+mui/nuis[4]);aj=muj*(1+muj/nuis[4]);
-           dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[1])*corr,mui, muj, nuis[4]); // it's the pem  covariance
-           p=pnorm(nuis[3],0,1,1,0);
-           psj=pbnorm22(nuis[3],nuis[3],(1-nuis[2])*corr);
+           ai=mui*(1+mui/nuis[3]);aj=muj*(1+muj/nuis[3]);
+           dd=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,mui, muj, nuis[3]); // PEM covariance
+           p=pnorm(nuis[2],0,1,1,0);
+           psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
            p1=1-2*p+psj;
-           rho[h]=p1*dd +  R_pow((1-p),2)*mui*muj*(p1-R_pow((1-p),2));
+           /* If Y=I X with P(I=1)=1-p and I independent of X, then
+              Cov(Y_i,Y_j)=p11 Cov(X_i,X_j)+mu_i mu_j[p11-(1-p)^2]. */
+           rho[h]=p1*dd + mui*muj*(p1-R_pow((1-p),2));
       
        }
 
@@ -2711,7 +3282,9 @@ void CorrelationMat_dis2(double *rho,double *coordx, double *coordy,double *coor
            p=pnorm(nuis[1],0,1,1,0);
            psj=pbnorm22(nuis[1],nuis[1],(1-nuis[0])*corr);
            p1=1-2*p+psj;
-           rho[h]=p1*dd +  ai*aj*(p1-R_pow((1-p),2));
+           /* Same identity as model 57; only the nugget parameterization
+              differs.  The mean-product term is mui*muj, not Var_i*Var_j. */
+           rho[h]=p1*dd + mui*muj*(p1-R_pow((1-p),2));
       
        }
             h++;
@@ -2744,13 +3317,13 @@ void CorrelationMat_dis_tap(double *rho,double *coordx, double *coordy, double *
 
       if(*model==2||*model==11)       rho[i]=fmin2(n1[i],n2[i]) *(psj-p1*p2);
       if(*model==14)                  rho[i]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);
-      if(*model==16)                  rho[i]=cov_binom_neg(n1[0],psj,p1,p2);
+      if(*model==16)                  rho[i]=cov_binom_neg(n1[i],psj,p1,p2);
       if(*model==45)
          {
            p=pnorm(nuis[2],0,1,1,0);
            p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr); p11=1-2*p+p00;
-           dd=cov_binom_neg(n1[0],psj,p1,p2);
-           rho[i]=p11*dd +  (n1[0]*n1[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+           dd=cov_binom_neg(n1[i],psj,p1,p2);
+           rho[i]=p11*dd +  (((double) n1[i] * (double) n2[i])*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
          }
     }
       /***************************************************************/
@@ -2819,15 +3392,15 @@ void CorrelationMat_st_dis_tap(double *rho,double *coordx, double *coordy, doubl
   if(*model==2||*model==11||*model==14||*model==16||*model==45){
       p1=pnorm(mu1[i],0,1,1,0); p2=pnorm(mu2[i],0,1,1,0);
           psj=pbnorm22(mu1[i],mu2[i],(1-nuis[0])*corr);
-      if(*model==2||*model==11)       rho[i]=fmin2(n1[i],n2[i])*(psj-p1*p1);
+      if(*model==2||*model==11)       rho[i]=fmin2(n1[i],n2[i])*(psj-p1*p2);
       if(*model==14)                  rho[i]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);
-      if(*model==16)                  rho[i]=cov_binom_neg(n1[0],psj,p1,p2);
+      if(*model==16)                  rho[i]=cov_binom_neg(n1[i],psj,p1,p2);
       if(*model==45)
          {
            p=pnorm(nuis[2],0,1,1,0);
            p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);p11=1-2*p+p00;
-           dd=cov_binom_neg(n1[0],psj,p1,p2);
-           rho[i]=p11*dd +  (n1[0]*n1[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+           dd=cov_binom_neg(n1[i],psj,p1,p2);
+           rho[i]=p11*dd +  (((double) n1[i] * (double) n2[i])*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
          }
 
 }
@@ -2917,7 +3490,7 @@ for(t=0;t<ntime[0];t++){
 
           if(*model==14||*model==16||*model==2||*model==11||*model==45){
 
-                        ai=mean[i+ns[t]*t];aj=mean[j+ns[t]*v];
+                        ai=mean[i+NS[t]];aj=mean[j+NS[v]];
                         psj=pbnorm22(ai,aj,(1-nuis[0])*corr);
                         p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
       if(*model==2||*model==11)      
@@ -2929,19 +3502,19 @@ for(t=0;t<ntime[0];t++){
            p=pnorm(nuis[2],0,1,1,0);
            p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr); p11=1-2*p+p00;
            dd=cov_binom_neg(n[0],psj,p1,p2);
-           rho[h]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+           rho[h]=p11*dd +  (R_pow((double) n[0],2)*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
       }
     }
 if(*model==30||*model==36) {       //poisson
-           ai=exp(mean[i+ns[t]*t]);
-           aj=exp(mean[j+ns[t]*v]);
+           ai=exp(mean[i+NS[t]]);
+           aj=exp(mean[j+NS[v]]);
            rho[h]= sqrt(ai* aj)*corr_pois((1-nuis[0])*CorFct(cormod,dd,0,par,t,v),ai, aj);
          }
 
 if(*model==46||*model==47) {       //poisson gamma
   
-           bi=exp(mean[i+ns[t]*t]);
-           bj=exp(mean[j+ns[t]*v]);
+           bi=exp(mean[i+NS[t]]);
+           bj=exp(mean[j+NS[v]]);
            ai=bi*(1+bi/nuis[1]);
            aj=bj*(1+bj/nuis[1]);
            rho[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*CorFct(cormod,dd,0,par,t,v),bi, bj, nuis[1]);
@@ -2949,8 +3522,8 @@ if(*model==46||*model==47) {       //poisson gamma
 
   if(*model==43||*model==44) //poisson inflado
        {
-           ai=exp(mean[i+ns[t]*t]);
-           aj=exp(mean[j+ns[t]*v]);
+           ai=exp(mean[i+NS[t]]);
+           aj=exp(mean[j+NS[v]]);
            dd=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj); // it's the  covariance
            p=pnorm(nuis[2],0,1,1,0);
            psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
@@ -2967,42 +3540,42 @@ if(*model==46||*model==47) {       //poisson gamma
           corr=CorFct(cormod,dd,tt,par,t,v);
 
             if(*model==14||*model==16||*model==2||*model==11||*model==45){
-                         ai=mean[i+ns[v]*t];aj=mean[j+ns[v]*v];
+                         ai=mean[i+NS[t]];aj=mean[j+NS[v]];
                          psj=pbnorm22(ai,aj,(1-nuis[0])*corr);
                          p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
 
              if(*model==2||*model==11)       //rho[h]=n[0]*(psj-p1*p2);                    //binomial
              { rho[h]=fmin2(n[i+NS[t]],n[(j+NS[v])])*(psj-p1*p2);          } 
              if(*model==14)                  rho[h]=(psj-p1*p2)/((-psj+p1+p2)*p1*p2);    //goemettric
-             if(*model==16)                  rho[h]=cov_binom_neg(n[0],psj,p1,p2); ;      // negative binomial
+             if(*model==16)                  rho[h]=cov_binom_neg(n[0],psj,p1,p2);      // negative binomial
              if(*model==45)  {
                       p=pnorm(nuis[2],0,1,1,0);
                       p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
                       p11=1-2*p+p00;
                       dd=cov_binom_neg(n[0],psj,p1,p2);
-                      rho[h]=p11*dd +  (n[0]*n[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
+                      rho[h]=p11*dd +  (R_pow((double) n[0],2)*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p));
          }
                 }
   if(*model==30||*model==36) {          //poisson
-        ai=exp(mean[i+ns[v]*t]);
-        aj=exp(mean[j+ns[v]*v]);
+        ai=exp(mean[i+NS[t]]);
+        aj=exp(mean[j+NS[v]]);
           rho[h]= sqrt(ai* aj)*corr_pois((1-nuis[0])*corr,ai, aj);
 
 
   }
     if(*model==46||*model==47) {          //poissongamma
 
-        double bi=exp(mean[i+ns[v]*t]);
-        double bj=exp(mean[j+ns[v]*v]);
-        ai=bi*(1+bi/nuis[2]);aj=bj*(1+bj/nuis[2]);
-        rho[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,bi, bj, nuis[2]);
+        double bi=exp(mean[i+NS[t]]);
+        double bj=exp(mean[j+NS[v]]);
+        ai=bi*(1+bi/nuis[1]);aj=bj*(1+bj/nuis[1]);
+        rho[h]=sqrt(ai*aj)*corr_pois_gen((1-nuis[0])*corr,bi, bj, nuis[1]);
 
   }
 
       if(*model==43||*model==44)  //poisson inflado
        {
-             ai=exp(mean[i+ns[v]*t]);
-             aj=exp(mean[j+ns[v]*v]);
+             ai=exp(mean[i+NS[t]]);
+             aj=exp(mean[j+NS[v]]);
            dd=sqrt(ai*aj)*corr_pois((1-nuis[0])*corr,ai, aj); // it's the  covariance
            p=pnorm(nuis[2],0,1,1,0);
            psj=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*corr);
@@ -3055,17 +3628,12 @@ void CorrelationMat_biv_skew_dyn2(double *rho,double *coordx, double *coordy,dou
 {
  int i=0,j=0,t=0,v=0,h=0;
   double cc=0.0,lags=0.0;
-  int N=2;
 
  // if(CheckCor(cormod,par)==-2){rho[0]=-2;return;}
   //  if(par[0]<=0 || par[1]<=0 || par[2]<0 || par[3]<0){rho[0]=-2;return;
-     double *vari;
-    vari=(double *) R_Calloc(N,double);
-     double *sk;
-    sk=(double *) R_Calloc(N,double);
-    vari[0]=par[0]; vari[1]=par[1];
+    double vari[2] = {par[0], par[1]};
+    double sk[2] = {nuis[2], nuis[3]};
     par[0]=1;par[1]=1;
-    sk[0]=nuis[2];sk[1]=nuis[3];
      //if(CheckCor(cormod,par)==-2){rho[0]=-2;return;}
     //if(par[0]<=0 || par[1]<=0 || par[2]<0 || par[3]<0){rho[0]=-2;return;}
            for(t=0;t<ntime[0];t++){
@@ -3106,6 +3674,30 @@ void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy, double 
 /****************** SPATIO-Temporal(BIVARIATE) CORRELATION Vector *******************************/
 /************************************************************************************************/
 /************************************************************************************************/
+
+/* Packed strict-lower spatial correlation matrix for local kriging.
+   The output order is column-major lower-triangle order, identical to
+   R's x[lower.tri(x)] for a symmetric n x n matrix.  Unlike Corr_c with
+   loc == coord, every unordered observation pair is evaluated exactly once. */
+void Corr_spatial_packed(double *rho,
+                         double *coordx, double *coordy, double *coordz,
+                         int *cormod, int *ncoord, double *par,
+                         int *type, double *radius)
+{
+    int i = 0, j = 0;
+    R_xlen_t h = 0;
+    double dis = 0.0;
+    for (j = 0; j < (*ncoord) - 1; j++) {
+        for (i = j + 1; i < (*ncoord); i++) {
+            dis = dist(type[0], coordx[i], coordx[j],
+                       coordy[i], coordy[j], coordz[i], coordz[j],
+                       radius[0]);
+            rho[h] = CorFct(cormod, dis, 0, par, 0, 0);
+            h++;
+        }
+    }
+    return;
+}
 
 //computation of correlation between a points and a vector (for kriging)
 void Corr_c(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,  double *locy,double *locz,
@@ -3213,7 +3805,7 @@ void Corr_c_bin(double *cc,
                         dd  = cov_binom_neg(n[0], psj, p1, p2);
                         if (*cop == 0) {
                             cc[h] = p11 * dd +
-                                    (n[0] * n[0] * (1 - p1) * (1 - p2) / (p1 * p2)) *
+                                    (R_pow((double) n[0],2) * (1 - p1) * (1 - p2) / (p1 * p2)) *
                                     (p11 - (1 - p) * (1 - p));
                         }
                         if (*cop == 1) cc[h] = ll;
@@ -3251,7 +3843,7 @@ void Corr_c_bin(double *cc,
                     if (*cop == 1) cc[h] = ll;
                 }
 
-                if (*model == 57 || *model == 58) {   /* poisson gamma ZIP */
+                if (*model == 57) {   /* PoissonGammaZIP: two nugget parameters */
                     double mui = exp(mean_obs[i]);
                     double muj = exp(mean_loc[j]);
 
@@ -3262,7 +3854,23 @@ void Corr_c_bin(double *cc,
                         p   = pnorm(nuis[2], 0, 1, 1, 0);
                         psj = pbnorm22(nuis[2], nuis[2], (1 - nuis[1]) * corr);
                         p1  = 1 - 2 * p + psj;
-                        cc[h] = p1 * dd + R_pow((1 - p), 2) * mui * muj * (p1 - R_pow((1 - p), 2));
+                        cc[h] = p1 * dd + mui * muj * (p1 - R_pow((1 - p), 2));
+                    }
+                    if (*cop == 1) cc[h] = ll;
+                }
+
+                if (*model == 58) {   /* PoissonGammaZIP1: one shared nugget */
+                    double mui = exp(mean_obs[i]);
+                    double muj = exp(mean_loc[j]);
+
+                    if (*cop == 0) {
+                        ai  = mui * (1 + mui / nuis[2]);
+                        aj  = muj * (1 + muj / nuis[2]);
+                        dd  = sqrt(ai * aj) * corr_pois_gen((1 - nuis[0]) * corr, mui, muj, nuis[2]);
+                        p   = pnorm(nuis[1], 0, 1, 1, 0);
+                        psj = pbnorm22(nuis[1], nuis[1], (1 - nuis[0]) * corr);
+                        p1  = 1 - 2 * p + psj;
+                        cc[h] = p1 * dd + mui * muj * (p1 - R_pow((1 - p), 2));
                     }
                     if (*cop == 1) cc[h] = ll;
                 }
@@ -3324,7 +3932,7 @@ void Corr_c_bin(double *cc,
                                 p11 = 1 - 2 * p + p00;
                                 dd  = cov_binom_neg(n[0], psj, p1, p2);
                                 cc[h] = p11 * dd +
-                                        (n[0] * n[0] * (1 - p1) * (1 - p2) / (p1 * p2)) *
+                                        (R_pow((double) n[0],2) * (1 - p1) * (1 - p2) / (p1 * p2)) *
                                         (p11 - (1 - p) * (1 - p));
                             }
                         }
@@ -3416,7 +4024,7 @@ if(*spt) {
     R_Free(partap);}
     if(*biv)  {
 
-        partap=(double *) R_Calloc(3,double);
+        partap=(double *) R_Calloc(4,double);
         partap[0]=mxd[0]; // spatial compact support
         partap[1]=mxd[1]; // temporal compact support
         partap[2]=mxd[2]; // temporal compact support
@@ -3451,11 +4059,7 @@ double DExpoSc(double lag, double scale, double rho)
 {
  return rho*lag/R_pow(scale,2);
 }
-// Derivatives with respect to scale of the Gaussian correlation model:
-double DGaussSc(double lag, double scale, double rho)
-{
-  return 2*rho*R_pow(lag,2)/R_pow(scale,3);
-}
+
 // Derivatives with respect to R_power1 of the generalised Cauchy correlation model:
 double DGenCauP1(double lag, double R_power1, double R_power2, double scale, double rho)
 {
@@ -3540,75 +4144,21 @@ double DWen1Sm(double lag, double scale, double smooth)
     else return 0;
 }
 
-double DMat_Cauchy_sc_t(double h,double u,double R_power2,double scale_s,double scale_t,double smooth)
+
+
+
+
+
+
+
+static inline double Dbiv_nug1(double h, int c11, int c22)
 {
-  double arg=0,arg3=0;
-  arg3=R_pow((1+R_pow(u/scale_t, 2)),-R_power2);
-  if(h) arg=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
-  else arg=1;
-  return 2*R_pow(u,2)*R_power2*arg*arg3/(R_pow(scale_t,3)*(1+R_pow(u/scale_t, 2)));
+    return (h == 0.0 && c11 == 0 && c22 == 0) ? 1.0 : 0.0;
 }
 
-double DMat_Cauchy_pw2(double h,double u,double R_power2,double scale_s,double scale_t,double smooth)
+static inline double Dbiv_nug2(double h, int c11, int c22)
 {
-  double arg=0.0,arg2=0.0,arg3=0.0;
-  arg3=R_pow((1+R_pow(u/scale_t, 2)),-R_power2);
-  if(h) arg=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
-  else  arg=1;
-  if(1+R_pow(u/scale_t, 2)) arg2=arg*arg3*log(1+R_pow(u/scale_t, 2));
- return arg2;
-}
-
-
-double DMat_Cauchy_sc_s(double h,double u,double R_power2,double scale_s,double scale_t,double smooth)
-{
-  double arg1,arg2=0,arg3;
-  arg3=R_pow((1+R_pow(u/scale_t, 2)),-R_power2);
-  if(h) {  arg2=2*smooth*scale_s*bessel_k(h/scale_s, smooth,1)-h*bessel_k(h/scale_s, smooth+1,1);}
-  arg1=R_pow(2, 1-smooth)*R_pow(h/scale_s, smooth)*arg3;
-  return -arg1*arg2/(gammafn(smooth)*R_pow(scale_s,2));
-}
-
-double DMat_Cauchy_sm(double h,double u,double eps, double R_power2, double scale_s,double scale_t,double smooth)
-{
-  double arg=0.0,arg2=0.0,arg3=0.0,psmooth=0.0;
-  arg3=R_pow((1+R_pow(u/scale_t, 2)),-R_power2);
-  psmooth=(bessel_k(h/scale_s,smooth+ eps,1)-bessel_k(h/scale_s,smooth,1))/ eps;
-  if(h) arg=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
-  else arg=1;
-  if(h) arg2=-arg3*arg*(log(2)+digamma(smooth)-log(h/scale_s)-psmooth/bessel_k(h/scale_s, smooth, 1));
-  else arg2=0;
-  return arg2;
-}
-
-double DMat_Exp_sc_t(double h,double u,double scale_s,double scale_t,double smooth)
-{
-  double arg=0;
-  if(h) arg=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
- else arg=1;
-  return arg*u*exp(-u/scale_t)/R_pow(scale_t,2);
-}
-
-double DMat_Exp_sc_s(double h,double u,double scale_s,double scale_t,double smooth)
-{
-double arg1=0,arg2=0;
-
- if(h){arg1=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
-   arg2=h*(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth+1, 1);}
- else {arg1=1;
-   arg2=0;}
-
- return -arg1*2*smooth*exp(-u/scale_t)/scale_s + arg2*exp(-u/scale_t)/R_pow(scale_s,2);
-}
-
-double DMat_Exp_sm(double h,double u,double eps,double scale_s,double scale_t,double smooth)
-{
-  double arg=0.0,psmooth=0.0,arg2=0.0;
-  psmooth=(bessel_k(h/scale_s,smooth+ eps,1)-bessel_k(h/scale_s,smooth,1))/ eps;
-  if(h){arg=(R_pow(2, 1-smooth)/gammafn(smooth))*R_pow(h/scale_s, smooth)*bessel_k(h/scale_s, smooth, 1);
-    arg2=-exp(-u/scale_t)*arg*(log(2)+digamma(smooth)-log(h/scale_s)-psmooth/bessel_k(h/scale_s,smooth,1));}
-  else arg2=0;
-  return arg2;
+    return (h == 0.0 && c11 == 1 && c22 == 1) ? 1.0 : 0.0;
 }
 
 /***************************************************/
@@ -3628,18 +4178,8 @@ double DWen1sep_biv_var2(double h,double var11,double var22,double nug11,double 
     if((c11==1)&&(c22==1))                             rho= CorFunWend1_tap(h,scale,smoo);
     return rho;
 }
-double DWen1sep_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==0)&&(c22==0))  {if(h==0)   rho=1;}
-    return rho;
-}
-double DWen1sep_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==1)&&(c22==1))  {if(h==0)   rho=1;}
-    return rho;
-}
+
+
 double DWen1sep_biv_scale(double h,double var11,double var22,double nug11,double nug22, double scale, double col,double smoo,int c11,int c22)
 {
     double rho=0.0;
@@ -3682,18 +4222,8 @@ double Dmatsep_biv_var2(double h,double var11,double var22,double nug11,double n
     if((c11==1)&&(c22==1))                             rho=CorFunWitMat(h, scale,smoo);
     return rho;
 }
-double Dmatsep_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale,double smoo, double col,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==0)&&(c22==0))  {if(h==0)   rho=1;}
-    return rho;
-}
-double Dmatsep_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale ,double smoo,double col,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==1)&&(c22==1))  {if(h==0)   rho=1;}
-    return rho;
-}
+
+
 double Dmatsep_biv_scale(double h,double eps,double var11,double var22,double nug11,double nug22, double scale ,double smoo,double col,int c11,int c22)
 {
     double rho=0.0;
@@ -3738,20 +4268,8 @@ double DMat_biv_var2(double h,double var11,double var22,double nug11,double nug2
     if((c11==1)&&(c22==1))                             rho=CorFunWitMat(h, scale22,smoo22);
     return rho;
 }
-double DMat_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==0)&&(c22==0))  {if(h==0)   rho=1;}
-    return rho;
-}
-double DMat_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
-{
-    double rho=0.0;
-    if((c11==1)&&(c22==1))  {if(h==0)   rho=1;}
-    return rho;
-}
+
+
 double DMat_biv_scale1(double h,double eps,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
                        double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
 {
@@ -3839,20 +4357,8 @@ double DWen1_biv_var2(double h,double var11,double var22,double nug11,double nug
     if((c11==1)&&(c22==1))                             rho=CorFunWend1_tap(h, scale22,smoo22);
     return rho;
 }
-double DWen1_biv_nug1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
-{
-    double rho=0.0;;
-    if((c11==0)&&(c22==0))  {if(h==0)   rho=1;}
-    return rho;
-}
-double DWen1_biv_nug2(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
-                     double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
-{
-    double rho=0.0;
-    if((c11==1)&&(c22==1))  {if(h==0)   rho=1;}
-    return rho;
-}
+
+
 double DWen1_biv_scale1(double h,double var11,double var22,double nug11,double nug22, double scale11,double scale22, double scale12,
                       double smoo11, double smoo22,double smoo12, double col,int c11,int c22)
 {
@@ -4115,9 +4621,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=DWen1sep_biv_var2(h,var11,var22,nug11,nug22,scale_s,col,smooth,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=DWen1sep_biv_nug1(h,var11,var22,nug11,nug22,scale_s,col,smooth,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=DWen1sep_biv_nug2(h,var11,var22,nug11,nug22,scale_s,col,smooth,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=DWen1sep_biv_col(h,var11,var22,nug11,nug22,scale_s,col,smooth,c11,c22);i++;}
         if(flag[5]==1){//scle
@@ -4142,9 +4648,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=DWen1_biv_var2(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=DWen1_biv_nug1(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=DWen1_biv_nug2(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=DWen1_biv_col(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
         if(flag[5]==1){//scale1
@@ -4175,9 +4681,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=DWen1_biv_var2(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=DWen1_biv_nug1(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=DWen1_biv_nug2(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=DWen1_biv_col(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
         if(flag[5]==1){//scale1
@@ -4202,9 +4708,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=Dmatsep_biv_var2(h,var11,var22,nug11,nug22,scale,smooth,col,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=Dmatsep_biv_nug1(h,var11,var22,nug11,nug22,scale,smooth,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=Dmatsep_biv_nug2(h,var11,var22,nug11,nug22,scale,smooth,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=Dmatsep_biv_col(h,var11,var22,nug11,nug22,scale,smooth,col,c11,c22);i++;}
         if(flag[5]==1){//scle
@@ -4250,9 +4756,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=DMat_biv_var2(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=DMat_biv_nug1(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=DMat_biv_nug2(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=DMat_biv_col(h,var11,var22,nug11,nug22,scale11,scale22,(scale11+scale22)/2,smoo11,smoo22,(smoo22+smoo11)/2,col,c11,c22);i++;}
         if(flag[5]==1){//scale1
@@ -4281,9 +4787,9 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
         if(flag[1]==1){//second varuance
             grad[i]=DMat_biv_var2(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
         if(flag[2]==1){//first nugget
-            grad[i]=DMat_biv_nug1(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug1(h, c11, c22);i++;}
         if(flag[3]==1){//second nugget
-            grad[i]=DMat_biv_nug2(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
+            grad[i]=Dbiv_nug2(h, c11, c22);i++;}
         if(flag[4]==1){//colocated
             grad[i]=DMat_biv_col(h,var11,var22,nug11,nug22,scale11,scale22,scale12,smoo11,smoo22,smoo12,col,c11,c22);i++;}
         if(flag[5]==1){//scale1
@@ -4449,27 +4955,35 @@ void VectCorrelation(double *rho, int *cormod, double *h, int *nlags, int *nlagt
            /***************************************/
       if(*model==2||*model==11||*model==19||*model==14||*model==16||*model==45)   // binomial  type I or  II or geometric case
       {
-          ai=mean[i];aj=mean[j];
+          ai=mean[0];aj=mean[0];
           ccc=CorFct(cormod, h[i], u[j], par,0,0);
-          psj=pbnorm22(ai,aj,(1-nuis[0])*ccc);
           p1=pnorm(ai,0,1,1,0); p2=pnorm(aj,0,1,1,0);
 
-          if(*model==2||*model==11||*model==19) {
-            double denom = sqrt(p1*p2*(1-p1)*(1-p2));
-            rho[t] = (denom != 0.0) ? (psj - p1*p2)/denom : 0.0;
-        }
-          if(*model==14)                        rho[t]= ((psj-p1*p2)/((-psj+p1+p2)*p1*p2))/(sqrt((1-p1)*(1-p2))/(p1*p2));  //covar12/sqrt(var1var2)
-          if(*model==16)                        rho[t]=cov_binom_neg(N[0],psj,p1,p2)/(N[0]* sqrt((1-p1)*(1-p2))/(p1*p2));
-          if(*model==45)
-      {
-           p=pnorm(nuis[2],0,1,1,0);
-           p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*ccc);
-           p11=1-2*p+p00;
-           dd=cov_binom_neg(N[0],psj,p1,p2);
-           rho[t]=(p11*dd +  (N[0]*N[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p)))/
-           (sqrt(N[0]*(1-p1)*(1-p)*(1+N[0]*p*(1-p1))*R_pow(p1,-2))*
-            sqrt(N[0]*(1-p2)*(1-p)*(1+N[0]*p*(1-p2))*R_pow(p2,-2)));
-      }
+          /* At the same space-time point the response correlation is exactly
+             one.  Avoid evaluating the bivariate Gaussian cdf at rho = 1,
+             which is a singular numerical boundary. */
+          if(h[i] == 0.0 && u[j] == 0.0) {
+            rho[t]=1.0;
+          } else {
+            psj=pbnorm22(ai,aj,(1-nuis[0])*ccc);
+
+            if(*model==2||*model==11||*model==19) {
+              double denom = sqrt(p1*p2*(1-p1)*(1-p2));
+              rho[t] = (denom != 0.0) ? (psj - p1*p2)/denom : 0.0;
+            }
+            if(*model==14) rho[t]= ((psj-p1*p2)/((-psj+p1+p2)*p1*p2))/(sqrt((1-p1)*(1-p2))/(p1*p2));  //covar12/sqrt(var1var2)
+            if(*model==16) rho[t]=cov_binom_neg(N[0],psj,p1,p2)/(N[0]* sqrt((1-p1)*(1-p2))/(p1*p2));
+            if(*model==45)
+            {
+                 p=pnorm(nuis[2],0,1,1,0);
+                 p00=pbnorm22(nuis[2],nuis[2],(1-nuis[1])*ccc);
+                 p11=1-2*p+p00;
+                 dd=cov_binom_neg(N[0],psj,p1,p2);
+                 rho[t]=(p11*dd +  (N[0]*N[0]*(1-p1)*(1-p2)/(p1*p2)) * (p11-(1-p)*(1-p)))/
+                 (sqrt(N[0]*(1-p1)*(1-p)*(1+N[0]*p*(1-p1))*R_pow(p1,-2))*
+                  sqrt(N[0]*(1-p2)*(1-p)*(1+N[0]*p*(1-p2))*R_pow(p2,-2)));
+            }
+          }
   }
       /***************************************/
       t++;}
@@ -4495,18 +5009,6 @@ void VectCorrelation_biv(double *rho, double *vario,int *cormod, double *h, int 
     return;
 }
 
-
-
-
-//  Bounds for the bivariate matern
-double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c){
-  double scale,l,inf;
-  scale=R_pow(scale11,2*nu11)*R_pow(scale22,2*nu22)/  R_pow(scale12,4*nu12);
-  if(!c) inf=R_pow(R_pow(scale12,2)+t*t,(2*nu12+2))/(R_pow((R_pow(scale11,2)+t*t),(nu11+1))*R_pow((R_pow(scale22,2)+t*t),(nu22+1)));
-  else  inf=1;
-  l=(gammafn(nu11+1)*gammafn(nu22+1)*R_pow(gammafn(nu12),2)*scale*inf)/(gammafn(nu11)*gammafn(nu22)*R_pow(gammafn(nu12+1),2));
-  return(l);
-}
 
 
 
@@ -4875,16 +5377,16 @@ static void stehfest_coeffs(int N, double *V)
 
 #define N_GRID 2000
 
-static double f_grid[N_GRID];
-static double w_grid[N_GRID];
-static double last_alpha = -1.0;
-static int grid_initialized = 0;
+static CORRFCT_TLS double f_grid[N_GRID];
+static CORRFCT_TLS double w_grid[N_GRID];
+static CORRFCT_TLS double last_alpha = -1.0;
+static CORRFCT_TLS int grid_initialized = 0;
 
-static double grid_w_min  = 0.0;
-static double grid_w_max  = 0.0;
-static double grid_log_min = 0.0;
-static double grid_log_max = 0.0;
-static double grid_dlog    = 0.0;
+static CORRFCT_TLS double grid_w_min  = 0.0;
+static CORRFCT_TLS double grid_w_max  = 0.0;
+static CORRFCT_TLS double grid_log_min = 0.0;
+static CORRFCT_TLS double grid_log_max = 0.0;
+static CORRFCT_TLS double grid_dlog    = 0.0;
 
 static void precompute_density_grid(double alpha)
 {
@@ -4893,7 +5395,7 @@ static void precompute_density_grid(double alpha)
         return;
     }
 
-    static double V[32];
+    static CORRFCT_TLS double V[32];
     if (!grid_initialized) {
         stehfest_coeffs(N_STEHFEST, V);
         grid_initialized = 1;

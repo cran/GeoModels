@@ -27,9 +27,7 @@ coordx_dyn, data, flagcorr, flagnuis, fixed,grid,
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
- \item{coordt}{A numeric vector assigning 1-dimension of
- temporal coordinates. Optional argument, the default is \code{NULL}
- then a spatial random field is expected.}
+ \item{coordt}{A numeric vector assigning one dimension of temporal coordinates. Optional argument; the default is \code{NULL}, in which case a spatial random field is expected. The values need not be equally spaced.}
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
  containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL} }
  \item{data}{A numeric vector or a (\eqn{n \times d}{n x d})-matrix or (\eqn{d \times d

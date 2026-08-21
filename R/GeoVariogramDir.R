@@ -28,6 +28,12 @@ GeoVariogramDir <- function(data, coordx, coordy = NULL, coordz = NULL,
     coords <- if (is.null(coordz)) cbind(coordx, coordy) else cbind(coordx, coordy, coordz)
   }
 
+  coords <- as.matrix(coords)
+  storage.mode(coords) <- "double"
+  distance <- match.arg(distance, c("Eucl", "Chor", "Geod"))
+  .GeoValidate3D(coords, distance = distance,
+                 context = "GeoVariogramDir")
+
   n0 <- nrow(coords)
   if (length(data) != n0) stop("length(data) must match number of coordinate rows.")
 
@@ -92,9 +98,9 @@ GeoVariogramDir <- function(data, coordx, coordy = NULL, coordz = NULL,
       dists_samp <- as.matrix(dist(coords[samp, ]))
       maxdist_bin <- as.numeric(quantile(dists_samp[upper.tri(dists_samp)], 0.95, na.rm = TRUE))
     } else {
-      xr <- range(coords[,1], na.rm = TRUE)
-      yr <- range(coords[,2], na.rm = TRUE)
-      maxdist_bin <- sqrt(diff(xr)^2 + diff(yr)^2)
+      coordinate_ranges <- apply(coords, 2L, range, na.rm = TRUE)
+      maxdist_bin <- sqrt(sum((coordinate_ranges[2L, ] -
+                               coordinate_ranges[1L, ])^2))
     }
   }
 
@@ -143,7 +149,11 @@ GeoVariogramDir <- function(data, coordx, coordy = NULL, coordz = NULL,
   }
 
   # ---------------- Distance type ----------------
-  use_geo <- distance %in% c("Geo", "Chor")
+  use_geo <- distance %in% c("Geod", "Chor")
+  if (use_geo && !requireNamespace("fields", quietly = TRUE)) {
+    stop("Package 'fields' is required by GeoVariogramDir() for geodesic or chordal distance.",
+         call. = FALSE)
+  }
 
   proj_sinusoidal <- function(M) {
     lon <- M[,1] * pi / 180
@@ -294,6 +304,11 @@ GeoVariogramDir <- function(data, coordx, coordy = NULL, coordz = NULL,
   attr(result, "neighb") <- neighb
   attr(result, "n_chunks") <- n_chunks
   attr(result, "subsample") <- subsample
+  attr(result, "direction_definition") <- if (ncol(coords) == 3L) {
+    "Azimuth in the xy plane; Euclidean lag distances use x, y, and z."
+  } else {
+    "Azimuth in the xy plane."
+  }
   structure(result, class = "GeoVariogramDir")
 }
 

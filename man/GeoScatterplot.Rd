@@ -1,86 +1,455 @@
 \name{GeoScatterplot}
 \alias{GeoScatterplot}
 \encoding{UTF-8}
-\title{h-scatterplot for space and space-time data.}
+\title{Scatterplots of Spatial or Spatio-temporal Pairs and Fitted Bivariate Contours}
 \description{
- The function produces h-scatterplots for the spatial, spatio-temporal and bivariate setting. 
+Produces scatterplots of observations associated with spatial or
+spatio-temporal pairs selected by distance classes, nearest-neighbour order,
+and temporal lag. When the first argument is a fitted \code{GeoFit} object,
+the function can optionally superimpose contour lines of the fitted bivariate
+density on the original response scale, the uniform
+probability-integral-transform scale, or the Gaussian-score scale.
 }
 \usage{
-GeoScatterplot(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=NULL,
- distance='Eucl', grid=FALSE, maxdist=NULL,neighb=NULL,
- times=NULL, numbins=4, radius=1, bivariate=FALSE,\dots)
+GeoScatterplot(data, coordx = NULL, coordy = NULL, coordz = NULL,
+  coordt = NULL, coordx_dyn = NULL, distance = "Eucl", grid = FALSE,
+  maxdist = NULL, neighb = NULL, times = NULL, time.lag = NULL,
+  numbins = 4, radius = 1, bivariate = FALSE,
+  contour = inherits(data, "GeoFit"),
+  residuals = FALSE, scale = c("Original", "Gaussian", "Uniform"),
+  gaussian.range = 3, ngrid = 80, nlevels = 6, levels = NULL,
+  contour.col = "red", contour.lwd = 1.5,
+  contour.labels = FALSE,
+  point.col = grDevices::adjustcolor("#481567FF", 0.45),
+  lag.method = c("median", "mean"), ...)
 }
 \arguments{
- \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid) or a
- (\eqn{t \times d}{t x d})-matrix (a single spatio-temporal realisation) or an (\eqn{d \times d \times t \times n }{d x d x t})-array
- (a single spatio-temporal realisation on regular grid). See \code{\link{GeoFit}} for details.}
- \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix 
- Coordinates on a sphere for a fixed radius \code{radius} 
- are passed in lon/lat format expressed in decimal degrees.}
- \item{coordy}{A numeric vector giving 1-dimension of
- spatial coordinates; Optional argument, the default is \code{NULL}.}
- \item{coordz}{A numeric vector giving 1-dimension of
- spatial coordinates; Optional argument, the default is \code{NULL}.}
+  \item{data}{Either the data to be plotted or an object of class
+  \code{GeoFit}. For the original interface, this can be a numeric vector,
+  matrix, or array containing a spatial, spatio-temporal, or bivariate
+  realization. See \code{\link{GeoFit}} for the supported data layouts.}
 
- \item{coordt}{A numeric vector assigning 1-dimension of
- temporal coordinates. Optional argument, the default is \code{NULL} then a spatial random field is expected.}
- \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
- containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}
- } 
- \item{distance}{String; the name of the spatial distance. The default
- is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}} for details.}
- \item{grid}{Logical; if \code{FALSE} (the default) the data
- are interpreted as spatial or spatio-temporal realisations on a set of 
- non-equispaced spatial sites.}
- \item{maxdist}{A numeric value denoting the spatial maximum distance,
- see Details for the accepted options.}
- \item{neighb}{Numeric; an optional positive integer indicating the 
- order of neighborhood. See Details for more information.}
- \item{times}{A numeric vector denoting the temporal instants involved Details.}
- \item{numbins}{A numeric value denoting the numbers of bins, see the
- Details.}
- \item{radius}{Numeric; a value indicating the radius of the sphere when 
- using the great circle distance. Default value is 1.} 
- \item{bivariate}{Logical; if \code{FALSE} (the default) the data
- are interpreted as univariate spatial or spatio-temporal realisations. 
- Otherwise they are intrepreted as a a realization from a bivariate field.}
- \item{\dots}{Optional parameters passed to the plot function.}
+  \item{coordx}{A numeric coordinate vector, a two-column coordinate matrix,
+  or a three-column coordinate matrix. Coordinates on a sphere are supplied
+  in longitude/latitude format, in decimal degrees. This argument is not
+  required when \code{data} is a \code{GeoFit} object.}
+
+  \item{coordy}{An optional numeric vector containing the second spatial
+  coordinate when \code{coordx} is supplied as a vector. The default is
+  \code{NULL}.}
+
+  \item{coordz}{An optional numeric vector containing the third spatial
+  coordinate. The default is \code{NULL}.}
+
+  \item{coordt}{An optional numeric vector containing temporal coordinates. If \code{NULL}, a purely spatial realization is assumed. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
+
+  \item{coordx_dyn}{For dynamic locations, a list with one two- or three-column coordinate matrix per element of \code{coordt}.  In the raw-data interface, \code{data[[t]]} must align row-by-row with \code{coordx_dyn[[t]]}.  In the \code{GeoFit} interface this layout is taken from the fitted object.}
+
+  \item{distance}{Character string naming the spatial distance. The default is
+  \code{"Eucl"}. See \code{\link{GeoFit}} for the available options. When
+  \code{data} is a \code{GeoFit} object, the distance stored in the fitted
+  object is used.}
+
+  \item{grid}{Logical. If \code{FALSE}, the default, the observations are
+  interpreted as values at non-equispaced sites. If \code{TRUE}, regular-grid
+  coordinates are generated from the supplied coordinate vectors.}
+
+  \item{maxdist}{A positive numeric value defining the maximum spatial
+  distance. When \code{neighb = NULL}, the interval from zero to
+  \code{maxdist} is divided into \code{numbins} distance classes. For a
+  bivariate realization, this can have length one or two. Purely spatial
+  distance-class pairs are generated in memory-bounded blocks rather than by
+  allocating all \eqn{n(n-1)/2} possible pairs at once.}
+
+  \item{neighb}{A positive integer or vector of positive integers defining
+  the nearest-neighbour candidate sets used to construct the scatterplots.
+  For a spatio-temporal \code{GeoFit} object, neighbours are determined for
+  the selected temporal lags. At a positive temporal lag and with fixed
+  spatial locations, the first nearest-neighbour candidate may be the
+  observation at the same spatial location, corresponding to spatial lag
+  zero. More generally, \code{neighb = m} displays the candidate set formed
+  by the first \eqn{m} nearest neighbours at that temporal lag.}
+
+  \item{times}{Optional numeric vector selecting temporal instants in the
+  original data-and-coordinate interface. Entries can be values contained in
+  \code{coordt} or valid one-based indices into \code{coordt}. At least two
+  instants must be selected. The selected instants are put back in their
+  original temporal order. If \code{NULL}, all temporal instants are used.}
+
+  \item{time.lag}{Optional numeric vector of non-negative temporal lags used
+  for spatio-temporal data. The requested values must be obtainable from the
+  selected temporal coordinates. For a fitted \code{GeoFit} object, if
+  \code{NULL}, all available temporal lags not exceeding the fitted
+  \code{maxtime} are used. For the original data-and-coordinate interface, if
+  \code{NULL}, all temporal lags generated by the selected instants are used.
+  Lag zero is included. Regular temporal grids are handled without constructing
+  a quadratic outer-difference matrix; irregular-grid lags are generated
+  incrementally and numerically equivalent floating-point lags are merged.}
+
+  \item{numbins}{A positive integer giving the number of distance classes when
+  \code{neighb = NULL}. The default is 4.}
+
+  \item{radius}{Numeric value giving the radius of the sphere for great-circle
+  or chordal distances. The default is 1. For a \code{GeoFit} object, the
+  radius stored in the fitted object is used unless this argument is supplied.}
+
+  \item{bivariate}{Logical. If \code{TRUE}, the observations are interpreted
+  as a realization of a bivariate random field. The default is \code{FALSE}.}
+
+  \item{contour}{Logical. If \code{TRUE}, contour lines of the fitted
+  bivariate density are added to each scatterplot. This option requires
+  \code{data} to be a univariate spatial or spatio-temporal \code{GeoFit}
+  object. The default is \code{TRUE} when \code{data} is a \code{GeoFit}
+  object and
+  \code{FALSE} otherwise. Set \code{contour = FALSE} to obtain only the
+  scatterplots.}
+
+  \item{residuals}{Logical. Relevant only when \code{data} is a
+  \code{GeoFit} object and \code{scale = "Original"}. If \code{TRUE}, the
+  scatterplot and fitted density are represented on a residual scale. For
+  real-valued models, the fitted location is subtracted. For
+  \code{"LogGaussian"}, \code{"Gamma"}, and \code{"Weibull"}, the
+  observations are divided by the fitted multiplicative mean. For the direct
+  count models \code{"Poisson"}, \code{"Binomial"},
+  \code{"BinomialNeg"}/\code{"Geometric"}, and \code{"PoissonGamma"},
+  residual-scale scatterplots use Pearson residuals based on the fitted marginal
+  mean and variance, consistently with \code{\link{GeoResiduals}}. The default
+  is \code{FALSE}.}
+
+  \item{scale}{Character string specifying the scale used when \code{data}
+  is a \code{GeoFit} object. \code{"Original"}, the default, uses the
+  response scale. \code{"Uniform"} applies the fitted marginal distribution
+  function to each observation. \code{"Gaussian"} additionally applies the
+  standard-normal quantile function. The aliases \code{"Response"},
+  \code{"PIT"}, and \code{"Normal"} are also accepted. The uniform and
+  Gaussian scales require a fitted continuous marginal model. Pearson-residual
+  objects can be displayed only on the original residual scale.}
+
+  \item{gaussian.range}{Positive finite number defining the symmetric plotting
+  interval \code{c(-gaussian.range, gaussian.range)} on the Gaussian-score
+  scale when the user does not supply \code{xlim} and \code{ylim}. The
+  default is 3, matching the Gaussian-scale copula comparison plots commonly
+  used to display reflection asymmetry.}
+
+  \item{ngrid}{Positive integer giving the number of grid points in each
+  coordinate direction used to evaluate the fitted bivariate density. It must
+  be at least 20. The default is 80.}
+
+  \item{nlevels}{Positive integer controlling the number of automatically
+  selected contour levels. Ignored when \code{levels} is supplied. The
+  default is 6.}
+
+  \item{levels}{Optional numeric vector of density levels at which contour
+  lines are drawn. The default is \code{NULL}, in which case the levels are
+  selected automatically.}
+
+  \item{contour.col}{Colour of the fitted contour lines. The default is
+  \code{"red"}.}
+
+  \item{contour.lwd}{Line width of the fitted contour lines. The default is
+  1.5.}
+
+  \item{contour.labels}{Logical indicating whether contour labels are drawn.
+  The default is \code{FALSE}.}
+
+  \item{point.col}{Colour used for the scatterplot points in both the raw-data
+  and \code{GeoFit} interfaces. The default is a semi-transparent purple. A
+  graphical \code{col} supplied through \code{...} takes precedence.}
+
+  \item{lag.method}{Character string specifying the representative spatial
+  lag used for a nearest-neighbour panel. \code{"median"}, the default, uses
+  the median distance of the displayed pairs; \code{"mean"} uses their mean
+  distance. For distance classes, the midpoint of the class is used. In a
+  spatio-temporal panel, the fitted density is evaluated at this representative
+  spatial lag and at the temporal lag displayed in the panel title.}
+
+  \item{...}{Additional graphical arguments passed to \code{plot}.}
 }
-
-\value{Produces a plot. No values are returned.}
 
 \details{
- h-scatterplot is the plot of the pair values that are neighborhood of a certain order or with distances belonging to a certain interval.
- In the first case a (vector of) neighborhood must be specified. In the second case a maximum distance (maxdist) and a number of lag-bins
- (numbins) must be specified.
- The method based on neighborhoods is recommended in particular for large datasets.
+An \eqn{h}-scatterplot displays paired observations associated with spatial
+locations separated by a given range of distances or by a specified
+nearest-neighbour order. The distance-class version requires \code{maxdist}
+and \code{numbins}; the nearest-neighbour version requires \code{neighb}.
+Nearest-neighbour scatterplots are generally preferable for large datasets.
+Purely spatial distance-class pairs are generated in blocks with bounded
+working memory. This avoids the former allocation of three vectors of length
+\eqn{n(n-1)/2}; the total number of retained pairs can still be quadratic when
+\code{maxdist} includes most location pairs. Distance classes use left-closed,
+right-open intervals, with the final class also including \code{maxdist}.
 
+The original interface, in which data and coordinates are supplied directly,
+continues to produce scatterplots without requiring a fitted model. Supplying
+a \code{GeoFit} object is an additional interface that extracts the data,
+coordinates, distance, fitted parameters, and, when present, the fitted copula
+from the object. If neither \code{neighb} nor \code{maxdist} is supplied, the
+function attempts to use the corresponding pair-selection setting stored in
+the fitted object. Nearest-neighbour selection uses the same \code{distance}
+and \code{radius} convention as the fitted model (or as supplied in the raw
+interface), and the lags returned by \code{GeoNeighIndex} are reused directly.
+
+For fixed spatio-temporal locations in the original interface, \code{data}
+must be a \code{length(coordt)} by \code{nrow(coordx)} matrix, following the
+same time-by-site convention used by \code{GeoFit}, or a vector in the
+corresponding time-block order. For dynamic locations, \code{coordx_dyn} must
+contain one coordinate matrix per temporal instant and \code{data} can be a
+matching list or a vector obtained by concatenating the temporal blocks.
+Pairs are constructed with \code{GeoNeighIndex}; no pair-graph object is
+required. The \code{times} argument can restrict the temporal instants before
+pairs are generated, while \code{time.lag} selects the displayed temporal
+lags.
+
+With \code{contour = TRUE}, the bivariate density implied by the fitted model
+is evaluated on a rectangular grid and superimposed on the points. For a
+nearest-neighbour panel, the density is evaluated at the representative
+spatial lag selected by \code{lag.method}; for a distance-class panel, it is
+evaluated at the midpoint of the class.
+
+For a fit obtained with \code{likelihood = "Marginal"} and
+\code{type = "Independence"}, the theoretical contour is based only on the
+fitted univariate marginal distribution. Any correlation model or copula
+parameters stored in the \code{GeoFit} object are ignored because they do not
+enter the independence likelihood. On the original scale the bivariate
+density is therefore \eqn{f_1(y_1)f_2(y_2)}. On the uniform scale the
+independence copula density is identically one, so there are no non-trivial
+contour levels. On the Gaussian-score scale the density is
+\eqn{\phi(z_1)\phi(z_2)}, giving the circular contours of two independent
+standard normal variables.
+
+For a spatio-temporal \code{GeoFit} object, pairs are classified by both the
+spatial lag \eqn{h} and the temporal lag \eqn{u}. The fitted contour in each
+panel therefore uses the fitted correlation \eqn{\rho(h,u)}. At a positive
+temporal lag and with fixed spatial locations, the first nearest-neighbour
+candidate is generally the observation at the same spatial location and thus
+has \eqn{h=0}. Such colocated temporal pairs are retained. More generally,
+\code{neighb = m} represents the candidate set containing the first \eqn{m}
+nearest neighbours at the selected temporal lag. This is the same candidate
+set returned by \code{GeoNeighIndex}; no additional filtering of zero spatial
+lags is applied inside \code{GeoScatterplot}. Both fixed and dynamic spatial
+locations are supported. When distance classes are requested, all spatial or
+spatio-temporal pairs within \code{maxdist} are constructed for the selected
+temporal lags and then divided into \code{numbins} classes.
+
+When \code{scale = "Uniform"}, the plotted observations are
+\eqn{U_i = F_i(Y_i)} and the fitted contour is the corresponding copula
+density \eqn{c_h(u_1,u_2)}. When \code{scale = "Gaussian"}, the plotted
+observations are \eqn{Z_i = \Phi^{-1}\{F_i(Y_i)\}} and the contour is
+\deqn{c_h\{\Phi(z_1),\Phi(z_2)\}\phi(z_1)\phi(z_2),}
+that is, the fitted copula represented with standard Gaussian margins. The
+plotted observations on these two scales are obtained internally by calling
+\code{\link{GeoPit}} with \code{type = "Uniform"} or
+\code{type = "Gaussian"}; therefore the marginal CDF definitions are shared
+by the two diagnostic functions rather than being duplicated in
+\code{GeoScatterplot}.
+
+For models fitted with \code{copula = "Gaussian"}, \code{"SkewGaussian"},
+or \code{"Clayton"}, the uniform- and Gaussian-scale contours are evaluated
+directly from the fitted copula density. The response marginal distribution is
+not used in this contour calculation. This direct evaluation is numerically
+more stable and ensures that the Gaussian-scale plot represents the same fitted
+copula as the uniform-scale plot. For native non-copula random-field models,
+the copula density is recovered from the fitted response and marginal
+densities.
+
+These transformations preserve the copula and are useful for displaying
+reflection symmetry or asymmetry without confounding from the fitted marginal
+distribution. In particular, reflection symmetry corresponds to invariance
+under \eqn{(u_1,u_2) \mapsto (1-u_1,1-u_2)} on the uniform scale and under
+\eqn{(z_1,z_2) \mapsto (-z_1,-z_2)} on the Gaussian scale. By default,
+Gaussian-score panels use square plotting regions and the interval
+\eqn{[-3,3]^2}.
+
+Native fitted contours are available for the continuous models
+\code{"Gaussian"}, \code{"SkewGaussian"}, \code{"Tukeyh"},
+\code{"StudentT"}, \code{"SinhAsinh"}, \code{"LogGaussian"},
+\code{"Gamma"}, and \code{"Weibull"}. Fitted contours are also available for
+\code{"Gaussian"}, \code{"SkewGaussian"}, and \code{"Clayton"} copulas with
+the continuous marginal models supported by the pairwise copula
+implementation: \code{"Gaussian"}, \code{"StudentT"},
+\code{"LogGaussian"}, \code{"Gamma"}, \code{"Weibull"}, \code{"Beta"},
+\code{"Beta2"}, \code{"Kumaraswamy"}, \code{"Kumaraswamy2"},
+\code{"Logistic"}, and \code{"SkewLaplace"}.
+
+Fitted contours are restricted to univariate, non-misspecified spatial or
+spatio-temporal \code{GeoFit} objects. If \code{scale = "Original"},
+\code{residuals = FALSE}, and the fitted location varies among sites, a
+unique original-scale bivariate contour is not defined. In that case, use
+\code{residuals = TRUE} or select the uniform or Gaussian scale. The
+\code{residuals} argument is not used with the uniform or Gaussian scale.
 }
 
-
-\author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
-Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
-Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+\section{Spatio-temporal ordering}{
+For raw fixed-location input, \code{data} is a \eqn{T \times N}{T x N}
+matrix with times in rows and sites in columns.  For raw dynamic input,
+\code{data} and \code{coordx_dyn} are lists of equal length and are matched
+within each time block.  Pair indices and selected \code{time.lag} values
+refer to the resulting time-wise concatenation.  A supplied \code{GeoFit}
+object uses the same conventions.  See
+\code{\link{GeoModels-spacetime-ordering}}.
 }
 
+\value{
+The function is primarily called for its graphical output.
+
+With the purely spatial original data-and-coordinate interface, the matched
+call is returned invisibly. With spatio-temporal raw data, an invisible list
+is returned with components \code{call}, \code{spacetime}, \code{time_lags},
+\code{time_values}, and \code{panels}. With a \code{GeoFit} object, an
+invisible list is returned with components \code{call}, \code{model},
+\code{copula}, \code{independence}, \code{contour},
+\code{scale}, \code{residuals}, \code{spacetime}, \code{time_lags}, and
+\code{panels}. For a marginal independence fit, \code{copula} is reported as
+\code{"Independence"} and \code{independence} is \code{TRUE}. Each panel
+contains the plotted paired values, representative
+spatial lag, and temporal lag. When contours are requested, it also contains
+the evaluation grid, density matrix, contour levels, and the fitted correlation
+used by the panel when available. Nearest-neighbour panels additionally contain
+the pair indices, individual spatial lags, and individual temporal lags.
+}
+
+\author{
+Moreno Bevilacqua,
+\email{moreno.bevilacqua89@gmail.com},
+\url{https://sites.google.com/view/moreno-bevilacqua/home};
+Víctor Morales Oñate,
+\email{victor.morales@uv.cl},
+\url{https://sites.google.com/site/moralesonatevictor/};
+Christian Caamaño-Carrillo,
+\email{chcaaman@ubiobio.cl},
+\url{https://www.researchgate.net/profile/Christian-Caamano}
+}
 
 \examples{
-
 library(GeoModels)
 set.seed(514)
 
-NN = 600
-coords = cbind(runif(NN),runif(NN))
+####################################
+### example 1 : Weibull random field
+####################################
+NN <- 1000
+coords <- cbind(runif(NN), runif(NN))
 
-param = list(mean=0,sill=1,nugget=0,power2=4,scale=0.4,smooth=0)
+corrmodel <- "GenWend"
+model <- "Weibull"
 
-corrmodel = "GenWend"; model = "Gaussian"
+param <- list(mean = 0, shape = 8, nugget = 0,
+              scale = 0.5, smooth = 0, power2 = 4)
 
-data = GeoSim(coordx = coords,corrmodel = corrmodel,
- model = model,param = param)$data
+data <- GeoSim(coordx = coords, corrmodel = corrmodel,
+                     model = model,
+                     param = param)$data
 
-# h-scatterplots for given a vector of neighborhoods
-GeoScatterplot(data,coords,neighb=c(2,4))
+## Original interface: scatterplots on the response scale
+GeoScatterplot(data, coords, neighb = c(1, 2))
+
+## Fit 
+fit <- GeoFit(data = data, coordx = coords,
+              corrmodel = corrmodel, model = "Weibull",
+              likelihood = "Marginal", type = "Pairwise",
+              neighb = 4,
+              start = list(mean = 0, shape = 6,
+                            scale = 0.3),
+              fixed = list(nugget = 0, smooth = 0,
+                           power2 = 4))
+
+GeoScatterplot(fit, neighb = c(1, 2),nlevels=8,scale = "Original")
+
+## Gaussian-score scale: useful for assessing reflection asymmetry
+GeoScatterplot(fit, neighb = c(1, 2),nlevels=8, scale = "Gaussian")
+
+
+#############################################################
+### example 2 : beta random field from a skew-Gaussian copula
+#############################################################
+NN <- 1000
+coords <- cbind(runif(NN), runif(NN))
+
+corrmodel <- "GenWend"
+model <- "Beta2"
+copula <- "SkewGaussian"
+nu=0.95
+## Main example: Beta2 marginal model with a Skew-Gaussian copula
+param <- list(mean = 0, shape = 8, min = 0, max = 1,
+              nu = nu, nugget = 0,
+              scale = 0.5, smooth = 0, power2 = 4)
+
+data <- GeoSimCopula(coordx = coords, corrmodel = corrmodel,
+                     model = model, copula = copula,
+                     param = param, sparse = TRUE)$data
+
+## The simulated model is Beta2 with copula = "SkewGaussian"
+## Original interface: scatterplots on the response scale
+GeoScatterplot(data, coords, neighb = c(1, 2))
+
+## Fit the Beta2 model with a Skew-Gaussian copula
+fit <- GeoFit(data = data, coordx = coords,
+              corrmodel = corrmodel, model = model,
+              copula = copula,
+              likelihood = "Marginal", type = "Pairwise",
+              neighb = 4,
+              start = list(mean = 0, shape = 6,
+                            scale = 0.3),
+              fixed = list(nugget = 0, smooth = 0,nu=nu,
+                           power2 = 4, min = 0, max = 1),
+              lower = list(mean = -Inf, shape = 0, scale = 0),
+              upper = list(mean = Inf, shape = Inf, scale = Inf),
+              optimizer = "nlminb")
+
+## Response scale: marginal shape and copula are both visible
+GeoScatterplot(fit, neighb = c(1, 2),
+               scale = "Original")
+
+## Gaussian-score scale: useful for assessing reflection asymmetry
+GeoScatterplot(fit, neighb = c(1, 2),
+               scale = "Gaussian")
+
+
+#############################################################
+### example 3 : spatio-temporal Gaussian random field
+#############################################################
+
+set.seed(89)
+coordt <- 1:5
+coords <- cbind(runif(200), runif(200))
+
+corrmodel <- "Matern_Matern"
+param <- list(mean = 0, sill = 1, nugget = 0,
+              scale_s = 0.2 / 3, scale_t = 2 / 3,
+              smooth_s = 0.5, smooth_t = 0.5)
+
+data_st <- GeoSim(coordx = coords, coordt = coordt,
+                  corrmodel = corrmodel,
+                  model = "Gaussian", param = param)$data
+
+fit_st <- GeoFit(data = data_st, coordx = coords, coordt = coordt,
+                 corrmodel = corrmodel, model = "Gaussian",
+                 likelihood = "Marginal", type = "Pairwise",
+                 neighb = 3, maxtime = 1,
+                 start = list(mean = 0, sill = 1,
+                              scale_s = 0.1, scale_t = 0.5),
+                 fixed = list(nugget = 0,
+                              smooth_s = 0.5, smooth_t = 0.5))
+
+## Four panels: two nearest-neighbour candidate sets at temporal lags 0 and 1.
+## With fixed locations, the panel neighb = 1, time.lag = 1 contains the
+## colocated temporal pairs and therefore has representative spatial lag h = 0.
+out_st <- GeoScatterplot(fit_st, neighb = c(1, 3),
+                         time.lag = c(0, 1),
+                         scale = "Gaussian")
+
+## The same space-time pair selection is available without fitting a model.
+out_raw_st <- GeoScatterplot(data_st, coordx = coords, coordt = coordt,
+                             neighb = c(1, 3), time.lag = c(0, 1),
+                             contour = FALSE)
+
+## Distance classes at selected temporal instants.
+out_raw_bins <- GeoScatterplot(data_st, coordx = coords, coordt = coordt,
+                               times = c(1, 3, 5), time.lag = c(0, 2),
+                               maxdist = 0.3, numbins = 3,
+                               contour = FALSE)
+
 
 }
 \keyword{Scatterplot}
+\keyword{spatial}
+\keyword{spatio-temporal}

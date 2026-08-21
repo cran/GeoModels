@@ -3,28 +3,17 @@
 ### File name: GeoKrig.r
 ####################################################
 
-GeoKrig= function(estobj=NULL,data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, loc, 
+GeoKrig= function(estobj=NULL,data, coordx=NULL, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, loc, 
                 method="cholesky", model="Gaussian", n=1,nloc=NULL, mse=FALSE,  param, anisopars=NULL,
                radius=1, sparse=FALSE,time=NULL,  type_krig="Simple",weigthed=TRUE,
-               which=1, copula=NULL,X=NULL,Xloc=NULL,Mloc=NULL,spobj=NULL,spdata=NULL,varcov=NULL)
+               which=1, copula=NULL,X=NULL,Xloc=NULL,Mloc=NULL,spobj=NULL,spdata=NULL,varcov=NULL,progress=FALSE,
+               check.duplicates=FALSE)
 
 {
 ##################################################################################################################
 ##################################################################################################################
 
-############## internal function  ############################
-mse_universal <- function(krig_weights, X, Xloc, vvar, BB, varcov) {
-  p <- ncol(X)
-  if (p > nrow(varcov) || p > ncol(varcov))
-    stop("varcov dimension does not match ncol(X)")
-  var_mean <- varcov[1:p, 1:p, drop = FALSE]
-  Wt <- t(krig_weights)  # N x n
-  V <- Xloc - Wt %*% X   # N x p
-
-  term <- rowSums((V %*% var_mean) * V)  # N
-  base <- rep(as.numeric(vvar), length.out = nrow(V)) - diag(BB)
-  base + term
-}
+############## internal functions are defined in KrigUtils.R ############################
 
 
 ######################################
@@ -53,8 +42,8 @@ if(!estobj$grid){  #not regular grid
  }                  # regular grid
 else  { coordx=estobj$coordx; coordy=estobj$coordy; coordz=estobj$coordz} # grid(nunca)
 
-   if(length(estobj$coordt)==1) coordt=NULL
-   else coordt=estobj$coordt
+   if(isTRUE(estobj$spacetime)) coordt=estobj$coordt
+   else coordt=NULL
 
    coordx_dyn=estobj$coordx_dyn
    corrmodel=estobj$corrmodel
@@ -67,6 +56,7 @@ else  { coordx=estobj$coordx; coordy=estobj$coordy; coordz=estobj$coordz} # grid
    copula=estobj$copula
    anisopars=estobj$anisopars
    varcov=estobj$varcov
+   if(!is.null(estobj$sparse)) sparse=estobj$sparse
    if(!is.null(anisopars))  {param$angle=NULL; param$ratio=NULL}
 
    X=estobj$X
@@ -74,13 +64,36 @@ else  { coordx=estobj$coordx; coordy=estobj$coordy; coordz=estobj$coordz} # grid
 ##################################
 ###### end check geofit object####
 ##################################
-if(is.null(varcov)&&type_krig=="Universal") stop("Universal kriking requires varcov of the estimates. Update the geofit object\n")
-
+model_requested <- gsub("[[:blank:]]", "", as.character(model)[1L])
+model <- .GeoPredictionCanonicalModel(model_requested)
+param_input <- param
+n_input <- n
+nloc_input <- nloc
 if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
-    if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
-corrmodel=gsub("[[:blank:]]", "",corrmodel); model=gsub("[[:blank:]]", "",model)
-distance=gsub("[[:blank:]]", "",distance); method=gsub("[[:blank:]]", "",method)
-type_krig=gsub("[[:blank:]]", "",type_krig); 
+if(!is.character(corrmodel) || is.null(CkCorrModel(corrmodel))) stop("the name of the correlation model is wrong")
+corrmodel=gsub("[[:blank:]]", "",corrmodel)
+if (!is.null(copula)) {
+  copula <- as.character(copula)[1L]
+  if (is.na(copula) || !nzchar(gsub("[[:blank:]]", "", copula))) {
+    copula <- NULL
+  } else {
+    copula <- gsub("[[:blank:]]", "", copula)
+  }
+}
+if(!is.null(copula) && !(copula %in% c("Gaussian", "Clayton", "SkewGaussian")))
+  stop("GeoKrig currently implements copula-based linear prediction for 'Gaussian', 'Clayton', and 'SkewGaussian'.", call.=FALSE)
+distance=gsub("[[:blank:]]", "",distance)
+method=.GeoKrigMatchMethod(method, sparse=sparse, context="GeoKrig")
+type_key=tolower(gsub("[[:blank:]]", "",type_krig))
+if(!(type_key %in% c("simple","universal"))) stop("type_krig must be 'Simple' or 'Universal'")
+type_krig=if(type_key=="simple") "Simple" else "Universal"
+if(!is.logical(weigthed) || length(weigthed)!=1L || is.na(weigthed))
+  stop("weigthed must be TRUE or FALSE")
+if(!is.logical(progress) || length(progress)!=1L || is.na(progress))
+  stop("progress must be TRUE or FALSE")
+if(!isTRUE(weigthed))
+  warning("weigthed is retained for backward compatibility and has no effect in standard kriging.", call.=FALSE)
+
 
 ########################################################
 ####### extracting sp objects if necessary 
@@ -88,6 +101,13 @@ type_krig=gsub("[[:blank:]]", "",type_krig);
 bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
+.GeoKrigValidatePredictionModel(model, copula = copula, bivariate = bivariate, context = "GeoKrig")
+model_code_copula <- as.integer(CkModel(model))
+copula_cont <- !bivariate && !is.null(copula) &&
+  copula %in% c("Gaussian", "Clayton", "SkewGaussian") &&
+  (model_code_copula %in% .GeoGaussianCopulaContinuousModels ||
+   (copula %in% c("Clayton", "SkewGaussian") &&
+    model_code_copula %in% .GeoGaussianCopulaDiscreteModels))
 if(!is.null(spobj)) {
    if(space||bivariate){
         a=sp2Geo(spobj,spdata); coordx=a$coords 
@@ -97,10 +117,46 @@ if(!is.null(spobj)) {
         a=sp2Geo(spobj,spdata); coordx=a$coords ; coordt=a$coordt 
         if(!a$pj) {if(distance!="Chor") distance="Geod"}
      }
-   if(!is.null(a$Y)&&!is.null(a$X)) {data=a$Y ; X=a$X }
+   if (!is.null(a$Y)) data <- a$Y
+   if (!is.null(a$X)) X <- a$X
 }
 
-if(!is.null(Mloc)) {type_krig="Simple"}
+if(spacetime && !is.null(coordx_dyn)) {
+  coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+    coordx_dyn, coordt = coordt, context = "GeoKrig"
+  )
+  .GeoValidateDynamicData(data, coordx_dyn, context = "GeoKrig")
+  .GeoValidateDynamicRows(X, coordx_dyn, name = "X", context = "GeoKrig")
+}
+if(bivariate) {
+  biv_info <- .GeoBivariateCoordinateInfo(
+    coordx = coordx, coordy = coordy, coordz = coordz,
+    coordx_dyn = coordx_dyn, grid = grid, context = "GeoKrig"
+  )
+  if(biv_info$dynamic) coordx_dyn <- biv_info$blocks
+  data <- .GeoBivariateDataVector(data, biv_info$ns, context = "GeoKrig")
+  if(!is.null(X)) X <- .GeoBivariateDesign(X, biv_info$ns, context = "GeoKrig")
+}
+if(!bivariate && is.null(coordx_dyn)) {
+  coords_input <- .GeoKrigCoordinateMatrix(
+    coordx = coordx, coordy = coordy, coordz = coordz, grid = grid,
+    context = "GeoKrig"
+  )
+  data <- .GeoKrigNormalizeData(
+    data, nspace = nrow(coords_input),
+    coordt = if(spacetime) coordt else NULL,
+    grid = grid, context = "GeoKrig"
+  )
+}
+
+.GeoCheckDuplicateLocations(
+  coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+  coordx_dyn = coordx_dyn, spacetime = spacetime, bivariate = bivariate,
+  grid = grid, context = "GeoKrig", check.duplicates = check.duplicates
+)
+.dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
+on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
+
 ######################################
 ############ some checks##############
 ######################################
@@ -110,72 +166,115 @@ if (is.vector(loc)) {
   loc <- as.matrix(loc)
 }
 
-if(!(ncol(loc)==2||ncol(loc)==3))   stop("loc parameter must be a matrix  N X 2 or N X 3 ")
+if(!(ncol(loc)==2||ncol(loc)==3))   stop("loc parameter must be a matrix N x 2 or N x 3")
+if(!is.numeric(loc) || !nrow(loc) || any(!is.finite(loc)))
+  stop("loc must be a finite numeric N x 2 or N x 3 matrix")
+if(!is.null(anisopars) && !identical(distance, "Eucl"))
+  stop("GeoKrig: anisopars requires distance = 'Eucl'.")
 
-if (!is.null(Xloc)) {
-  if (is.vector(Xloc)) {
-    Xloc <- matrix(Xloc, nrow = 1)
-  } else if (!is.matrix(Xloc)) {
-    Xloc <- as.matrix(Xloc)
-  }
+
+.GeoValidate3D(
+  coordx = coordx, coordy = coordy, coordz = coordz,
+  coordx_dyn = coordx_dyn, distance = distance, grid = grid,
+  context = "GeoKrig"
+)
+.GeoValidate3D(
+  coordx = loc, distance = distance, grid = FALSE,
+  context = "GeoKrig prediction locations"
+)
+.GeoValidateCoordinateCompatibility(
+  coordx = coordx, coordy = coordy, coordz = coordz,
+  coordx_dyn = coordx_dyn, loc = loc, context = "GeoKrig"
+)
+
+if (!is.null(X) && !is.matrix(X) && !is.list(X)) X <- as.matrix(X)
+
+## Mean specification.  A vector param$mean is an external mean at the
+## observations; mean, mean1, ... are regression coefficients otherwise.
+Mobs <- .GeoMean_external(param)
+if (!is.null(Mobs) && !is.null(X)) {
+  stop("A fixed observation mean and X cannot be used together.\n")
 }
-if (!is.null(X) && !is.matrix(X)) X <- as.matrix(X)
-
-if(is.matrix(X) &&is.null(Xloc))  stop("Covariates for locations to predict are missing \n")
-if(is.null(X) &&is.matrix(Xloc))  stop("Covariates  are missing \n")
-if(CheckST(CkCorrModel(corrmodel))) {if(is.null(time)) stop("At least one temporal instants is needed for space-time kriging\n ")  } 
-if(!is.null(Mloc)&&  !is.null(Xloc)) stop("Mloc or Xloc must be fixed\n")    
-if((length(param$mean)>1)&&is.null(Mloc)) stop("Mloc must be fixed \n")  
+if (!is.null(Mloc) && !is.null(Xloc)) {
+  stop("Use either Mloc or Xloc, not both.\n")
+}
+if (!is.null(Mobs) && is.null(Mloc)) {
+  stop("Mloc is required when the observation mean is supplied as a vector.\n")
+}
+if (!is.null(X) && is.null(Xloc) && is.null(Mloc)) {
+  stop("Xloc or Mloc is required when X is supplied.\n")
+}
+if (is.null(X) && !is.null(Xloc)) {
+  stop("X must be supplied when Xloc is used.\n")
+}
+if (is.null(X) && is.null(Mobs) &&
+    length(setdiff(.GeoMean_supplied_names(param), "mean"))) {
+  stop("Parameters mean1, mean2, ... require an explicit design matrix X; without X the mean is intercept-only.\n")
+}
+if(identical(type_krig, "Universal") && (!is.null(Mobs) || !is.null(Mloc))) {
+  warning("External observation/prediction means are treated as known; ",
+          "type_krig is therefore set to 'Simple'.", call. = FALSE)
+  type_krig <- "Simple"
+}
+if(identical(type_krig, "Universal") && isTRUE(mse) && is.null(varcov)) {
+  stop("Universal kriging with mse = TRUE requires varcov (the covariance matrix of the estimated parameters).")
+}
+if(spacetime) {
+  if(is.null(time)) stop("At least one temporal instant is needed for space-time kriging")
+  if(!is.numeric(time) || !length(time) || any(!is.finite(time)))
+    stop("time must be a non-empty finite numeric vector")
+  time=as.numeric(time)
+}
 loc_orig=loc
 if(!is.null(anisopars)) {  loc=GeoAniso(loc,c(anisopars$angle,anisopars$ratio))}
 
-if(!is.null(Mloc))
-{   if(is.numeric(Mloc)) Mloc=as.vector(Mloc)
-    if(!is.vector(Mloc)) stop("Mloc must be a vector")
-    if(space){ 
-       if(length(Mloc)==1) Mloc=rep(Mloc,nrow(loc));if(nrow(loc)!=length(Mloc)) stop("Lenght of the  mean vector fixed does not match the number of locations to predict \n")
-         }
-    if(spacetime){
-       if(length(Mloc)==1) Mloc=rep(Mloc,nrow(loc)*length(time));if(nrow(loc)*length(time)!=length(Mloc)) stop("Lenght of the  mean vector fixed does not match the number of locations to predict \n")
-          }
+if(!is.null(Mloc)) {
+    if(!is.numeric(Mloc)) stop("Mloc must be numeric")
+    Mloc <- as.numeric(Mloc)
+    if(any(!is.finite(Mloc))) stop("Mloc contains non-finite values")
 }
-if(!(type_krig %in% c("Simple","Universal"))) stop("type_krig must be 'Simple' or 'Universal'")
 ######################################
 ############ end some checks##########
 ######################################
 
 
 
-#### checking 2-d or 3-d compatibility ##########
-if(!is.null(estobj)){
-if(is.null(estobj$coordz)&&ncol(loc)==3) stop("locations to predict are three dimensional but location used to predict are two dimensional \n")
-if(!is.null(estobj$coordz)&&ncol(loc)==2) stop("locations to predict are two dimensional but location used to predict are three dimensional \n")
-}
-else{ if(is.null(coordx_dyn))
-       { 
-    if(is.null(coordz)){
-       if(ncol(coordx)==2&&ncol(loc)==3) stop("locations to predict are three dimensional but location used to predict are two dimensional \n")
-       if(ncol(coordx)==3&&ncol(loc)==2) stop("locations to predict are two dimensional but location used to predict are three dimensional \n")
-                        }
-       else {
-       if(ncol(loc)==2) stop("locations to predict are two dimensional but location used to predict are three dimensional \n")
-           }
-       }
-      else {} 
-}
-######################################
-######################################
 #### locations points to predict ###
 if(is.null(time)) time=0; numloc = nrow(loc); tloc = length(time);
-if(!tloc)  tloc = 1; 
-if(!is.null(estobj)){
-if(is.null(estobj$coordz)) {locx = loc[,1];locy = loc[,2]; locz=double(length(loc[,1]))}
-else                {locx = loc[,1];locy = loc[,2]; locz=loc[,3]}
-}
-else{
-if(ncol(loc) ==2) {locx = loc[,1];locy = loc[,2]; locz=double(length(loc[,1]))}
-if(ncol(loc) ==3) {locx = loc[,1];locy = loc[,2]; locz=loc[,3]}
+if(!tloc)  tloc = 1;
 
+## Normalize observation/prediction size parameters before covariance construction.
+## A location-specific n can never be averaged to invent nloc.
+count_sizes <- NULL
+count_model_names <- c("Binary", "Bernoulli", "Binomial",
+                       "Geom", "Geometric", "BinomialNeg", "BinomialNegZINB",
+                       "Poisson", "PoissonZIP", "PoissonGamma",
+                       "PoissonGammaZIP", "PoissonGammaZIP1")
+n_cov <- n
+if (!bivariate && model %in% count_model_names) {
+  count_sizes <- .GeoKrigCountSizes(
+    model, n = n, nloc = nloc, nobs = length(data),
+    npred = numloc * tloc, context = "GeoKrig"
+  )
+  ## GeoCovmatrix distinguishes a site-specific Binomial trial vector from
+  ## common field-size parameters.  Keep the expanded observation/prediction
+  ## vectors in count_sizes for Corr_c_bin, but pass only the representation
+  ## accepted by the covariance constructor.
+  if (identical(model, "Binomial")) {
+    n_cov <- count_sizes$obs
+  } else if (model %in% c("Binary", "Bernoulli", "Geom", "Geometric")) {
+    n_cov <- 1L
+  } else if (model %in% c("BinomialNeg", "BinomialNegZINB")) {
+    ## .GeoKrigCountSizes() has already validated that n is one common
+    ## positive integer r (and that nloc, if supplied, agrees with it).
+    n_cov <- as.integer(round(n[1L]))
+  }
+}
+
+if(ncol(loc) == 2L) {
+  locx = loc[,1]; locy = loc[,2]; locz = double(nrow(loc))
+} else {
+  locx = loc[,1]; locy = loc[,2]; locz = loc[,3]
 }
 
 
@@ -195,13 +294,15 @@ logGausstemp=SinhAsinhtemp=Tukeyh2temp=Tukeyhtemp=FALSE
 
 ######################################################## 
 ######################################################## 
-Mtemp=NULL
-   if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian"))          # we need a x covariance matrix with mean=0
+## Remove an external observation mean before covariance construction.
+## The covariance code must never interpret its entries as mean1, mean2, ... .
+if (!is.null(Mobs) && !copula_cont) param$mean <- 0
+Mtemp <- Mobs
+   if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian") && !copula_cont)          # non-copula multiplicative kriging uses a standardized covariance matrix
 {
      paramtemp=param; sel=substr(names(param),1,4)=="mean";  ## selecting mean values
      meantemp=names(param[sel])             ## saving mean parameters
      param=param[!sel];                     ## not mean parameters
-     if(length(paramtemp$mean)>1)    Mtemp=paramtemp$mean
      param$mean=0;        ## mean must be =0 when calling covariance matrix
      Xtemp=X;X=NULL                         ## saving X and setting X=NULL
 }
@@ -210,10 +311,18 @@ Mtemp=NULL
 #####################################################
 
 covmatrix = GeoCovmatrix(coordx=coordx, coordy=coordy,coordz=coordz, coordt=coordt, coordx_dyn=coordx_dyn,
-            corrmodel=corrmodel, distance= distance,grid=grid,model=model,n=n,
+            corrmodel=corrmodel, distance= distance,grid=grid,model=model,n=n_cov,
             param=param, anisopars=anisopars, radius=radius,sparse=sparse,copula=copula,X=X)
 
 #####################################################
+## Normalize legacy/no-copula GeoCovmatrix objects.  Some fitted objects may
+## store an absent copula as NULL, NA, or an empty string; downstream kriging
+## logic must treat all of these representations identically.
+if (!is.null(covmatrix$copula)) {
+  cov_copula <- as.character(covmatrix$copula)[1L]
+  if (is.na(cov_copula) || !nzchar(gsub("[[:blank:]]", "", cov_copula)))
+    covmatrix$copula <- NULL
+}
 covmatrix$param=unlist(covmatrix$param)
 if(bivariate) tloc=1
 spacetime_dyn=FALSE; if(!is.null(covmatrix$coordx_dyn)) spacetime_dyn=TRUE
@@ -222,15 +331,16 @@ if(!spacetime_dyn) dimat=covmatrix$numcoord*covmatrix$numtime
 if(spacetime_dyn)  dimat =sum(covmatrix$ns)
 dimat2=numloc*tloc
 
-if(is.null(X)) XX=rep(1,dimat)
-else XX=X
+## GeoCovmatrix needs the external observation locations for Gaussian-copula
+## covariance construction, but downstream parameter extraction expects a
+## scalar regression coefficient.  MM retains the external mean vector.
+if (copula_cont && !is.null(Mobs)) param$mean <- 0
 
-MM=NULL
-if(!is.null(Mtemp))  {MM=Mtemp;param$mean=0}
-else  { if(length(param$mean)>1)  { MM=param$mean; param$mean=0 } } ## in the case of non constant external mean        
+MM <- Mtemp
+if(!is.null(MM)) param$mean <- 0
 ###############
-if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian")) {
-          if(is.null(Xtemp)) X=matrix(rep(1,dimat))
+if(model %in% c("Weibull","Gamma","LogLogistic","LogGaussian") && !copula_cont) {
+          if(is.null(Xtemp)) X=matrix(1, nrow=dimat, ncol=1L)
           else               X=Xtemp
           param=paramtemp
           if(!is.null(Mtemp)) param$mean=0
@@ -242,19 +352,86 @@ else { if(!is.null(X)) X=covmatrix$X
      }
 
 ###############
-num_betas=ncol(X); NS=0
+if (!bivariate) {
+  X <- .GeoMean_design(X, n = dimat, name = "X")
+  num_betas <- ncol(X)
+  if (!is.null(MM) && length(MM) != dimat)
+    stop("The fixed observation mean must have one value per observation.\n")
+  if (!is.null(Mloc)) {
+    if (length(Mloc) == 1L) Mloc <- rep(Mloc, dimat2)
+    if (length(Mloc) != dimat2)
+      stop("Mloc must have one value per prediction point/time combination.\n")
+  }
+  if (is.null(Mloc)) {
+    Xloc <- .GeoMean_design(Xloc, n = dimat2, p = num_betas, name = "Xloc")
+  } else {
+    Xloc <- NULL
+  }
+} else {
+  X <- .GeoBivariateDesign(
+    if(is.null(X)) covmatrix$X else X,
+    covmatrix$ns, context = "GeoKrig"
+  )
+  num_betas <- ncol(X)
+  invisible(.GeoBivariateValidateMeanParameters(
+    param, num_betas, context = "GeoKrig"
+  ))
+  if (!is.null(Mloc)) {
+    Mloc <- as.numeric(Mloc)
+    if (length(Mloc) == 1L) Mloc <- rep(Mloc, dimat2)
+    if (length(Mloc) != dimat2 || any(!is.finite(Mloc)))
+      stop("GeoKrig: Mloc must contain one finite value per prediction location.")
+    Xloc <- NULL
+  } else {
+    Xloc <- .GeoMean_design(Xloc, n = dimat2, p = num_betas, name = "Xloc")
+  }
+}
+XX <- X
+NS=0
 if(spacetime||bivariate) { NS=cumsum(covmatrix$ns); NS=c(0,NS)[-(length(covmatrix$ns)+1)] }
-if(is.null(Xloc)) Xloc=as.matrix(rep(1,dimat2))
-else {if(spacetime_dyn) Xloc=as.matrix(Xloc)}
 ###########
-nuisance = param[covmatrix$namesnuis]; nuisance=Filter(Negate(is.null),nuisance)
-sel=substr(names(nuisance),1,4)=="mean"
-betas=as.numeric(nuisance[sel])   ## mean parameters
-if(length(betas)>1 && is.null(X)) stop("Covariates matrix X is missing\n")
-if(bivariate) { sel1=substr(names(nuisance),1,6)=="mean_1"; betas1=as.numeric(nuisance[sel1])
-                sel2=substr(names(nuisance),1,6)=="mean_2"; betas2=as.numeric(nuisance[sel2])
-              }
-other_nuis=as.numeric(nuisance[!sel])
+nuisance = if (bivariate) covmatrix$param[covmatrix$namesnuis] else param[covmatrix$namesnuis]; nuisance=Filter(Negate(is.null),nuisance)
+## n is an argument rather than a named nuisance parameter for count models,
+## but the generic copula moment/quantile engines need the common size value.
+if (!isTRUE(bivariate) && !is.null(copula) &&
+    copula %in% c("Clayton", "SkewGaussian") &&
+    as.integer(CkModel(model)) %in% c(11L, 16L)) {
+  nn <- if (as.integer(CkModel(model)) == 11L && !is.null(count_sizes))
+    unique(as.numeric(c(count_sizes$obs, count_sizes$pred))) else as.numeric(n_cov)[1L]
+  if (length(nn) != 1L || !is.finite(nn))
+    stop("GeoKrig: copula-based Binomial prediction currently requires one common n across observations and prediction locations.", call. = FALSE)
+  nuisance["n"] <- nn[1L]
+}
+if(!bivariate) {
+  sel <- names(nuisance) %in% .GeoMean_names(num_betas)
+  betas <- .GeoMean_beta(nuisance, num_betas)
+}
+if(bivariate) {
+  sel <- substr(names(nuisance),1,4)=="mean"
+  beta_biv <- .GeoBivariateValidateMeanParameters(
+    nuisance, num_betas, context = "GeoKrig"
+  )
+  betas1 <- beta_biv$beta1
+  betas2 <- beta_biv$beta2
+}
+## Count cross-covariance kernels use the same alphabetically ordered
+## nuisance vector as GeoCovmatrix().  Keeping one ordering is essential for
+## models such as PoissonGamma/PoissonGammaZIP where `shape` is not adjacent
+## to `nugget` in NuisParam().
+other_nuis_named <- nuisance[!sel]
+other_nuis <- as.numeric(other_nuis_named[order(names(other_nuis_named))])
+
+## Marginal location predictors used by copula covariance and
+## prediction.  These are eta = X beta (or externally supplied values), not
+## necessarily the marginal means on the observed scale.
+eta_obs_cop <- eta_loc_cop <- NULL
+if (copula_cont) {
+  eta_obs_cop <- if (is.null(MM)) as.numeric(X %*% betas) else as.numeric(MM)
+  eta_loc_cop <- if (!is.null(Mloc)) as.numeric(Mloc) else as.numeric(Xloc %*% betas)
+  if (length(eta_obs_cop) != dimat || length(eta_loc_cop) != dimat2 ||
+      any(!is.finite(c(eta_obs_cop, eta_loc_cop))))
+    stop("GeoKrig: inconsistent copula marginal locations.", call. = FALSE)
+}
 
 ############
 cmodel=corrmodel
@@ -267,40 +444,183 @@ pred = NULL
 varpred=vv=vv2=NULL
 k = 0
 
-###### spatial case not grid
-if(!grid){
-  if(!spacetime&&!bivariate){
-    if(is.null(covmatrix$coordz))  ccc=cbind(covmatrix$coordx,covmatrix$coordy,0) 
-    else                           ccc=cbind(covmatrix$coordx,covmatrix$coordy,covmatrix$coordz)
-    }
-}
-###### spatial anisotropy case 
-if(!is.null(anisopars)) {  ccc=GeoAniso(ccc,c(anisopars$angle,anisopars$ratio))}
+###### observed coordinates in covariance ordering
+ccc <- .GeoKrigObservedCoordinates(covmatrix, dimat, context = "GeoKrig")
 
-if(grid) {if(is.null(coordz)) { ccc=as.matrix(expand.grid(covmatrix$coordx,covmatrix$coordy));ccc=cbind(ccc,0) }
-          else                { ccc=as.matrix(expand.grid(covmatrix$coordx,covmatrix$coordy,covmatrix$coordz)) }
-          grid=FALSE
-         }
-else  {
-      if((spacetime||bivariate)&&(!spacetime_dyn)) 
-      {  ## space time not dynamic
-          if(!is.null(covmatrix$coordz)) ccc=cbind(rep(covmatrix$coordx,covmatrix$numtime),rep(covmatrix$coordy,covmatrix$numtime),rep(covmatrix$coordz,covmatrix$numtime))
-          else                          ccc=cbind(rep(covmatrix$coordx,covmatrix$numtime),rep(covmatrix$coordy,covmatrix$numtime),0)
-      }
-      if((spacetime||bivariate)&&(spacetime_dyn)) {
-            ccc=do.call(rbind,args=c(covmatrix$coordx_dyn));
-            if(ncol(ccc)==2) ccc=cbind(ccc,0)
-                                                  }
+###### spatial anisotropy case
+## Apply anisotropy only after the final prediction-coordinate matrix
+## has been constructed for spatial, grid, space-time, and dynamic inputs.
+if(!is.null(anisopars)) {
+    ccc=GeoAniso(ccc,c(anisopars$angle,anisopars$ratio))
 }
 ###############################################################
 
-if((spacetime||bivariate)&&spacetime_dyn)  dataT=t(unlist(data))  
-else dataT=t(data)
+if(bivariate) dataT <- .GeoBivariateDataVector(data, covmatrix$ns, context = "GeoKrig")
+else if(spacetime && spacetime_dyn) dataT <- as.numeric(unlist(data, use.names = FALSE))
+else dataT <- as.numeric(data)
+
+####################################################################
+############### blocked global kriging ###############################
+####################################################################
+## The high-volume observed-scale copula path and the ordinary Gaussian
+## baseline are evaluated in prediction-location blocks.  The observed
+## covariance matrix is factorized once and the factorization is reused for
+## every block.  The full weights matrix is still retained because it is part
+## of the historical GeoKrig return object; therefore blocking reduces peak
+## cross-covariance memory without changing the returned object.
+blocked_continuous <- !bivariate && (copula_cont ||
+  (is.null(covmatrix$copula) && as.integer(covmatrix$model) == 1L))
+
+if (blocked_continuous) {
+  if (copula_cont) {
+    moments_obs_cop <- .GeoCopulaMarginalMoments(
+      covmatrix$model, nuisance, eta_obs_cop
+    )
+    moments_loc_cop <- .GeoCopulaMarginalMoments(
+      covmatrix$model, nuisance, eta_loc_cop
+    )
+    mu <- as.numeric(moments_obs_cop$mean)
+    muloc <- as.numeric(moments_loc_cop$mean)
+    vvar_all <- as.numeric(moments_loc_cop$variance)
+    eta_range_cop <- range(c(eta_obs_cop, eta_loc_cop), finite = TRUE)
+  } else {
+    mu <- if (is.null(MM)) as.numeric(X %*% betas) else as.numeric(MM)
+    muloc <- if (!is.null(Mloc)) as.numeric(Mloc) else as.numeric(Xloc %*% betas)
+    vvar_all <- rep(as.numeric(covmatrix$param["sill"]), dimat2)
+    eta_range_cop <- NULL
+  }
+
+  if (length(mu) != dimat || length(muloc) != dimat2 ||
+      length(vvar_all) != dimat2 ||
+      any(!is.finite(c(mu, muloc, vvar_all)))) {
+    stop("GeoKrig: inconsistent blocked marginal moments.", call. = FALSE)
+  }
+
+  if (identical(type_krig, "Universal")) {
+    if (copula_cont) {
+      d_obs <- .GeoCopulaMarginalMeanDerivative(
+        covmatrix$model, nuisance, eta_obs_cop
+      )
+      d_loc <- .GeoCopulaMarginalMeanDerivative(
+        covmatrix$model, nuisance, eta_loc_cop
+      )
+      X_system <- X * d_obs
+      Xloc_system <- Xloc * d_loc
+    } else {
+      X_system <- X
+      Xloc_system <- Xloc
+    }
+    mean_names_system <- .GeoMean_names(ncol(X_system))
+  } else {
+    X_system <- Xloc_system <- mean_names_system <- NULL
+  }
+
+  krig_factor <- .GeoKrigFactor(
+    covmatrix, method = method, context = "GeoKrig"
+  )
+  krig_blocks <- .GeoKrigLocationBlocks(
+    dimat, numloc, tloc, context = "GeoKrig"
+  )
+  n_krig_blocks <- length(krig_blocks)
+  if (isTRUE(progress) && n_krig_blocks > 1L) {
+    restore_progress_handlers <- .GeoProgressHandlersPush(
+      handler = "txtprogressbar", global = TRUE
+    )
+    on.exit(restore_progress_handlers(), add = TRUE)
+    krig_pb <- progressr::progressor(
+      steps = n_krig_blocks, on_exit = FALSE, auto_finish = FALSE
+    )
+    ## Finish before restoring the temporary global handler, including on
+    ## errors or user interrupts.
+    on.exit(krig_pb(type = "finish"), add = TRUE, after = FALSE)
+  } else {
+    krig_pb <- function(...) {}
+  }
+
+  ## Historical API: GeoKrig returns all kriging weights.  Keep that result
+  ## exactly, but never materialize the complete cross-covariance matrix.
+  krig_weights <- matrix(NA_real_, nrow = dimat, ncol = dimat2)
+  pp <- numeric(dimat2)
+  vv <- if (isTRUE(mse)) numeric(dimat2) else NULL
+  datas <- as.matrix(as.numeric(dataT) - as.numeric(mu))
+  nugget_scale <- 1 - as.numeric(covmatrix$param["nugget"])
+  if (!is.finite(nugget_scale))
+    stop("GeoKrig: invalid nugget parameter.", call. = FALSE)
+
+  loc_matrix <- cbind(locx, locy, locz)
+  block_id <- 0L
+  for (loc_idx in krig_blocks) {
+    block_id <- block_id + 1L
+    first_task <- (loc_idx[1L] - 1L) * tloc + 1L
+    last_task <- loc_idx[length(loc_idx)] * tloc
+    task_idx <- seq.int(first_task, last_task)
+    ntarget_block <- length(task_idx)
+
+    rho_block <- .GeoKrigCorrelationBlock(
+      covmatrix = covmatrix, observed_coords = ccc,
+      corrmodel = corrmodel, corrparam = corrparam, distance = distance,
+      loc_block = loc_matrix[loc_idx, , drop = FALSE],
+      time = time, tloc = tloc, NS = NS, which = which,
+      context = "GeoKrig"
+    )
+    latent_block <- nugget_scale * rho_block
+
+    if (copula_cont) {
+      eta_obs_pair <- rep(eta_obs_cop, times = ntarget_block)
+      eta_loc_pair <- rep(eta_loc_cop[task_idx], each = dimat)
+      CC_block <- .GeoCopulaCrossCovFast(
+        covmatrix$copula, latent_block, covmatrix$model, nuisance,
+        eta1 = eta_obs_pair, eta2 = eta_loc_pair,
+        eta_range = eta_range_cop
+      )
+      dim(CC_block) <- c(dimat, ntarget_block)
+    } else {
+      CC_block <- matrix(
+        latent_block * as.numeric(covmatrix$param["sill"]),
+        nrow = dimat, ncol = ntarget_block
+      )
+    }
+
+    Xloc_block <- if (identical(type_krig, "Universal")) {
+      Xloc_system[task_idx, , drop = FALSE]
+    } else NULL
+
+    krig_system_block <- .GeoKrigSystem(
+      covmatrix = covmatrix, CC = CC_block, method = method,
+      type_krig = type_krig, X = X_system, Xloc = Xloc_block,
+      target_variance = vvar_all[task_idx], mse = mse, varcov = varcov,
+      mean_names = mean_names_system, factor = krig_factor,
+      context = "GeoKrig"
+    )
+    wb <- krig_system_block$weights
+    krig_weights[, task_idx] <- wb
+    pp[task_idx] <- muloc[task_idx] + as.numeric(crossprod(datas, wb))
+    if (isTRUE(mse)) vv[task_idx] <- krig_system_block$mse
+
+    rm(rho_block, latent_block, CC_block, wb, krig_system_block)
+    if (copula_cont) rm(eta_obs_pair, eta_loc_pair)
+    krig_pb(sprintf("block %d/%d", block_id, n_krig_blocks))
+  }
+
+  cvv <- c(vv)
+  if (mse) {
+    if (anyNA(cvv)) cvv[is.na(cvv)] <- 1e-30
+    selp <- cvv <= 0
+    if (any(selp)) cvv[selp] <- 1e-30
+  }
+  if (spacetime) {
+    pred <- matrix(t(pp), nrow = tloc, ncol = numloc)
+    varpred <- if (isTRUE(mse)) matrix(cvv, nrow = tloc, ncol = numloc) else NULL
+  } else {
+    pred <- c(pp)
+    varpred <- if (isTRUE(mse)) cvv else NULL
+  }
+}
 
 ####################################################################
 ############### computing  correlation vector ######################
 ####################################################################
-if(covmatrix$model %in% c(1,10,59,18,21,12,26,24,27,38,29,39,28,9, 34,40,20,22))    
+if(!blocked_continuous && covmatrix$model %in% c(1,10,59,18,21,12,26,24,27,38,29,39,28,9,34,40,20,22,25,33,42,50))    
 {
 ## gaussian=1
 ## skew gaussian=10
@@ -344,6 +664,21 @@ if(bivariate){  corri=cc$corri  }
 
 else {
         rho=cc$corri; cc=(1-as.numeric(covmatrix$param["nugget"]))*rho
+
+if (copula_cont) {
+  eta_obs_pair <- rep(eta_obs_cop, times = dimat2)
+  eta_loc_pair <- rep(eta_loc_cop, each = dimat)
+  corri <- .GeoCopulaCrossCovFast(
+    covmatrix$copula, cc, covmatrix$model, nuisance,
+    eta1 = eta_obs_pair, eta2 = eta_loc_pair
+  )
+  moments_obs_cop <- .GeoCopulaMarginalMoments(
+    covmatrix$model, nuisance, eta_obs_cop
+  )
+  moments_loc_cop <- .GeoCopulaMarginalMoments(
+    covmatrix$model, nuisance, eta_loc_cop
+  )
+} else {
 
 ################ Gaussian ##################################
 if(covmatrix$model==1)   {  vv=as.numeric(covmatrix$param['sill']); 
@@ -397,34 +732,26 @@ if(covmatrix$model==34)
 if(covmatrix$model==40)
 { vv=as.numeric(covmatrix$param['sill']);
   tail1=as.numeric(covmatrix$param['tail1']);tail2=as.numeric(covmatrix$param['tail2'])
-  if(is.null(covmatrix$copula)){ 
-                           hr=tail1;hl=tail2
-                             x1=1-(1-cc^2)*hr; y1=1-(1-cc^2)*hl; x2=(1-hr)^2-(cc*hr)^2;y2=(1-hl)^2-(cc*hl)^2
-                             g=1-hl-hr+(1-cc^2)*hl*hr
-                             h1=sqrt(1-cc^2/(x1^2))+(cc/x1)*asin(cc/x1);h2=sqrt(1-cc^2/(y1^2))+(cc/y1)*asin(cc/y1)
-                             h3=sqrt(1-cc^2/(x1*y1))+sqrt(cc^2/(x1*y1))*asin(sqrt(cc^2/(x1*y1)))
-                             p1=x1*h1/(2*pi*(x2)^(3/2))+cc/(4*(x2)^(3/2))
-                             p2=y1*h2/(2*pi*(y2)^(3/2))+cc/(4*(y2)^(3/2))
-                             p3=-(x1*y1)^(1/2)*h3/(2*pi*(g)^(3/2))+cc/(4*(g)^(3/2))
-                             mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
-                             vv1=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2
-                             corri=(p1+p2+2*p3-mm^2)/vv1
-                           }
-    else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
+  if(is.null(covmatrix$copula)){
+    mom_hh <- .GeoTukeyh2StandardMoments(tail1, tail2)
+    mm <- mom_hh$mean
+    vv1 <- mom_hh$variance
+    corri <- .GeoTukeyh2Correlation(cc, tail1, tail2)
+  }
+  else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ####################### sas ######################################
-if (covmatrix$model == 20) { 
+if (covmatrix$model == 20) {
   vv <- as.numeric(covmatrix$param['sill'])
   tail <- as.numeric(covmatrix$param['tail'])
   skew <- as.numeric(covmatrix$param['skew'])
-    if(is.null(covmatrix$copula)){ 
-  d <- tail
-  e <- skew
-  mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-  vv1=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
-  corri=corrsas(cc,e,d)
-}
-      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
+  if(is.null(covmatrix$copula)){
+    mom_sas <- .GeoSASStandardMoments(skew, tail)
+    mm <- mom_sas$mean
+    vv1 <- mom_sas$variance
+    corri <- corrsas(cc, skew, tail)
+  }
+  else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ######################## skew student T#####################################
 if(covmatrix$model==18) 
@@ -535,8 +862,7 @@ if(covmatrix$model==26)
 {  # weibull
                         sh=as.numeric(covmatrix$param['shape']);
                         if(is.null(covmatrix$copula)){ 
-                        cc2 <- cc^2;c2 <- gamma(1 + 1/sh)^2;denom <- gamma(1 + 2/sh) - c2;Fz <- hypergeo::hypergeo(-1/sh, -1/sh, 1, cc2)
-                        corri <- (c2 / denom) * (Re(Fz) - 1)
+                        corri <- .GeoWeibullCorr(cc, sh)
                          }
                         else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}           
 }
@@ -558,13 +884,19 @@ if(covmatrix$model==22)
                                      else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
 ############################################################
+} ## end legacy/non-copula marginal-correlation transformations
  }        
 ############################################################
 if(bivariate)  {          if(which==1)    vvar=covmatrix$param["sill_1"]+covmatrix$param["nugget_1"]
                           if(which==2)    vvar=covmatrix$param["sill_2"]+covmatrix$param["nugget_2"]
                }
 else    {
-    #####  computing mean and variances for each model
+    ##### computing target marginal variance
+    if (copula_cont) {
+      vvar <- as.numeric(moments_loc_cop$variance)
+      M <- 0
+    } else {
+    ##### legacy/non-copula mean and variances for each model
      if(covmatrix$model==1)   {vvar= vv;                M=0 }
      if(covmatrix$model==10)  {vvar= vv+sk^2*(1-2/pi); M=sk*sqrt(2/pi)}
      if(covmatrix$model==59)  {vvar = vv * (1 - 2*sk + 2*sk^2) / (sk^2 * (1-sk)^2)
@@ -599,6 +931,7 @@ else    {
      if(covmatrix$model==22)  {vvar= exp(ss)-1   }
 
      if(SinhAsinhtemp||Tukeyh2temp||Tukeyhtemp||logGausstemp) vvar=1
+    } ## end legacy target variance
 
  }
 ###############################################################  
@@ -607,17 +940,27 @@ else    {
 ############setting mean for the external mean case ################
 ################################################################
    if(!bivariate){
-    if(is.null(MM)) {mu=X%*%betas; muloc=Xloc%*%betas}
-                    else            {mu=MM;         muloc=Mloc}  
+    if (copula_cont) {
+      mu <- as.numeric(moments_obs_cop$mean)
+      muloc <- as.numeric(moments_loc_cop$mean)
+    } else {
+      mu <- if (is.null(MM)) as.numeric(X %*% betas) else as.numeric(MM)
+      muloc <- if (!is.null(Mloc)) as.numeric(Mloc) else as.numeric(Xloc %*% betas)
+    }
                         }          
-    else{ X11=X[1:covmatrix$ns[1],]; X22=X[(covmatrix$ns[1]+1):(covmatrix$ns[1]+covmatrix$ns[2]),]
-               if(!is.null(Xloc)) 
-                    { X11_loc=Xloc[(1:(nrow(Xloc)/2)),]; X22_loc=Xloc[(nrow(Xloc)/2+1):nrow(Xloc),]}
-               mu=c(X11%*%matrix(betas1),X22%*%matrix(betas2))
-                   if(!is.null(Xloc)) muloc=c(X11_loc%*%matrix(betas1),X22_loc%*%matrix(betas2))
-        }  
+    else {
+      i1 <- seq_len(covmatrix$ns[1L])
+      i2 <- covmatrix$ns[1L] + seq_len(covmatrix$ns[2L])
+      X11 <- X[i1, , drop = FALSE]
+      X22 <- X[i2, , drop = FALSE]
+      mu <- as.numeric(c(X11 %*% betas1, X22 %*% betas2))
+      muloc <- .GeoBivariatePredictionMean(
+        nuisance, Xloc, dimat2, which, num_betas, Mloc,
+        context = "GeoKrig"
+      )
+    }
 #### updating mean
-        if(!bivariate){
+        if(!bivariate && !copula_cont){
           #### additive model on the real line
          if(covmatrix$model %in% c(10,18,29,27,38,39,28, 34,40,20,59))
                                 { muloc=muloc + M;   mu=mu + M }     
@@ -629,11 +972,45 @@ else    {
 ##################################################################
 ##########computing kriging weights##################################
 ##################################################################
-if(is.null(covmatrix$copula))                 { CC = matrix(corri*vvar,nrow=dimat,ncol=dimat2)}
-else  {if(covmatrix$copula=="Gaussian")       { CC = matrix(corri,nrow=dimat,ncol=dimat2)    }}
-MM=getInvC(covmatrix,CC,mse)  
-krig_weights = MM$a       
-BB=MM$b                   
+if(bivariate) {
+  ## Corr_c calls the bivariate covariance model directly; its output already
+  ## contains sill, nugget and cross-covariance scaling.
+  CC <- matrix(corri, nrow = dimat, ncol = dimat2)
+} else if(is.null(covmatrix$copula)) {
+  CC <- matrix(corri*vvar, nrow=dimat, ncol=dimat2)
+} else if(covmatrix$copula %in% c("Gaussian", "Clayton", "SkewGaussian")) {
+  CC <- matrix(corri, nrow=dimat, ncol=dimat2)
+}
+if(identical(type_krig, "Universal")) {
+  if(bivariate) {
+    X_system <- .GeoBivariateBlockDesign(X, covmatrix$ns)
+    Xloc_system <- .GeoBivariateTargetBlockDesign(
+      Xloc, nloc = dimat2, p = num_betas, which = as.integer(which)
+    )
+    mean_names_system <- colnames(X_system)
+  } else {
+    if (copula_cont) {
+      d_obs <- .GeoCopulaMarginalMeanDerivative(covmatrix$model, nuisance, eta_obs_cop)
+      d_loc <- .GeoCopulaMarginalMeanDerivative(covmatrix$model, nuisance, eta_loc_cop)
+      X_system <- X * d_obs
+      Xloc_system <- Xloc * d_loc
+    } else {
+      X_system <- X
+      Xloc_system <- Xloc
+    }
+    mean_names_system <- .GeoMean_names(ncol(X_system))
+  }
+} else {
+  X_system <- Xloc_system <- mean_names_system <- NULL
+}
+krig_system <- .GeoKrigSystem(
+  covmatrix = covmatrix, CC = CC, method = method,
+  type_krig = type_krig, X = X_system, Xloc = Xloc_system,
+  target_variance = vvar, mse = mse, varcov = varcov,
+  mean_names = mean_names_system, context = "GeoKrig"
+)
+krig_weights = krig_system$weights
+BB = NULL
 
 ##################################################################
 ################# simple or universal kriging #################################
@@ -642,6 +1019,11 @@ if(type_krig %in% c("Simple","Universal"))  {
 
 if(!bivariate)
 {  
+
+if (copula_cont) {
+  datas <- as.matrix(as.numeric(dataT) - as.numeric(mu))
+  pp <- as.numeric(muloc) + as.numeric(crossprod(datas, krig_weights))
+} else {
 
 if(type_krig %in% c("Simple","Universal")) {
                ############################ optimal linear predictors #######################
@@ -659,36 +1041,29 @@ if(covmatrix$model %in% c(21,24,26,22))
                  datas=as.matrix(c(dataT)/emu-ones)
                  pp = c(emuloc) * ( one + crossprod(datas,krig_weights))  
                       }
+} ## end legacy/non-copula predictor
 }     
-else  {   
-  dat = c(dataT) - as.numeric(c(rep(covmatrix$param['mean_1'],covmatrix$ns[1]),
-                            rep(covmatrix$param['mean_2'],covmatrix$ns[2])))
-
-  if(which==1) pp = c(param$mean_1) + crossprod(dat,krig_weights)
-  if(which==2) pp = c(param$mean_2) + crossprod(dat,krig_weights)
-      }
+else {
+  dat <- as.numeric(dataT) - as.numeric(mu)
+  pp <- as.numeric(muloc) + as.numeric(crossprod(dat, krig_weights))
+}
 #### MSE COMPUTATION ##################
 
   if(mse) {
-           # Gaussian,StudentT,skew-Gaussian,two piece linear kriging
-        if(covmatrix$model %in% c(1,12,27,38,29,10,18,39,28,40,34,9,20,59))
-                              vv <- if (identical(type_krig, "Universal")) {
-                                      mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)
-                                    } else {
-                                      rep(as.numeric(vvar), length.out = dimat2) - diag(BB)
-                                    }
+    if (copula_cont) {
+      vv <- krig_system$mse
+    } else {
+      # Gaussian, StudentT, skew-Gaussian and two-piece linear kriging
+      if(covmatrix$model %in% c(1,12,27,38,29,10,18,39,28,40,34,9,20,59))
+        vv <- krig_system$mse
 
-             #gamma  #weibull     #loglogistic #loggaussian
-    if(covmatrix$model %in% c(21,26,24,22))  {
-                              vv <- if (identical(type_krig, "Universal")) {
-                                      mse_universal(krig_weights, X, Xloc, vvar, BB, varcov)
-                                    } else {
-                                      rep(as.numeric(vvar), length.out = dimat2) - diag(BB)
-                                    }
-                     vv <- emuloc^2 * vv            
-                     }
-
-               }     
+      # gamma, Weibull, log-logistic and log-Gaussian
+      if(covmatrix$model %in% c(21,26,24,22))  {
+        vv <- krig_system$mse
+        vv <- emuloc^2 * vv
+      }
+    }
+  }     
 
 
   }  
@@ -710,9 +1085,9 @@ if(mse) { if(anyNA(cvv))
 ####   formatting data  
 if(spacetime||bivariate) {
             pred=matrix(t(pp),nrow=tloc,ncol=numloc);
-            varpred=matrix(cvv,nrow=tloc,ncol=numloc);
+            varpred=if(isTRUE(mse)) matrix(cvv,nrow=tloc,ncol=numloc) else NULL;
             }
-else {pred=c(pp);varpred=cvv}
+else {pred=c(pp);varpred=if(isTRUE(mse)) cvv else NULL}
 
 }
 
@@ -721,29 +1096,20 @@ else {pred=c(pp);varpred=cvv}
 ####################################################################################################################################
 ###################### binomial  negative binomial and poisson (inflated) #####################################
 ####################################################################################################################################
-if(covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46,47,57,58))
+if(!copula_cont && covmatrix$model %in% c(2,11,14,19,30,36,16,43,44,45,46,47,57,58))
 {
 
      if(type=="Standard"||type=="standard") {
 
       if(!bivariate){
-               if(is.null(MM)) {mu=X%*%betas; mu0=Xloc%*%betas}
-               else {mu=MM;mu0=Mloc}        
+               mu <- if (is.null(MM)) as.numeric(X %*% betas) else as.numeric(MM)
+               mu0 <- if (!is.null(Mloc)) as.numeric(Mloc) else as.numeric(Xloc %*% betas)
       }
      if(bivariate)  {mu  = c(X11%*%betas1,X22%*%betas2)}
-     KK=0
-     if(covmatrix$model %in% c(2,11))    ### binomial
-     { if(is.null(nloc)) {KK=rep(round(mean(n)),dimat2)}
-          else {if(is.numeric(nloc)) {
-                     if(length(nloc)==1) KK=rep(nloc,dimat2) 
-                     else                KK=nloc
-                                    }
-               } 
-         if(length(n)==1) {n=rep(n,dimat) }
-         if(length(KK)!=dimat2) stop("dimension of nloc is wrong\n")
-    }
-     if(covmatrix$model==19) KK=min(nloc)
-     if(covmatrix$model==16||covmatrix$model==45) KK=n
+     ## Count-size vectors in observation and prediction ordering.
+     n_obs_count <- if (is.null(count_sizes)) rep.int(1L, dimat) else count_sizes$obs
+     n_pred_count <- if (is.null(count_sizes)) rep.int(1L, dimat2) else count_sizes$pred
+     KK <- n_pred_count
 
 ## covariance between observed and prediction sites
 if(covmatrix$model %in% c(2,11,14,16,19,30,36,43,44,45,46,47,57,58))
@@ -771,7 +1137,7 @@ ccorr = dotCall64::.C64(
   locx, locy, locz,
   covmatrix$numcoord, numloc,
   covmatrix$model, tloc,
-  as.integer(KK), as.integer(n), covmatrix$ns, NS, covmatrix$numtime,
+  as.integer(KK), as.integer(n_obs_count), covmatrix$ns, NS, covmatrix$numtime,
   as.double(c(mu)),              # mean_obs
   as.double(c(mu0)),             # mean_loc
   as.double(other_nuis), as.double(corrparam),
@@ -786,7 +1152,7 @@ ccorr = dotCall64::.C64(
 }
 
 if(cop==1) { 
-nuisance$n=n[1]
+nuisance$n=n_obs_count[1L]
 corri= gaussian_copula_cov(ccorr$corri,covmatrix$model, nuisance)
      }
 else {corri=ccorr$corri}
@@ -794,9 +1160,9 @@ else {corri=ccorr$corri}
 ##################inverse of cov matrix##############################################
         if(!bivariate) cc = matrix(corri,nrow=dimat,ncol=dimat2)
         else           {}
-        MM=getInvC(covmatrix,cc,mse)  
-        krig_weights = MM$a
-        BB=MM$b
+        krig_weights = .GeoKrigSolve(covmatrix, cc, method=method,
+                                         context="GeoKrig")
+        BB = NULL
 ######################################################################################
 
        if(type_krig %in% c("Simple","Universal"))   {
@@ -837,8 +1203,8 @@ else {corri=ccorr$corri}
        if(covmatrix$model==2||covmatrix$model==11){  ### binomial
         p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate) { 
-               datas=c(dataT)-n*c(pmu)
-               pp = KK*c(p0) + crossprod(datas,  krig_weights) 
+               datas=c(dataT)-n_obs_count*c(pmu)
+               pp = n_pred_count*c(p0) + crossprod(datas,  krig_weights) 
             }
             else{}
            if(mse) vvar=KK*p0*(1-p0)
@@ -847,19 +1213,19 @@ else {corri=ccorr$corri}
            if(covmatrix$model==19){  ### binomial2
             p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate)   
-              { datas=c(dataT)-c(n*pmu)
-                pp = nloc*c(p0) + crossprod(datas,krig_weights)
-              } 
+              { datas=c(dataT)-c(n_obs_count*pmu)
+                pp = n_pred_count*c(p0) + crossprod(datas,krig_weights)
+              }
             else{}
-          if(mse)    vvar=nloc*p0*t(1-p0)
+          if(mse)    vvar=n_pred_count*p0*(1-p0)
           }
         ##########################################################
        if(covmatrix$model==14||covmatrix$model==16){    ###geometric or negative binomial
          p0=pnorm(mu0); pmu=pnorm(mu)
             if(!bivariate)
             {   k1=c(p0);k2=c(pmu);
-                aa=n*(1-k1)/k1  
-                datas=c(dataT)-n*(1-k2)/k2
+                aa=n_pred_count*(1-k1)/k1
+                datas=c(dataT)-n_obs_count*(1-k2)/k2
                 pp = aa + crossprod(datas ,krig_weights)
           }
             else{}
@@ -881,19 +1247,37 @@ else {corri=ccorr$corri}
             p0=pnorm(mu0); pmu=pnorm(mu)
             p=as.numeric(pnorm(covmatrix$param['pmu']))
             if(!bivariate) { k1=c(p0);k2=c(pmu);
-                             datas=c(dataT)-(1-p)*n*(1-k2)/k2
-                             pp = (1-p)*n*(1-k1)/k1 + crossprod(datas,krig_weights)
+                             datas=c(dataT)-(1-p)*n_obs_count*(1-k2)/k2
+                             pp = (1-p)*n_pred_count*(1-k1)/k1 + crossprod(datas,krig_weights)
                            }
             else{}
-            if(mse) vvar=n*(1-k1)*(1-p)*(1+n*p*(1-k1))/k1^2
+            if(mse) vvar=n_pred_count*(1-k1)*(1-p)*(1+n_pred_count*p*(1-k1))/k1^2
           }
         if(mse){
-                  vv = diag(sqrt(tcrossprod(vvar))  - BB  )
-                }
+          ## Compute only the diagonal kriging variance; never allocate an
+          ## Npred x Npred matrix.  Universal kriging additionally propagates
+          ## uncertainty in the estimated regression coefficients.
+          vv <- as.numeric(vvar) - colSums(cc * krig_weights)
+          if (identical(type_krig, "Universal")) {
+            d_obs <- .GeoKrigCountMeanDerivative(
+              covmatrix$model, covmatrix$param, mu, n_obs_count
+            )
+            d_loc <- .GeoKrigCountMeanDerivative(
+              covmatrix$model, covmatrix$param, mu0, n_pred_count
+            )
+            X_system_count <- X * d_obs
+            Xloc_system_count <- Xloc * d_loc
+            mean_names_count <- .GeoMean_names(ncol(X_system_count))
+            var_mean_count <- .GeoKrigMeanVarcov(
+              varcov, mean_names = mean_names_count, context = "GeoKrig"
+            )
+            trend_gap_count <- Xloc_system_count - t(krig_weights) %*% X_system_count
+            vv <- vv + rowSums((trend_gap_count %*% var_mean_count) * trend_gap_count)
+          }
+        }
         }
 ##############################################################
-# FIX: when mse=FALSE vv is never assigned in the count-data branch
-if(!mse) vv <- rep(NA_real_, dimat2)
+if(!mse) vv <- NULL
 cvv=c(vv)
 ##### setting almost zero when zero mse
 if(mse) {
@@ -907,12 +1291,13 @@ if(mse) {
 ####   formatting data  
 if(spacetime||bivariate) {
             pred=matrix(t(pp),nrow=tloc,ncol=numloc);
-            varpred=matrix(cvv,nrow=tloc,ncol=numloc);
+            varpred=if(isTRUE(mse)) matrix(cvv,nrow=tloc,ncol=numloc) else NULL;
             }
-          else {pred=c(pp);varpred=cvv}
+          else {pred=c(pp);varpred=if(isTRUE(mse)) cvv else NULL}
     }}
 
 if(tloc==1)  {pred=c(pred);varpred=c(varpred)}
+if(!isTRUE(mse)) varpred <- NULL
 
     # Return the objects list:
    GeoKrig= list(     bivariate=bivariate,
@@ -921,9 +1306,9 @@ if(tloc==1)  {pred=c(pred);varpred=c(varpred)}
                    covmatrix=covmatrix$covmatrix,corrmodel = corrmodel,copula=copula,data=data,distance = distance,
                    grid=covmatrix$grid,loc=loc_orig,nozero=covmatrix$nozero,ns=covmatrix$ns,X=XX,
                    numcoord = covmatrix$numcoord,numloc= numloc,numtime = covmatrix$numtime,numt = tloc,
-                   model=model,param = covmatrix$param,pred=pred,n=n,
-                   radius=radius,spacetime = covmatrix$spacetime,time=time,type=type,type_krig=type_krig,varcov=varcov,
-                   mse=varpred)
+                   model=model,fit_model=model_requested,param = param_input,pred=pred,n=n_input,nloc=nloc_input,
+                   radius=radius,spacetime = covmatrix$spacetime,time=time,type=type,type_krig=type_krig,method=method,weigthed=weigthed,varcov=varcov,
+                   weights=krig_weights,mse=varpred)
     structure(c(GeoKrig , call = call), class = c("GeoKrig"))
 }
 

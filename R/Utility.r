@@ -88,7 +88,7 @@ CkCorrModel <- function(corrmodel)
                              Wen1_time=66,wen1_time=66,    #ok
                              Wen2_space=67,wen2_space=67,  #ok
                              Wen2_time=68,wen2_time=68,    #ok
-                             Matern_Matern_sep=88,
+                             Matern_Matern_sep=86,
                              Gneiting_wen_S=87,gneiting_wen_S=87,Gneiting_Wen_S=87,
                              Gneiting_wen_T=88,gneiting_wen_T=88, #ok
                              Matern_Matern_nosep=89,
@@ -193,6 +193,11 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
     # START Include internal functions:
     CheckParamRange <- function(param)
     { 
+        ## An empty parameter set is valid: there is simply nothing to check.
+        ## This is required when GeoFit/GeoFit2 use automatic initialization
+        ## (start = NULL, normalized internally to an empty list).
+        if (is.null(param) || length(param) == 0L) return(TRUE)
+
       #  if(!is.na(param['df'])) if(param['df'] > 1/2 || param['df'] < 0 ) return(FALSE)
         #if(!is.na(param['tail'])) if(param['tail'] >0.5) return(FALSE)
         if(!is.na(param['shape'])) if(param['shape'] <0) return(FALSE)
@@ -228,6 +233,18 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
     }
    
     bivariate=CheckBiv(CkCorrModel(corrmodel))
+
+    dimension_error <- tryCatch({
+      .GeoValidate3D(
+        coordx = coordx, coordy = coordy, coordz = coordz,
+        coordx_dyn = coordx_dyn, distance = distance, grid = grid,
+        context = if (is.null(fcall)) "GeoModels" else as.character(fcall)
+      )
+      NULL
+    }, error = function(e) conditionMessage(e))
+    if (!is.null(dimension_error)) {
+      return(list(error = paste0(dimension_error, "\n")))
+    }
     if(!bivariate)  if(length(coordt)>0&&is.list(X)) X=X[[1]]
     if(!bivariate) {if(is.null(X))  {X=1;num_betas=1} 
                     else num_betas=ncol(X)  }
@@ -286,9 +303,56 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
     if(radius<0){
         error <- 'the radius of the sphere must be positive\n'
         return(list(error=error))}
-    if(CkModel(model)==11&&(all(n<1)||!all(is.numeric(n))))
-    {error <- 'the parameter n for the Binomial RF is wrong \n'
-        return(list(error=error))}
+    ## Count-field size semantics.
+    ##
+    ## Direct Binomial RFs allow site-specific n(s), as in the repeated-trial
+    ## construction.  Direct Negative-Binomial RFs instead use one common
+    ## positive integer r (stored in the public argument `n`) for the whole
+    ## field; Geometric is the special case r = 1.  Gaussian-copula margins
+    ## are a different construction and retain their existing marginal-size
+    ## handling.
+    model_code_n <- CkModel(model)
+    binomial_n_models <- c(11L, 15L, 19L, 31L, 49L, 51L)
+    negbin_common_r_models <- c(16L, 45L, 52L, 54L, 56L)
+    if(model_code_n %in% c(2L, binomial_n_models, 14L, negbin_common_r_models)) {
+      bad_n <- is.null(n) || !is.numeric(n) || !length(n) ||
+               any(!is.finite(n)) || any(n < 1) ||
+               any(abs(n - round(n)) > sqrt(.Machine$double.eps))
+
+      if(!bad_n && is.null(copula) && model_code_n == 2L) {
+        bad_n <- length(n) != 1L || as.integer(round(n[1L])) != 1L
+        if(bad_n) {
+          error <- 'for the direct Binary/Bernoulli random field n is fixed to 1\n'
+          return(list(error=error))
+        }
+      }
+
+      if(!bad_n && is.null(copula) && model_code_n == 14L) {
+        bad_n <- length(n) != 1L || as.integer(round(n[1L])) != 1L
+        if(bad_n) {
+          error <- 'for the direct Geometric random field n is fixed to 1 (the r = 1 Negative-Binomial case)\n'
+          return(list(error=error))
+        }
+      }
+
+      if(!bad_n && is.null(copula) && model_code_n %in% negbin_common_r_models) {
+        bad_n <- length(n) != 1L
+        if(bad_n) {
+          error <- 'for direct Negative-Binomial random fields n is the common number r of successes and must be one positive integer scalar\n'
+          return(list(error=error))
+        }
+      }
+
+      if(!bad_n && identical(fcall, "Fitting") &&
+         model_code_n %in% binomial_n_models && length(n) > 1L) {
+        nobs_n <- length(unlist(data, use.names = FALSE))
+        bad_n <- length(n) != nobs_n
+      }
+      if(bad_n) {
+        error <- 'the parameter n must contain positive integer values; for Binomial it may be scalar or one value per observation\n'
+        return(list(error=error))
+      }
+    }
 
     # START check fitting
     if(fcall=="Fitting"){
@@ -347,20 +411,24 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
            error <- 'the setting name of the likelihood objects is not correct\n'
            return(list(error=error))}
         if(likelihood == "Full"){
-            if(!any(type == c("Restricted", "Standard", "Tapering","Tapering1","CV","Tapering2"))){
+            if(!any(type == c("Standard", "Tapering","Tapering1","CV","Tapering2"))){
                 error <- 'insert a type name of the likelihood objects compatible with the full likelihood\n'
                 return(list(error=error))}}
         if(likelihood == "Marginal"){
-            if(!any(type == c("Difference", "Pairwise","Independence"))){
-                error <- 'insert a type name of the likelihood objects compatible with the composite-likelihood\n'
+            if(!any(type == c("Pairwise","Independence"))){
+                error <- 'Marginal likelihood is compatible only with Pairwise or Independence type\n'
                 return(list(error=error))}}
-        if(varest & (likelihood == "Conditional" || likelihood == "Difference" ||
+        if(likelihood == "Conditional" && type != "Pairwise") {
+            error <- 'Conditional likelihood is compatible only with Pairwise type\n'
+            return(list(error=error))
+        }
+        if(likelihood == "Marginal_2" && type != "Pairwise") {
+            error <- 'Marginal_2 likelihood is compatible only with Pairwise type\n'
+            return(list(error=error))
+        }
+        if(varest & (likelihood == "Conditional" ||
             likelihood == "Marginal"|| likelihood == "Marginal_2")){
             error <- 'insert the type of estimation method for the variances\n'
-            return(list(error=error))}
-        if(varest  & (likelihood == "Conditional" || likelihood == "Difference" ||
-            likelihood == "Marginal"|| likelihood == "Marginal_2")){
-            error <- 'the name of the estimation type for the variances is not correct\n'
             return(list(error=error))}
 
   ### check on starting parameters         
@@ -370,27 +438,15 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
                 return(list(error=error))}
  namstart <- names(start)
 
-  if(!bivariate){
-       if(num_betas>1){
-       if(ncol(X)!=sum(substr(c(namstart,namfixed),1,4)=="mean"))
-       {error <- 'number of covariates must be equal to to the regressian mean parameters\n'
-        return(list(error=error)) }}
-    }
-  if(bivariate){
-       if(num_betas[1]>1&&num_betas[2]>1){
-       if(is.list(X)) 
-            if(ncol(X[[1]])!=sum(substr(c(namstart,namfixed),1,6)=="mean_1")&&
-          ncol(X[[2]])!=sum(substr(c(namstart,namfixed),1,6)=="mean_2"))
-       { error <- 'number of covariates must be equal to to the regressian mean parameters\n'
-                return(list(error=error)) }}
-    }
+  ## Mean coefficients may be split between start and fixed, and omitted
+  ## coefficients receive automatic starting values in WlsStart().  Their
+  ## names and their correspondence with the columns of X are validated by
+  ## the dedicated univariate/bivariate mean helpers before this generic
+  ## input checker is called.  Do not require every coefficient here.
   if(!all(namstart %in% c(NuisParam2(model,CheckBiv(CkCorrModel(corrmodel)),num_betas,copula), CorrelationPar(CkCorrModel(corrmodel)))))
     { error <- 'some names of the starting parameters is/are not correct\n'
       return(list(error=error))}
 
-  if(any(namstart=='mean') & (type=='Difference' || type=='Restricted'))
-  { error <- 'the mean parameter is not allow with the difference composite likelihood\n'
-    return(list(error=error))}
   if(!CheckParamRange(unlist(start))){
                 error <- 'some starting values are out of the range\n'
                 return(list(error=error))
@@ -417,29 +473,20 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
             error <- 'temporal coordinates are missing\n'
             return(list(error=error))}
             if(grid) # START regular grid
-              {  if(CheckBiv(CkCorrModel(corrmodel))) 
-                    {
-                      if(is.null(dimdata))
-                      {error <- c('insert an array of d x d x 2  spatial observations\n')
-                          return(list(error=error))}
-                      if(length(dimdata)!=3)
-                      {error <- c('the dimension of the data matrix is not correct\n')
-                          return(list(error=error))}
-                      if(length(coordx)!=dimdata[1] || length(coordy)!=dimdata[2]|| length(coordz)!=dimdata[3])
-                      {error <- c('the number of coordinates does not match with the number of spatial observations\n')
-                      return(list(error=error))}
-                    }
-                  else {                  
-                     if(is.null(dimdata))
-                     {error <- c('insert a matrix d x d of spatial observations\n')
-                     return(list(error=error))}
-                     if(length(dimdata)!=2)
-                     {error <- c('the dimension of the data matrix is not correct\n')
-                     return(list(error=error))}
-                     if(length(coordx)!=dimdata[1] || length(coordy)!=dimdata[2]|| length(coordz)!=dimdata[3])
-                     {error <- c('the number of coordinates does not match with the number of spatial observations\n')
-                     return(list(error=error))}
-                    }
+              {
+                if(is.null(coordy)) {
+                  error <- 'coordy is required when grid=TRUE\n'
+                  return(list(error=error))
+                }
+                spatial_dims <- c(length(coordx), length(coordy))
+                if(!is.null(coordz)) spatial_dims <- c(spatial_dims, length(coordz))
+                expected_dims <- if(CheckBiv(CkCorrModel(corrmodel)))
+                                   c(spatial_dims, 2L) else spatial_dims
+                if(is.null(dimdata) || !identical(as.integer(dimdata), as.integer(expected_dims))) {
+                  error <- paste0('grid data dimensions must be ',
+                                  paste(expected_dims, collapse=' x '), '\n')
+                  return(list(error=error))
+                }
               } # END regular grid
             else # START irregular grid
               {
@@ -480,18 +527,18 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
             return(list(error=error))}
     if(grid) # START regular grid
               {
-                if(is.null(dimdata))
-                  { error <- c('insert an array of d x d x t spatial-temporal observations\n')
-                    return(list(error=error))}
-                if(length(dimdata)!=3)
-                  { error <- c('the dimension of the data matrix is not correct\n')
-                    return(list(error=error))}
-                if(length(coordx)!=dimdata[1] || length(coordy)!=dimdata[2]|| length(coordz)!=dimdata[3])
-                  { error <- c('the number of coordinates does not match with the number of spatial observations\n')
-                    return(list(error=error))}
-                if(dimdata[3]!=length(coordt))
-                  { error <- c('the time coordinate does not match with the third dimension of the data array\n')
-                    return(list(error=error))}
+                if(is.null(coordy)) {
+                  error <- 'coordy is required when grid=TRUE\n'
+                  return(list(error=error))
+                }
+                spatial_dims <- c(length(coordx), length(coordy))
+                if(!is.null(coordz)) spatial_dims <- c(spatial_dims, length(coordz))
+                expected_dims <- c(spatial_dims, length(coordt))
+                if(is.null(dimdata) || !identical(as.integer(dimdata), as.integer(expected_dims))) {
+                  error <- paste0('space-time grid data dimensions must be ',
+                                  paste(expected_dims, collapse=' x '), '\n')
+                  return(list(error=error))
+                }
               } # END regular grid
             else # START irregular grid
               {
@@ -626,8 +673,7 @@ CkLikelihood <- function(likelihood)
                               Conditional=1,
                               Full=2,
                               Marginal=3,
-                              Marginal_2=1,
-                              Difference=4)
+                              Marginal_2=1)
     return(CkLikelihood)
   }
 
@@ -636,7 +682,7 @@ CkModel <- function(model)
     CkModel <- switch(model,
                          None=0,
                          Gaussian=1,Gauss=1,
-                         Binary=2,
+                         Binary=2,Bernoulli=2,
                          Tukeygh=9,
                          SkewGaussian=10,SkewGauss=10,
                          Binomial=11,
@@ -695,9 +741,7 @@ CkModel <- function(model)
 CkType <- function(type)
   {
     CkType <- switch(type,
-                        Difference=1,
                         Pairwise=2,
-                        Restricted=3,
                         Standard=4,
                         Tapering=5,
                         Tapering2=5,
@@ -707,6 +751,66 @@ CkType <- function(type)
                         Independence=9)
     return(CkType)
   }
+
+
+.GeoValidateHoleWendlandParameters <- function(corrmodel, param, d=2L,
+                                                context="GeoModels") {
+  code <- CkCorrModel(corrmodel)
+  if(is.null(code) || !(as.integer(code) %in% c(26L,29L)))
+    return(invisible(TRUE))
+  if(!is.list(param))
+    stop(context, ": param must be a list.", call.=FALSE)
+
+  req <- c("power1","power2","scale","smooth")
+  miss <- req[!vapply(req, function(nm) {
+    z <- param[[nm]]
+    is.numeric(z) && length(z)==1L && is.finite(z)
+  }, logical(1L))]
+  if(length(miss))
+    stop(context, ": ", corrmodel, " requires finite scalar parameter(s): ",
+         paste(miss, collapse=", "), ".", call.=FALSE)
+
+  k <- as.numeric(param$power1)
+  nu <- as.numeric(param$power2)
+  a <- as.numeric(param$scale)
+  sm <- as.numeric(param$smooth)
+  if(k < 0 || abs(k-round(k)) > sqrt(.Machine$double.eps))
+    stop(context, ": for ", corrmodel,
+         ", power1 is the hole-effect order k and must be a non-negative integer.",
+         call.=FALSE)
+  k <- as.integer(round(k))
+  d <- as.integer(d)[1L]
+  if(is.na(d) || d < 1L) d <- 2L
+  deff <- d + 2L*k
+
+  nu_min <- function(xi, dd) {
+    if(dd == 1L && xi < 0)
+      (sqrt(8*xi + 9) - 1)/2
+    else
+      xi + (dd + 1)/2
+  }
+
+  if(as.integer(code) == 26L) {
+    xi <- sm
+    if(a <= 0 || xi <= -0.5)
+      stop(context, ": GenWend_Hole requires scale > 0 and smooth (xi) > -1/2.",
+           call.=FALSE)
+  } else {
+    ## GW_{nu*a, xi-1/2, nu, d, k}: public smooth is the Matern-like xi.
+    if(a <= 0 || sm <= 0)
+      stop(context, ": GenWend_Matern_Hole requires scale > 0 and smooth > 0.",
+           call.=FALSE)
+    xi <- sm - 0.5
+  }
+
+  lower <- nu_min(xi, deff)
+  if(nu < lower - 100*.Machine$double.eps*max(1,abs(lower)))
+    stop(context, ": invalid ", corrmodel,
+         " parameters: power2 (nu) must be >= ", format(lower, digits=15),
+         " for smooth=", format(sm, digits=15), ", power1 (k)=", k,
+         " and dimension d=", d, ".", call.=FALSE)
+  invisible(TRUE)
+}
 
 #####  names of the correlation models ###############
 #CorrParam <- function(corrmodel)
@@ -790,8 +894,10 @@ CorrelationPar <- function(corrmodel) {
     "73" = c("power2_s", "power2_t", "scale_s", "scale_t"),
     "74" = c("power2_s", "power2_t", "scale_s", "scale_t"),
     "75" = c("power2_s", "power2_t", "scale_s", "scale_t"),
+    "76" = c("power2_s", "power2_t", "scale_s", "scale_t"),
     "77" = c("power2_s", "power2_t", "scale_s", "scale_t"),
     "78" = c("scale_s", "scale_t", "smooth_s", "smooth_t", "power2_s", "power2_t"),
+    "82" = c("power2", "scale_s", "scale_t"),
     "84" = c("scale_s", "scale_t"),
     "85" = c("scale_s", "scale_t", "power2_s", "power2_t", "smooth_s", "smooth_t", "sep"),
     "86" = c("scale_s", "scale_t", "smooth_s", "smooth_t"),
@@ -863,7 +969,7 @@ NuisParam2 <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = N
     # Lista modelli con parametri specifici
     model_list <- list(
       simple = c("Gaussian", "Gauss", "Binomial", "Gaussian_misp_Binomial","Gaussian_misp_BinomialNeg",
-                 "BinomialLogistic", "Binomial2", "BinomialNeg", "Bernoulli",
+                 "BinomialLogistic", "Binomial2", "BinomialNeg", "Binary", "Bernoulli",
                  "Poisson", "Gaussian_misp_Poisson", "Geom", "Geometric", "Wrapped",
                  "PoisBin", "PoisBinNeg", "LogGaussian", "LogGauss", "Logistic"),
       
@@ -980,7 +1086,7 @@ NuisParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NU
   a <- NuisParam2(model, bivariate, num_betas, copula)
   models_no_sill <- c(
     "Weibull", "Poisson", "Binomial", "Gamma", "LogLogistic",
-    "BinomialNeg", "Bernoulli", "Geometric", "Gaussian_misp_Poisson",
+    "BinomialNeg", "Binary", "Bernoulli", "Geom", "Geometric", "Gaussian_misp_Poisson",
     "PoissonGammaZIP", "PoissonGamma", "PoissonGammaZIP1", "Gaussian_misp_BinomialNeg","Gaussian_misp_Binomial",
     "PoissonZIP", "Gaussian_misp_PoissonZIP", "BinomialNegZINB",
     "PoissonZIP1", "Gaussian_misp_PoissonZIP1", "BinomialNegZINB1",
@@ -1002,11 +1108,145 @@ MargParam <- function(model, bivariate = FALSE, num_betas = c(1, 1), copula = NU
 #########################################################################################
 #########################################################################################
 
+.GeoSelectedPairInfo <- function(pair_index, coords, distance, radius,
+                                 spacetime = FALSE, bivariate = FALSE,
+                                 ns = NULL, coordt = NULL) {
+  if (!is.list(pair_index) ||
+      is.null(pair_index$colidx) || is.null(pair_index$rowidx)) {
+    stop("Internal selected-pair specification is invalid.", call. = FALSE)
+  }
+
+  colidx <- pair_index$colidx
+  rowidx <- pair_index$rowidx
+
+  if (!is.numeric(colidx) || !is.numeric(rowidx) ||
+      length(colidx) != length(rowidx) || length(colidx) < 1L ||
+      any(!is.finite(colidx)) || any(!is.finite(rowidx)) ||
+      any(colidx != floor(colidx)) || any(rowidx != floor(rowidx))) {
+    stop("Internal selected-pair indices must be finite integer vectors of equal positive length.",
+         call. = FALSE)
+  }
+
+  colidx <- as.integer(colidx)
+  rowidx <- as.integer(rowidx)
+  coords <- as.matrix(coords)
+
+  if (nrow(coords) < 1L ||
+      any(colidx < 1L | colidx > nrow(coords)) ||
+      any(rowidx < 1L | rowidx > nrow(coords))) {
+    stop("Internal selected-pair indices are outside the coordinate range.",
+         call. = FALSE)
+  }
+
+  ## Bound temporary allocations for massive pair graphs.  The output lag
+  ## vector is unavoidable, but coordinate differences are created only for
+  ## one block at a time rather than as M x d matrices.
+  block_size <- getOption("GeoModels.selected_pair_block_size", 1000000L)
+  block_size <- suppressWarnings(as.integer(block_size)[1L])
+  if (!is.finite(block_size) || block_size < 1L) block_size <- 1000000L
+
+  npairs <- length(colidx)
+  lags <- numeric(npairs)
+  starts <- seq.int(1L, npairs, by = block_size)
+
+  for (from in starts) {
+    to <- min(npairs, from + block_size - 1L)
+    take <- from:to
+    ii <- colidx[take]
+    jj <- rowidx[take]
+
+    if (distance == 0L) {
+      squared <- numeric(length(take))
+      for (dimension in seq_len(ncol(coords))) {
+        delta <- coords[ii, dimension] - coords[jj, dimension]
+        squared <- squared + delta * delta
+      }
+      lags[take] <- sqrt(squared)
+    } else {
+      if (ncol(coords) < 2L) {
+        stop("Geodesic and chordal selected-pair distances require longitude and latitude.",
+             call. = FALSE)
+      }
+
+      lon1 <- coords[ii, 1L] * pi / 180
+      lat1 <- coords[ii, 2L] * pi / 180
+      lon2 <- coords[jj, 1L] * pi / 180
+      lat2 <- coords[jj, 2L] * pi / 180
+
+      cosine <- sin(lat1) * sin(lat2) +
+        cos(lat1) * cos(lat2) * cos(lon1 - lon2)
+      cosine <- pmax(-1, pmin(1, cosine))
+      angle <- acos(cosine)
+
+      lags[take] <- if (distance == 2L) {
+        radius * angle
+      } else {
+        2 * radius * sin(0.5 * angle)
+      }
+    }
+  }
+
+  if (any(!is.finite(lags))) {
+    stop("Non-finite distances were obtained for the reused selected pairs.",
+         call. = FALSE)
+  }
+
+  lagt <- 0
+  first <- second <- NULL
+
+  if (isTRUE(spacetime)) {
+    if (is.null(ns) || is.null(coordt) || length(ns) != length(coordt)) {
+      stop("Internal space-time dimensions are inconsistent for selected-pair reuse.",
+           call. = FALSE)
+    }
+
+    cumulative <- cumsum(as.integer(ns))
+    lagt <- numeric(npairs)
+    for (from in starts) {
+      to <- min(npairs, from + block_size - 1L)
+      take <- from:to
+      tc <- as.integer(findInterval(colidx[take] - 1L, cumulative) + 1L)
+      tr <- as.integer(findInterval(rowidx[take] - 1L, cumulative) + 1L)
+      if (any(tc < 1L | tc > length(coordt)) ||
+          any(tr < 1L | tr > length(coordt))) {
+        stop("Internal selected-pair time indices are invalid.", call. = FALSE)
+      }
+      lagt[take] <- abs(as.numeric(coordt[tc]) - as.numeric(coordt[tr]))
+    }
+  }
+
+  if (isTRUE(bivariate)) {
+    if (is.null(ns) || length(ns) != 2L) {
+      stop("Internal bivariate dimensions are inconsistent for selected-pair reuse.",
+           call. = FALSE)
+    }
+    n1 <- as.integer(ns[1L])
+    first <- as.integer(colidx > n1)
+    second <- as.integer(rowidx > n1)
+  }
+
+  list(
+    colidx = colidx,
+    rowidx = rowidx,
+    lags = lags,
+    lagt = lagt,
+    first = first,
+    second = second
+  )
+}
+
 StartParam <- function(coordx, coordy,coordz ,coordt,coordx_dyn, corrmodel, data, distance, fcall,
                       fixed, grid,likelihood,  maxdist, neighb,maxtime, model, n, 
                       param, parscale,paramrange, radius, start, taper, tapsep, 
                       type,typereal,  weighted,copula, X,memdist,nosym,p_neighb,thin_method)
 {
+
+    ## GeoVarest may temporarily provide the exact graph used by the original
+    ## fit.  Pair distances can also be supplied as a transient worker-local
+    ## cache, avoiding repeated O(M) distance calculations across bootstrap
+    ## replications without enlarging the returned GeoFit object.
+    selected_pair_index <- getOption("GeoModels.selected_pair_index", NULL)
+    selected_pair_info <- getOption("GeoModels.selected_pair_info", NULL)
 
 ####################################  
 ### START internal functions:
@@ -1190,6 +1430,14 @@ if(method1=="euclidean")
 
 
 ##################################################################################################################
+    .set_fixed_default <- function(fixed, name, value) {
+      if(is.null(fixed)) fixed <- list()
+      if(!is.list(fixed)) fixed <- as.list(fixed)
+      if(is.null(names(fixed))) names(fixed) <- rep("", length(fixed))
+      if(!(name %in% names(fixed))) fixed[[name]] <- value
+      fixed
+    }
+
     if(fcall=="Fitting"){
         ### Parameters' settings:
         nuisance=nuisance1=nuisance2=NULL
@@ -1201,9 +1449,8 @@ if(method1=="euclidean")
           {
            if(!bivariate) {
                            mu <- mean(unlist(data))
-                           if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
-                           if(is.list(fixed)) fixed$mean <- mu# Fixs the mean
-                           else fixed <- list(mean=mu)}
+                           if(any(type==c(1, 7,8)))     # Checks the type of likelihood
+                             fixed <- .set_fixed_default(fixed, "mean", mu)
                            nuisance <- c(mu, 0, var(c(unlist(data))))
 
                            if(likelihood==2 && (CkType(typereal)==5 || CkType(typereal)==7) ) tapering <- 1
@@ -1218,10 +1465,10 @@ if(method1=="euclidean")
              if(bivariate) {
                            if(is.null(coordx_dyn)) { mu1 <- mean(data[1,]); mu2 <- mean(data[2,])}
                            else                   { mu1 <- mean(data[[1]]); mu2 <- mean(data[[2]])}
-                           if(any(type==c(1, 3, 7, 8,4))) {   # Checks the type of likelihood
-                           if(is.list(fixed)) {fixed$mean_1 <- mu1;fixed$mean_2<- mu2}
-                           else               {fixed <- list(mean_1=mu1,mean_2=mu2)  }
-                                                         }
+                           if(any(type==c(1, 7, 8))) {   # Checks the type of likelihood
+                             fixed <- .set_fixed_default(fixed, "mean_1", mu1)
+                             fixed <- .set_fixed_default(fixed, "mean_2", mu2)
+                           }
                            nuisance <- c(mu1,mu2)
                            if(model %in% c(10,29,31,32,59))  {nuisance <- c(nuisance,0.1,0.2)}
                            if(model %in% c(26,46,47,48,42,50))  {nuisance <- c(nuisance,0.1,0.2)}
@@ -1233,12 +1480,8 @@ if(method1=="euclidean")
 
 if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                                                        #discrete
             mu=0
-            if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
-                           if(is.list(fixed)) 
-                                              { fixed$mean <- mu}# Fixs the mean}
-                                            else      {fixed <- list(mean=mu)}
-                           
-                           }                        
+            if(any(type==c(1, 7,8)))     # Checks the type of likelihood
+              fixed <- .set_fixed_default(fixed, "mean", mu)                        
 
             nuisance <- c(mu, 0, 1)
 
@@ -1259,12 +1502,13 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 {
     if(!bivariate)
     {
-         if(any(type==c(1, 3, 7,8,4)))# Checks the type of likelihood
-            if(is.list(fixed)) {
-                               mu <- mean(unlist(data));fixed$mean <- mu# Fixs the mean
-                               for(i in 1:(num_betas-1)) fixed[[paste("mean",i,sep="")]]=1 
-                               }
-            else               {mu <- mean(unlist(data));fixed <- list(mean=mu)}
+         if(any(type==c(1, 7,8))) { # Checks the type of likelihood
+            mu <- mean(unlist(data))
+            fixed <- .set_fixed_default(fixed, "mean", mu)
+            if(num_betas > 1)
+              for(i in seq_len(num_betas-1))
+                fixed <- .set_fixed_default(fixed, paste0("mean", i), 1)
+         }
             for(i in 1:num_betas) nuisance=c(nuisance,1);
             nuisance=c(nuisance,0,var(c(unlist(data))))
              if(model %in% c(10,29,31,32,59))        nuisance=c(nuisance,1)  
@@ -1277,25 +1521,24 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
     }
     if(bivariate)
     {
-            if(any(type==c(1, 3, 7,8,4)))# Checks the type of likelihood
-            if(is.list(fixed)) 
-        {
-                if(!is.list(data))
-                {
-                                mu1 <- rowMeans(unlist(data))[1];fixed$mean_1 <- mu1# Fixs the mean
-                                mu2 <- rowMeans(unlist(data))[2];fixed$mean_2 <- mu2# Fixs the mean
-                                for(i in 1:(num_betas[1]-1)) fixed[[paste("mean_1",i,sep="")]]=1 
-                                for(i in 1:(num_betas[2]-1)) fixed[[paste("mean_2",i,sep="")]]=1  # fixed$meani=1
-                }
-                  if(is.list(data))
-                {
-                                mu1 <- mean(data[[1]]);fixed$mean_1 <- mu1# Fixs the mean
-                                mu2 <- mean(data[[2]]);fixed$mean_2 <- mu2# Fixs the mean
-                                for(i in 1:(num_betas[1]-1)) fixed[[paste("mean_1",i,sep="")]]=1 
-                                for(i in 1:(num_betas[2]-1)) fixed[[paste("mean_2",i,sep="")]]=1  # fixed$meani=1
-                }
-        }
-            else  fixed <- list(mean_1=mu1,mean_2=mu2)
+            if(any(type==c(1, 7,8))) { # Checks the type of likelihood
+              if(!is.list(data)) {
+                data_biv <- as.matrix(data)
+                mu1 <- mean(data_biv[1,])
+                mu2 <- mean(data_biv[2,])
+              } else {
+                mu1 <- mean(data[[1]])
+                mu2 <- mean(data[[2]])
+              }
+              fixed <- .set_fixed_default(fixed, "mean_1", mu1)
+              fixed <- .set_fixed_default(fixed, "mean_2", mu2)
+              if(num_betas[1] > 1)
+                for(i in seq_len(num_betas[1]-1))
+                  fixed <- .set_fixed_default(fixed, paste0("mean_1", i), 1)
+              if(num_betas[2] > 1)
+                for(i in seq_len(num_betas[2]-1))
+                  fixed <- .set_fixed_default(fixed, paste0("mean_2", i), 1)
+            }
             for(i in 1:num_betas[1]) nuisance1=c(nuisance1,1);
             for(i in 1:num_betas[2]) nuisance2=c(nuisance2,1);
             nuisance=c(nuisance1,nuisance2 )
@@ -1310,12 +1553,13 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 }  ### end continous models
      if(model %in% c(2,11,13,14,15,16,19,17,30,49,51,52,54,43,45,53,56,57,58)) {  # discrete models
 
-        if(any(type==c(1, 3, 7,8,4)))# Checks the type of likelihood
-            if(is.list(fixed)) {
-                               mu <- mean(unlist(data));fixed$mean <- mu# Fixs the mean
-                               for(i in 1:(num_betas-1)) fixed[[paste("mean",i,sep="")]]=1  # fixed$meani=1
-                               }
-            else               {mu <- mean(unlist(data));fixed <- list(mean=mu)}
+        if(any(type==c(1, 7,8))) { # Checks the type of likelihood
+          mu <- mean(unlist(data))
+          fixed <- .set_fixed_default(fixed, "mean", mu)
+          if(num_betas > 1)
+            for(i in seq_len(num_betas-1))
+              fixed <- .set_fixed_default(fixed, paste0("mean", i), 1)
+        }
 
          if(model %in% c(2,11,13,14,15,16,19,17,30,49,51,52,54))   nuisance <- c(0,rep(0,num_betas-1) ,0, 1) 
 
@@ -1331,7 +1575,10 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
      #
 }
 
- if(!is.null(copula)) {if(copula=="Clayton"||copula=="SkewGaussian") nuisance=c(nuisance,2)}
+ if(!is.null(copula)) {
+     if(copula=="Clayton") nuisance=c(nuisance,2)
+     if(copula=="SkewGaussian") nuisance=c(nuisance,0)
+ }
 # Update the parameter vector     
         names(nuisance) <- namesnuis
         namesparam <- sort(c(namescorr, namesnuis))
@@ -1341,6 +1588,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
         flag <- rep(1, numparam)
         namesflag <- namesparam
         names(flag) <- namesflag
+        all_parameter_names <- namesparam
         # Update the parameters with fixed values:
      
         if(!is.null(fixed)){
@@ -1348,8 +1596,15 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             namesfixed <- names(fixed)
             numfixed <- length(namesfixed)
 
-            flag[pmatch(namesfixed, namesflag)] <- 0
-            param <- param[-pmatch(namesfixed, namesparam)]
+            bad_fixed <- setdiff(namesfixed, all_parameter_names)
+            if(length(bad_fixed))
+                stop("Invalid parameter name(s) in 'fixed': ",
+                     paste(bad_fixed, collapse=", "),
+                     ". Valid parameter names are: ",
+                     paste(all_parameter_names, collapse=", "), ".", call.=FALSE)
+            idx_fixed <- match(namesfixed, namesflag)
+            flag[idx_fixed] <- 0
+            param <- param[-match(namesfixed, namesparam)]
                           numparamcorr <- numparamcorr-sum(namesfixed %in% namescorr)
             namesparam <- names(param)
             numparam <- length(param)   
@@ -1364,8 +1619,7 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
             start <- unlist(start)
             namesstart <- names(start)
 
-            #if(any(type == c(1, 3, 7))){
-                 if(any(type==c(1, 3, 7,8,4))){    # Checks the type of likelihood
+                 if(any(type==c(1, 7,8))){    # Checks the type of likelihood
 
                 if(!bivariate) {   # univariate case
                        if(any(model==c(1,10,12,18,20,9,13,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,46,47,48,50,
@@ -1399,7 +1653,21 @@ if(model %in% c(11,13,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){              
 
             namesstart <- names(start)
             numstart <- length(start)
-            param[pmatch(namesstart,namesparam)] <- start
+            bad_start <- setdiff(namesstart, all_parameter_names)
+            if(length(bad_start))
+                stop("Invalid parameter name(s) in 'start': ",
+                     paste(bad_start, collapse=", "),
+                     ". Valid parameter names are: ",
+                     paste(all_parameter_names, collapse=", "), ".", call.=FALSE)
+            overlap_start_fixed <- intersect(namesstart, namesfixed)
+            if(length(overlap_start_fixed))
+                stop("Parameter(s) supplied in both 'start' and 'fixed': ",
+                     paste(overlap_start_fixed, collapse=", "), ".", call.=FALSE)
+            idx_start <- match(namesstart, namesparam)
+            if(anyNA(idx_start))
+                stop("Internal parameter-name reconciliation failed for: ",
+                     paste(namesstart[is.na(idx_start)], collapse=", "), ".", call.=FALSE)
+            param[idx_start] <- start
             }
         ### set the scale of the parameters:
         # Insert here!
@@ -1540,7 +1808,7 @@ gb=.C('SetGlobalVar',as.integer(bivariate), as.double(coordx), as.double(coordy)
             as.integer(numtime),as.double(trange), as.integer(tapering), as.integer(tapmodel),as.integer(distance),as.integer(weighted), #6
            colidx= as.integer(colidx),rowidx= as.integer(rowidx), # 2
             as.integer(ns), as.integer(NS), as.integer(isdyn),
-      PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+      PACKAGE='GeoModels', NAOK=TRUE)
 
   #if(!sum(coordz)) coordz=NULL
 
@@ -1588,12 +1856,31 @@ if(space)   #  spatial case
   K=neighb
   x=cbind(coordx, coordy,coordz)
 
-  sol=GeoNeighIndex(coordx=x,distance=distance1,
-    maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb,thin_method=thin_method)
-  #sol=GeoNeighIndexRandom(coordx=x,distance=distance1,maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb)
+  if (is.null(selected_pair_index)) {
+    sol=GeoNeighIndex(coordx=x,distance=distance1,
+      maxdist=maxdist,neighb=K,radius=radius,p_neighb=p_neighb,thin_method=thin_method)
+  } else {
+    reused <- if (!is.null(selected_pair_info)) {
+      selected_pair_info
+    } else {
+      .GeoSelectedPairInfo(
+        selected_pair_index, x, distance, radius,
+        spacetime = FALSE, bivariate = FALSE, ns = ns, coordt = coordt
+      )
+    }
+    ## GeoNeighIndex returns target indices in rowidx and neighbour indices in
+    ## colidx. StartParam swaps them before returning, so preserve that schema.
+    sol <- list(
+      rowidx = reused$colidx,
+      colidx = reused$rowidx,
+      lags = reused$lags,
+      lagt = reused$lagt
+    )
+  }
 
 ###
   nn = length(sol$lags)
+  if (nn == 0L) stop("No pairwise contributions were retained. Increase 'p_neighb', 'neighb', or 'maxdist'.", call. = FALSE)
   sol$lagt=0
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
@@ -1634,13 +1921,28 @@ if(spacetime)   #  space time  case
   K=neighb
   x=cbind(coordx, coordy,coordz)
  
-  sol=GeoNeighIndex(coordx=x[1:numcoord,],
- coordx_dyn=coordx_dyn,
-    coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,
-    p_neighb=p_neighb,thin_method=thin_method)
-   #sol=GeoNeighIndexRandom(coordx=x[1:numcoord,],
-   # coordx_dyn=coordx_dyn,
-#coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius)
+  if (is.null(selected_pair_index)) {
+    sol=GeoNeighIndex(coordx=x[1:numcoord,],
+      coordx_dyn=coordx_dyn,
+      coordt=coordt,distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,
+      p_neighb=p_neighb,thin_method=thin_method)
+  } else {
+    reused <- if (!is.null(selected_pair_info)) {
+      selected_pair_info
+    } else {
+      .GeoSelectedPairInfo(
+        selected_pair_index, x, distance, radius,
+        spacetime = TRUE, bivariate = FALSE, ns = ns, coordt = coordt
+      )
+    }
+    sol <- list(
+      rowidx = reused$colidx,
+      colidx = reused$rowidx,
+      lags = reused$lags,
+      lagt = reused$lagt
+    )
+  }
+  if (!length(sol$colidx)) stop("No pairwise contributions were retained. Increase 'p_neighb', 'neighb', 'maxdist', or 'maxtime'.", call. = FALSE)
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
              nn=length(gb$colidx)
@@ -1670,12 +1972,29 @@ if(bivariate)   # bivariate case
   K=neighb
   x=cbind(coordx, coordy,coordz)
 
-  sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE,
-    p_neighb=p_neighb,thin_method=thin_method)
-
-  #sol=GeoNeighIndexRandom(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE)
+  if (is.null(selected_pair_index)) {
+    sol=GeoNeighIndex(coordx=x, coordx_dyn=coordx_dyn, distance=distance1,maxdist=maxdist,neighb=K,maxtime=maxtime,radius=radius,bivariate=TRUE,
+      p_neighb=p_neighb,thin_method=thin_method)
+  } else {
+    reused <- if (!is.null(selected_pair_info)) {
+      selected_pair_info
+    } else {
+      .GeoSelectedPairInfo(
+        selected_pair_index, x, distance, radius,
+        spacetime = FALSE, bivariate = TRUE, ns = ns, coordt = NULL
+      )
+    }
+    sol <- list(
+      rowidx = reused$colidx,
+      colidx = reused$rowidx,
+      lags = reused$lags,
+      first = reused$first,
+      second = reused$second
+    )
+  }
   ###    deleting symmetric indexes with associate distances
 
+  if (!length(sol$colidx)) stop("No pairwise contributions were retained. Increase 'p_neighb', 'neighb', or 'maxdist'.", call. = FALSE)
 
   gb=list(); gb$colidx=sol$colidx;
              gb$rowidx=sol$rowidx ;
@@ -1719,7 +2038,7 @@ if(is.null(coordt)) coordt=1
 ########################################################################################
     ### Returned list of objects:
     return(list(bivariate=bivariate,coordx=coordx,coordy=coordy,coordz=coordz,coordt=coordt,corrmodel=corrmodel,
-                colidx = colidx ,rowidx=rowidx,
+                colidx = as.integer(colidx), rowidx = as.integer(rowidx),
                 data=data,distance=distance,
                 error=error,flagcorr=flagcorr,flagnuis=flagnuis,fixed=fixed,likelihood=likelihood,
                 lower=paramrange$lower,model=model,n=n,namescorr=namescorr,namesfixed=namesfixed,
@@ -1732,4 +2051,20 @@ if(is.null(coordt)) coordt=1
                 ia=ia,idx=idx,ja=ja,nozero=nozero,tapmodel=tapmodel,tapsep=tapsep),  radius=radius,                            ## with tapered matrix informations
                 spacetime=spacetime,srange=srange,start=start,upper=paramrange$upper,type=type,
                 trange=trange,weighted=weighted,X=X))
+}
+## Temporarily configure progressr without leaking handler state to the user session.
+.GeoProgressHandlersPush <- function(handler = NULL, global = NULL) {
+  old_handlers <- progressr::handlers()
+  old_global <- progressr::handlers(global = NA)
+
+  if (!is.null(handler)) progressr::handlers(handler)
+  if (!is.null(global)) progressr::handlers(global = isTRUE(global))
+
+  function() {
+    try(progressr::handlers(old_handlers), silent = TRUE)
+    ## Do not wrap global handler changes in try()/tryCatch():
+    ## base::globalCallingHandlers() cannot be modified with handlers on stack.
+    progressr::handlers(global = old_global)
+    invisible(NULL)
+  }
 }

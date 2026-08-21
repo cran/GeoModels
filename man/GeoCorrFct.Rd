@@ -22,15 +22,14 @@ covariance=FALSE,variogram=FALSE)
  \item{distance}{String; the name of the spatial distance. The default
  is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}}.}
  \item{param}{A list of parameter values required for the covariance
- model.}
+ model. For univariate curves, omitted \code{mean}, \code{sill}, and
+ \code{nugget} use the defaults 0, 1, and 0, respectively.}
  \item{radius}{Numeric; a value indicating the radius of the sphere 
  when using covariance models valid using the great circle distance. 
  Default value is the radius of the earth in Km (i.e. 6371)} 
- \item{n}{Numeric; the number of trials in a (negative) binomial random fields.
- Default is \eqn{1}.}
+ \item{n}{Positive integer size parameter. For Binomial it is the common number of trials used by this lag-only curve. For Negative Binomial it is the single common number \eqn{r} of successes; Geometric corresponds to \eqn{r=1}. Site-specific Binomial sizes are handled by \code{GeoCovmatrix()} rather than by a single lag-only curve. Default is \eqn{1}.}
  \item{covariance}{Logic; if TRUE then the covariance is returned. Default is FALSE}
- \item{variogram}{Logic; if FALSE then the covariance/correlation is returned. Otherwise the associated
- semivariogram is returned}
+ \item{variogram}{Logical; if FALSE the correlation/covariance is returned. If TRUE, \code{covariance=FALSE} returns the normalized semivariogram \eqn{1-\rho(h)}, while \code{covariance=TRUE} returns the semivariogram on the response scale.}
  }
 
 

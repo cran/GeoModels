@@ -22,7 +22,7 @@ StartParam(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel,
 
  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
 
- \item{coordt}{A numeric vector assigning 1-dimension of temporal coordinates.}
+ \item{coordt}{A numeric vector assigning one dimension of temporal coordinates. Temporal coordinates may be irregularly spaced; temporal lags used during initialization are computed from the supplied coordinate values.}
 
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d_t x 2})-matrices containing dynamical (in time) spatial coordinates.
  Optional argument, default is \code{NULL}.}
@@ -47,7 +47,7 @@ StartParam(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel,
  \item{neighb}{Numeric; an optional positive integer indicating the order of neighborhood in the composite likelihood computation.
  See Details for more information.}
 
- \item{maxtime}{Numeric; an optional positive value indicating the maximum temporal lag considered in the composite-likelihood computation.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal lag, expressed in the same units as \code{coordt}, considered in the composite-likelihood initialization.}
 
  \item{model}{String; the density associated to the likelihood objects. \code{"Gaussian"} is the default.}
 
@@ -78,7 +78,7 @@ StartParam(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel,
 
  \item{X}{Numeric; matrix of space-time covariates.}
 
- \item{memdist}{Logical; if \code{TRUE} then the distances in the composite likelihood are computed before the optimization.}
+ \item{memdist}{Low-level compatibility flag. The \code{GeoFit} and \code{WlsStart} workflows always use \code{TRUE}; direct use is not recommended.}
 
  \item{nosym}{Logical; if \code{TRUE} symmetric weights are not considered.}
 

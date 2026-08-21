@@ -8,6 +8,10 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
                 mdecomp,model,namescorr,namesnuis,namesparam,numcoord,numpairs,numparamcor,numtime,
                 optimizer,onlyvar,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso,score)
 {
+  type_code <- suppressWarnings(as.integer(type))
+  if (length(type_code) == 1L && !is.na(type_code) && type_code == 3L)
+    stop("Likelihood type code 3 is no longer supported.", call. = FALSE)
+
   #########################################################################
   ## Utilities
   #########################################################################
@@ -23,9 +27,8 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   get_mean <- function(X, nuisance, MM = NULL) {
     if (!is.null(MM)) return(as.numeric(MM))
-    sel <- substr(names(nuisance), 1, 4) == "mean"
-    mm <- as.numeric(nuisance[sel])
-    as.vector(X %*% mm)
+    beta <- .GeoMean_beta(nuisance, ncol(X))
+    as.numeric(X %*% beta)
   }
 
   build_correlation_matrix <- function(corr_vec, ident) {
@@ -35,16 +38,6 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     corrmat_full <- t(corrmat_full)
     corrmat_full[lt] <- corr_vec
     corrmat_full
-  }
-
-  get_rhobeg <- function(param, lower, upper) {
-    width <- upper - lower
-    finite_width <- width[is.finite(width) & width > 0]
-    if (length(finite_width) > 0) {
-      min(0.1 * min(finite_width), 0.2 * max(abs(param), 1))
-    } else {
-      0.2 * max(abs(param), 1)
-    }
   }
 
   make_optimize_bounds <- function(param, lower, upper, namesparam) {
@@ -192,37 +185,6 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   #########################################################################
   ## Densities / criteria
   #########################################################################
-
-  LogNormDenRestr <- function(const,cova,dimat,mdecomp,stdata,...) {
-    llik <- 1.0e8
-    decompvarcov <- MatDecomp(cova, mdecomp)
-    if (is.logical(decompvarcov) && !decompvarcov) return(llik)
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
-    if (is.na(logdetvarcov)) return(llik)
-    ivarcov <- MatInv(cova)
-    sumvarcov <- sum(ivarcov)
-    if (!is.finite(sumvarcov) || sumvarcov <= 0) return(llik)
-    p <- ivarcov - array(rowSums(ivarcov), c(dimat, 1)) %*% colSums(ivarcov) / sumvarcov
-    llik <- 0.5 * (const + logdetvarcov + log(sumvarcov) + crossprod(t(crossprod(stdata, p)), stdata))
-    as.numeric(llik)
-  }
-
-  LogNormDenRestr_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    llik <- 1.0e8
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    ident <- t(ident)
-    ident[lower.tri(ident, diag = TRUE)] <- cova
-    decompvarcov <- MatDecomp(ident, mdecomp)
-    if (is.logical(decompvarcov) && !decompvarcov) return(llik)
-    logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
-    if (is.na(logdetvarcov)) return(llik)
-    ivarcov <- MatInv(ident)
-    sumvarcov <- sum(ivarcov)
-    if (!is.finite(sumvarcov) || sumvarcov <= 0) return(llik)
-    p <- ivarcov - array(rowSums(ivarcov), c(dimat, 1)) %*% colSums(ivarcov) / sumvarcov
-    llik <- 0.5 * (const + logdetvarcov + log(sumvarcov) + crossprod(t(crossprod(stdata, p)), stdata))
-    as.numeric(llik)
-  }
 
   LogNormDenStand <- function(const, cova, dimat, mdecomp, stdata, ...) {
     llik <- 1.0e8
@@ -515,7 +477,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     paramcorr <- as.numeric(pram[namescorr])
     nuisance0 <- pram[namesnuis]
     Mean <- get_mean(X, nuisance0, MM)
-    sel <- substr(names(nuisance0), 1, 4) == "mean"
+    sel <- names(nuisance0) %in% .GeoMean_names(ncol(X))
     nuisance <- nuisance0[!sel]
     nuisance <- nuisance[order(names(nuisance))]
 
@@ -544,7 +506,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     paramcorr <- as.numeric(pram[namescorr])
     nuisance0 <- pram[namesnuis]
     Mean <- get_mean(X, nuisance0, MM)
-    sel <- substr(names(nuisance0), 1, 4) == "mean"
+    sel <- names(nuisance0) %in% .GeoMean_names(ncol(X))
     nuisance <- nuisance0[!sel]
 
     if (aniso) {
@@ -568,7 +530,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     llik <- 1.0e8
     delta1 <- as.numeric(nuisance["tail1"])
     delta2 <- as.numeric(nuisance["tail2"])
-    if (delta1 <= 0 || delta1 >= 0.5 || delta2 <= 0 || delta2 >= 0.5 || sill <= 0) return(llik)
+    if (delta1 < 0 || delta1 >= 0.5 || delta2 < 0 || delta2 >= 0.5 || sill <= 0) return(llik)
 
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
@@ -582,19 +544,29 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
     if (length(pos_idx) > 0) {
       st_pos <- stdata[pos_idx]
-      W_pos <- VGAM::lambertW(delta1 * st_pos^2)
-      g_pos <- sqrt(W_pos / delta1)
-      jac_pos <- g_pos / (st_pos * (1 + W_pos))
-      tau_inv[pos_idx] <- g_pos
-      log_jacobian <- log_jacobian + sum(log(abs(jac_pos)))
+      if (delta1 == 0) {
+        tau_inv[pos_idx] <- st_pos
+      } else {
+        W_pos <- as.numeric(VGAM::lambertW(delta1 * st_pos^2))
+        g_pos <- sqrt(W_pos / delta1)
+        tau_inv[pos_idx] <- g_pos
+        ## For the inverse Tukey-h map,
+        ## d tau^{-1}(y) / dy = exp(-W/2) / (1 + W).
+        log_jacobian <- log_jacobian +
+          sum(-0.5 * W_pos - log1p(W_pos))
+      }
     }
     if (length(neg_idx) > 0) {
       st_neg <- stdata[neg_idx]
-      W_neg <- VGAM::lambertW(delta2 * st_neg^2)
-      g_neg <- sqrt(W_neg / delta2)
-      jac_neg <- -g_neg / (st_neg * (1 + W_neg))
-      tau_inv[neg_idx] <- -g_neg
-      log_jacobian <- log_jacobian + sum(log(abs(jac_neg)))
+      if (delta2 == 0) {
+        tau_inv[neg_idx] <- st_neg
+      } else {
+        W_neg <- as.numeric(VGAM::lambertW(delta2 * st_neg^2))
+        g_neg <- sqrt(W_neg / delta2)
+        tau_inv[neg_idx] <- -g_neg
+        log_jacobian <- log_jacobian +
+          sum(-0.5 * W_neg - log1p(W_neg))
+      }
     }
 
     y <- try(forwardsolve(decompvarcov, tau_inv, transpose = FALSE), silent = TRUE)
@@ -621,7 +593,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     nugget <- as.numeric(nuisance['nugget'])
     tail1 <- as.numeric(nuisance['tail1'])
     tail2 <- as.numeric(nuisance['tail2'])
-    if (tail1 <= 0 || tail1 >= 0.5 || tail2 <= 0 || tail2 >= 0.5 || nugget < 0 || nugget >= 1 || sill <= 0) return(llik)
+    if (tail1 < 0 || tail1 >= 0.5 || tail2 < 0 || tail2 >= 0.5 || nugget < 0 || nugget >= 1 || sill <= 0) return(llik)
 
     nuisance_temp <- nuisance
     nuisance_temp['sill'] <- 1
@@ -642,13 +614,16 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
     if (is.na(logdetvarcov)) return(llik)
-    Wval <- VGAM::lambertW(delta * stdata^2)
+    Wval <- as.numeric(VGAM::lambertW(delta * stdata^2))
     IL <- sign(stdata) * sqrt(Wval / delta)
-    IW <- 1 / (stdata * (1 + Wval))
     y <- try(forwardsolve(decompvarcov, IL, transpose = FALSE), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     quad_form <- sum(y^2)
-    log_jacobian <- -2 * sum(log(abs(IL * IW)))
+
+    ## Stable form of -2*log|d tau^{-1}(y)/dy|.
+    ## Since d tau^{-1}(y)/dy = exp(-W/2)/(1+W), the
+    ## contribution is W + 2*log(1+W), including the y=0 limit.
+    log_jacobian <- sum(Wval + 2 * log1p(Wval))
     if (!is.finite(quad_form) || !is.finite(log_jacobian)) return(llik)
     0.5 * (const + dimat * log(sill) + logdetvarcov + quad_form + log_jacobian)
   }
@@ -840,10 +815,6 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     lname <- 'loglik'
     if (bivariate) lname <- 'loglik_biv'
 
-    if (type == 3) {
-      if (bivariate) fname <- "LogNormDenRestr_biv" else fname <- "LogNormDenRestr"
-      const <- const - log(2*pi)
-    }
     if (type == 4) {
       if (bivariate) fname <- 'LogNormDenStand_biv' else fname <- 'LogNormDenStand'
     }
@@ -1134,7 +1105,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     numparam <- length(param)
     Likelihood$claic <- NULL
     Likelihood$clbic <- NULL
-    if (type == 3 || type == 4) {
+    if (type == 4) {
       Likelihood$claic <- -2 * (maxfun - numparam)
       Likelihood$clbic <- -2 * maxfun + numparam * log(dimat)
     }

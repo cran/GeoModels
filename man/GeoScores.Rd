@@ -5,9 +5,11 @@
 \title{Computation of predictive scores}
 
 \description{
- The function computes predictive scores for observed validation values and
- predicted values, optionally using predictive variances or 95 percent
- prediction intervals.
+ The function computes predictive scores for observed validation values from
+ point predictions, kriging prediction objects, or conditional-simulation
+ objects. Gaussian predictive scores are available from \code{GeoKrig}/\code{GeoKrigloc}
+ through the \code{pred}/\code{mse} convention, while \code{GeoSimcond}
+ objects are scored from their empirical conditional predictive distribution.
 }
 
 \usage{
@@ -29,9 +31,20 @@ GeoScores(data_to_pred,
  }
 
  \item{probject}{
- Optional object of class \code{GeoKrig} or \code{GeoKrigloc}. If supplied,
- point predictions and prediction variances are extracted from
- \code{probject$pred} and \code{probject$mse}, respectively.
+ Optional object of class \code{GeoKrig}, \code{GeoKrigloc}, or \code{GeoSimcond}.
+ For \code{GeoKrig}/\code{GeoKrigloc}, point predictions and prediction variances
+ are extracted from \code{probject$pred} and \code{probject$mse}. Requested
+ probabilistic scores are computed from the Gaussian predictive convention
+ \eqn{N(\widehat Y, MSE)} for every marginal model. For a non-Gaussian model
+ this is a Gaussian approximation based on the optimal linear predictor and its
+ MSE; \code{GeoScores} reports it without deciding whether that approximation is
+ appropriate for a particular analysis.
+
+ For \code{GeoSimcond}, the conditional simulations in \code{probject$condsim}
+ define an empirical predictive distribution. Point scores use
+ \code{probject$cond_mean}; CRPS, PIT, Brier score, prediction intervals,
+ interval score, and coverage are computed directly from the conditional draws,
+ without a Gaussian approximation.
  }
 
  \item{pred}{
@@ -41,9 +54,12 @@ GeoScores(data_to_pred,
 
  \item{mse}{
  Optional numeric vector, matrix or array of prediction variances. Predictive
- standard errors are computed as \code{sqrt(mse)}. This argument is required
- for Gaussian-distribution scores unless both \code{lower95} and
- \code{upper95} are supplied.
+ standard errors are computed as \code{sqrt(mse)}. This argument is not needed
+ for \code{"pe"}, for interval score or coverage when \code{lower95} and
+ \code{upper95} are supplied, or when \code{probject} is a
+ \code{GeoSimcond} object. It is required for probabilistic scores based on the
+ Gaussian \code{pred}/\code{mse} convention unless both interval bounds are
+ supplied and used to infer a Gaussian standard error.
  }
 
  \item{score}{
@@ -55,10 +71,12 @@ GeoScores(data_to_pred,
 
  \item{lower95}{
  Optional numeric vector, matrix or array containing the lower bounds of the
- 95 percent prediction intervals. If supplied together with
- \code{upper95}, these bounds are used directly for \code{"intscore"} and
- \code{"coverage"}. If \code{mse} is not supplied, they are also used to
- approximate predictive standard errors for Gaussian-distribution scores.
+ 95 percent prediction intervals. If supplied together with \code{upper95},
+ these bounds are used directly for \code{"intscore"} and \code{"coverage"}.
+ For a \code{GeoSimcond} object they override the default empirical 2.5 and
+ 97.5 percent conditional-simulation quantiles. If \code{mse} is not supplied
+ in the Gaussian \code{pred}/\code{mse} path, they can also be used to infer a
+ Gaussian predictive standard error.
  }
 
  \item{upper95}{
@@ -67,108 +85,101 @@ GeoScores(data_to_pred,
  }
 
  \item{threshold}{
- Numeric threshold used to compute the Brier score \code{"brie"}. The binary
- event is \eqn{Y > threshold}.
+ Finite numeric scalar used to compute the Brier score \code{"brie"}. The binary event is \eqn{Y > threshold}.
  }
 
  \item{na.rm}{
- Logical. If \code{TRUE}, non-finite observations, predictions, invalid
- intervals and non-positive predictive variances or standard errors are
- removed before computing the scores. If \code{FALSE}, such values produce
- an error.
+ Logical. If \code{TRUE}, invalid observations are removed separately for each requested score class. Thus an invalid predictive variance does not remove an otherwise valid observation from MAE/RMSPE, and an invalid interval does not affect point scores. If \code{FALSE}, invalid values relevant to any requested score produce an error.
  }
 }
 
 \details{
- \code{GeoScores} computes point prediction scores and probabilistic
- predictive scores. Predictions and prediction variances can be supplied
- directly through \code{pred} and \code{mse}, or indirectly through a
- \code{GeoKrig} or \code{GeoKrigloc} object supplied to \code{probject}.
+ \code{GeoScores} dispatches predictive scoring according to the information
+ contained in \code{probject}.
 
- The point prediction option \code{"pe"} returns the mean absolute error and
- the root mean squared prediction error.
-
- The scores \code{"brie"}, \code{"lscore"}, \code{"pit"} and \code{"crps"}
- are computed under the assumption that the predictive distribution is
- Gaussian, with mean equal to the point prediction and standard deviation equal
- to the predictive standard error. If \code{mse} is supplied, the predictive
- standard error is \code{sqrt(mse)}. If \code{mse} is absent and both
- \code{lower95} and \code{upper95} are supplied, the predictive standard error
- is approximated as
+ For a \code{GeoKrig} or \code{GeoKrigloc} object, \code{pred} is the point
+ predictor and \code{mse} its mean squared prediction error. The option
+ \code{"pe"} returns mean absolute error and root mean squared prediction
+ error. Whenever probabilistic scores are requested, \code{GeoScores} uses the
+ Gaussian predictive convention
  \deqn{
- \frac{U - L}{2 \Phi^{-1}(0.975)},
+ Y_0\mid Y \ \dot\sim\ N\{\widehat Y_0, MSE_0\}.
  }
- where \eqn{L} and \eqn{U} are the lower and upper bounds of the 95 percent
- prediction interval.
+ This convention is used for every marginal model. For a Gaussian random field
+ it is the natural conditional predictive distribution (conditional on fitted
+ parameters). For a non-Gaussian model, \code{GeoKrig}/\code{GeoKrigloc}
+ still returns an optimal linear predictor, so CRPS, LogScore, PIT, Brier score,
+ and Gaussian intervals obtained this way must be interpreted as Gaussian
+ predictive approximations based on the OLP and its MSE. \code{GeoScores} does
+ not suppress those quantities; their scientific interpretation is left to the
+ user.
 
- The Brier score is computed for the binary event \eqn{Y > threshold}, using
- the Gaussian predictive probability
- \eqn{1 - \Phi((threshold - \hat{Y}) / s)}, where \eqn{\hat{Y}} is the
- prediction and \eqn{s} is the predictive standard error.
+ Predictions and prediction variances can equivalently be supplied directly
+ through \code{pred} and \code{mse}; this uses the same Gaussian predictive
+ convention.
 
- The logarithmic score is returned as the negative log predictive density,
- averaged over validation observations:
+ For a \code{GeoSimcond} object, the replications stored in
+ \code{probject$condsim} are treated as an empirical conditional predictive
+ distribution at each prediction location. No Gaussian approximation is used.
+ The point forecast for \code{"pe"} is \code{probject$cond_mean} (or the
+ empirical conditional mean reconstructed from the simulations if needed).
+ The Brier probability for the event \eqn{Y>threshold} is the empirical
+ conditional exceedance probability. PIT is the empirical conditional CDF at
+ the validation observation. The default 95 percent predictive interval is
+ given by the empirical 0.025 and 0.975 quantiles, unless explicit
+ \code{lower95}/\code{upper95} values are supplied.
+
+ The empirical CRPS from conditional draws
+ \eqn{x_1,\ldots,x_B} is
  \deqn{
- \frac{1}{2}\left\{\log(2\pi\sigma^2) +
- \left(\frac{y - \hat{y}}{\sigma}\right)^2\right\}.
+ \widehat{CRPS}(F,y)=
+ \frac{1}{B}\sum_{b=1}^B |x_b-y|-
+ \frac{1}{2B^2}\sum_{b=1}^B\sum_{c=1}^B |x_b-x_c|.
  }
+ It is evaluated internally with an equivalent sorted-sample formula requiring
+ \eqn{O(B\log B)} rather than \eqn{O(B^2)} work per prediction location.
 
- The CRPS is computed using the closed-form expression for a Gaussian
- predictive distribution.
+ A logarithmic score is not computed automatically from a
+ \code{GeoSimcond} object. Conditional draws identify the predictive
+ distribution empirically but do not by themselves provide a predictive
+ density evaluated exactly at the observed value. If \code{"lscore"} is
+ requested from a \code{GeoSimcond} object, \code{LogScore = NA} is returned
+ with a warning; no kernel-density approximation is introduced silently.
 
- For \code{"pit"}, if \code{probject} is a \code{GeoKrig} or
- \code{GeoKrigloc} object and \code{GeoPit} is available, the PIT values are
- obtained through \code{GeoPit(probject, type = "Uniform")$data}; otherwise
- they are computed as \code{pnorm(data_to_pred, mean = pred, sd = sqrt(mse))}.
+ In the Gaussian \code{pred}/\code{mse} path, the Brier score uses the
+ Gaussian predictive probability of \eqn{Y>threshold}; the logarithmic score
+ is the mean negative Gaussian log predictive density; PIT uses the Gaussian
+ CDF; and CRPS uses the closed-form Gaussian expression.
 
- The 95 percent interval score is computed as
+ The 95 percent interval score is
  \deqn{
- (u - l) +
- \frac{2}{\alpha}(l - y) I(y < l) +
- \frac{2}{\alpha}(y - u) I(y > u),
+ (u-l)+\frac{2}{\alpha}(l-y)I(y<l)+
+ \frac{2}{\alpha}(y-u)I(y>u), \qquad \alpha=0.05.
  }
- with \eqn{\alpha = 0.05}. If \code{lower95} and \code{upper95} are supplied,
- they are used directly as \eqn{l} and \eqn{u}; otherwise the interval is
- computed from the Gaussian predictive distribution using \code{pred} and
- \code{mse}. The empirical coverage is the proportion of validation values
- falling inside the corresponding 95 percent intervals.
+ For \code{GeoKrig}/\code{GeoKrigloc} without explicit interval bounds,
+ \eqn{l} and \eqn{u} are Gaussian intervals based on \code{pred} and
+ \code{mse}. For \code{GeoSimcond}, they are empirical conditional-simulation
+ quantiles. Empirical coverage is the proportion of validation observations
+ lying in the corresponding intervals.
 }
-
 \value{
- A list containing only the components requested through \code{score}. Possible
- components are:
- \item{MAE}{
- Mean absolute error. Returned when \code{"pe"} is requested.
- }
- \item{RMSPE}{
- Root mean squared prediction error. Returned when \code{"pe"} is requested.
- }
- \item{Brier}{
- Brier score for the binary event \eqn{Y > threshold}. Returned when
- \code{"brie"} is requested.
- }
- \item{LogScore}{
- Mean negative log predictive density under a Gaussian predictive
- distribution. Returned when \code{"lscore"} is requested.
- }
- \item{PIT}{
- Probability integral transform values. Returned when \code{"pit"} is
- requested.
- }
- \item{CRPS}{
- Mean continuous ranked probability score under a Gaussian predictive
- distribution. Returned when \code{"crps"} is requested.
- }
- \item{IS95}{
- Mean interval score for the 95 percent prediction intervals. Returned when
- \code{"intscore"} is requested.
- }
- \item{Cvg95}{
- Empirical coverage of the 95 percent prediction intervals. Returned when
- \code{"coverage"} is requested.
- }
+ A list containing only the components requested through \code{score}:
+ \item{MAE}{Mean absolute error. For \code{GeoSimcond}, the empirical
+ conditional mean is used as the point forecast.}
+ \item{RMSPE}{Root mean squared prediction error.}
+ \item{Brier}{Brier score for the event \eqn{Y>threshold}. It is Gaussian
+ probability based for \code{GeoKrig}/\code{GeoKrigloc} and empirical
+ conditional-simulation based for \code{GeoSimcond}.}
+ \item{LogScore}{Mean negative Gaussian log predictive density for the
+ \code{pred}/\code{mse} or \code{GeoKrig}/\code{GeoKrigloc} path. For a
+ \code{GeoSimcond} object this component is \code{NA} if requested.}
+ \item{PIT}{Gaussian PIT values for the \code{pred}/\code{mse} or kriging
+ path, or empirical conditional CDF values for \code{GeoSimcond}.}
+ \item{CRPS}{Mean Gaussian CRPS for the kriging/direct-prediction path, or
+ mean empirical CRPS from conditional simulations for \code{GeoSimcond}.}
+ \item{IS95}{Mean interval score for the 95 percent prediction intervals.}
+ \item{Cvg95}{Empirical coverage of the 95 percent prediction intervals.}
 }
-
 \references{
  Gneiting, T. and Raftery, A. E. (2007).
  \emph{Strictly Proper Scoring Rules, Prediction, and Estimation}.
@@ -269,6 +280,12 @@ Pr_scores$CRPS
 Pr_scores$LogScore
 Pr_scores$IS95
 Pr_scores$Cvg95
+
+# Conditional-simulation objects can be scored directly. For example,
+# after obtaining cs <- GeoSimcond(..., nrep = 500), use
+# GeoScores(data_to_pred, cs)
+# to compute point scores, empirical CRPS, empirical 95 percent interval
+# score, and empirical coverage from cs$condsim.
 
 }
 

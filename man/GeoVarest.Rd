@@ -22,12 +22,15 @@
 GeoVarest(fit, K = 100, sparse = FALSE,
  method = c("cholesky", "TB", "CE"),
  alpha = 0.95, L = 10000,
- parallel = TRUE, ncores = NULL, progress = TRUE, seed = NULL)
+ parallel = FALSE, ncores = 6, progress = TRUE, seed = NULL,
+ min_success_rate = 0.8)
 }
 \arguments{
  \item{fit}{A fitted object obtained from \code{\link{GeoFit}}. The object
  must contain the sensitivity matrix, hence \code{GeoFit} should be called
- with \code{sensitivity = TRUE}.}
+ with \code{sensitivity = TRUE}. Full/Standard likelihood fits are not accepted;
+ use \code{GeoFit(..., likelihood = "Full", type = "Standard", varest = TRUE)}
+ for Hessian-based standard errors.}
 
  \item{K}{The number of simulations used in the parametric score bootstrap.}
 
@@ -43,18 +46,22 @@ GeoVarest(fit, K = 100, sparse = FALSE,
 
  \item{L}{Numeric; the number of lines in the turning bands method.}
 
- \item{parallel}{Logical; if \code{TRUE}, the score evaluation step is
+ \item{parallel}{Logical; default \code{FALSE}. If \code{TRUE}, the score evaluation step is
  parallelized.}
 
- \item{ncores}{Numeric; number of cores involved in the parallel score
- evaluation. If \code{NULL}, the number of cores is chosen automatically as 4.}
+ \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and the number of bootstrap jobs. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free.}
 
  \item{progress}{Logical; if \code{TRUE}, progress information is shown.}
 
  \item{seed}{Optional integer seed for reproducibility of the simulated
  samples.}
+ \item{min_success_rate}{Minimum fraction of successful score-bootstrap
+ replications required to return variance estimates. The default is 0.8.}
 }
 \details{
+For spatio-temporal fits, the original numeric \code{coordt} values stored in \code{fit} are reused. Irregularly spaced times are supported with \code{method = "cholesky"}; approximate simulation methods retain the restrictions documented in \code{\link{GeoSimapprox}}.
+
+
  Let \eqn{cl(\theta)} denote the composite log-likelihood and let
  \eqn{U(\theta) = \nabla cl(\theta)} be the corresponding composite score.
  The function simulates \code{K} data sets from the fitted model and evaluates
@@ -77,6 +84,17 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  refit the model for each simulated data set. It estimates the variability
  matrix of the score and then computes the sandwich/Godambe covariance
  matrix.
+
+ For stochastic nearest-neighbor fits, the realized retained-pair graph stored
+ in the original fit is reused unchanged for every simulated data set. Thus the
+ score bootstrap estimates variability conditional on the selected pair graph,
+ in agreement with the current implementation described in the stochastic-NN
+ methodology.
+
+
+Parallel multisession workers are started with the package-library paths of the calling R session, including the library containing the loaded GeoModels installation.
+
+For \code{method = "TB"} without a copula, parallel workers are persistent and replications are streamed one at a time (simulate, evaluate, release). This keeps peak memory bounded when both \code{L} and \code{K} are large while still reusing the selected pair graph and static fitting context within each worker. For fitted copula models, \code{method="TB"} is simulated through the turning-bands backend of \code{GeoSimCopula}; the copula path is currently not streamed replicate-by-replicate. On platforms where \pkg{future} reports forked multicore execution as safe, GeoModels uses it automatically to reduce worker startup and serialization overhead; otherwise it falls back to multisession with the current GeoModels library path propagated explicitly.
 }
 \value{
  Returns an updated object of class \code{GeoFit}. The following components
@@ -98,8 +116,15 @@ GeoVarest(fit, K = 100, sparse = FALSE,
  \item{score_logCompLik}{Composite log-likelihood values corresponding to the
  successful score evaluations.}
  \item{score_failures}{Data frame with failed score evaluations, if any.}
- \item{estimates}{Matrix containing the successful scores and the associated
- composite log-likelihood values.}
+}
+
+\section{Three-dimensional coordinates}{
+For a purely spatial univariate fit with explicit irregular three-dimensional
+Euclidean coordinates, \code{method = "TB"} is supported when no
+\code{anisopars} were used. Method \code{"CE"} remains restricted to
+regular two-dimensional grids. Use \code{method = "cholesky"} for
+bivariate, spatio-temporal, anisotropic, or other unsupported
+three-dimensional cases.
 }
 \seealso{
 \code{\link{GeoFit}} for the fitted objects used as input

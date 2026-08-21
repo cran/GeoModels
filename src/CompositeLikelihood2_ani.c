@@ -14,7 +14,7 @@ void Comp_Pair_Gauss2mem_aniso(int *cormod, double *coord1,double *coord2, doubl
     int i=0;double lag=0.0;
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    if(!R_FINITE(sill) || sill<=0 || nugget<0 || nugget>=1){*res=LOW; return;}
     for(i=0;i<(npairs[0]);i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
   lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
@@ -397,8 +397,7 @@ void Comp_Pair_BinomnegGauss2mem_aniso(int *cormod, double *coord1, double *coor
     }
     /* FIX 3: dimensione sicura */
     int cache_size = N + 2 * MAX_UV + 10;
-    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
-    if (!lgamma_cache) { *res = LOW; return; }
+    double *lgamma_cache = (double *) R_alloc((size_t) cache_size, sizeof(double));
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
@@ -445,7 +444,6 @@ void Comp_Pair_BinomnegGauss2mem_aniso(int *cormod, double *coord1, double *coor
         *res += weights * log(bl);
     }
  
-    free(lgamma_cache);
  
 #undef P_CLAMP
  
@@ -608,11 +606,10 @@ void Comp_Pair_BinomNNGauss_misp2mem_aniso(int *cormod, double *coord1,double *c
     double p1=0.0,p2=0.0;//probability of marginal success
     double p11=0.0;//probability of joint success
 
-    double **M;
-    M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
+    double M0[2] = {0.0, 0.0};
+    double M1[2] = {0.0, 0.0};
+    double *M[2] = {M0, M1};
+    double dat[2] = {0.0, 0.0};
 
     double nugget=nuis[0];
     if( nugget>=1 || nugget<0){*res=LOW; return;}
@@ -636,8 +633,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                  bl=dNnorm(N,M,dat);
                  *res+= log(bl)*weights;       
                 }}
-           for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
     if(!R_FINITE(*res))*res = LOW;
     return;
 }
@@ -708,7 +703,9 @@ void Comp_Pair_Logistic2mem_aniso(int *cormod, double *coord1,double *coord2, do
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                 zi=(data1[i]);zj=(data2[i]);
-                    corr=CorFct(cormod,lag,0,par,0,0);
+                lag=hypot(coord1[2*i]-coord2[2*i],
+                          coord1[2*i+1]-coord2[2*i+1]);
+                corr=CorFct(cormod,lag,0,par,0,0);
                 if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                     bl= biv_Logistic((1-nugget)*corr,zi,zj,mean1[i],mean2[i],nuis[1]);
                     *res+= weights*log(bl);
@@ -744,73 +741,82 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     return;
 }
 /*********************************************************/
-void Comp_Pair_PoisGamma2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Pair_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,
+                                   double *data1, double *data2, int *N1, int *N2,
+                                   double *par, int *weigthed, double *res,
+                                   double *mean1, double *mean2, double *nuis,
+                                   int *type_cop, int *cond)
 {
-    int i=0, uu,ww;
-    double weights=1.0,corr,mui,muj,bl,lag=0.0;
-    double nugget=nuis[0];
-
-      if(nugget<0||nugget>=1){*res=LOW; return;}
-  // Rprintf("%d   \n",npairs[0]);
-      for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                    mui=exp(mean1[i]);muj=exp(mean2[i]);
-                    lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                     corr=CorFct(cormod,lag,0,par,0,0);
-                    // if(fabs(corr)>1|| !R_FINITE(corr)) {*res=LOW; return;}
-                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                      uu=(int) data1[i];  ww=(int) data2[i];
-                      bl=biv_PoissonGamma((1-nugget)*corr,uu,ww,mui, muj,nuis[2]);
-                      *res+= log(bl)*weights;
-                    }}
-
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget = nuis[0], shape = nuis[2];
+    if (!R_FINITE(nugget) || nugget < 0.0 || nugget >= 1.0 ||
+        !R_FINITE(shape) || !(shape > 0.0) || !npairs) { *res = LOW; return; }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        int r, t; double mi, mj;
+        const int prep = GeoPGPreparePairAt(i, data1[i], data2[i],
+                                             mean1[i], mean2[i],
+                                             &r, &t, &mi, &mj);
+        if (prep == 0) continue;
+        if (prep < 0) { *res = LOW; return; }
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        double weight = 1.0;
+        if (weigthed[0]) weight = CorFunBohman(lag, maxdist[0]);
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double base = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(base) || fabs(base) > 1.0 + 1e-8) { *res = LOW; return; }
+        double rho = lag <= 0.0 ? fmax2(-1.0, fmin2(1.0, base))
+                                : (1.0 - nugget) * base;
+        if (lag > 0.0 && rho >= 1.0) rho = 1.0 - 1e-15;
+        if (lag > 0.0 && rho <= -1.0) rho = -1.0 + 1e-15;
+        const double ll = GeoPGLogJoint(rho, r, t, mi, mj, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
 }
 
 
-void Comp_Pair_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+
+void Comp_Pair_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1,
+                                              double *coord2, double *data1,
+                                              double *data2, int *N1, int *N2,
+                                              double *par, int *weigthed,
+                                              double *res, double *mean1,
+                                              double *mean2, double *nuis,
+                                              int *type_cop, int *cond)
 {
-    int i=0,N=2;
-    double  weights=1.0,corr,corr1,mui,muj,bl,bi,bj,vvi,vvj,lag=0.0;
-    double nugget=nuis[0];
-
-      if(nugget<0||nugget>=1){*res=LOW; return;}
-double **M;
-        M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
-    for(i=0;i<npairs[0];i++){
-
-                  if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-             //***********/
-                    mui=exp(mean1[i]);muj=exp(mean2[i]);
-                    bi= nuis[2]/mui; bj= nuis[2]/muj;
-                    vvi= mui*(1+1/bi); vvj= muj*(1+1/bj);
-                    lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                     corr=CorFct(cormod,lag,0,par,0,0)*(1-nugget);
-                      corr1=corr_pois_gen(corr,mui, muj, nuis[2]);
-                      //Rprintf("%f %f  %f \n",corr,corr1,nuis[2]);
-                      if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                        M[0][0]=vvi; M[1][1]=vvj;M[0][1]=sqrt(vvi*vvj)*corr1;M[1][0]= M[0][1];
-                        dat[0]=data1[i]-mui;dat[1]=data2[i]-muj;
-
-                      bl=dNnorm(N,M,dat);
-                      //Rprintf("%f %f  %f \n",corr,corr1,log(bl));
-                      *res+= log(bl)*weights;
-                    }}
-   for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
-
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget = nuis[0], shape = nuis[2];
+    if (!R_FINITE(nugget) || nugget < 0.0 || nugget >= 1.0 ||
+        !R_FINITE(shape) || !(shape > 0.0) || !npairs) { *res = LOW; return; }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+        if (!R_FINITE(data1[i]) || !R_FINITE(data2[i]) ||
+            !R_FINITE(mean1[i]) || !R_FINITE(mean2[i]) ||
+            mean1[i] > 700.0 || mean2[i] > 700.0) { *res = LOW; return; }
+        const double mi = exp(mean1[i]), mj = exp(mean2[i]);
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        double weight = weigthed[0] ? CorFunBohman(lag, maxdist[0]) : 1.0;
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double base = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(base) || fabs(base) > 1.0 + 1e-8) { *res = LOW; return; }
+        double rho = lag <= 0.0 ? fmax2(-1.0, fmin2(1.0, base))
+                                : (1.0 - nugget) * base;
+        if (rho >= 1.0) rho = 1.0 - 1e-15;
+        if (rho <= -1.0) rho = -1.0 + 1e-15;
+        const double ll = GeoPGGaussLogJoint(rho, data1[i], data2[i], mi, mj, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
 }
+
 
 
 /*********************************************************/
@@ -834,7 +840,6 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                     // if(fabs(corr)>1|| !R_FINITE(corr)) {*res=LOW; return;}
                         if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                       uu=(int) data1[i];  ww=(int) data2[i];
-                      Rprintf("%f %f \n",mui,muj);
                       bl=biv_PoissonZIP(corr,uu,ww,mui, muj,mup,nugget1,nugget2);
                       *res+= log(bl)*weights;
                     }}
@@ -852,12 +857,10 @@ void Comp_Pair_Gauss_misp_Pois2mem_aniso(int *cormod, double *coord1,double *coo
     double nugget=nuis[0];
 
       if(nugget<0||nugget>=1){*res=LOW; return;}
-double **M;
-        M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
+    double M0[2] = {0.0, 0.0};
+    double M1[2] = {0.0, 0.0};
+    double *M[2] = {M0, M1};
+    double dat[2] = {0.0, 0.0};
     for(i=0;i<npairs[0];i++){
 
                   if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
@@ -873,9 +876,6 @@ double **M;
                       bl=dNnorm(N,M,dat);
                       *res+= log(bl)*weights;
                     }}
-   for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
-
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
@@ -981,7 +981,7 @@ void Comp_Pair_Tukeyhh2mem_aniso(int *cormod, double *coord1,double *coord2, dou
     double nugget=nuis[0];
     double h1=nuis[3];
     double h2=nuis[2];
-      if( sill<0||h1<0||h1>0.5||h2<0||h2>0.5||nugget<0||nugget>=1){*res=LOW; return;}
+      if( sill<=0||h1<0||h1>=0.5||h2<0||h2>=0.5||nugget<0||nugget>=1){*res=LOW; return;}
         for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                 zi=data1[i];zj=data2[i];
@@ -1274,7 +1274,7 @@ void Comp_Pair_GaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, do
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                       *res+= bl*weights;
@@ -1287,18 +1287,18 @@ void Comp_Pair_TCop2mem_aniso(int *cormod, double *coord1,double *coord2, double
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond)
 {
-  int model=1; 
-    /*############*/
+  int model=12;
+    /* StudentT nuisance order: df, nugget, sill, [nu]. */
     int i=0;double lag=0.0;
-    double  weights=1.0,sill,nugget,corr,bl;
-    sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    double  weights=1.0,sill,nugget,corr,bl,df;
+    df=nuis[0];nugget=nuis[1];sill=nuis[2];
+    if(!R_FINITE(df)||df<=0||!R_FINITE(sill)||sill<=0||nugget<0||nugget>=1){*res=LOW; return;}
 
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                       *res+= bl*weights;
@@ -1316,12 +1316,14 @@ void Comp_Pair_BetaCop2mem_aniso(int *cormod, double *coord1,double *coord2, dou
     int i=0;double lag=0.0;
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    if(!R_FINITE(sill)||sill<=0 || nugget<0||nugget>=1 ||
+       !R_FINITE(nuis[2])||!R_FINITE(nuis[3])||nuis[2]<=0||nuis[3]<=0 ||
+       !R_FINITE(nuis[4])||!R_FINITE(nuis[5])||nuis[4]>=nuis[5]) {*res=LOW; return;}
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                         *res+= bl*weights;
@@ -1339,12 +1341,14 @@ void Comp_Pair_Beta2Cop2mem_aniso(int *cormod, double *coord1,double *coord2, do
     int i=0;double lag=0.0;
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    if(!R_FINITE(sill)||sill<=0 || nugget<0||nugget>=1 ||
+       !R_FINITE(nuis[2])||nuis[2]<=0 ||
+       !R_FINITE(nuis[3])||!R_FINITE(nuis[4])||nuis[3]>=nuis[4]) {*res=LOW; return;}
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                        *res+= bl*weights;
@@ -1362,12 +1366,14 @@ void Comp_Pair_KumaraswamyCop2mem_aniso(int *cormod, double *coord1,double *coor
     int i=0;double lag=0.0;
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    if(!R_FINITE(sill)||sill<=0 || nugget<0||nugget>=1 ||
+       !R_FINITE(nuis[2])||!R_FINITE(nuis[3])||nuis[2]<=0||nuis[3]<=0 ||
+       !R_FINITE(nuis[4])||!R_FINITE(nuis[5])||nuis[4]>=nuis[5]) {*res=LOW; return;}
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                         *res+= bl*weights;
@@ -1384,18 +1390,153 @@ void Comp_Pair_Kumaraswamy2Cop2mem_aniso(int *cormod, double *coord1,double *coo
     int i=0;double lag=0.0;
     double  weights=1.0,sill,nugget,corr,bl;
     sill=nuis[1];nugget=nuis[0];
-    if(sill<0 || nugget<0||nugget>1){*res=LOW; return;}
+    if(!R_FINITE(sill)||sill<=0 || nugget<0||nugget>=1 ||
+       !R_FINITE(nuis[2])||nuis[2]<=0 ||
+       !R_FINITE(nuis[3])||!R_FINITE(nuis[4])||nuis[3]>=nuis[4]) {*res=LOW; return;}
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                       *res+= bl*weights;
                     }}
     if(!R_FINITE(*res))  *res = LOW;
     return;
+}
+
+void Comp_Pair_WeibullCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=26;
+    const double nugget=nuis[0], shape=nuis[2];
+    if(nugget<0||nugget>=1||!R_FINITE(shape)||shape<=0){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_GammaCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=21;
+    const double nugget=nuis[0], shape=nuis[2];
+    if(nugget<0||nugget>=1||!R_FINITE(shape)||shape<=0){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_LogGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=22;
+    const double nugget=nuis[0], sill=nuis[1];
+    if(nugget<0||nugget>=1||!R_FINITE(sill)||sill<=0){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_LogisticCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=25;
+    const double nugget=nuis[0], sill=nuis[1];
+    if(nugget<0||nugget>=1||!R_FINITE(sill)||sill<=0){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_SkewLaplaceCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=59;
+    const double nugget=nuis[0], sill=nuis[1], skew=nuis[2];
+    if(nugget<0||nugget>=1||!R_FINITE(sill)||sill<=0||!R_FINITE(skew)||skew<=0||skew>=1){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_BinomNNGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=11;
+    const double nugget=nuis[0];
+    if(nugget<0||nugget>=1){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
+}
+
+void Comp_Pair_BinomnegGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond)
+{
+    const int model=16;
+    const double nugget=nuis[0];
+    if(nugget<0||nugget>=1){*res=LOW;return;}
+    double total=0.0;
+    for(int i=0;i<npairs[0];++i){
+        if(!ISNAN(data1[i])&&!ISNAN(data2[i])){
+            double lag=hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
+            double corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+            double w=*weigthed?CorFunBohman(lag,maxdist[0]):1.0;
+            total += w*biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
+        }
+    }
+    *res=R_FINITE(total)?total:LOW;
 }
 
 void Comp_Pair_PoisCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
@@ -1407,16 +1548,53 @@ void Comp_Pair_PoisCop2mem_aniso(int *cormod, double *coord1,double *coord2, dou
     int i=0;double lag=0.0;
     double  weights=1.0,nugget,corr,bl;
     nugget=nuis[0];
-    if(nugget<0||nugget>1){*res=LOW; return;}
+    if(nugget<0||nugget>=1){*res=LOW; return;}
 
     for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                      corr=CorFct(cormod,lag,0,par,0,0);
+                      corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
            bl=biv_cop(corr,type_cop[0],cond[0],data1[i],data2[i],mean1[i],mean2[i],nuis,model,N1[i],N2[i]);
                         *res+= bl*weights;
                     }}
     if(!R_FINITE(*res))  *res = LOW;
     return;
+}
+void Comp_Pair_PoisGammaZIP2mem_aniso(int *cormod, double *coord1, double *coord2,
+                                      double *data1, double *data2, int *N1, int *N2,
+                                      double *par, int *weigthed, double *res,
+                                      double *mean1, double *mean2, double *nuis,
+                                      int *type_cop, int *cond)
+{
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget1 = nuis[0], nugget2 = nuis[1];
+    const double mup = nuis[2], shape = nuis[4];
+    if (!R_FINITE(nugget1) || !R_FINITE(nugget2) ||
+        nugget1 < 0.0 || nugget1 >= 1.0 || nugget2 < 0.0 || nugget2 >= 1.0 ||
+        !R_FINITE(mup) || !R_FINITE(shape) || !(shape > 0.0) || !npairs) {
+        *res = LOW; return;
+    }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        int r, t; double mi, mj;
+        const int prep = GeoPGPreparePairAt(i, data1[i], data2[i],
+                                             mean1[i], mean2[i],
+                                             &r, &t, &mi, &mj);
+        if (prep == 0) continue;
+        if (prep < 0) { *res = LOW; return; }
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        double weight = weigthed[0] ? CorFunBohman(lag, maxdist[0]) : 1.0;
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double rho = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(rho) || fabs(rho) > 1.0 + 1e-8) { *res = LOW; return; }
+        rho = fmax2(-1.0, fmin2(1.0, rho));
+        const double ll = GeoPGZIPLogJoint(rho, r, t, mi, mj, mup,
+                                            nugget1, nugget2, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
 }

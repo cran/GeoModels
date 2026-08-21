@@ -22,7 +22,7 @@ WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
 
  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
 
- \item{coordt}{A numeric vector assigning 1-dimension of temporal coordinates.}
+ \item{coordt}{A numeric vector assigning one dimension of temporal coordinates. Temporal coordinates may be irregularly spaced; temporal lags used during initialization are computed from the supplied coordinate values.}
 
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d_t x 2})-matrices containing dynamical (in time) spatial coordinates.
  Optional argument, default is \code{NULL}.}
@@ -46,7 +46,7 @@ WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
 
  \item{neighb}{Numeric; an optional positive integer indicating the order of neighborhood in the composite likelihood computation.}
 
- \item{maxtime}{Numeric; an optional positive value indicating the maximum temporal separation considered in the composite-likelihood computation.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal separation, expressed in the same units as \code{coordt}, considered in the composite-likelihood initialization.}
 
  \item{model}{String; the name of the model.}
 
@@ -78,7 +78,7 @@ WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
 
  \item{X}{Numeric; matrix of spatio(temporal) covariates in the linear mean specification.}
 
- \item{memdist}{Logical; if \code{TRUE} then the distances in the composite likelihood are computed before the optimization.}
+ \item{memdist}{Deprecated compatibility argument. \code{WlsStart} always precomputes the selected pair structure; \code{FALSE} produces a warning and is treated as \code{TRUE}.}
 
  \item{nosym}{Logical; if \code{TRUE} symmetric weights are not considered.}
 

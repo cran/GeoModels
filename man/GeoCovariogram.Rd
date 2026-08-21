@@ -17,21 +17,30 @@ GeoCovariogram(fitted, distance="Eucl",answer.cov=FALSE,
 \arguments{
  \item{fitted}{A fitted object obtained from the
  \code{\link{GeoFit}} or \code{\link{GeoWLS}} procedures.}
- \item{distance}{String; the name of the spatial distance. The default
- is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}}.}
- \item{answer.cov}{Logical; if \code{TRUE} a vector with the
- estimated covariance function is returned; if \code{FALSE} (the
- default) the covariance is not returned.}
+ \item{distance}{String; the name of the spatial distance. When omitted,
+ the distance stored in \code{fitted} is used when available. The empirical
+ lag values are taken from \code{vario}; the fitted and empirical objects
+ should therefore use the same spatial metric.}
+ \item{answer.cov}{Logical; if \code{TRUE} the estimated covariance
+ function is returned. For a bivariate Gaussian fit, the returned components
+ are \code{covariance11}, \code{covariance12}, and \code{covariance22}.}
  \item{answer.vario}{Logical; if \code{TRUE} a vector with the
  estimated variogram is returned; if \code{FALSE} (the
  default) the variogram is not returned.}
  \item{answer.range}{Logical; if \code{TRUE} the estimated
- pratical range is returned; if \code{FALSE} (the
- default) the pratical range is not returned.}
- \item{fix.lags}{Integer; a positive value denoting the spatial lag to
- consider for the plot of the temporal profile.}
- \item{fix.lagt}{Integer; a positive value denoting the temporal lag to
- consider for the plot of the spatial profile.}
+ practical range is returned; if \code{FALSE} (the
+ default) the practical range is not returned.}
+ \item{fix.lags}{Integer; a positive index in the empirical spatial-lag
+ grid (including its zero-lag entry) used for the temporal profile. The
+ theoretical surface is matched to the corresponding lag value rather than
+ reusing this index on a different grid. For dynamic spatial supports, if the
+ zero-lag entry is selected but no collocated pairs exist across distinct
+ times, the plot automatically uses the first positive-distance space-time bin
+ containing finite empirical pairs; the fitted curve is evaluated at that
+ bin's center and the panel title reports the bin interval.}
+ \item{fix.lagt}{Integer; a positive index in the empirical temporal-lag
+ grid (including its zero-lag entry) used for the spatial profile. The
+ theoretical surface is matched to the corresponding time-lag value.}
  \item{show.cov}{Logical; if \code{TRUE} the estimated
  covariance function is plotted; if \code{FALSE} (the
  default) the covariance function is not plotted.}
@@ -39,25 +48,106 @@ GeoCovariogram(fitted, distance="Eucl",answer.cov=FALSE,
  variogram is plotted; if \code{FALSE} (the
  default) the variogram is not plotted.}
  \item{show.range}{Logical; if \code{TRUE} the estimated
- pratical range is added on the plot; if \code{FALSE} (the
- default) the pratical range is not added.}
+ practical range is added on the plot; if \code{FALSE} (the
+ default) the practical range is not added.}
  \item{add.cov}{Logical; if \code{TRUE} the vector of the
  estimated covariance function is added on the current plot; if \code{FALSE} (the
  default) the covariance is not added.}
  \item{add.vario}{Logical; if \code{TRUE} the vector with the
  estimated variogram is added on the current plot; if \code{FALSE} (the
  default) the correlation is not added.}
- \item{pract.range}{Numeric; the percent of the sill to be reached.}
+ \item{pract.range}{Numeric scalar in \code{[0,100]}; the percentage of
+ the marginal variance reached by the semivariogram when computing the
+ practical range.}
  \item{vario}{A \code{Variogram} object obtained from the
  \code{\link{GeoVariogram}} procedure.}
- \item{invisible}{Logical;If TRUE then a statistic the (sum of the squared diffeence
- between the empirical semivariogram and the estimated semivariogram) is computed.} 
+ \item{invisible}{Logical; if \code{TRUE}, compute the sum of squared
+ differences between the empirical and fitted semivariograms on the empirical
+ lag grid. This diagnostic is computed independently of whether the variogram
+ is plotted.}
  \item{\dots}{other optional parameters which are passed to plot functions.}
 }
 
-\details{The function computes the fitted variogram model}
+\details{
 
-\value{ Produces a plot. No values are returned.}
+When a fitted univariate model has a nonconstant mean, the returned
+lag-only theoretical curve requires one representative marginal location.
+The function uses the average fitted linear predictor \eqn{X\widehat\beta};
+for a site-specific fixed mean it uses the average of that vector.  This does
+not alter the fitted mean used by likelihood, residual, simulation, or
+kriging calculations.
+For a univariate \code{GeoFit} object fitted with \code{copula="Gaussian"},
+\code{copula="Clayton"}, or \code{copula="SkewGaussian"}, the theoretical
+covariance and semivariogram are computed on the observed marginal scale with
+the same covariance engine used by \code{\link{GeoCovmatrix}} and
+\code{\link{GeoKrig}}. The supported continuous margins are
+\code{"Gaussian"}, \code{"StudentT"}, \code{"LogGaussian"},
+\code{"Gamma"}, \code{"Weibull"}, \code{"Beta"}, \code{"Beta2"},
+\code{"Kumaraswamy"}, \code{"Kumaraswamy2"}, \code{"Logistic"},
+\code{"SkewLaplace"}, \code{"Tukeyh"}, \code{"Tukeyh2"}, and
+\code{"SinhAsinh"}. For the Gaussian copula, the monotone transformed-Gaussian
+Tukey and sinh--arcsinh margins use their exact model covariance. Clayton-like covariance uses cached deterministic
+copula quadrature and skew-Gaussian covariance uses the cached Hermite
+representation also used for linear prediction.
+
+For \code{"Beta2"} and \code{"Kumaraswamy2"} with covariates, and more
+generally whenever the marginal location varies over the observation sites,
+a single lag-only covariance curve is not uniquely defined by distance alone.
+The displayed curve therefore uses the representative marginal predictor
+described above (the average fitted linear predictor). It is a representative
+theoretical semivariogram for diagnostic comparison with the empirical one.
+
+For non-Gaussian univariate models, the practical range is computed directly
+from the fitted observed-scale covariance and semivariogram. This avoids using
+a Gaussian-correlation range as a surrogate for a transformed marginal model.
+If the requested percentage is not reached on the evaluated lag grid, the
+returned practical range is \code{NA}. For a Gaussian model, the correlation
+root calculation is retained. A bivariate practical range is not defined by
+this function and is returned as \code{NA}.
+
+For space-time profile plots, \code{fix.lags} and \code{fix.lagt} select an
+empirical lag value; the closest point on the fitted 150-point surface grid is
+then used. This keeps empirical and theoretical profiles aligned even though
+their grids have different resolutions. For dynamic spatial supports, finite
+empirical space-time bins are displayed as points rather than vertical stems.
+The empirical temporal margin \eqn{\gamma(0,u)} is used when actual collocated
+locations are available at distinct times. If \code{fix.lags=1} requests that
+zero-lag profile but no collocated dynamic pairs exist, the plot instead uses
+the first positive-distance space-time bin with finite empirical values. Thus
+the panel represents a near-zero spatial band (for example \eqn{0<h<h_1})
+rather than displaying an empty empirical profile; the fitted curve is
+evaluated at the center of the selected spatial bin. The title reports the
+actual bin interval. No zero-valued empirical temporal observations are
+imputed, and the underlying \code{GeoVariogram} temporal margin remains the
+true collocated \eqn{\gamma(0,u)} margin.
+
+For a non-copula LogGaussian model, covariance and semivariogram are reported
+on the observed scale, including the representative factor \eqn{\exp(2\eta)}
+in the marginal variance, consistently with \code{GeoCovmatrix}.
+
+For a non-copula \code{SinhAsinh} model, the nugget attenuation is applied to
+the latent Gaussian correlation before the nonlinear sinh--arcsinh correlation
+map is evaluated. This is the same ordering used by \code{GeoCovmatrix},
+\code{GeoCorrFct}, and \code{GeoKrig}.
+
+Objects returned by \code{GeoResiduals()} with
+\code{residual_type = "Pearson"} are intentionally rejected.  The empirical
+variogram of Pearson residuals is useful by itself, but it is not on the same
+scale as the response covariance model stored in the original discrete
+\code{GeoFit} object.
+
+The function computes the fitted variogram model}
+
+\value{
+By default the function produces the requested plot invisibly. When
+\code{answer.cov=TRUE} and/or \code{answer.vario=TRUE}, it invisibly returns a
+list containing the lag grid and the fitted covariance and/or semivariogram.
+When \code{answer.range=TRUE}, the practical range is included as
+\code{range}. With \code{invisible=TRUE} and no requested answer, the
+sum-of-squares diagnostic used by the function is returned invisibly. For a
+bivariate Gaussian fit with \code{answer.cov=TRUE}, the list contains
+\code{covariance11}, \code{covariance12}, and \code{covariance22}.
+}
  
 
 \references{
@@ -79,7 +169,6 @@ Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.resear
 
 \examples{
 library(GeoModels)
-library(scatterplot3d)
 
 ################################################################
 ###

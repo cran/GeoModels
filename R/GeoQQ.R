@@ -5,46 +5,65 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
 {
   ###### utilities ##########
   # Log-logistic quantile with shape (>0) and scale (>0)
-  qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
-    if (missing(shape)) stop("argument 'shape' is missing, with no default")
-    if (shape <= 0) stop("'shape' must be positive")
-    if (scale <= 0) stop("'scale' must be positive")
-    if (log.p) p <- exp(p)
-    if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
-    if (!lower.tail) p <- 1 - p
-    result <- numeric(length(p)); result[p == 0] <- 0; result[p == 1] <- Inf
-    valid <- p > 0 & p < 1
-    if (any(valid)) {
-      pv <- p[valid]
-      result[valid] <- scale * (pv / (1 - pv))^(1/shape)
-    }
-    result
-  }
 
   # Log-logistic density (fix: density, not quantile)
-  dllogis1 <- function(x, shape, rate = 1, scale = 1/rate) {
-    if (missing(shape)) stop("argument 'shape' is missing, with no default")
-    if (shape <= 0) stop("'shape' must be positive")
-    if (scale <= 0) stop("'scale' must be positive")
-    out <- numeric(length(x)); out[] <- 0
-    pos <- x > 0 & is.finite(x)
-    z <- x[pos]/scale
-    out[pos] <- (shape/scale) * z^(shape - 1) / (1 + z^shape)^2
-    out
-  }
   ##################################
 
   if(!inherits(fit,"GeoFit"))  stop("A GeoFit object is needed as input\n")
+  if(identical(fit$residual_type, "Pearson")) {
+    stop("GeoQQ() is not defined for Pearson-residual objects. Use GeoQQ() or GeoPit() on the original discrete GeoFit object, and use GeoResiduals() output for residual maps or variograms.",
+         call. = FALSE)
+  }
   if(type!="Q" && type!="D") stop("Type can be Q or D \n")
 
+  model <- fit$model
+  discrete_models <- c(
+    "Binary", "Bernoulli", "Binomial", "BinomialLogistic",
+    "Geom", "Geometric", "BinomialNeg", "Poisson", "PoissonGamma",
+    "PoissonZIP", "PoissonZIP1", "PoissonGammaZIP", "PoissonGammaZIP1",
+    "BinomialNegZINB", "BinomialNegZINB1"
+  )
+
   pp_tmp <- c(unlist(fit$param), unlist(fit$fixed))
-  mean_pars <- names(pp_tmp)[substr(names(pp_tmp), 1, 4) == "mean"]
-  if (!is.null(fit$X) && length(mean_pars) > 1) {
-    stop("GeoQQ() is intended for residual GeoFit objects when covariates are present. ",
+  external_mean <- !is.null(.GeoMean_external(fit$fixed))
+  non_intercept_X <- FALSE
+  if (!is.null(fit$X)) {
+    Xqq <- .GeoMean_design(
+      fit$X, n = length(unlist(fit$data, use.names = FALSE)), name = "X"
+    )
+    non_intercept_X <- ncol(Xqq) != 1L ||
+      any(abs(Xqq[, 1L] - 1) > sqrt(.Machine$double.eps))
+  }
+  if (external_mean || non_intercept_X) {
+    if (model %in% discrete_models) {
+      stop(
+        "GeoQQ() does not define a single theoretical marginal distribution for discrete fits with a nonconstant mean. Use GeoPit(fit) for site-specific marginal diagnostics.",
+        call. = FALSE
+      )
+    }
+    stop("GeoQQ() requires an intercept-only marginal fit. ",
          "Please use GeoResiduals(fit) before calling GeoQQ().")
   }
 
-  model <- fit$model
+  .GeoQQ_constant_n <- function(n, model_name) {
+    nn <- as.numeric(n)
+    if (!length(nn) || any(!is.finite(nn)) || any(nn <= 0) || any(nn != round(nn))) {
+      stop("For model '", model_name, "', n must contain positive integers.", call. = FALSE)
+    }
+    if (length(nn) > 1L && any(nn != nn[1L])) {
+      stop(
+        "GeoQQ() requires a constant n for model '", model_name,
+        "'. Use GeoPit(fit) when n is site-specific.",
+        call. = FALSE
+      )
+    }
+    nn[1L]
+  }
+
+  if (model %in% c("Binomial", "BinomialLogistic", "BinomialNeg")) {
+    fit$n <- .GeoQQ_constant_n(fit$n, model)
+  }
+
   copula <- if(!is.null(fit$copula)) fit$copula else NULL
 
   fit$param <- unlist(fit$param); fit$fixed <- unlist(fit$fixed)
@@ -135,9 +154,9 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       if(model %in% c("Kumaraswamy2")){
         mm <- 1/(1+exp(-MM)); sh <- as.numeric(pp["shape"])
         pmin <- as.numeric(pp["min"]); pmax <- as.numeric(pp["max"])
-        shape1 <- log(0.5)/log1p(-(mm^sh))
-        q_t  <- pmin + (pmax-pmin)*(1 - (1 - (probabilities)^sh)^shape1)
-        q_t1 <- pmin + (pmax-pmin)*(1 - (1 - (probabilities1)^sh)^shape1)
+        shape2 <- log(0.5)/log1p(-(mm^sh))
+        q_t  <- pmin + (pmax-pmin)*(1 - (1 - probabilities)^(1/shape2))^(1/sh)
+        q_t1 <- pmin + (pmax-pmin)*(1 - (1 - probabilities1)^(1/shape2))^(1/sh)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Kumaraswamy qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
@@ -196,7 +215,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model%in%c("StudentT","Gaussian_misp_StudentT")){
-        df <- as.numeric(round(1/pp["df"]))
+        df <- as.numeric(1/pp["df"])
         q_t  <- MM + sqrt(VV)*qt(probabilities,  df=df)
         q_t1 <- MM + sqrt(VV)*qt(probabilities1, df=df)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("t qq-plot"), 
@@ -205,7 +224,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
 
       if(model%in%c("SkewStudentT","Gaussian_misp_SkewStudentT")){
         alpha <- as.numeric(pp["skew"])
-        nu    <- as.numeric(round(1/pp["df"]))
+        nu    <- as.numeric(1/pp["df"])
         q_t  <- MM + sqrt(VV)*sn::qst(probabilities,  xi=0, omega=1, alpha=alpha, nu=nu)
         q_t1 <- MM + sqrt(VV)*sn::qst(probabilities1, xi=0, omega=1, alpha=alpha, nu=nu)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("skewt qq-plot"), 
@@ -238,8 +257,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       if(model %in% c("LogLogistic")){
         shape <- pp["shape"]
         cc <- gamma(1+1/shape)*gamma(1-1/shape)
-        q_t  <- qllogis1(probabilities,  shape=shape, scale=exp(MM)/cc)
-        q_t1 <- qllogis1(probabilities1, shape=shape, scale=exp(MM)/cc)
+        q_t  <- .GeoMarginalQLogLogistic(probabilities,  shape=shape, scale=exp(MM)/cc)
+        q_t1 <- .GeoMarginalQLogLogistic(probabilities1, shape=shape, scale=exp(MM)/cc)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("LogLogistic qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
@@ -269,34 +288,17 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model %in% c("Tukeyh2")){
-        qtpTukeyh221 <- function(p, tail1, tail2){
-          u <- qnorm(p)
-          out <- numeric(length(p))
-          sel1 <- which(u >= 0)
-          sel2 <- which(u < 0)
-          if (length(sel1)) out[sel1] <- u[sel1] * exp(0.5 * tail1 * u[sel1]^2)
-          if (length(sel2)) out[sel2] <- u[sel2] * exp(0.5 * tail2 * u[sel2]^2)
-          out
-        }
         tail1 <- as.numeric(pp["tail1"]); tail2 <- as.numeric(pp["tail2"])
-        q_t  <- MM + sqrt(VV)*qtpTukeyh221(probabilities,  tail1,tail2)
-        q_t1 <- MM + sqrt(VV)*qtpTukeyh221(probabilities1, tail1,tail2)
+        q_t  <- MM + sqrt(VV)*.GeoMarginalQTukeyH2(probabilities, tail1, tail2)
+        q_t1 <- MM + sqrt(VV)*.GeoMarginalQTukeyH2(probabilities1, tail1, tail2)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Tukey-hh qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("SkewLaplace")){
-        qtpSkewLaplace22 <- function(u, sk){
-          mm=0; vv=1; s <- sqrt(vv)
-          res <- rep(NA_real_, length(u))
-          hi <- u >= sk; lo <- u < sk
-          res[hi] <- mm - (s / sk) * (log1p(-u[hi]) - log1p(-sk))
-          res[lo] <- mm + (s / (1 - sk)) * (log(u[lo]) - log(sk))
-          res
-        }
         skew <- as.numeric(pp["skew"])
-        q_t  <- MM + sqrt(VV)*qtpSkewLaplace22(probabilities,skew)
-        q_t1 <- MM + sqrt(VV)*qtpSkewLaplace22(probabilities1,skew)
+        q_t  <- MM + sqrt(VV)*.GeoMarginalQSkewLaplace(probabilities, skew)
+        q_t1 <- MM + sqrt(VV)*.GeoMarginalQSkewLaplace(probabilities1, skew)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Skew Laplace qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
@@ -316,52 +318,25 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model %in% c("TwoPieceGaussian")){
-        qtpGaussian <- function(x,skew){
-          sel1 <- which(x>0 & x<0.5*(1+skew))
-          sel2 <- which(x>=0.5*(1+skew) & x<=1)
-          x1 <- x[sel1]; x2 <- x[sel2]
-          qq1 <- (1+skew)*qnorm(x1/(1+skew))
-          qq2 <- (1-skew)*qnorm((x2-skew)/(1-skew))
-          c(qq1,qq2)
-        }
         skew <- as.numeric(pp["skew"])
-        q_t  <- MM + sqrt(VV)*qtpGaussian(probabilities,  skew)
-        q_t1 <- MM + sqrt(VV)*qtpGaussian(probabilities1, skew)
+        q_t  <- MM + sqrt(VV)*.GeoMarginalQTwoPieceGaussian(probabilities, skew)
+        q_t1 <- MM + sqrt(VV)*.GeoMarginalQTwoPieceGaussian(probabilities1, skew)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Gaussian qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("TwoPieceStudentT")){
-        qtpt1 <- function(x,skew,df){
-          sel1 <- which(x>0 & x<0.5*(1+skew))
-          sel2 <- which(x>=0.5*(1+skew) & x<=1)
-          x1 <- x[sel1]; x2 <- x[sel2]
-          qq1 <- (1+skew)*qt(x1/(1+skew), df=df)
-          qq2 <- (1-skew)*qt((x2-skew)/(1-skew), df=df)
-          c(qq1,qq2)
-        }
         skew <- as.numeric(pp["skew"]); df <- 1/as.numeric(pp["df"])
-        q_t  <- MM + sqrt(VV)*qtpt1(probabilities,  skew,df)
-        q_t1 <- MM + sqrt(VV)*qtpt1(probabilities1, skew,df)
+        q_t  <- MM + sqrt(VV)*.GeoMarginalQTwoPieceStudentT(probabilities, skew, df)
+        q_t1 <- MM + sqrt(VV)*.GeoMarginalQTwoPieceStudentT(probabilities1, skew, df)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Student qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
 
       if(model %in% c("TwoPieceTukeyh")){
-        qtukh <- function(xx,tail){
-          uu <- qnorm(xx); uu*exp(0.5*tail*uu^2)
-        }
-        qtptukey <- function(x,skew,tail){
-          sel1 <- which(x>0 & x<0.5*(1+skew))
-          sel2 <- which(x>=0.5*(1+skew) & x<=1)
-          x1 <- x[sel1]; x2 <- x[sel2]
-          qq1 <- (1+skew)*qtukh(x1/(1+skew), tail=tail)
-          qq2 <- (1-skew)*qtukh((x2-skew)/(1-skew), tail=tail)
-          c(qq1,qq2)
-        }
         skew <- as.numeric(pp["skew"]); tail <- as.numeric(pp["tail"])
-        q_t  <- MM + sqrt(VV)*qtptukey(probabilities,  skew,tail)
-        q_t1 <- MM + sqrt(VV)*qtptukey(probabilities1, skew,tail)
+        q_t  <- MM + sqrt(VV)*.GeoMarginalQTwoPieceTukeyH(probabilities, skew, tail)
+        q_t1 <- MM + sqrt(VV)*.GeoMarginalQTwoPieceTukeyH(probabilities1, skew, tail)
         do.call(plot, c(list(x=q_t, y=q_e, main=.get_main("Two-Piece Tukey-h qq-plot"), 
                              xlab=xlab, ylab=ylab, xlim=.XL(range(q_t, finite=TRUE))), dots))
       }
@@ -472,7 +447,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model%in%c("StudentT","Gaussian_misp_StudentT")){
-        df <- as.numeric(round(1/pp["df"]))
+        df <- as.numeric(1/pp["df"])
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         .hist_once("Student T Histogram", xr_default = range(dd, finite=TRUE))
@@ -480,7 +455,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model%in%c("SkewStudentT","Gaussian_misp_SkewStudentT")){
-        alpha <- as.numeric(pp["skew"]); nu <- as.numeric(round(1/pp["df"]))
+        alpha <- as.numeric(pp["skew"]); nu <- as.numeric(1/pp["df"])
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         d_st <- sn::dst((ll-MM)/sqrt(VV), xi=0, omega=1, alpha=alpha, nu=nu)/sqrt(VV)
@@ -540,7 +515,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         cc <- gamma(1+1/shape)*gamma(1-1/shape)
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
-        d_l <- dllogis1(ll, shape = shape, scale = exp(MM)/cc)
+        d_l <- .GeoMarginalDLogLogistic(ll, shape = shape, scale = exp(MM)/cc)
         .hist_once("LogLogistic Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, d_l, ...)
       }
@@ -580,44 +555,22 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model %in% c("Tukeyh")){
-        inverse_lamb <- function(x,tail) {
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
-          val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
-          sign(x)*val
-        }
-        dTukey <- function(z,tail){
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
-          b <- inverse_lamb(z,tail)
-          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
-          dnorm(b) / den
-        }
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
-        ds <- dTukey((ll-MM)/sqrt(VV), tail=as.numeric(pp["tail"]))/sqrt(VV)
+        ds <- .GeoMarginalDTukeyH((ll-MM)/sqrt(VV), as.numeric(pp["tail"]))/sqrt(VV)
         .hist_once("Tukey-h Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
       }
 
       if(model %in% c("Tukeyh2")){
         tail1 <- as.numeric(pp["tail1"]); tail2 <- as.numeric(pp["tail2"])
-        inverse_lamb <- function(x,tail){
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
-          val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
-          sign(x)*val
-        }
-        d_piece <- function(z, tail){
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
-          b <- inverse_lamb(z,tail)
-          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
-          dnorm(b) / den
-        }
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         zs <- (ll-MM)/sqrt(VV)
         ds <- numeric(length(zs))
         idx1 <- which(zs>=0); idx2 <- which(zs<0)
-        ds[idx1] <- d_piece(zs[idx1], tail1)
-        ds[idx2] <- d_piece(zs[idx2], tail2)
+        ds[idx1] <- .GeoMarginalDTukeyH(zs[idx1], tail1)
+        ds[idx2] <- .GeoMarginalDTukeyH(zs[idx2], tail2)
         ds <- ds / sqrt(VV)
         .hist_once("Tukey-hh Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
@@ -629,8 +582,8 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         z <- (ll-MM)/sqrt(VV)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
-        ds[idx1] <- dnorm(z[idx1]/(1-skew),0,1) / (sqrt(VV)*(1-skew))
-        ds[idx2] <- dnorm(z[idx2]/(1+skew),0,1) / (sqrt(VV)*(1+skew))
+        ds[idx1] <- dnorm(z[idx1]/(1-skew),0,1) / sqrt(VV)
+        ds[idx2] <- dnorm(z[idx2]/(1+skew),0,1) / sqrt(VV)
         .hist_once("Two-Piece Gaussian Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
       }
@@ -641,31 +594,20 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
         z <- (ll-MM)/sqrt(VV)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
-        ds[idx1] <- dt(z[idx1]/(1-skew), df=df) / (sqrt(VV)*(1-skew))
-        ds[idx2] <- dt(z[idx2]/(1+skew), df=df) / (sqrt(VV)*(1+skew))
+        ds[idx1] <- dt(z[idx1]/(1-skew), df=df) / sqrt(VV)
+        ds[idx2] <- dt(z[idx2]/(1+skew), df=df) / sqrt(VV)
         .hist_once("Two-Piece Student Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
       }
 
       if(model %in% c("TwoPieceTukeyh")){
         skew <- as.numeric(pp["skew"]); tail <- as.numeric(pp["tail"])
-        inverse_lamb <- function(x,tail){
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(x)
-          val <- sqrt(VGAM::lambertW(tail*x*x)/tail)
-          sign(x)*val
-        }
-        dTukeyh <- function(z,tail){
-          if (!is.finite(tail) || abs(tail) < .Machine$double.eps) return(dnorm(z))
-          b <- inverse_lamb(z,tail)
-          den <- exp(0.5 * tail * b^2) * (1 + tail * b^2)
-          dnorm(b) / den
-        }
         xr <- .XL(range(dd, finite=TRUE)); ll <- .GRID(xr)
         z <- (ll-MM)/sqrt(VV)
         ds <- numeric(length(z))
         idx1 <- which(z>=0); idx2 <- which(z<0)
-        ds[idx1] <- dTukeyh(z[idx1]/(1-skew), tail) / (sqrt(VV)*(1-skew))
-        ds[idx2] <- dTukeyh(z[idx2]/(1+skew), tail) / (sqrt(VV)*(1+skew))
+        ds[idx1] <- .GeoMarginalDTukeyH(z[idx1]/(1-skew), tail) / sqrt(VV)
+        ds[idx2] <- .GeoMarginalDTukeyH(z[idx2]/(1+skew), tail) / sqrt(VV)
         .hist_once("Two-Piece Tukey-h Histogram", xr_default = range(dd, finite=TRUE))
         lines(ll, ds, ...)
       }

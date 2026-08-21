@@ -164,19 +164,31 @@ process_spacetime_fixed <- function(data, coords, X) {
   if (!is.matrix(data)) {
     stop("For spacetime with fixed coordinates, data must be a matrix (T x N)")
   }
+  nt <- nrow(data)
+  nsite <- ncol(data)
+
+  if (nrow(coords) != nsite) {
+    stop("For fixed spatio-temporal data, coords must have one row per spatial site")
+  }
+  if (!is.null(X)) {
+    X <- .GeoMean_design(X, n = nt * nsite, name = "X")
+  }
   
   # Find locations with any missing values across time
   missing_mask <- apply(data, 2, function(col) any(identify_missing(col)))
   valid_mask <- !missing_mask
   
-  perc <- sum(missing_mask) / ncol(data)
+  perc <- sum(missing_mask) / nsite
   
-  # Remove locations with missing values
+  # Remove locations with missing values.  The design matrix follows the
+  # package observation order: all sites at time 1, then all sites at time 2,
+  # and so on (the same order as c(t(data))).
   if (perc > 0) {
+    keep_rows <- rep(valid_mask, times = nt)
     data <- data[, valid_mask, drop = FALSE]
     coords <- coords[valid_mask, , drop = FALSE]
     if (!is.null(X)) {
-      X <- X[, valid_mask, drop = FALSE]
+      X <- X[keep_rows, , drop = FALSE]
     }
   }
   

@@ -1,323 +1,396 @@
-GeoPit <- function(object, type = "Uniform")
+GeoPit <- function(object, type = c("Uniform", "Gaussian"), data_to_pred = NULL)
 {
-  if (!(type == "Uniform" || type == "Gaussian"))
-    stop("The type parameter can be Uniform or Gaussian")
+  type <- match.arg(type)
 
-  if (!(inherits(object, "GeoFit") || inherits(object, "GeoKrig") || inherits(object, "GeoKrigloc")))
-    stop("A GeoFit, GeoKrig or GeoKrigloc object is needed as input\n")
+  valid_class <- inherits(object, "GeoFit") ||
+    inherits(object, "GeoKrig") ||
+    inherits(object, "GeoKrigloc")
 
-  model <- object$model
+  if (!valid_class) {
+    stop("A GeoFit, GeoKrig, or GeoKrigloc object is required.")
+  }
+
+  if (isTRUE(object$bivariate)) {
+    stop("The spatial bivariate case is not implemented in GeoPit().")
+  }
+
+  model <- .GeoMarginalCanonicalModel(object$model)
   EST <- inherits(object, "GeoFit")
+  PRED <- inherits(object, "GeoKrig") || inherits(object, "GeoKrigloc")
+
+  if (EST && identical(object$residual_type, "Pearson")) {
+    stop(
+      "GeoPit() is not defined for Pearson-residual objects. Use the original discrete GeoFit object for PIT diagnostics.",
+      call. = FALSE
+    )
+  }
+
+  if (PRED && !(model %in% c("Gaussian", "Gauss"))) {
+    stop(
+      "Predictive PIT from GeoKrig/GeoKrigloc is currently supported only for Gaussian models, because non-Gaussian linear kriging does not provide a full conditional predictive distribution.",
+      call. = FALSE
+    )
+  }
 
   pp <- c(unlist(object$param), unlist(object$fixed))
 
-  ## GeoPit is intended to be applied after GeoResiduals() when
-  ## a fitted GeoFit object contains covariates.  Prediction objects
-  ## are allowed because pred/mse are already site-specific.
-  if (EST) {
-    mean_pars <- names(pp)[substr(names(pp), 1, 4) == "mean"]
-    if (!is.null(object$X) && length(mean_pars) > 1) {
-      stop("GeoPit() is intended for residual GeoFit objects when covariates are present. ",
-           "Please use GeoResiduals(object) before calling GeoPit().")
-    }
-  }
-
   getpar <- function(name, default = NA_real_) {
-    val <- suppressWarnings(as.numeric(pp[name][1]))
-    if (length(val) == 0 || is.na(val)) default else val
+    val <- suppressWarnings(as.numeric(pp[name][1L]))
+    if (length(val) == 0L || !is.finite(val)) default else val
   }
 
-  inv_lamb <- function(x, tail) {
-    if (!is.finite(tail) || abs(tail) < .Machine$double.eps)
-      return(x)
-    value <- sqrt(VGAM::lambertW(tail * x * x) / tail)
-    sign(x) * value
+  require_par <- function(name) {
+    val <- getpar(name)
+    if (!is.finite(val)) {
+      stop("Parameter '", name, "' is missing in the fitted object.")
+    }
+    val
   }
 
-  split_cdf <- function(x, fun_left, fun_right) {
-    res <- numeric(length(x))
-    id_right <- which(x >= 0)
-    id_left  <- which(x < 0)
-    if (length(id_right) > 0) res[id_right] <- fun_right(x[id_right])
-    if (length(id_left)  > 0) res[id_left]  <- fun_left(x[id_left])
-    res
+  scaled_to_unit <- function(x, lower, upper) {
+    if (!is.finite(lower) || !is.finite(upper) || upper <= lower) {
+      stop("The support parameters must satisfy min < max.")
+    }
+    (x - lower) / (upper - lower)
   }
 
   if (EST) {
-    if (is.list(object$data)) dd <- unlist(object$data)
-    else dd <- c(t(object$data))
+    if (is.list(object$data)) {
+      dd <- unlist(object$data, use.names = FALSE)
+    } else {
+      dd <- c(t(object$data))
+    }
+    dd <- as.numeric(dd)
 
-    ## If an external fixed mean vector was used, keep it as the PIT mean.
-    if (!is.null(object$fixed$mean) && length(object$fixed$mean) > 1) {
-      allmean <- as.numeric(object$fixed$mean)
+    ## A site-specific external mean vector takes precedence over X beta.
+    external_mean <- .GeoMean_external(object$fixed, n = length(dd))
+
+    if (!is.null(external_mean)) {
+      allmean <- external_mean
     } else if (!is.null(object$X)) {
       X <- object$X
-      if (is.list(X)) X <- as.matrix(do.call(rbind, X))
-      else X <- as.matrix(X)
-
-      namesnuis <- NuisParam(object$model, object$bivariate, object$numbetas)
-      nuisance <- pp[namesnuis]
-      sel <- substr(names(nuisance), 1, 4) == "mean"
-      beta <- as.numeric(nuisance[sel])
-      beta <- beta[is.finite(beta)]
-
-      if (length(beta) == ncol(X)) {
-        allmean <- as.numeric(X %*% beta)
+      if (is.list(X)) {
+        X <- as.matrix(do.call(rbind, X))
       } else {
-        allmean <- rep(getpar("mean", 0), length(dd))
+        X <- as.matrix(X)
       }
+
+      if (nrow(X) != length(dd)) {
+        stop("The number of rows of X does not match the number of observations.")
+      }
+
+      beta <- .GeoMean_beta(pp, ncol(X))
+      allmean <- as.numeric(X %*% beta)
     } else {
       allmean <- rep(getpar("mean", 0), length(dd))
     }
 
+    ## Models without a sill parameter use the structural value one.
     allsill <- rep(getpar("sill", 1), length(dd))
   } else {
-    dd <- as.numeric(c(object$data_to_pred))
+    target <- data_to_pred
+    if (is.null(target) && !is.null(object$data_to_pred)) {
+      target <- object$data_to_pred
+    }
+    if (is.null(target)) {
+      stop(
+        "For a GeoKrig/GeoKrigloc object, supply the observed prediction targets through data_to_pred.",
+        call. = FALSE
+      )
+    }
+    dd <- as.numeric(c(target))
     allmean <- as.numeric(c(object$pred))
     allsill <- as.numeric(c(object$mse))
+    if (!length(allsill)) {
+      stop("Predictive PIT requires mse=TRUE in GeoKrig/GeoKrigloc.", call. = FALSE)
+    }
   }
 
-  dd <- as.numeric(c(dd))
-  allmean <- as.numeric(c(allmean))
-  allsill <- as.numeric(c(allsill))
+  dd <- as.numeric(dd)
+  allmean <- as.numeric(allmean)
+  allsill <- as.numeric(allsill)
 
-  if (length(allmean) == 1) allmean <- rep(allmean, length(dd))
-  if (length(allsill) == 1) allsill <- rep(allsill, length(dd))
+  if (length(allmean) == 1L) allmean <- rep(allmean, length(dd))
+  if (length(allsill) == 1L) allsill <- rep(allsill, length(dd))
 
-  if (length(allmean) != length(dd))
-    stop("length of mean vector does not match data length in GeoPit()")
-  if (length(allsill) != length(dd))
-    stop("length of variance vector does not match data length in GeoPit()")
-
-  if (object$bivariate)
-    stop("The spatial bivariate case is not implemented yet")
+  if (length(allmean) != length(dd)) {
+    stop("The length of the mean vector does not match the data length.")
+  }
+  if (length(allsill) != length(dd)) {
+    stop("The length of the variance vector does not match the data length.")
+  }
+  if (any(!is.finite(allsill)) || any(allsill <= 0)) {
+    stop("All variance values used by GeoPit() must be positive and finite.")
+  }
 
   data <- NULL
 
   #######################################
+  ## Gaussian marginal models
   if (model %in% c("Gaussian", "Gaussian_misp_Binomial",
                    "Gaussian_misp_Poisson", "Gaussian_misp_BinomialNeg")) {
-    MM <- allmean
-    VV <- allsill
-    data <- pnorm(dd, mean = MM, sd = sqrt(VV))
+    data <- pnorm(dd, mean = allmean, sd = sqrt(allsill))
   }
 
   #######################################
-  if (model %in% c("Weibull")) {
-    MM <- allmean
-    sh <- getpar("shape")
-    data <- pweibull(dd, shape = sh, scale = exp(MM) / gamma(1 + 1 / sh))
+  ## Positive-support marginal models
+  if (model == "Weibull") {
+    shape <- require_par("shape")
+    if (shape <= 0) stop("The Weibull shape parameter must be positive.")
+    data <- pweibull(
+      dd,
+      shape = shape,
+      scale = exp(allmean) / gamma(1 + 1 / shape)
+    )
   }
 
-  #######################################
-  if (model %in% c("Beta2")) {
-    MM <- allmean
-    mm <- 1 / (1 + exp(-MM))
-    sh <- getpar("shape")
-    pmin <- getpar("min")
-    pmax <- getpar("max")
-    data <- pbeta((dd - pmin) / (pmax - pmin), shape1 = mm * sh, shape2 = (1 - mm) * sh)
+  if (model == "Gamma") {
+    shape <- require_par("shape")
+    if (shape <= 0) stop("The Gamma shape parameter must be positive.")
+    data <- pgamma(
+      dd,
+      shape = shape / 2,
+      rate = shape / (2 * exp(allmean))
+    )
   }
 
-  #######################################
-  if (model %in% c("Kumaraswamy2")) {
-    MM <- allmean
-    mm <- 1 / (1 + exp(-MM))
-    sh <- getpar("shape")
-    pmin <- getpar("min")
-    pmax <- getpar("max")
-    shape1 <- log(0.5) / log1p(-mm^sh)
-    data <- 1 - (1 - ((dd - pmin) / (pmax - pmin))^sh)^shape1
+  ## GeoModels LogGaussian parametrization:
+  ## Y = exp(MM) * exp(sqrt(VV) * Z) / exp(VV / 2).
+  if (model == "LogGaussian") {
+    data <- suppressWarnings(
+      pnorm((log(dd) - allmean + allsill / 2) / sqrt(allsill))
+    )
   }
 
-  #######################################
-  if (model %in% c("SkewGaussian")) {
-    MM <- allmean
-    VV <- allsill
-    sk <- getpar("skew")
-    omega <- sqrt((sk^2 + VV) / VV)
-    alpha <- sk / sqrt(getpar("sill", 1))
-    data <- sn::psn((dd - MM) / sqrt(VV), xi = 0, omega = omega, alpha = alpha)
-  }
-
-  #######################################
-  if (model %in% c("StudentT", "Gaussian_misp_StudentT")) {
-    MM <- allmean
-    VV <- allsill
-    data <- pt((dd - MM) / sqrt(VV), df = round(1 / getpar("df")))
-  }
-
-  #######################################
-  if (model %in% c("SkewStudentT", "Gaussian_misp_SkewStudentT")) {
-    MM <- allmean
-    VV <- allsill
-    alpha <- getpar("skew")
-    nu <- round(1 / getpar("df"))
-    data <- sn::pst((dd - MM) / sqrt(VV), xi = 0, omega = 1, alpha = alpha, nu = nu)
-  }
-
-  #######################################
-  if (model %in% c("Gamma")) {
-    MM <- allmean
-    shape <- getpar("shape")
-    data <- pgamma(dd, shape = shape / 2, rate = shape / (2 * exp(MM)))
-  }
-
-  #######################################
-  ## GeoModels LogGaussian parametrization from GeoSim:
-  ## Y = exp(MM) * exp(sqrt(VV) * Z) / exp(VV / 2), Z ~ N(0,1).
-  if (model %in% c("LogGaussian", "LogGauss")) {
-    MM <- allmean
-    VV <- allsill
-    data <- suppressWarnings(pnorm((log(dd) - MM + VV / 2) / sqrt(VV)))
-  }
-
-  #######################################
-  if (model %in% c("LogLogistic")) {
-    pllogis1 <- function(q, shape, rate = 1, scale = 1 / rate,
-                         lower.tail = TRUE, log.p = FALSE) {
-      x <- (q / scale)^shape
-      p <- x / (1 + x)
-      if (!lower.tail) p <- 1 - p
-      if (log.p) p <- log(p)
-      p
+  if (model == "LogLogistic") {
+    shape <- require_par("shape")
+    if (shape <= 1) {
+      stop("The LogLogistic shape parameter must be greater than one.")
     }
-    MM <- allmean
-    shape <- getpar("shape")
     cc <- gamma(1 + 1 / shape) * gamma(1 - 1 / shape)
-    data <- pllogis1(dd, shape = shape, scale = exp(MM) / cc)
+    scale <- exp(allmean) / cc
+    data <- .GeoMarginalPLogLogistic(dd, shape = shape, scale = scale)
   }
 
   #######################################
-  if (model %in% c("Logistic")) {
-    MM <- allmean
-    VV <- allsill
-    data <- (1 + exp(-(dd - MM) / sqrt(VV)))^(-1)
+  ## Bounded-support marginal models
+  if (model == "Beta") {
+    shape1 <- require_par("shape1")
+    shape2 <- require_par("shape2")
+    pmin <- require_par("min")
+    pmax <- require_par("max")
+    if (shape1 <= 0 || shape2 <= 0) {
+      stop("The Beta shape parameters must be positive.")
+    }
+    zz <- scaled_to_unit(dd, pmin, pmax)
+    data <- pbeta(zz, shape1 = shape1, shape2 = shape2)
   }
 
-  #######################################
-  if (model %in% c("SinhAsinh")) {
-    MM <- allmean
-    VV <- allsill
-    tail <- getpar("tail")
-    skew <- getpar("skew")
-    data <- pnorm(sinh(tail * asinh((dd - MM) / sqrt(VV)) - skew))
-  }
-
-  #######################################
-  if (model %in% c("Tukeyh")) {
-    MM <- allmean
-    VV <- allsill
-    tail <- getpar("tail")
-    x <- (dd - MM) / sqrt(VV)
-    data <- pnorm(inv_lamb(x, tail))
-  }
-
-  #######################################
-  if (model %in% c("Tukeyh2")) {
-    MM <- allmean
-    VV <- allsill
-    tail1 <- getpar("tail1")
-    tail2 <- getpar("tail2")
-    x <- (dd - MM) / sqrt(VV)
-    data <- numeric(length(x))
-    id_pos <- which(x > 0)
-    id_neg <- which(x <= 0)
-    if (length(id_pos) > 0) data[id_pos] <- pnorm(inv_lamb(x[id_pos], tail1))
-    if (length(id_neg) > 0) data[id_neg] <- pnorm(inv_lamb(x[id_neg], tail2))
-  }
-
-  #######################################
-  if (model %in% c("TwoPieceGaussian")) {
-    MM <- allmean
-    VV <- allsill
-    skew <- getpar("skew")
-    x <- (dd - MM) / sqrt(VV)
-    data <- split_cdf(
-      x,
-      fun_left  = function(z) (1 + skew) * pnorm(z / (1 + skew)),
-      fun_right = function(z) skew + (1 - skew) * pnorm(z / (1 - skew))
+  if (model == "Beta2") {
+    shape <- require_par("shape")
+    pmin <- require_par("min")
+    pmax <- require_par("max")
+    if (shape <= 0) stop("The Beta2 shape parameter must be positive.")
+    mu <- plogis(allmean)
+    zz <- scaled_to_unit(dd, pmin, pmax)
+    data <- pbeta(
+      zz,
+      shape1 = mu * shape,
+      shape2 = (1 - mu) * shape
     )
   }
 
-  #######################################
-  if (model %in% c("TwoPieceStudentT")) {
-    MM <- allmean
-    VV <- allsill
-    skew <- getpar("skew")
-    df <- 1 / getpar("df")
-    x <- (dd - MM) / sqrt(VV)
-    data <- split_cdf(
-      x,
-      fun_left  = function(z) (1 + skew) * pt(z / (1 + skew), df = df),
-      fun_right = function(z) skew + (1 - skew) * pt(z / (1 - skew), df = df)
-    )
+  if (model == "Kumaraswamy") {
+    shape1 <- require_par("shape1")
+    shape2 <- require_par("shape2")
+    pmin <- require_par("min")
+    pmax <- require_par("max")
+    if (shape1 <= 0 || shape2 <= 0) {
+      stop("The Kumaraswamy shape parameters must be positive.")
+    }
+    zz <- scaled_to_unit(dd, pmin, pmax)
+    data <- numeric(length(zz))
+    data[zz >= 1] <- 1
+    inside <- which(zz > 0 & zz < 1)
+    if (length(inside)) {
+      data[inside] <- 1 - (1 - zz[inside]^shape1)^shape2
+    }
+  }
+
+  if (model == "Kumaraswamy2") {
+    shape <- require_par("shape")
+    pmin <- require_par("min")
+    pmax <- require_par("max")
+    if (shape <= 0) {
+      stop("The Kumaraswamy2 shape parameter must be positive.")
+    }
+    mu <- plogis(allmean)
+    zz <- scaled_to_unit(dd, pmin, pmax)
+    second_shape <- log(0.5) / log1p(-mu^shape)
+    if (any(!is.finite(second_shape)) || any(second_shape <= 0)) {
+      stop("Kumaraswamy2 produced invalid location-specific shape parameters.")
+    }
+    data <- numeric(length(zz))
+    data[zz >= 1] <- 1
+    inside <- which(zz > 0 & zz < 1)
+    if (length(inside)) {
+      data[inside] <- 1 - (1 - zz[inside]^shape)^second_shape[inside]
+    }
   }
 
   #######################################
-  if (model %in% c("TwoPieceTukeyh")) {
-    MM <- allmean
-    VV <- allsill
-    skew <- getpar("skew")
-    tail <- getpar("tail")
-    pTukeyh <- function(z) pnorm(inv_lamb(z, tail))
-    x <- (dd - MM) / sqrt(VV)
-    data <- split_cdf(
-      x,
-      fun_left  = function(z) (1 + skew) * pTukeyh(z / (1 + skew)),
-      fun_right = function(z) skew + (1 - skew) * pTukeyh(z / (1 - skew))
+  ## Real-valued non-Gaussian marginal models
+  if (model == "SkewGaussian") {
+    skew <- require_par("skew")
+    sill <- getpar("sill", 1)
+    omega <- sqrt((skew^2 + allsill) / allsill)
+    alpha <- skew / sqrt(sill)
+    data <- sn::psn(
+      (dd - allmean) / sqrt(allsill),
+      xi = 0,
+      omega = omega,
+      alpha = alpha
     )
   }
 
-  #######################################
-  if (model %in% c("TwoPieceBimodal")) {
-    MM <- allmean
-    VV <- allsill
-    skew <- getpar("skew")
-    df <- getpar("df")
-    delta <- getpar("shape")
+  if (model %in% c("StudentT", "Gaussian_misp_StudentT")) {
+    inv_df <- require_par("df")
+    if (inv_df <= 0) stop("The inverse degrees-of-freedom parameter must be positive.")
+    df <- 1 / inv_df
+    data <- pt((dd - allmean) / sqrt(allsill), df = df)
+  }
+
+  if (model %in% c("SkewStudentT", "Gaussian_misp_SkewStudentT")) {
+    inv_df <- require_par("df")
+    if (inv_df <= 0) stop("The inverse degrees-of-freedom parameter must be positive.")
+    alpha <- require_par("skew")
+    nu <- 1 / inv_df
+    data <- sn::pst(
+      (dd - allmean) / sqrt(allsill),
+      xi = 0,
+      omega = 1,
+      alpha = alpha,
+      nu = nu
+    )
+  }
+
+  if (model == "Logistic") {
+    data <- plogis((dd - allmean) / sqrt(allsill))
+  }
+
+  if (model == "SkewLaplace") {
+    skew <- require_par("skew")
+    if (skew <= 0 || skew >= 1) {
+      stop("The SkewLaplace skew parameter must lie in (0,1).")
+    }
+    z <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPSkewLaplace(z, skew)
+  }
+
+  if (model == "SinhAsinh") {
+    tail <- require_par("tail")
+    skew <- require_par("skew")
+    if (tail <= 0) stop("The SinhAsinh tail parameter must be positive.")
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- pnorm(sinh(tail * asinh(x) - skew))
+  }
+
+  if (model == "Tukeyh") {
+    tail <- require_par("tail")
+    if (tail < 0 || tail >= 0.5) stop("The Tukeyh tail parameter must lie in [0,0.5).")
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPTukeyH(x, tail)
+  }
+
+  if (model == "Tukeyh2") {
+    tail1 <- require_par("tail1")
+    tail2 <- require_par("tail2")
+    if (tail1 < 0 || tail1 >= 0.5 || tail2 < 0 || tail2 >= 0.5)
+      stop("The Tukeyh2 tail1 and tail2 parameters must lie in [0,0.5).")
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPTukeyH2(x, tail1, tail2)
+  }
+
+  if (model == "TwoPieceGaussian") {
+    skew <- require_par("skew")
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPTwoPieceGaussian(x, skew)
+  }
+
+  if (model == "TwoPieceStudentT") {
+    skew <- require_par("skew")
+    inv_df <- require_par("df")
+    if (inv_df <= 0) stop("The inverse degrees-of-freedom parameter must be positive.")
+    df <- 1 / inv_df
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPTwoPieceStudentT(x, skew, df)
+  }
+
+  if (model == "TwoPieceTukeyh") {
+    skew <- require_par("skew")
+    tail <- require_par("tail")
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalPTwoPieceTukeyH(x, skew, tail)
+  }
+
+  if (model == "TwoPieceBimodal") {
+    skew <- require_par("skew")
+    df <- require_par("df")
+    delta <- require_par("shape")
     alpha <- 2 * (delta + 1) / df
     nn <- 2^(1 - alpha / 2)
-    x <- (dd - MM) / sqrt(VV)
-    data <- split_cdf(
+    x <- (dd - allmean) / sqrt(allsill)
+    data <- .GeoMarginalSplitCDF(
       x,
       fun_left = function(z) {
         0.5 * (1 + skew) *
-          (1 - pgamma((-z / (1 + skew))^alpha, shape = df, scale = 1 / nn))
+          (1 - pgamma((-z / (1 + skew))^alpha,
+                      shape = df, scale = 1 / nn))
       },
       fun_right = function(z) {
         0.5 * (1 + skew) +
-          0.5 * (1 - skew) * pgamma((z / (1 - skew))^alpha, shape = df, scale = 1 / nn)
+          0.5 * (1 - skew) *
+          pgamma((z / (1 - skew))^alpha,
+                 shape = df, scale = 1 / nn)
       }
     )
   }
 
   #######################################
-  ## discrete
-  if (model %in% c("Binomial")) {
-    MM <- allmean
-    data <- pbinom(dd, size = object$n, prob = pnorm(MM))
+  ## Discrete marginal models
+  if (model == "Binomial") {
+    data <- pbinom(dd, size = object$n, prob = pnorm(allmean))
   }
 
-  if (model %in% c("BinomialNeg")) {
-    MM <- allmean
-    data <- pnbinom(dd, size = object$n, prob = pnorm(MM))
+  if (model == "BinomialNeg") {
+    data <- pnbinom(dd, size = object$n, prob = pnorm(allmean))
   }
 
-  if (model %in% c("Poisson")) {
-    MM <- allmean
-    data <- ppois(dd, lambda = exp(MM))
+  if (model == "Poisson") {
+    data <- ppois(dd, lambda = exp(allmean))
   }
 
-  if (is.null(data))
-    stop("PIT is not implemented for this model in GeoPit()")
+  if (model == "PoissonGamma") {
+    shape <- require_par("shape")
+    if (shape <= 0) {
+      stop("The PoissonGamma shape parameter must be positive.")
+    }
+    data <- pnbinom(dd, size = shape, mu = exp(allmean))
+  }
+
+  if (is.null(data)) {
+    stop("PIT is not implemented for model '", model, "' in GeoPit().")
+  }
+
+  ## Numerical protection. The raw Uniform PIT is left on [0, 1], while
+  ## the Gaussian transform is clipped only to avoid infinite qnorm values.
+  data <- pmin(1, pmax(0, data))
 
   if (type == "Gaussian") {
     eps <- .Machine$double.eps
-    data <- pmin(1 - eps, pmax(eps, data))
-    data <- qnorm(data)
+    data <- qnorm(pmin(1 - eps, pmax(eps, data)))
   }
 
   object$data <- data
-  return(object)
+  object
 }

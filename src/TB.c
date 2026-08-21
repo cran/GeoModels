@@ -64,6 +64,72 @@ void TBD1d_amp(double * restrict ux, double * restrict uy,
 }
 
 
+/* Evaluate the finite-L spectral turning-bands sum on two- or
+   three-dimensional coordinates. Both omega and coords are supplied in
+   R column-major order: omega is L x d and coords is N x d. */
+void TBDnd_amp(double * restrict omega, double * restrict coords,
+               double * restrict phi, double * restrict amp,
+               int *L, int *N, int *d,
+               double * restrict result)
+{
+  const int nloc = N[0];
+  const int Lfreq = L[0];
+  const int ndim = d[0];
+  const double two_pi = 2.0 * M_PI;
+
+  if (ndim != 2 && ndim != 3) {
+    for (int j = 0; j < nloc; j++) result[j] = R_NaN;
+    return;
+  }
+
+  const double *ux = omega;
+  const double *uy = omega + Lfreq;
+  const double *uz = (ndim == 3) ? omega + 2 * Lfreq : NULL;
+  const double *sx = coords;
+  const double *sy = coords + nloc;
+  const double *sz = (ndim == 3) ? coords + 2 * nloc : NULL;
+
+  double *a = (double *) R_Calloc(Lfreq, double);
+  double *b = (double *) R_Calloc(Lfreq, double);
+  double *c = (ndim == 3) ? (double *) R_Calloc(Lfreq, double) : NULL;
+
+  for (int l = 0; l < Lfreq; l++) {
+    a[l] = two_pi * ux[l];
+    b[l] = two_pi * uy[l];
+    if (ndim == 3) c[l] = two_pi * uz[l];
+  }
+
+  if (ndim == 2) {
+    for (int j = 0; j < nloc; j++) {
+      const double sxj = sx[j];
+      const double syj = sy[j];
+      double acc = 0.0;
+      for (int l = 0; l < Lfreq; l++) {
+        const double arg = a[l] * sxj + b[l] * syj + phi[l];
+        acc += amp[l] * cos(arg);
+      }
+      result[j] = acc;
+    }
+  } else {
+    for (int j = 0; j < nloc; j++) {
+      const double sxj = sx[j];
+      const double syj = sy[j];
+      const double szj = sz[j];
+      double acc = 0.0;
+      for (int l = 0; l < Lfreq; l++) {
+        const double arg = a[l] * sxj + b[l] * syj + c[l] * szj + phi[l];
+        acc += amp[l] * cos(arg);
+      }
+      result[j] = acc;
+    }
+  }
+
+  R_Free(a);
+  R_Free(b);
+  if (c != NULL) R_Free(c);
+}
+
+
 
 void hyperg_1F2_e_call( double *a,  double *b,double *c,  double *x, double *val)
 {
@@ -292,14 +358,16 @@ void spectraldensityC(double u, int model, int d, int L, double *f, double *av, 
 
 
 // preguntar si las coordenadas son enteras
-void extraer(double *coord,int sequen1,double *sub_coord,int fila,int col, int d){
-    int j=0;
-    for (size_t i = sequen1; i < fila; i++){
-        for (int h=0;h<d;h++){
-            sub_coord[j+h*col] = coord[i+h*col]; 
+void extraer(double *coord, int sequen1, double *sub_coord,
+             int fila, int col, int d) {
+    /* coord is col x d and sub_coord is fila x d, both in R
+       column-major order.  sequen1 is the zero-based first row of the
+       requested block. */
+    for (int j = 0; j < fila; j++) {
+        const int source_row = sequen1 + j;
+        for (int h = 0; h < d; h++) {
+            sub_coord[j + h * fila] = coord[source_row + h * col];
         }
-        j=j+1;
-   
     }
 }
 
@@ -373,17 +441,28 @@ void extraer_col(int inicio, int final,double *x_original,double *x){
     for(int i=inicio;i<=final;i++){x[j] = x_original[i];j=j+1;}
 }
 
-void llenar_simu1(double *simu1,double *simu,int *m,int *P,int *N,int lim, int i,double *L1){
-
-    if (i==0){
-        for (int j = 0; j < m[i] * *(P)* *(N)*lim; j++){simu1[j] = simu[j]/sqrt(*L1);}  
+void llenar_simu1(double *simu1, double *simu, int *m, int *P,
+                  int *N, int lim, int block, double *L1) {
+    /* Scatter a coordinate block into an n x P result for every
+       realization.  Both local and destination arrays use R
+       column-major order. */
+    int total_n = 0;
+    int start = 0;
+    for (int b = 0; b < lim; b++) {
+        if (b < block) start += m[b];
+        total_n += m[b];
     }
-    else{
-        int k=0;
-        int suma = m[i-1] * *(P)* *(N)*lim + m[i] * *(P)* *(N)*lim;
-        for (size_t j = m[i] * *(P)* *(N)*lim ; j < suma ; j++){
-            simu1[j]  = simu[k];
-            k = k+1;}
+    const int block_n = m[block];
+    const double scale = 1.0 / sqrt(*L1);
+
+    for (int k = 0; k < *N; k++) {
+        for (int h = 0; h < *P; h++) {
+            for (int j = 0; j < block_n; j++) {
+                const int src = k * (*P) * block_n + h * block_n + j;
+                const int dst = k * (*P) * total_n + h * total_n + start + j;
+                simu1[dst] = simu[src] * scale;
+            }
+        }
     }
 }
 
@@ -432,7 +511,6 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
   
   // Allocate memory for temporary variables
   double *f = (double *) R_Calloc(p * p, double);
-  double *g = (double *) R_Calloc(1, double);
   double *u_1 = (double *) R_Calloc(d, double);
   double *w = (double *) R_Calloc(p, double);
   
@@ -466,9 +544,18 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
     // Calculate spectral density matrix based on model
     spectraldensityC(norm_u, *model, d, p, f, a_v, C_v, nu1_v, nu2_v, params_other);
     
-    // Normalize the spectral density
-    for (int i = 0; i < p * p; i++) {
-      f[i] = (g[0] != 0) ? 2 * f[i] / g[0] : 2;
+    /* Importance-sampling normalization.  Frequencies are generated
+       from the Matérn proposal with parameters (a0, nu0), so the
+       spectral matrix must be divided elementwise by that proposal
+       density.  The previous code used an uninitialised zero-valued
+       placeholder and consequently replaced every matrix entry by 2. */
+    const double proposal_density = den_mat(norm_u, *nu0, *a0);
+    if (!R_FINITE(proposal_density) || proposal_density <= 0.0) {
+      for (int i = 0; i < p * p; i++) f[i] = 0.0;
+    } else {
+      for (int i = 0; i < p * p; i++) {
+        f[i] = 2.0 * f[i] / proposal_density;
+      }
     }
     
     // Handle matrices of different dimensions
@@ -567,7 +654,6 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
   
   // Free first phase memory allocations
   R_Free(f);
-  R_Free(g);
   R_Free(u_1);
   R_Free(autovalores);
   R_Free(autovectores);
@@ -672,11 +758,16 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
           cos_vec(x_cos, x, fila * largo);
           sen_vec(x_sen, x, fila * largo);
           
-          // Extract A and B columns
-          double *A_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
-          double *B_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
-          extraer_col(index[0], index[largo - 1] * p + 1, A, A_col);
-          extraer_col(index[0], index[largo - 1] * p + 1, B, B_col);
+          // Extract the selected P x largo blocks in column-major order.
+          double *A_col = (double *)R_Calloc(p * largo, double);
+          double *B_col = (double *)R_Calloc(p * largo, double);
+          for (int q = 0; q < largo; q++) {
+            const int source_col = index[q];
+            for (int h = 0; h < p; h++) {
+              A_col[h + p * q] = A[h + p * source_col];
+              B_col[h + p * q] = B[h + p * source_col];
+            }
+          }
           
           // Calculate cross products
           double *result1 = (double *)R_Calloc(m * *P, double);
@@ -713,11 +804,16 @@ void for_c(int *d_v, double *a_v, double *nu1_v, double *C_v, double *nu2_v,
           cos_vec(x_cos, x, fila * largo);
           sen_vec(x_sen, x, fila * largo);
           
-          // Extract A and B columns
-          double *A_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
-          double *B_col = (double *)R_Calloc(*P * (index[largo - 1] + 1), double);
-          extraer_col(index[0], index[largo - 1] * p + 1, A, A_col);
-          extraer_col(index[0], index[largo - 1] * p + 1, B, B_col);
+          // Extract the selected P x largo blocks in column-major order.
+          double *A_col = (double *)R_Calloc(p * largo, double);
+          double *B_col = (double *)R_Calloc(p * largo, double);
+          for (int q = 0; q < largo; q++) {
+            const int source_col = index[q];
+            for (int h = 0; h < p; h++) {
+              A_col[h + p * q] = A[h + p * source_col];
+              B_col[h + p * q] = B[h + p * source_col];
+            }
+          }
           
           // Apply corrections
           restar_matrices(x_cos, x_cos, cosphi, fila * largo);

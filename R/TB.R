@@ -49,7 +49,7 @@ tbm2d <- function(coord, coordt, param, corrmodel,L,bivariate){
 
     m = c()
    for (i in 1:(length(sequen)-1)){ m1 <- sequen[i+1]-sequen[i]; m = c(m1,m)} 
-simu11 = as.numeric( rep(0,N*P*sum(m)*(length(sequen)-1)))
+simu11 <- numeric(N * P * n)
 
 result=dotCall64::.C64("for_c",
          SIGNATURE = c("integer","double","double", "double",
@@ -71,6 +71,43 @@ result=dotCall64::.C64("for_c",
 #######################################################
 ######### univariate case #############################
 #######################################################
+
+## Lightweight top-level worker used by future.apply.  Keeping this
+## function outside tbm2d_uni() prevents it from capturing the complete
+## simulation frame when it is serialized for multisession workers.
+.tb_call_kernel_chunk <- function(coord_chunk, u, phi, amp, L, CC) {
+  coord_chunk <- as.matrix(coord_chunk)
+  u <- as.matrix(u)
+  Ninner <- nrow(coord_chunk)
+  d <- ncol(coord_chunk)
+
+  if (!(d %in% c(2L, 3L)) || ncol(u) != d) {
+    stop("TB kernel requires matching two- or three-dimensional coordinates and frequencies.",
+         call. = FALSE)
+  }
+
+  result <- dotCall64::.C64(
+    "TBDnd_amp",
+    SIGNATURE = c(
+      "double", "double", "double", "double",
+      "integer", "integer", "integer", "double"
+    ),
+    omega = c(u),
+    coords = c(coord_chunk),
+    phi = phi,
+    amp = amp,
+    L = as.integer(L),
+    n = as.integer(Ninner),
+    d = as.integer(d),
+    result = dotCall64::vector_dc("double", Ninner),
+    INTENT = c("r", "r", "r", "r", "r", "r", "r", "rw"),
+    PACKAGE = "GeoModels",
+    VERBOSE = 0,
+    NAOK = TRUE
+  )$result
+
+  sqrt(CC) * result / sqrt(L)
+}
 
 safe_besselJ <- function(x, nu) {
   out <- numeric(length(x))
@@ -309,16 +346,6 @@ w_n_stable <- function(nmax, delta, beta, gamma, d) {
   w <- pmax(w, 0)
   w / sum(w)
 }
-
-fT_n <- function(t, eta, n, d) {
-  t <- as.numeric(t)
-  Sd <- sphere_area(d)
-  CH <- exp(log_C_H_n(eta, n, d))
-  const <- Sd * CH * 4^(2*eta + 2*n) * gamma(1 + eta + n)^2
-  #const * t^(d - 1 - 2*eta) * besselJ(t / 2, eta + n)^2  
-   const * t^(d - 1 - 2*eta) * safe_besselJ(t / 2, eta + n)^2            
-}
-
 sample_fT_n_adaptive <- function(N, eta, n, d, safety = 1.2) {
   Sd <- sphere_area(d)
   CH <- exp(log_C_H_n(eta, n, d))
@@ -419,8 +446,9 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
   n <- dim(coord)[1]
   d <- dim(coord)[2]
 
-  if (is.null(d) || d != 2) {
-    stop("Current TB/STB implementation supports only 2D spatial coordinates.")
+  if (is.null(d) || !(d %in% c(2L, 3L))) {
+    stop("Current univariate TB/STB implementation supports only 2D or 3D spatial coordinates.",
+         call. = FALSE)
   }
 
   condition <- FALSE
@@ -495,37 +523,22 @@ tbm2d_uni <- function(coord, coordt, param, corrmodel, L, bivariate, parallel, n
   Nlocs <- nrow(coord)
   simu <- NULL
 
-  ## Helper: single serial call to the (now cache-friendly) C kernel.
-  ## Used both for the fully-serial path and for each parallel chunk.
-  call_kernel <- function(indexes) {
-    Ninner <- length(indexes)
-    result <- dotCall64::.C64("TBD1d_amp",
-               SIGNATURE = c("double","double","double","double",
-                             "double","double","integer","integer","double"),
-               ux = c(u[,1]), uy = c(u[,2]),
-               sx = c(coord[indexes,1]),
-               sy = c(coord[indexes,2]),
-               phi = phi, amp = amp,
-               L = as.integer(L), n = as.integer(Ninner),
-               result = dotCall64::vector_dc("double", Ninner),
-               INTENT = c("r","r","r","r","r","r","r","r","rw"),
-               PACKAGE='GeoModels', VERBOSE=0, NAOK=TRUE)$result
-    sqrt(CC) * result / sqrt(L)
-  }
+  ## The worker function is defined at file scope and all required values
+  ## are passed explicitly.  This avoids both large captured environments
+  ## and manual parent-environment manipulation.
 
   if (!is.null(u)) {
 
-   ## Decide whether to parallelize based on the actual workload
-## (Nlocs * L), not on Nlocs alone. The threshold is calibrated so
-## that, for the recommended value L = 50,000 used in the numerical
-## experiments, inner parallelism starts at Nlocs >= 50,000.
-cost <- as.numeric(Nlocs) * as.numeric(L)
-do_parallel <- isTRUE(parallel) && cost >= 2.5e9
+   ## GeoSimapprox decides whether the TB call should use spatial-chunk
+## parallelism before entering tbm2d_uni().  Therefore `parallel=TRUE`
+## here already means that the inner TB path was selected (automatically
+## or via GeoModels.force_tb_inner_parallel).  Do not apply a second,
+## inconsistent workload threshold at this lower level.
+do_parallel <- isTRUE(parallel)
 
     if (do_parallel) {
 
-      n.workers <- if (is.null(ncores)) max(1, parallel::detectCores() - 1) else ncores
-      n.workers <- min(n.workers, Nlocs)  # no point in more chunks than locations
+      n.workers <- .GeoResolveWorkers(TRUE, ncores, n_jobs = Nlocs)
 
       ## One chunk per worker (balanced), instead of fixed-size 1e5 chunks.
       ## This function assumes a `future` plan has ALREADY been set by the
@@ -536,11 +549,23 @@ do_parallel <- isTRUE(parallel) && cost >= 2.5e9
       limits <- unique(round(seq(0, Nlocs, length.out = n.workers + 1)))
       chunk_list <- lapply(seq_len(length(limits) - 1), function(k)
         (limits[k] + 1):limits[k + 1])
+      coord_chunks <- lapply(
+        chunk_list,
+        function(indexes) coord[indexes, , drop = FALSE]
+      )
 
       simu <- matrix(NA, Nlocs, 1)
       chunk_results <- future.apply::future_lapply(
-        chunk_list, call_kernel,
-        future.seed = TRUE, future.packages = "GeoModels"
+        coord_chunks,
+        FUN = .tb_call_kernel_chunk,
+        u = u,
+        phi = phi,
+        amp = amp,
+        L = L,
+        CC = CC,
+        future.seed = TRUE,
+        future.packages = c("GeoModels", "dotCall64"),
+        future.globals = FALSE
       )
 
       for (k in seq_along(chunk_list)) {
@@ -548,7 +573,7 @@ do_parallel <- isTRUE(parallel) && cost >= 2.5e9
       }
 
     } else {
-      simu <- matrix(call_kernel(seq_len(Nlocs)), Nlocs, 1)
+      simu <- matrix(.tb_call_kernel_chunk(coord, u, phi, amp, L, CC), Nlocs, 1)
     }
   }
 

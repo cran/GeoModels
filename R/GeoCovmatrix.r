@@ -1,10 +1,12 @@
 
 
-GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NULL,coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
+GeoCovmatrix <- function(estobj=NULL,coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL,coordx_dyn=NULL,corrmodel, distance="Eucl", grid=FALSE,
                      model="Gaussian", n=1, param, anisopars=NULL,radius=1,
-                       sparse=FALSE,copula=NULL,X=NULL,spobj=NULL)
+                       sparse=FALSE,copula=NULL,X=NULL,spobj=NULL,check.duplicates=FALSE)
 
 {
+  call <- match.call()
+
   ########################################################################################################
   ##########  Internal function: computing covariance matrix #############################################
   ########################################################################################################
@@ -19,7 +21,7 @@ GeoCovmatrix <- function(estobj=NULL,coordx, coordy=NULL, coordz=NULL, coordt=NU
 ############### computing correlation #############################################
 ###################################################################################
 
-if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42,59))
+if(model %in% c(1,9,34,12,20,18,39,27,38,29,21,26,24,10,22,40,28,33,42,59,13))
 {
 
   if(type=="Standard") {
@@ -115,26 +117,12 @@ if(bivariate){}
 if(model==40)  {  ## TukeyH2
 
 if(!bivariate)    {
-    corr=cr$corr*(1-as.numeric(nuisance['nugget']))
+    corr_lat=cr$corr*(1-as.numeric(nuisance['nugget']))
     hr=as.numeric(nuisance['tail1'])
     hl=as.numeric(nuisance['tail2'])
-
-x1=1-(1-corr^2)*hr
-y1=1-(1-corr^2)*hl
-x2=(1-hr)^2-(corr*hr)^2
-y2=(1-hl)^2-(corr*hl)^2
-g=1-hl-hr+(1-corr^2)*hl*hr
-h1=sqrt(1-corr^2/(x1^2))+(corr/x1)*asin(corr/x1)
-h2=sqrt(1-corr^2/(y1^2))+(corr/y1)*asin(corr/y1)
-h3=sqrt(1-corr^2/(x1*y1))+sqrt(corr^2/(x1*y1))*asin(sqrt(corr^2/(x1*y1)))
-p1=x1*h1/(2*pi*(x2)^(3/2))+corr/(4*(x2)^(3/2))
-p2=y1*h2/(2*pi*(y2)^(3/2))+corr/(4*(y2)^(3/2))
-p3=-(x1*y1)^(1/2)*h3/(2*pi*(g)^(3/2))+corr/(4*(g)^(3/2))
-
-   mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
-   vv1=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2
-   corr=(p1+p2+2*p3-mm^2)/vv1
-  vv=as.numeric(nuisance['sill'])*vv1
+    mom_hh <- .GeoTukeyh2StandardMoments(hr, hl)
+    corr <- .GeoTukeyh2Correlation(corr_lat, hr, hl)
+    vv=as.numeric(nuisance['sill'])*mom_hh$variance
        }
 if(bivariate){}
 }
@@ -159,11 +147,16 @@ if(bivariate){}
 if(model==12)   ##  student case
     {
 if(!bivariate){
-   corr=cr$corr*(1-as.numeric(nuisance['nugget']))
-nu=as.numeric(1/nuisance['df'])
-#corr=exp(log(nu-2)+2*lgamma(0.5*(nu-1))-log(2)-2*lgamma(nu/2)+log(Re(hypergeo::hypergeo(0.5,0.5, nu/2,corr^2)))+log(corr))
-if(nu<170) corr=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,corr^2))*cr$corr)/(2*gamma(nu/2)^2)
-vv=as.numeric(nuisance['sill'])*(nu)/(nu-2)
+   rho_base=cr$corr
+   rho_num=rho_base*(1-as.numeric(nuisance['nugget']))
+   nu=as.numeric(1/nuisance['df'])
+   # In the constructive Student-t RF the common scale-mixture component
+   # depends on the nugget-free latent correlation, while the Gaussian
+   # numerator carries the nugget attenuation.
+   if(nu<170) corr=((nu-2)*gamma((nu-1)/2)^2*
+                    Re(hypergeo::hypergeo(0.5,0.5,nu/2,rho_base^2))*rho_num)/
+                   (2*gamma(nu/2)^2)
+   vv=as.numeric(nuisance['sill'])*(nu)/(nu-2)
 }
 if(bivariate){}
 }
@@ -187,19 +180,15 @@ if(bivariate){}
 ###############################################################
 
 if (model == 20) {  ## SAS
-  # Estrazione parametri
   nugget <- as.numeric(nuisance['nugget'])
-  d <- as.numeric(nuisance['tail'])     # deve essere > 0
-  e <- as.numeric(nuisance['skew'])     # può essere qualsiasi valore
+  d <- as.numeric(nuisance['tail'])
+  e <- as.numeric(nuisance['skew'])
   sill <- as.numeric(nuisance['sill'])
-  mm=sinh(e/d)*exp(0.25)*(besselK(.25,(d+1)/(2*d))+besselK(.25,(1-d)/(2*d)))/(sqrt(8*pi))
-  vs=cosh(2*e/d)*exp(0.25)*(besselK(.25,(d+2)/(2*d))+besselK(0.25,(2-d)/(2*d)))/(sqrt(32*pi))-0.5-mm^2
-
+  mom_sas <- .GeoSASStandardMoments(e, d)
   corr_base <- cr$corr * (1 - nugget)
-  corr=corrsas(corr_base, e, d)        #external function for sas
-  vv <- sill * vs
+  corr <- corrsas(corr_base, e, d)
+  vv <- sill * mom_sas$variance
 }
-
 
 
 ###############################################################
@@ -302,7 +291,7 @@ if(model==59)  {  ##  skewLaplace case
           if(!bivariate){
               corr=cr$corr*(1-as.numeric(nuisance['nugget']))
               sk=as.numeric(nuisance['skew'])
-              corr=cr$corr^2; 
+              corr=corr^2
               vv=as.numeric(nuisance['sill'])*(1/sk^2 + 1/(1-sk)^2)
      }
       if(bivariate){}
@@ -362,7 +351,7 @@ if(model==28)   ##  beta case
 ######################
   #nu=shape1;alpha=shape2
   nu2=shape1/2;alpha2=shape2/2
-  res=0;ss=0;k=0
+  res=0;ss=0;k=0;A=rep(0,length(corr22))
   while(k<=100){
     p1=2*(lgamma(cc+k)-lgamma(cc)+lgamma(nu2+1+k)-lgamma(nu2+1))
     p2=lgamma(k+1)+(lgamma(nu2+k)-lgamma(nu2))+2*(lgamma(cc+1+k)-lgamma(cc+1))
@@ -371,10 +360,9 @@ if(model==28)   ##  beta case
     b3=k*log(corr22)
     sum=exp(b1+b2+b3)
     res=res+sum
+    A=res
     if (all(sum<1e-6)){
       break
-    } else{
-      A=res
     }
     k=k+1
   }
@@ -397,17 +385,22 @@ if(model==33||model==42)   ##  Kumaraswamy case
                 eta=as.numeric(nuisance['shape1'])
                    }
       if(model==42){
-                ga=as.numeric(nuisance['shape2'])
-                eta=log1p(-(1+exp(mu))^(-ga))/log(0.5)
+                ga=as.numeric(nuisance['shape'])
+                mu_kuma2=as.numeric(ML)
+                if(length(mu_kuma2) != 1L && (max(mu_kuma2)-min(mu_kuma2)) > sqrt(.Machine$double.eps))
+                  stop("GeoCovmatrix: plain Kumaraswamy2 covariance is currently implemented only for a constant mean; use the copula covariance engine for location-dependent margins.", call.=FALSE)
+                pmed=plogis(mu_kuma2[1L])
+                eta=log(0.5)/log1p(-(pmed^ga))
                    }
 
       mm=eta*beta(1+1/ga,eta)
       NN=length(corr);
       res=double(NN)
       bb=.C("corr_kuma_vec",as.double(corr),as.double(eta),as.double(ga),
-      res=as.double(res),as.integer(NN),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+      res=as.double(res),as.integer(NN),PACKAGE='GeoModels', NAOK=TRUE)
       corr=bb$res
-      vv=eta*beta(1+2/ga,eta)-mm^2
+      ssup=as.numeric(nuisance['max'])-as.numeric(nuisance['min'])
+      vv=ssup^2*(eta*beta(1+2/ga,eta)-mm^2)
       }
       if(bivariate){}
 }
@@ -488,8 +481,10 @@ if(model==26)   ##  weibull case
          corr=cr$corr*(1-as.numeric(nuisance['nugget']))
          sh=as.numeric(nuisance['shape'])
          vv=exp(mu)^2 * (gamma(1+2/sh)/gamma(1+1/sh)^2-1)
-         bcorr=    gamma(1+1/sh)^2/(gamma(1+2/sh)-gamma(1+1/sh)^2)
-         corr=bcorr*((1-corr^2)^(1+2/sh)*Re(hypergeo::hypergeo(1+1/sh,1+1/sh ,1 ,corr^2))-1)
+         ## Use Eq. (6) directly.  The previous Euler-transformed form
+         ## involved 2F1(1+1/sh,1+1/sh;1;rho^2), which is numerically
+         ## singular for the hypergeo backend near rho^2=1.
+         corr=.GeoWeibullCorr(corr, sh)
         }
   if(bivariate) {}
     }
@@ -547,6 +542,8 @@ if(model %in% c(2,11,30,16,14,43,45,46,57,58)){ #  binomial (negative)Gaussian t
 
 if(model==2||model==11)
 {if(length(n)==1) n=rep(n,dime)}
+if(model==14) n=rep.int(1L,dime)
+if(model %in% c(16,45)) n=rep.int(as.integer(n[1L]),dime)
 if(!bivariate){
 mu=ML
 
@@ -622,7 +619,7 @@ cr<-dotCall64::.C64("CorrelationMat_dis_tap",corr=dotCall64::vector_dc("double",
                             diag(varcov)=vv 
                         }
 
-  if(model %in% c(57))   { mm=exp(mu); kk=as.numeric(param$shape);
+  if(model %in% c(57,58))   { mm=exp(mu); kk=as.numeric(param$shape);
                             pg=pnorm(param$pmu)
                            vv=(1-pg)*mm*(1+pg*mm+(mm/kk))
                            diag(varcov)=vv }
@@ -649,10 +646,14 @@ if(!is.null(estobj)){
 if(!estobj$grid){  #not regular grid 
 
  if(!estobj$bivariate){  if(is.null(estobj$coordx_dyn)) coordx=cbind(estobj$coordx,estobj$coordy,estobj$coordz)
-                         else cord=estobj$coordx_dyn
+                         else coordx_dyn=estobj$coordx_dyn
                       } ## spatial (temporal) non regular case
- else  {    if(is.null(estobj$coordx_dyn))  { coordx=estobj$coordx[1:estobj$ns[1]]    # bivariate not dynamic    
-                                              coordy=estobj$coordy[1:estobj$ns[2]] 
+ else  {    if(is.null(estobj$coordx_dyn))  {
+                                              n1 <- as.integer(estobj$ns[1L])
+                                              idx1 <- seq_len(n1)
+                                              coordx=estobj$coordx[idx1]    # bivariate, common static locations
+                                              coordy=estobj$coordy[idx1]
+                                              coordz=if(is.null(estobj$coordz)) NULL else estobj$coordz[idx1]
                                             }  
             else {coordx_dyn=estobj$coordx_dyn}                                      # bivariate  dynamic  
        }
@@ -661,8 +662,7 @@ else  { coordx=estobj$coordx;
         coordy=estobj$coordy
         coordz=estobj$coordz
       }
-   if(length(estobj$coordt)==1) coordt=NULL
-   else coordt=estobj$coordt
+   coordt=estobj$coordt
    coordx_dyn=estobj$coordx_dyn
    corrmodel=estobj$corrmodel
    model=estobj$model
@@ -678,6 +678,7 @@ else  { coordx=estobj$coordx;
 
 }
 ################# end extracting information###################################################
+model <- .GeoCovCanonicalModel(model)
 if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the name of the correlation model is wrong")
  if(is.null(CkModel(model))) stop("The name of the  model  is not correct\n")
 
@@ -701,6 +702,42 @@ bivariate<-CheckBiv(CkCorrModel(corrmodel))
 spacetime<-CheckST(CkCorrModel(corrmodel))
 space=!spacetime&&!bivariate
 
+## Normalize the optional copula field before input checking.
+if(!is.null(copula)) {
+  copula <- as.character(copula)[1L]
+  if(is.na(copula) || !nzchar(trimws(copula))) copula <- NULL
+}
+if(!is.null(copula) && !(copula %in% c("Gaussian", "Clayton", "SkewGaussian")))
+  stop("GeoCovmatrix supports copula='Gaussian', 'Clayton', or 'SkewGaussian'.",
+       call. = FALSE)
+if(!is.null(copula) && copula %in% c("Clayton", "SkewGaussian") &&
+   !(as.integer(CkModel(model)) %in% .GeoCopulaPredictionModels))
+  stop("GeoCovmatrix supports copula='", copula,
+       "' only for the validated copula prediction margins.", call. = FALSE)
+
+if(is.null(copula)) {
+  plain_supported <- c(
+    "Gaussian","Tukeygh","Tukeyh","Tukeyh2","StudentT","SinhAsinh",
+    "SkewStudentT","TwoPieceBimodal","TwoPieceStudentT","TwoPieceTukeyh",
+    "TwoPieceGaussian","SkewGaussian","SkewLaplace","Beta","Kumaraswamy",
+    "Kumaraswamy2","Wrapped","Gamma","Weibull","LogLogistic","LogGaussian",
+    "Binary","Bernoulli","Binomial","Geometric","Geom","BinomialNeg",
+    "Poisson","PoissonZIP","BinomialNegZINB","PoissonGamma",
+    "PoissonGammaZIP","PoissonGammaZIP1"
+  )
+  if(!(model %in% plain_supported))
+    stop("GeoCovmatrix: plain observed-scale covariance is not implemented for model = '",
+         model, "'.", call.=FALSE)
+  if(bivariate && model != "Gaussian")
+    stop("GeoCovmatrix: plain bivariate observed-scale covariance is currently implemented only for model = 'Gaussian'.",
+         call.=FALSE)
+  if(model %in% c("PoissonGammaZIP","PoissonGammaZIP1") && (spacetime || sparse))
+    stop("GeoCovmatrix: PoissonGammaZIP/PoissonGammaZIP1 covariance is currently implemented only for dense purely spatial designs.",
+         call.=FALSE)
+}
+
+Mobs_cov <- NULL
+
 tapsep=NULL ;   maxdist=NULL; maxtime=NULL; type="Standard"    #setted for older compatibility
 ##############################################################################
 ###### extracting sp object informations if necessary              ###########
@@ -717,13 +754,67 @@ if(!is.null(spobj)) {
      }
 }
 
+## Preserve the user's grid declaration in the returned object.  Internally a
+## regular grid is expanded to explicit locations and then processed as an
+## irregular coordinate matrix.
+grid_input <- isTRUE(grid)
 
+.GeoValidate3D(
+  coordx = coordx, coordy = coordy, coordz = coordz,
+  coordx_dyn = coordx_dyn, distance = distance, grid = grid,
+  context = "GeoCovmatrix"
+)
+
+## Hole-effect generalized Wendland validity depends on the Euclidean
+## dimension through the turning-bands construction.  Infer d from the
+## coordinate representation before flattening it.
+hole_d <- 2L
+if(!is.null(coordz)) hole_d <- 3L
+if(is.matrix(coordx) && ncol(coordx) >= 3L) hole_d <- 3L
+if(is.list(coordx_dyn) && length(coordx_dyn) &&
+   any(vapply(coordx_dyn, function(z) is.matrix(z) && ncol(z) >= 3L, logical(1L))))
+  hole_d <- 3L
+.GeoValidateHoleWendlandParameters(corrmodel, param, d=hole_d, context="GeoCovmatrix")
+
+if(!is.null(coordx_dyn)) {
+  coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+    coordx_dyn,
+    coordt = if(spacetime) coordt else NULL,
+    context = "GeoCovmatrix"
+  )
+  if(spacetime) {
+    .GeoValidateDynamicRows(X, coordx_dyn, name = "X",
+                            context = "GeoCovmatrix")
+  }
+}
+if(bivariate) {
+  biv_info <- .GeoBivariateCoordinateInfo(
+    coordx = coordx, coordy = coordy, coordz = coordz,
+    coordx_dyn = coordx_dyn, grid = grid, context = "GeoCovmatrix"
+  )
+  if(biv_info$dynamic) coordx_dyn <- biv_info$blocks
+  if(!is.null(X)) {
+    X <- .GeoBivariateDesign(X, biv_info$ns, context = "GeoCovmatrix")
+  }
+}
+
+.GeoCheckDuplicateLocations(
+  coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+  coordx_dyn = coordx_dyn, spacetime = spacetime, bivariate = bivariate,
+  grid = grid, context = "GeoCovmatrix", check.duplicates = check.duplicates
+)
 
 #######################################################
      ## setting zero mean and nugget if no mean or nugget is fixed
     if(!bivariate){
     if(is.null(param$mean)) param$mean<-0
-    if(is.null(param$nugget)) param$nugget<-0  
+    ## CkInput(..., fcall = "Simulation") validates the union of the
+    ## Gaussian nuisance parameters and the declared model nuisance
+    ## parameters.  Hence the auxiliary generic nugget must exist here even
+    ## for double-nugget ZIP models.  It is removed *after* StartParam(),
+    ## before building the positional nuisance vector passed to
+    ## CorrelationMat_dis2 (see cleanup below).
+    if(is.null(param$nugget)) param$nugget<-0
     #if(length(param$mean)>1) MM=fixed$mean
     if(is.null(param$sill)) param$sill<-1  
 }
@@ -731,22 +822,26 @@ if(!is.null(spobj)) {
     if(is.null(param$mean_1)) param$mean_1<-0
     if(is.null(param$mean_2)) param$mean_2<-0
     if(is.null(param$nugget_1)) param$nugget_1<-0
-    if(is.null(param$nugget_2)) param$nugget_2<-0 
-    if(is.null(param$sill_1)) param$sill_1<-0
-    if(is.null(param$sill_2)) param$sill_2<-0 
+    if(is.null(param$nugget_2)) param$nugget_2<-0
+    sill_names <- c("sill_1", "sill_2")
+    missing_sills <- sill_names[vapply(sill_names, function(nm)
+      is.null(param[[nm]]), logical(1L))]
+    if(length(missing_sills))
+      stop("GeoCovmatrix: bivariate models require parameter(s) ",
+           paste(missing_sills, collapse=", "), ".", call.=FALSE)
 
 }
 
     if(is.null(coordx_dyn)){
-    unname(coordx);unname(coordy);unname(coordz)}
-    else{coordx=NULL;coordy=NULL;coordz=NULL}
+    coordx=unname(coordx);coordy=unname(coordy);coordz=unname(coordz)}
+    else{coordx_dyn=lapply(coordx_dyn, unname)}
 
 
     #if the covariance is compact supported  and option sparse is used
     #then set the code as a tapering and an object spam is returned
 if(sparse) {
     covmod=CkCorrModel(corrmodel)
-    if(covmod %in% c(10,11,13,15,19,6,7,21,22,23,30,
+    if(covmod %in% c(10,11,13,15,19,6,7,21,22,23,26,29,30,
                      63,64,65,66,67,68,
                      69,70,71,72,73,74,75,76,77,78,
                      111,112,129,113,114,131,132,130,134,
@@ -783,6 +878,9 @@ if(sparse) {
               log_den <- lgamma(param$power2 / 2) +lgamma((param$power2 + 2) / 2 + param$smooth)
               maxdist <- param$scale*exp(log_num - log_den)^(1/(1+2*param$smooth))
               }
+        ## Reparameterized hole-effect GW is GW_{nu*a,xi-1/2,nu,d,k};
+        ## hence its exact compact support is nu*a, not a.
+        if(covmod==29) maxdist=as.numeric(param$power2*param$scale)
       }
   }
   taper=corrmodel
@@ -792,7 +890,7 @@ if(sparse) {
 if(!bivariate){
 
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        "BinomialNeg","Binary","Bernoulli","Geom","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB', 'PoissonGammaZIP','PoissonGammaZIP1','PoissonGamma',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')){
@@ -803,7 +901,7 @@ else                    param$sill=1
 
 
 coords=NULL
-coordz=NULL
+coordx_dyn_orig=coordx_dyn
 
 if(is.null(coordx_dyn)){
  #######################################
@@ -811,13 +909,72 @@ if(is.null(coordx_dyn)){
     else     {  if(!is.null(coordy)) { coords=as.matrix(cbind(coordx,coordy,coordz))}
                 else                 { coords=as.matrix(coordx);}
                 if(ncol(coords)==3) coordz=coords[,3]
-             }         
-}
+                else                coordz=NULL
+             }
     coords_orig=coords
- #######################################  
- 
     if(!is.null(anisopars)) {  coords=GeoAniso(coords,c(anisopars$angle,anisopars$ratio))}
+}
+else {
+    coords_orig=do.call(rbind, coordx_dyn_orig)
+    coordx_dyn_metric=coordx_dyn_orig
+    if(!is.null(anisopars)) {
+      if(ncol(coords_orig)!=2L)
+        stop("GeoCovmatrix: anisotropy for dynamic three-dimensional coordinates is not implemented.", call.=FALSE)
+      coordx_dyn_metric=lapply(coordx_dyn_orig, function(z)
+        GeoAniso(z,c(anisopars$angle,anisopars$ratio)))
+    }
+    coordx_dyn=coordx_dyn_metric
+    coords=do.call(rbind, coordx_dyn)
+    if(ncol(coords)==3) coordz=coords[,3]
+    else                coordz=NULL
+}
+coordz_orig=if(ncol(coords_orig)==3L) coords_orig[,3] else NULL
+ #######################################
 #######################################
+
+    if(!bivariate) {
+      nobs_mean_cov <- if(!is.null(coordx_dyn)) {
+        sum(vapply(coordx_dyn, function(z) nrow(as.matrix(z)), integer(1L)))
+      } else {
+        nrow(coords) * if(is.null(coordt)) 1L else length(coordt)
+      }
+      if(!is.numeric(n) || !length(n) || any(!is.finite(n)))
+        stop("GeoCovmatrix: n must be finite numeric.", call.=FALSE)
+      if(any(n < 1) || any(abs(n-round(n)) > sqrt(.Machine$double.eps)))
+        stop("GeoCovmatrix: n must contain positive integer values.", call.=FALSE)
+      if(is.null(copula) && model %in% c("Binary","Bernoulli")) {
+        if(length(n) != 1L || as.integer(round(n[1L])) != 1L)
+          stop("GeoCovmatrix: Binary/Bernoulli is the one-trial field; n must equal 1.", call.=FALSE)
+        n <- 1L
+      }
+      if(is.null(copula) && model %in% c("Geom","Geometric")) {
+        if(length(n) != 1L || as.integer(round(n[1L])) != 1L)
+          stop("GeoCovmatrix: Geometric is the r = 1 Negative-Binomial field; n must equal 1.", call.=FALSE)
+        n <- 1L
+      }
+      if(is.null(copula) && model %in% c("BinomialNeg","BinomialNegZINB")) {
+        if(length(n) != 1L)
+          stop("GeoCovmatrix: for direct Negative-Binomial fields n is the common number r of successes and must be a positive integer scalar.", call.=FALSE)
+        n <- as.integer(round(n[1L]))
+      } else if(model == "Binomial" &&
+                length(n) != 1L && length(n) != nobs_mean_cov) {
+        stop("GeoCovmatrix: Binomial n must be scalar or contain exactly one value per observation (",
+             nobs_mean_cov, ").", call.=FALSE)
+      }
+      Mobs_cov <- .GeoMean_external(param, n = nobs_mean_cov)
+      if(!is.null(Mobs_cov) && !is.null(X))
+        stop("A site-specific mean vector and X cannot be used together.\n")
+      if(!is.null(X)) {
+        X <- .GeoMean_design(X, n = nobs_mean_cov, name = "X")
+        invisible(.GeoMean_beta(param, ncol(X)))
+      } else {
+        supplied_mean <- .GeoMean_supplied_names(param)
+        if(is.null(Mobs_cov) && length(setdiff(supplied_mean, "mean")))
+          stop("Multiple mean coefficients require an explicit design matrix X.\n")
+        if(is.null(Mobs_cov)) invisible(.GeoMean_beta(param, 1L))
+      }
+      if(!is.null(Mobs_cov)) param$mean <- 0
+    }
 
 
     checkinput <- CkInput(coords[,1], coords[,2],coordz, coordt, coordx_dyn, corrmodel, NULL, distance, "Simulation",
@@ -891,7 +1048,7 @@ if(is.null(tapsep)) tapsep=1
     }
     if(is.null(initparam$NS)) initparam$NS=0
 
-    if(initparam$model %in% c(43,45)) initparam$namesnuis=initparam$namesnuis[!initparam$namesnuis %in% "nugget"]
+    if(initparam$model %in% c(43,45,57)) initparam$namesnuis=initparam$namesnuis[!initparam$namesnuis %in% "nugget"]
 
 
 
@@ -901,23 +1058,42 @@ ML=0
 if(!bivariate){
 
 if(model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-        "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
+        "BinomialNeg","Binary","Bernoulli","Geom","Geometric","Gaussian_misp_Poisson",
         'PoissonZIP','Gaussian_misp_PoissonZIP','BinomialNegZINB', 'PoissonGammaZIP','PoissonGammaZIP1','PoissonGamma',
         'PoissonZIP1','Gaussian_misp_PoissonZIP1','BinomialNegZINB1',"LogGaussian",
         'Beta2','Kumaraswamy2','Beta','Kumaraswamy')) 
   {
-  ### setting mean because mean affect variance in this case
-  parc=initparam$param[initparam$namescorr]
-  sel1=!(names(initparam$param) %in% names(parc))
-  inip=initparam$param[sel1] ## deleting corr parameters
-
-  sel=substr(names(inip),1,4)=="mean"
-  beta=as.numeric(inip[sel]) ## mean parameters
-  other_nuis2=inip[!sel]
-  other_nuis=as.numeric(other_nuis2[order(names(other_nuis2))]) # other nuis parameters ordered by names
-  if((dim(initparam$X)[2])>1){ ML=initparam$X%*%c(beta) }
-  else                       { if(sum(sel)>1)   ML=beta 
-                               else  ML=initparam$X*c(beta) }
+  ### setting mean because mean affects the covariance in this case
+  parc <- initparam$param[initparam$namescorr]
+  inip <- initparam$param[!(names(initparam$param) %in% names(parc))]
+  mean_names <- .GeoMean_names(ncol(initparam$X))
+  other_nuis2 <- inip[!(names(inip) %in% mean_names)]
+  ## Build the ZIP nuisance vectors in the exact positional order expected by
+  ## CorrelationMat_dis2.  StartParam() deliberately carries an auxiliary
+  ## Gaussian `nugget` for Simulation-input validation; for double-nugget ZIP
+  ## models that auxiliary entry must never reach the C kernel.
+  zip_order <- switch(as.character(initparam$model),
+    "43" = c("nugget1", "nugget2", "pmu"),
+    "44" = c("nugget1", "nugget2", "pmu"),
+    "45" = c("nugget1", "nugget2", "pmu"),
+    "57" = c("nugget1", "nugget2", "pmu", "shape"),
+    "58" = c("nugget", "pmu", "shape"),
+    NULL)
+  if(!is.null(zip_order)) {
+    missing_zip <- setdiff(zip_order, names(other_nuis2))
+    if(length(missing_zip))
+      stop("GeoCovmatrix: internal ZIP nuisance construction is missing ",
+           paste(missing_zip, collapse=", "), ".", call.=FALSE)
+    other_nuis <- as.numeric(other_nuis2[zip_order])
+  } else {
+    other_nuis <- as.numeric(other_nuis2[order(names(other_nuis2))])
+  }
+  if(!is.null(Mobs_cov)) {
+    ML <- Mobs_cov
+  } else {
+    beta <- .GeoMean_beta(initparam$param, ncol(initparam$X))
+    ML <- as.numeric(initparam$X %*% beta)
+  }
                              } 
 }
 
@@ -941,9 +1117,9 @@ else {
 
     # Delete the global variables:
     if(!space)
-                      .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+                      .C('DeleteGlobalVar', PACKAGE='GeoModels', NAOK=TRUE)
     else                     
-                      .C('DeleteGlobalVar2', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
+                      .C('DeleteGlobalVar2', PACKAGE='GeoModels', NAOK=TRUE)
  ##### setting names nuis parameters
     if(initparam$bivariate)   initparam$numtime=2
     if(!initparam$bivariate){namesnuis = NuisParam(model, bivariate,ncol(initparam$X),copula)}
@@ -955,14 +1131,14 @@ if(is.null(X)) initparam$X=NULL
     CovMat <- list(bivariate =  initparam$bivariate,
                    coordx = coords_orig[,1],
                    coordy = coords_orig[,2],
-                   coordz = coordz,
+                   coordz = coordz_orig,
                    coordt = initparam$coordt,
-                   coordx_dyn = coordx_dyn,
+                   coordx_dyn = coordx_dyn_orig,
                    covmatrix=covmatrix,
                    copula=copula,
                    corrmodel = corrmodel,
                    distance = distance,
-                   grid=   grid,
+                   grid=   grid_input,
                    nozero=initparam$setup$nozero,
                    n=n,
                    ns=initparam$ns,
@@ -977,24 +1153,32 @@ if(is.null(X)) initparam$X=NULL
                    numcoordy = initparam$numcoordy,
                    numtime = initparam$numtime,
                    param = param,
+                   ## Kept separate because param must remain a scalar parameter
+                   ## vector for covariance and kriging internals.
+                   mean_external = if(!initparam$bivariate) Mobs_cov else NULL,
                    radius = radius,
                    setup=setup,
                    spacetime = initparam$spacetime,
                    sparse=sparse,
     
                    X=initparam$X)
-    structure(c(CovMat, call = call), class = c("GeoCovmatrix"))
+    CovMat$call <- call
+    structure(CovMat, class = c("GeoCovmatrix"))
 }
 
 print.GeoCovmatrix <- function(x, digits = max(3, getOption("digits") - 3), ...)
   {
-  if(x$biv) {biv="Bivariate";x$numtime=1} else {biv="Univariate"}
-  if(x$numtime==1) {type="Spatial"
-                   if(x$biv) type="Spatial Biviariate"
-             } else {type="Spatio-temporal"}
- 
-  if(!x$biv) {dime=x$numcoord*x$numtime}
-  else       {dime=2*x$numcoord}
+  is_bivariate <- isTRUE(x$bivariate)
+  if(is_bivariate) biv <- "Bivariate" else biv <- "Univariate"
+
+  if(is_bivariate) type <- "Spatial Bivariate"
+  else if(isTRUE(x$spacetime)) type <- "Spatio-temporal"
+  else type <- "Spatial"
+
+  dd <- dim(x$covmatrix)
+  dime <- if(length(dd)) dd[1L] else length(x$covmatrix)
+
+  model <- paste0("model code ", x$model)
   if(x$model==1) model <- 'Gaussian'
   if(x$model==21) model <- 'Gamma'
   if(x$model==39) model <- 'TwoPieceBimodal'
@@ -1016,7 +1200,7 @@ print.GeoCovmatrix <- function(x, digits = max(3, getOption("digits") - 3), ...)
   if(x$model==27) model <- 'TwoPieceStudentT'
   if(x$model==38) model <- 'TwoPieceTukeyh'
   if(x$model==29) model <- 'TwoPieceGaussian'
-  if(x$model==20) model <- 'SinhAsinh'    
+  if(x$model==20) model <- 'SinhAsinh'
   if(x$model==13) model <- 'Wrapped'
   if(x$model==26) model <- 'Weibull'
   if(x$model==11) model <- 'Binomial'
@@ -1026,26 +1210,31 @@ print.GeoCovmatrix <- function(x, digits = max(3, getOption("digits") - 3), ...)
   if(x$model==28) model <- 'Beta'
   if(x$model==31) model <- 'Binomial_TwoPieceGauss'
   if(x$model==32) model <- 'BinomialNeg_TwoPieceGauss'
-  if(x$model==19) model <- 'Binomial2'     
+  if(x$model==19) model <- 'Binomial2'
   if(x$model==16) model <- 'BinomialNeg'
   if(x$model==45) model <- 'BinomialNegZINB'
   if(x$model==14) model <- 'Geometric'
   if(x$model==15) model <- 'PoisBin'
-  if(x$model==17) model <- 'PoisBinNeg'  
-                      
+  if(x$model==17) model <- 'PoisBinNeg'
+
     cat('\n##################################################################')
     cat('\n Covariance matrix type:', type,'\n')
     cat('\n Dimension:',dime,'X',dime,'\n')
     cat('\n Model:', model, '\n')
+    if(!is.null(x$copula)) cat('\n Copula:', x$copula, '\n')
     cat('\n Correlation model:', x$corrmodel, '\n')
-    cat('\n Number of spatial coordinates:', x$numcoord, '\n')
-    cat('\n Number of dependent temporal realisations:', x$numtime, '\n')
+    if(!is.null(x$coordx_dyn)) {
+      cat('\n Spatial block sizes:', paste(x$ns, collapse = ', '), '\n')
+    } else {
+      cat('\n Number of spatial coordinates:', x$numcoord, '\n')
+    }
+    if(isTRUE(x$spacetime))
+      cat('\n Number of dependent temporal realisations:', length(x$coordt), '\n')
     cat('\n Type of the random field:', biv, '\n')
-    cat('\n Number of  parameters:', length(x$param), '\n')
+    cat('\n Number of parameters:', length(x$param), '\n')
     cat('\nParameters:\n')
     print.default(unlist(x$param), digits = digits, print.gap = 2,
                   quote = FALSE)
     cat('\n##################################################################\n')
     invisible(x)
   }
-

@@ -13,54 +13,16 @@ GeoTestsupp_space <- function(data, coordx,
                               type = NULL,
                               method = c("cholesky", "TB"),
                               L = 10000,
-                              parallel = TRUE,
-                              ncores = NULL,
+                              parallel = FALSE,
+                              ncores = 6,
                               progress = TRUE,
                               seed = NULL) {
 
-  ## ====== cleanup: preserve user's global future/progress settings ======
-  future_plan_original <- NULL
-  if (requireNamespace("future", quietly = TRUE)) {
-    future_plan_original <- future::plan()
-    on.exit(try(future::plan(future_plan_original), silent = TRUE), add = TRUE)
-  }
-
-  old_handlers <- NULL
-  if (requireNamespace("progressr", quietly = TRUE)) {
-    old_handlers <- progressr::handlers()
-    on.exit({
-      if (length(old_handlers) > 0L) {
-        progressr::handlers(old_handlers)
-      } else {
-        progressr::handlers("default")
-      }
-    }, add = TRUE)
-  }
-
-  ## ====== reproducibility: optional seed without side effects ======
-  if (!is.null(seed)) {
-    if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed)) {
-      stop("seed must be NULL or a single finite numeric value", call. = FALSE)
-    }
-
-    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
-      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-    } else {
-      NULL
-    }
-
-    on.exit({
-      if (is.null(old_seed)) {
-        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
-          rm(".Random.seed", envir = .GlobalEnv)
-        }
-      } else {
-        assign(".Random.seed", old_seed, envir = .GlobalEnv)
-      }
-    }, add = TRUE)
-
-    set.seed(as.integer(seed))
-  }
+  ## ====== preserve runtime settings and optional RNG seed ======
+  cleanup_resources <- .GeoTestPreserveRuntime(gc_on_exit = FALSE)
+  on.exit(cleanup_resources(), add = TRUE)
+  restore_seed <- .GeoTestSetSeed(seed)
+  on.exit(restore_seed(), add = TRUE)
 
   ## ====== input validation ======
   method <- match.arg(method)
@@ -154,22 +116,7 @@ GeoTestsupp_space <- function(data, coordx,
   NN <- nrow(coordx)
 
   ## ====== progress handlers ======
-  use_progressr <- isTRUE(progress) &&
-    requireNamespace("progressr", quietly = TRUE)
-
-  if (isTRUE(progress) && !use_progressr) {
-    warning(
-      "progress=TRUE but progressr is not available; progress bars disabled.",
-      call. = FALSE
-    )
-  }
-
-  if (use_progressr) {
-    progressr::handlers(global = TRUE)
-    progressr::handlers(progressr::handler_txtprogressbar(clear = TRUE))
-  } else if (requireNamespace("progressr", quietly = TRUE)) {
-    progressr::handlers("void")
-  }
+  use_progressr <- .GeoTestConfigureProgress(progress)
 
   ## ====== automatic likelihood selection ======
   if (is.null(likelihood) && is.null(type)) {
@@ -194,18 +141,9 @@ GeoTestsupp_space <- function(data, coordx,
   }
 
   ## ====== robust core handling ======
-  coremax <- parallel::detectCores()
-  if (is.na(coremax) || coremax <= 1L) {
-    parallel <- FALSE
-    ncores <- 1L
-  } else {
-    if (is.null(ncores)) ncores <- min(coremax - 1L, B)
-    if (!is.numeric(ncores) || length(ncores) != 1L || !is.finite(ncores)) {
-      stop("ncores must be NULL or a positive integer", call. = FALSE)
-    }
-    ncores <- max(1L, min(as.integer(ncores), B, coremax))
-    if (ncores == 1L) parallel <- FALSE
-  }
+  core_cfg <- .GeoTestCoreConfig(parallel, ncores, B, strict_positive = FALSE)
+  parallel <- core_cfg$parallel
+  ncores <- core_cfg$ncores
 
   ## ====== compute d_min and h0 ======
   nn <- nabor::knn(coordx, coordx, k = 2)
@@ -288,29 +226,7 @@ GeoTestsupp_space <- function(data, coordx,
 
   ## ====== bounds utilities ======
   norm_bounds <- function(b, which = c("lower", "upper"), start_names) {
-    which <- match.arg(which)
-    if (is.null(b)) b <- list()
-
-    if (!is.list(b)) {
-      stop(which, " must be a named list", call. = FALSE)
-    }
-    if (length(b) > 0L && (is.null(names(b)) || any(names(b) == ""))) {
-      stop(which, " must be a named list with names matching start", call. = FALSE)
-    }
-
-    unknown <- setdiff(names(b), start_names)
-    if (length(unknown) > 0L) {
-      stop(
-        which, " contains names not in start: ",
-        paste(unknown, collapse = ", "),
-        call. = FALSE
-      )
-    }
-
-    base_val <- if (which == "lower") -Inf else Inf
-    out <- setNames(rep(base_val, length(start_names)), start_names)
-    if (length(b) > 0L) out[names(b)] <- unlist(b, use.names = FALSE)
-    as.list(out)
+    .GeoTestNormalizeBounds(b, which, start_names, require_list = TRUE)
   }
 
   widen_boxes <- function(lo, up, starts = NULL, positive = character()) {
@@ -387,17 +303,9 @@ GeoTestsupp_space <- function(data, coordx,
     )
   }
 
-  loglik_value <- function(fit_obj) {
-    if (inherits(fit_obj, "try-error") || is.null(fit_obj)) return(NA_real_)
-    val <- if (!is.null(fit_obj$logCompLik)) fit_obj$logCompLik else fit_obj$logLik
-    val <- as.numeric(val)
-    if (length(val) != 1L || !is.finite(val)) NA_real_ else val
-  }
+  loglik_value <- .GeoTestLogLikValue
 
-  same_pairs <- function(f0, f1) {
-    if (!identical(type, "Pairwise")) return(TRUE)
-    identical(f0$rowidx, f1$rowidx) && identical(f0$colidx, f1$colidx)
-  }
+  same_pairs <- function(f0, f1) .GeoTestSamePairs(f0, f1, type)
 
   make_start_from_fit <- function(fit_obj, template, lo, up,
                                   force_scale_above_h0 = FALSE) {
@@ -656,13 +564,6 @@ GeoTestsupp_space <- function(data, coordx,
     }
   }
 
-  get_rep <- function(sim, b) {
-    X <- sim$data
-    if (is.list(X)) return(X[[b]])
-    if (is.null(dim(X))) return(X)
-    X[, b]
-  }
-
   ## ====== bootstrap helper ======
   estimate_fun <- function(Zb) {
     f0 <- suppressWarnings(
@@ -707,97 +608,41 @@ GeoTestsupp_space <- function(data, coordx,
   ## ====== sequential or parallel bootstrap ======
   if (!parallel) {
     message(sprintf("Performing %d estimations under H0 and H1 sequentially...", B))
-
-    run_sequential <- function() {
-      out <- vector("list", B)
-      for (b in seq_len(B)) {
-        out[[b]] <- estimate_fun(get_rep(data_sim, b))
-      }
-      out
-    }
-
-    if (use_progressr) {
-      result_list <- progressr::with_progress({
-        pb <- progressr::progressor(along = seq_len(B))
-        out <- vector("list", B)
-        for (b in seq_len(B)) {
-          out[[b]] <- estimate_fun(get_rep(data_sim, b))
-          pb(sprintf("b=%d", b))
-        }
-        out
-      })
-    } else {
-      result_list <- run_sequential()
-    }
-
+    result_list <- .GeoTestSequentialApply(
+      data_sim, B, estimate_fun, progress = use_progressr
+    )
+  } else if (!requireNamespace("future", quietly = TRUE) ||
+             !requireNamespace("future.apply", quietly = TRUE)) {
+    warning(
+      "Parallel bootstrap requested but future/future.apply is unavailable; using sequential evaluation.",
+      call. = FALSE
+    )
+    result_list <- .GeoTestSequentialApply(
+      data_sim, B, estimate_fun, progress = FALSE
+    )
   } else {
-    if (!requireNamespace("future", quietly = TRUE) ||
-        !requireNamespace("future.apply", quietly = TRUE)) {
-      warning(
-        "Parallel bootstrap requested but future/future.apply is unavailable; using sequential evaluation.",
-        call. = FALSE
-      )
-
-      result_list <- vector("list", B)
-      for (b in seq_len(B)) {
-        result_list[[b]] <- estimate_fun(get_rep(data_sim, b))
-      }
+    message(sprintf(
+      "Performing %d estimations under H0 and H1 using %d cores...",
+      B, ncores
+    ))
+    data_files <- .GeoTestSaveReplicates(data_sim, B, "supp_space")
+    on.exit(unlink(data_files), add = TRUE)
+    rm(data_sim)
+    gc(verbose = FALSE, full = TRUE)
+    pb_boot <- if (use_progressr) {
+      progressr::progressor(steps = B)
     } else {
-      message(sprintf(
-        "Performing %d estimations under H0 and H1 using %d cores...",
-        B, ncores
-      ))
-
-      old_plan <- future::plan()
-      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
-      future::plan(future::multisession, workers = ncores)
-
-      ## Store each simulated dataset separately so each worker reads only
-      ## its own bootstrap replicate instead of receiving the whole object.
-      temp_dir <- tempdir()
-      tag <- format(Sys.time(), "%Y%m%d_%H%M%S")
-      data_files <- vapply(seq_len(B), function(b) {
-        fp <- file.path(temp_dir, sprintf("supp_space_%s_%05d.rds", tag, b))
-        saveRDS(get_rep(data_sim, b), fp, compress = FALSE)
-        fp
-      }, character(1))
-      on.exit(unlink(data_files), add = TRUE)
-
-      rm(data_sim)
-      gc(verbose = FALSE, full = TRUE)
-
-      old_max_size <- getOption("future.globals.maxSize")
-      on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
-      required_size <- as.numeric(utils::object.size(coordx)) +
-        as.numeric(utils::object.size(estimate_fun))
-      options(
-        future.globals.maxSize = max(
-          500 * 1024^2,
-          1.5 * required_size
-        )
-      )
-
-      if (use_progressr) {
-        result_list <- progressr::with_progress({
-          pb <- progressr::progressor(along = seq_len(B))
-          future.apply::future_lapply(
-            seq_len(B),
-            function(b) {
-              ans <- estimate_fun(readRDS(data_files[[b]]))
-              pb(sprintf("b=%d", b))
-              ans
-            },
-            future.seed = TRUE
-          )
-        })
-      } else {
-        result_list <- future.apply::future_lapply(
-          seq_len(B),
-          function(b) estimate_fun(readRDS(data_files[[b]])),
-          future.seed = TRUE
-        )
-      }
+      NULL
     }
+    result_list <- .GeoTestParallelFileApply(
+      data_files = data_files,
+      FUN = estimate_fun,
+      ncores = ncores,
+      progressor = pb_boot,
+      globals = list(coordx = coordx, estimate_fun = estimate_fun),
+      progress_every = TRUE,
+      error_value = c(lambda = NA_real_, fallback = 0)
+    )
   }
 
   result_mat <- do.call(rbind, result_list)

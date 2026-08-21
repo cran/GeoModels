@@ -1,10 +1,9 @@
 \name{GeoOutlier}
 \alias{GeoOutlier}
 \encoding{UTF-8}
-\title{Spatio (temporal) outliers detection}
+\title{Spatial outlier detection}
 \description{
-Given a set of spatio (temporal) locations and data, the procedure select the spatial or spatiotemporal ouliers
-using a specific algorithm.
+Detects outliers in a univariate purely spatial data set using the selected local procedure. Space-time and bivariate outlier detection are not currently implemented.
 }
 \usage{
 GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, 
@@ -12,9 +11,7 @@ GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
  method="Z-Median", radius=1, bivariate=FALSE,X=NULL)
 }
 \arguments{
- \item{data}{An optional \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
- or a (\eqn{t \times d}{t x d})-matrix (a single spatio-temporal realisation) or an (\eqn{d \times d \times t \times n }{d x d x t})-array
- (a single spatio-temporal realisation on regular grid).}
+ \item{data}{A numeric vector containing a single spatial realization, or a matrix representing a single spatial realization on a regular grid. Space-time data are not currently supported.}
  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix 
  Coordinates on a sphere for a fixed radius \code{radius} 
  are passed in lon/lat format expressed in decimal degrees.}
@@ -23,20 +20,14 @@ GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
 
- \item{coordt}{A numeric vector giving 1-dimension of
- temporal coordinates. Optional argument, the default is \code{NULL}
- then a spatial RF is expected.}
+ \item{coordt}{Retained for API compatibility. \code{GeoOutlier} is currently implemented only for purely spatial data and rejects space-time input.}
 
- \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
- containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}
- }
+ \item{coordx_dyn}{Retained for API compatibility. Dynamic space-time coordinates are not currently implemented.}
 
  \item{distance}{String; the name of the spatial distance. The default
  is \code{Eucl}, the Euclidean distance. See \code{\link{GeoFit}} for details.}
 
- \item{grid}{Logical; if \code{FALSE} (the default) the data
- are interpreted as spatial or spatio-temporal realisations on a set
- of non-equispaced spatial sites (irregular grid).}
+ \item{grid}{Logical; if \code{FALSE} (the default), the data are interpreted as a spatial realization on explicit, possibly non-equispaced, spatial sites.}
 
  \item{neighb}{Numeric; an optional positive integer indicating the 
  order of neighborhoodused for Z-Median algorithm.}
@@ -47,14 +38,14 @@ GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
 \item{radius}{Numeric; a value indicating the radius of the sphere when using the great 
  circle distance. Default value is 1.} 
 
- \item{bivariate}{If TRUE then data is considered as spatial bivariate data.}
+ \item{bivariate}{Retained for API compatibility. Bivariate outlier detection is not currently implemented and \code{TRUE} is rejected.}
 
- \item{X}{Numeric; an optional Matrix of spatio (temporal) covariates.}
+ \item{X}{Numeric; an optional matrix of spatial covariates with one row per observation.}
 }
 
 
 \value{
- Return a matrix or a list containing the dected spatial or spatio-temporal outliers
+ Returns a matrix containing the detected spatial outliers
 }
 
 \references{
@@ -66,4 +57,12 @@ GeoOutlier(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL,
 \author{Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},\url{https://sites.google.com/view/moreno-bevilacqua/home},
 Víctor Morales Oñate, \email{victor.morales@uv.cl}, \url{https://sites.google.com/site/moralesonatevictor/},
 Christian Caamaño-Carrillo, \email{chcaaman@ubiobio.cl},\url{https://www.researchgate.net/profile/Christian-Caamano}
+}
+
+\section{Three-dimensional coordinates}{
+Purely spatial irregular coordinates may be supplied as an
+\eqn{N \times 3} matrix or as separate \code{coordx}, \code{coordy}, and
+\code{coordz} vectors. Three-dimensional coordinates require
+\code{distance = "Eucl"}. Space-time and bivariate outlier detection are
+not implemented.
 }

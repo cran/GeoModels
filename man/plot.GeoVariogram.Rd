@@ -1,11 +1,11 @@
 \name{plot.GeoVariogram}
 \alias{plot.GeoVariogram}
 \encoding{UTF-8}
-\title{Plot empirical spatial, spatio-temporal and spatial bivariate semi-Variogram}
+\title{Plot empirical spatial, spatio-temporal and bivariate semivariograms}
 
 \description{
- Plot empirical spatial, spatio-temporal and spatial bivariate semi-Variogram using 
- on object \code{\link{GeoVariogram}}.
+ Plot an empirical spatial, spatio-temporal, or bivariate semivariogram
+ returned by \code{\link{GeoVariogram}}.
 }
 
 \usage{
@@ -19,8 +19,10 @@
 }
 
 \details{
- This function plots empirical semi variogram in the spatial, spatio-temporal and spatial
- bivariate case
+ Spatial objects are shown as a standard lag plot. Spatio-temporal objects
+ show the empirical surface and its spatial and temporal margins. Bivariate
+ objects show the two marginal semivariograms and the cross-semivariogram;
+ missing empirical bins are handled as \code{NA}.
 }
 
 \value{

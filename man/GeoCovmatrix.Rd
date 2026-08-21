@@ -4,33 +4,32 @@
 \title{Spatial and Spatio-temporal Covariance Matrix of (non-)Gaussian random fields}
 \description{
  The function computes the covariance matrix associated to
- a spatial or spatio-temporal or a bivariate spatial Gaussian or non-Gaussian random field
+ a spatial or spatio-temporal Gaussian or supported non-Gaussian random field
  with given underlying covariance model and a set of spatial location sites (and temporal instants).
 }
 \usage{
-GeoCovmatrix(estobj = NULL, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+GeoCovmatrix(estobj = NULL, coordx = NULL, coordy = NULL, coordz = NULL, coordt = NULL,
  coordx_dyn = NULL, corrmodel, distance = "Eucl", grid = FALSE,
  model = "Gaussian", n = 1, param, anisopars = NULL, radius = 1,
- sparse = FALSE, copula = NULL, X = NULL, spobj = NULL)
+ sparse = FALSE, copula = NULL, X = NULL, spobj = NULL,
+ check.duplicates = FALSE)
 }
 \arguments{
  \item{estobj}{An object of class \code{Geofit} that includes information about data, model and estimates.}
  \item{coordx}{A numeric (\eqn{d \times 2})-matrix or (\eqn{d \times 3})-matrix.
  Coordinates on a sphere for a fixed radius \code{radius}
- are passed in lon/lat format expressed in decimal degrees.}
+ are passed in lon/lat format expressed in decimal degrees. The default is \code{NULL};
+ this is useful when coordinates are supplied through \code{coordx_dyn}, \code{estobj}, or \code{spobj}.}
  \item{coordy}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, the default is \code{NULL}.}
- \item{coordt}{A numeric vector giving 1-dimension of temporal coordinates.
- At the moment implemented only for the Gaussian case. Optional argument, the default is \code{NULL}
- then a spatial random field is expected.}
- \item{coordx_dyn}{A list of \eqn{T} numeric (\eqn{d_t \times 2})-matrices
- containing dynamical (in time) coordinates. Optional argument, the default is \code{NULL}.}
+ \item{coordt}{A numeric vector giving one dimension of temporal coordinates. Optional argument; the default is \code{NULL}, in which case a spatial random field is expected. At the moment implemented only for the Gaussian case. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
+ \item{coordx_dyn}{For dynamic locations, a list of length \eqn{T}, where \eqn{T} is \code{length(coordt)}.  Element \code{coordx_dyn[[t]]} contains the two- or three-dimensional locations at \code{coordt[t]}; covariance-matrix rows and columns concatenate these blocks by time.}
  \item{corrmodel}{String; the name of a correlation model; see \code{\link{GeoCovmatrix}} for the list of implemented correlation models.}
  \item{distance}{String; the name of the spatial distance. The default is \code{"Eucl"}, the Euclidean distance. See \code{\link{GeoFit}}.}
  \item{grid}{Logical; if \code{FALSE} (the default) the data
  are interpreted as spatial or spatio-temporal realisations on a set
  of non-equispaced spatial sites (irregular grid). See \code{\link{GeoFit}}.}
- \item{n}{Numeric; the number of trials in a binomial random field. Default is \eqn{1}.}
+ \item{n}{Positive integer size parameter. For a direct Binomial random field it may be a scalar or one value per observation. For a direct Negative-Binomial random field it is the common number \eqn{r} of successes and must be scalar; the Geometric model is the special case \eqn{r=1}. Default is \eqn{1}.}
  \item{model}{String; the type of random field. See \code{\link{GeoFit}}.}
  \item{param}{A list of parameter values required for the covariance model.}
  \item{anisopars}{A list of two elements \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively.}
@@ -39,10 +38,23 @@ GeoCovmatrix(estobj = NULL, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{sparse}{Logical; if \code{TRUE} the function returns an object of class \code{spam}.
  This option should be used when a parametric compactly supported covariance is
  used. Default is \code{FALSE}.}
- \item{copula}{String; the type of copula. It can be \code{"Clayton"} or \code{"Gaussian"}.}
- \item{X}{Numeric; matrix of space-time covariates.}
- \item{spobj}{An object of class \code{sp} or \code{spacetime}.}
+ \item{copula}{String; optional copula specification. Observed-scale covariance-matrix construction is implemented for \code{"Gaussian"}, \code{"Clayton"}, and \code{"SkewGaussian"} for the supported continuous copula margins.}
+ \item{X}{Numeric design matrix used to evaluate the mean when required by the marginal covariance.  For fixed sites, rows follow time-major order; for dynamic sites, supply a stacked matrix in temporal-block order or a list aligned with \code{coordx_dyn}.}
+ \item{spobj}{An object of class \code{sp} or \code{spacetime}. For space-time objects, the current \code{sp2Geo()} conversion uses sequential temporal indices and does not preserve irregular original time spacing; to retain irregular temporal distances, use the explicit-coordinate interface with numeric \code{coordt}.}
+\item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
+\section{Spatio-temporal ordering}{
+For fixed locations, covariance rows and columns are ordered
+\preformatted{
+(s[1], t[1]), ..., (s[N], t[1]),
+(s[1], t[2]), ..., (s[N], t[2]), ...
+}
+For dynamic locations, all rows of \code{coordx_dyn[[1]]} come first, then all
+rows of \code{coordx_dyn[[2]]}, and so on.  The rows of \code{X} and an
+external \code{param$mean} vector use this same order.  See
+\code{\link{GeoModels-spacetime-ordering}}.
+}
+
 \value{
  Returns an object of class \code{GeoCovmatrix}.
  An object of class \code{GeoCovmatrix} is a list containing
@@ -57,19 +69,35 @@ GeoCovmatrix(estobj = NULL, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \code{sparse} is \code{TRUE}.}
  \item{corrmodel}{String: the correlation model.}
  \item{distance}{String: the type of spatial distance.}
- \item{grid}{Logical: \code{TRUE} if the spatial data are on a regular grid, otherwise \code{FALSE}.}
+ \item{grid}{Logical: the value supplied by the user, indicating whether the original spatial coordinates described a regular grid.}
  \item{nozero}{In the case of tapered matrix the percentage of non-zero values in the
  covariance matrix; otherwise \code{NULL}.}
- \item{n}{The number of trials for binomial random fields.}
+ \item{n}{The Binomial number of trials, or the common Negative-Binomial number \eqn{r} of successes.}
  \item{namescorr}{String: the names of the correlation parameters.}
  \item{numcoord}{Numeric: the number of spatial coordinates.}
  \item{numtime}{Numeric: the number of temporal coordinates.}
  \item{model}{The type of RF, see \code{\link{GeoFit}}.}
- \item{param}{Numeric: the covariance parameters.}
+ \item{param}{Numeric: the scalar covariance and marginal parameters.}
+ \item{mean_external}{For a univariate model, the optional known mean vector supplied through \code{param$mean}. It is stored separately from \code{param}, in observation order, so that covariance and prediction routines do not interpret its entries as regression coefficients.}
  \item{spacetime}{\code{TRUE} if spatio-temporal and \code{FALSE} if spatial covariance model.}
  \item{sparse}{Logical: is the returned object of class \code{spam}?}
+ \item{call}{The matched call used to create the object.}
 }
 \details{
+
+
+For plain (non-copula) bivariate correlation models, observed-scale covariance is currently validated only for Gaussian margins; unsupported non-Gaussian bivariate combinations are rejected explicitly. For direct Negative-Binomial fields, the public argument \code{n} denotes the single common integer \eqn{r} in the waiting-time construction.
+For \code{copula="Gaussian"}, \code{copula="Clayton"}, and \code{copula="SkewGaussian"}, continuous-margin covariance matrices are constructed directly on the observed scale. The implementation supports \code{"Gaussian"}, \code{"StudentT"}, \code{"LogGaussian"}, \code{"Gamma"}, \code{"Weibull"}, \code{"Beta"}, \code{"Beta2"}, \code{"Kumaraswamy"}, \code{"Kumaraswamy2"}, \code{"Logistic"}, \code{"SkewLaplace"}, \code{"Tukeyh"}, \code{"Tukeyh2"}, and \code{"SinhAsinh"}. Under the Gaussian copula, covariance for the last three is evaluated with the exact covariance of the corresponding monotone transformed-Gaussian field. For location-dependent copula margins, pairwise covariances use the two site-specific marginal predictors supplied through \code{X} or an external mean vector. Clayton-like covariance uses cached deterministic copula quadrature; skew-Gaussian covariance uses a cached bivariate Hermite expansion of the latent representation, avoiding pair-by-pair adaptive two-dimensional integration. The count margins \code{"Poisson"}, \code{"Binomial"}, and \code{"BinomialNeg"} are also available for Gaussian, Clayton-like, and skew-Gaussian copula covariance in the global prediction path; Binomial currently requires a common trial count \code{n}.
+The same observed-scale covariance engines are used by \code{\link{GeoCovariogram}} and \code{\link{GeoKrig}}, so covariance matrices, fitted semivariogram curves, and linear prediction are numerically consistent.
+
+
+For univariate models whose covariance depends on the marginal location, the
+mean is evaluated as \eqn{X\beta}, where coefficients \code{mean},
+\code{mean1}, and so on correspond in order to the columns of \code{X}.  With
+\code{X=NULL}, an intercept-only design is used.  A vector
+\code{param$mean} may instead supply one known mean per observation and is
+mutually exclusive with \code{X}.
+
  In the spatial case, the covariance matrix of the
  random vector \deqn{[Z(s_1),\ldots,Z(s_n)]^T}
  with a specific spatial covariance model is computed. Here \eqn{n} is the number of spatial location sites.
@@ -78,9 +106,12 @@ GeoCovmatrix(estobj = NULL, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  random vector \deqn{[Z(s_1,t_1),Z(s_2,t_1),\ldots,Z(s_n,t_1),\ldots,Z(s_n,t_m)]^T}
  with a specific space-time covariance model is computed. Here \eqn{m} is the number of temporal instants.
 
- In the bivariate case, the covariance matrix of the
- random vector \deqn{[Z_1(s_1),Z_2(s_1),\ldots,Z_1(s_n),Z_2(s_n)]^T}
- with a specific spatial bivariate covariance model is computed.
+ In the bivariate case, rows and columns are in variable-block order.
+ For common locations the covariance matrix is associated with
+ \deqn{[Z_1(s_1),\ldots,Z_1(s_n),Z_2(s_1),\ldots,Z_2(s_n)]^T.}
+ For heterotopic locations supplied by \code{coordx_dyn=list(coords1,coords2)},
+ the first block contains all observations of variable 1 at \code{coords1}
+ and the second contains all observations of variable 2 at \code{coords2}.
 
  The location site \eqn{s_i} can be a point in the \eqn{d}-dimensional Euclidean space with \eqn{d=2} or \eqn{d=3}
  or a point (given in lon/lat degree format) on a sphere of arbitrary radius.

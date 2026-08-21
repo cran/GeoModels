@@ -15,7 +15,7 @@ coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
  loc, neighb=NULL,maxdist=NULL,
  maxtime=NULL, radius=1, time=NULL, 
  X=NULL,M=NULL,spobj=NULL,spdata=NULL,
- parallel=FALSE,ncores=NULL)
+ parallel=FALSE,ncores=6,check.duplicates=FALSE)
 }
 \arguments{
  \item{data}{An optional \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
@@ -29,9 +29,7 @@ coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
- \item{coordt}{A numeric vector giving 1-dimension of
- temporal coordinates. Optional argument, the default is \code{NULL}
- then a spatial RF is expected.}
+ \item{coordt}{A numeric vector giving one dimension of the observation-time coordinates. Optional argument; the default is \code{NULL}, in which case a spatial random field is expected. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
  containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}
  }
@@ -48,20 +46,23 @@ coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
  \item{maxdist}{Numeric; a positive value indicating the maximum
  spatial distance considered in the spatial neighborhood
  selection.}
- \item{maxtime}{Numeric; an optional positive integer indicating the 
- order of temporal neighborhood.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal-distance threshold, expressed in the same units as \code{coordt}.}
  \item{radius}{Numeric; a value indicating the radius of the sphere when using the great 
  circle distance. Default value is 1.} 
- \item{time}{Numeric; a value giving the temporal instant for which a neighborhood is computed.}
+ \item{time}{Numeric; the temporal coordinate at which the neighborhood is requested, interpreted on the same numeric time scale as \code{coordt}.}
  \item{X}{Numeric; an optional Matrix of spatio (temporal) covariates.}
  \item{M}{Numeric; an estimated spatio (temporal) mean vector.}
- \item{spobj}{An object of class sp or spacetime}
+ \item{spobj}{An object of class \code{sp} or \code{spacetime}. For space-time objects, the current \code{sp2Geo()} conversion uses sequential temporal indices and does not preserve irregular original time spacing; to retain irregular temporal distances, use the explicit-coordinate interface with numeric \code{coordt}.}
  \item{spdata}{Character:The name of data in the sp or spacetime object}
- \item{parallel}{Logical; if \code{TRUE} then parallelizzation is used}
- \item{ncores}{Numeric; number of cores involved in parallelization.} 
+ \item{parallel}{Logical; default \code{FALSE}. Set \code{TRUE} to enable parallel execution where supported.}
+ \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and the number of available jobs. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free.}
+\item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
 
 
+\details{
+Observed locations are checked for exact duplicates before neighborhood construction. In space-time data, the same spatial site may occur at different times, but duplicate space-time observations are not allowed.
+}
 \value{
  Returns a list containing the following information:
  \item{coordx}{A list of the matrix coordinates of the computed spatial neighborhood ;}

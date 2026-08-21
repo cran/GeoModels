@@ -1,8 +1,8 @@
-GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = NULL,
                           coordx_dyn = NULL,
                           distance = "Eucl", neighb = 4, maxdist = NULL,
                           maxtime = 1, radius = 1, bivariate = FALSE,
-                          p_neighb = 1, thin_method = "bernoulli")
+                          p_neighb = 1, thin_method = "bernoulli", check.duplicates = FALSE)
 {
   ##############################################################
   ## Checks
@@ -21,6 +21,14 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
   }
 
   K <- as.integer(neighb)
+
+  .GeoCheckDuplicateLocations(
+    coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+    coordx_dyn = coordx_dyn,
+    spacetime = !isTRUE(bivariate) && !is.null(coordt),
+    bivariate = isTRUE(bivariate), grid = FALSE,
+    context = "GeoNeighIndex", check.duplicates = check.duplicates
+  )
 
   ## Canonical thinning-method names.
   ## Accepted inputs include "bernoulli", "Bernoulli",
@@ -46,11 +54,39 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     targetbalanced = "FixedBudget"
   )
  
-  indices <- function(nn_idx, nn_dists, drop_first = FALSE) {
+  indices <- function(nn_idx, nn_dists, drop_first = FALSE, x_equals_y = FALSE) {
 
     if (drop_first) {
-      nn_idx   <- nn_idx[, -1, drop = FALSE]
-      nn_dists <- nn_dists[, -1, drop = FALSE]
+      n <- nrow(nn_idx)
+      kout <- max(0L, ncol(nn_idx) - 1L)
+
+      ## Fast normal case: nabor returns the query point itself first.
+      ## With duplicated coordinates/ties this ordering is not guaranteed,
+      ## so remove the actual target index rather than blindly dropping col 1.
+      if (isTRUE(x_equals_y) &&
+          length(nn_idx) &&
+          all(nn_idx[, 1L] == seq_len(n))) {
+        nn_idx   <- nn_idx[, -1L, drop = FALSE]
+        nn_dists <- nn_dists[, -1L, drop = FALSE]
+      } else if (isTRUE(x_equals_y)) {
+        out_idx <- matrix(0L, nrow = n, ncol = kout)
+        out_dst <- matrix(NA_real_, nrow = n, ncol = kout)
+        if (kout > 0L) {
+          for (ii in seq_len(n)) {
+            keep <- which(nn_idx[ii, ] > 0L & nn_idx[ii, ] != ii)
+            if (length(keep)) {
+              keep <- keep[seq_len(min(kout, length(keep)))]
+              out_idx[ii, seq_along(keep)] <- nn_idx[ii, keep]
+              out_dst[ii, seq_along(keep)] <- nn_dists[ii, keep]
+            }
+          }
+        }
+        nn_idx <- out_idx
+        nn_dists <- out_dst
+      } else {
+        nn_idx   <- nn_idx[, -1L, drop = FALSE]
+        nn_dists <- nn_dists[, -1L, drop = FALSE]
+      }
     }
 
     k <- ncol(nn_idx)
@@ -83,44 +119,40 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     K <- as.integer(K)
     K <- min(K, n_x, n_y)
 
-    project_coords <- function(coords) {
-
-      prj <- mapproj::mapproject(
-        coords[, 1],
-        coords[, 2],
-        projection = "sinusoidal"
-      )
-
-      radius * cbind(prj$x, prj$y)
+    sphere_xyz <- function(coords) {
+      lon <- coords[, 1L] * pi / 180
+      lat <- coords[, 2L] * pi / 180
+      clat <- cos(lat)
+      cbind(clat * cos(lon), clat * sin(lon), sin(lat))
     }
 
-    if (is.null(maxdist)) {
-
-      nearest <- nabor::knn(x, y, k = K)
-
-    } else {
-
-      if (distance %in% c(1, 2)) {
-
-        x_proj <- project_coords(x)
-        y_proj <- project_coords(y)
-
-        nearest <- nabor::knn(
-          x_proj,
-          y_proj,
-          k = K,
-          radius = maxdist
-        )
-
-      } else {
-
-        nearest <- nabor::knn(
-          x,
-          y,
-          k = K,
-          radius = maxdist
-        )
+    if (distance %in% c(1, 2)) {
+      if (!requireNamespace("fields", quietly = TRUE)) {
+        stop("Package 'fields' is required by GeoNeighIndex() for geodesic or chordal distance.",
+             call. = FALSE)
       }
+      ## Select spherical neighbours in 3D unit-sphere coordinates.  Chordal
+      ## distance is monotone in great-circle distance, so this produces the
+      ## correct NN ordering globally (including dateline/polar cases), unlike
+      ## longitude/latitude or a planar projection.
+      x_nn <- sphere_xyz(x)
+      y_nn <- sphere_xyz(y)
+
+      if (is.null(maxdist)) {
+        nearest <- nabor::knn(x_nn, y_nn, k = K)
+      } else {
+        if (!is.finite(radius) || radius <= 0) stop("radius must be positive")
+        radius_nn <- if (distance == 2) {
+          2 * sin(0.5 * pmin(pi, maxdist / radius))
+        } else {
+          pmin(2, maxdist / radius)
+        }
+        nearest <- nabor::knn(x_nn, y_nn, k = K, radius = radius_nn)
+      }
+    } else if (is.null(maxdist)) {
+      nearest <- nabor::knn(x, y, k = K)
+    } else {
+      nearest <- nabor::knn(x, y, k = K, radius = maxdist)
     }
 
     if (distance %in% c(1, 2)) {
@@ -160,7 +192,8 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     sol <- indices(
       nearest$nn.idx,
       nearest$nn.dists,
-      drop_first = drop_first
+      drop_first = drop_first,
+      x_equals_y = x_equals_y
     )
 
     if (!is.null(maxdist)) {
@@ -280,8 +313,10 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
         to <- (from + 1L):nt
         lag_time <- abs(ct[to] - ct[from])
+        ttol <- 100 * .Machine$double.eps *
+          pmax(1, abs(ct[to]), abs(ct[from]))
 
-        keep <- is.finite(lag_time) & lag_time > 0 & lag_time <= maxtime
+        keep <- is.finite(lag_time) & lag_time > 0 & lag_time <= maxtime + ttol
 
         if (!any(keep)) {
           next
@@ -347,6 +382,35 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       )
     }
 
+    same_location_pairs <- function(ref, query) {
+      if (ncol(ref) != ncol(query) || !nrow(ref) || !nrow(query)) {
+        return(list(tar = integer(0L), nei = integer(0L)))
+      }
+
+      scale <- suppressWarnings(max(abs(c(ref, query)), na.rm = TRUE))
+      if (!is.finite(scale) || scale < 1) scale <- 1
+      tol <- 100 * .Machine$double.eps * scale
+
+      available <- seq_len(nrow(ref))
+      tar <- integer(0L)
+      nei <- integer(0L)
+
+      for (i in seq_len(nrow(query))) {
+        if (!length(available)) break
+        delta <- abs(sweep(ref[available, , drop = FALSE], 2L,
+                           query[i, ], FUN = "-"))
+        dmax <- apply(delta, 1L, max)
+        jpos <- which.min(dmax)
+        if (length(jpos) && is.finite(dmax[jpos]) && dmax[jpos] <= tol) {
+          tar <- c(tar, i)
+          nei <- c(nei, available[jpos])
+          available <- available[-jpos]
+        }
+      }
+
+      list(tar = tar, nei = nei)
+    }
+
     out <- list()
     out_i <- 1L
 
@@ -383,6 +447,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
     if (nrow(time_pairs) == 0L) {
 
+      if (!length(out)) return(matrix(numeric(0L), nrow = 0L, ncol = 4L))
       sol <- do.call(rbind, out)
 
       ok <- is.finite(sol[, 1]) &
@@ -402,17 +467,19 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       t_from <- time_pairs$from[rr]
       t_to   <- time_pairs$to[rr]
 
-      bb <- min(ns[t_from], ns[t_to])
-
-      if (bb <= 0L) {
-        next
+      if (is.null(coordx_dyn)) {
+        bb <- min(ns[t_from], ns[t_to])
+        if (bb <= 0L) next
+        same <- list(tar = seq_len(bb), nei = seq_len(bb))
+      } else {
+        same <- same_location_pairs(getX(t_from), getX(t_to))
+        bb <- length(same$tar)
+        if (bb <= 0L) next
       }
 
-      ii <- seq_len(bb)
-
       out[[out_i]] <- cbind(
-        glob(ii, t_to),
-        glob(ii, t_from),
+        glob(same$tar, t_to),
+        glob(same$nei, t_from),
         rep.int(time_pairs$lag_time[rr], bb),
         rep.int(0, bb)
       )
@@ -458,6 +525,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       }
     }
 
+    if (!length(out)) return(matrix(numeric(0L), nrow = 0L, ncol = 4L))
     sol <- do.call(rbind, out)
 
     ok <- is.finite(sol[, 1]) &
@@ -474,6 +542,37 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
   bivariate_index <- function(coords, coordx_dyn = NULL, N, K = 4,
                               maxdist, distance, radius) {
+
+    ## Build every bivariate pair block with the same five-column schema.
+    ## In particular, an empty block must be a 0 x 5 matrix: base::cbind()
+    ## would otherwise drop zero-length vectors and retain only scalar
+    ## columns, causing rbind() failures when no positive-lag cross pair
+    ## exists (for example, coincident grids with neighb = 1).
+    pair_block <- function(rowidx, colidx, first, second, lags) {
+
+      n <- length(rowidx)
+
+      if (length(colidx) != n || length(lags) != n) {
+        stop("Internal error: inconsistent bivariate pair-block lengths.")
+      }
+
+      if (n == 0L) {
+        out <- matrix(numeric(0L), nrow = 0L, ncol = 5L)
+        colnames(out) <- c("rowidx", "colidx", "first", "second", "lag")
+        return(out)
+      }
+
+      out <- cbind(
+        as.integer(rowidx),
+        as.integer(colidx),
+        rep.int(as.integer(first), n),
+        rep.int(as.integer(second), n),
+        as.numeric(lags)
+      )
+
+      colnames(out) <- c("rowidx", "colidx", "first", "second", "lag")
+      out
+    }
 
     if (length(K) == 3L) {
       K1 <- K[1]
@@ -525,7 +624,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         x_equals_y = TRUE
       )
 
-      aa1 <- cbind(
+      aa1 <- pair_block(
         inf1$rowidx,
         inf1$colidx,
         0L,
@@ -544,7 +643,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         x_equals_y = TRUE
       )
 
-      aa2 <- cbind(
+      aa2 <- pair_block(
         inf2$rowidx + n_half,
         inf2$colidx + n_half,
         1L,
@@ -568,7 +667,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         (inf21$colidx > 0) &
         (inf21$rowidx > 0)
 
-      aa_cross <- cbind(
+      aa_cross <- pair_block(
         inf21$rowidx[sel],
         inf21$colidx[sel] + n_half,
         0L,
@@ -578,12 +677,12 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
       ii <- seq_len(n_half)
 
-      aa_coll <- cbind(
+      aa_coll <- pair_block(
         ii,
         ii + n_half,
         0L,
         1L,
-        0
+        rep.int(0, length(ii))
       )
 
       return(rbind(
@@ -618,7 +717,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       x_equals_y = TRUE
     )
 
-    aa1 <- cbind(
+    aa1 <- pair_block(
       inf1$rowidx,
       inf1$colidx,
       0L,
@@ -637,7 +736,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       x_equals_y = TRUE
     )
 
-    aa2 <- cbind(
+    aa2 <- pair_block(
       inf2$rowidx + n1,
       inf2$colidx + n1,
       1L,
@@ -661,7 +760,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       (inf_cross$colidx > 0) &
       (inf_cross$rowidx > 0)
 
-    aa_cross <- cbind(
+    aa_cross <- pair_block(
       inf_cross$rowidx[sel],
       inf_cross$colidx[sel] + n1,
       0L,
@@ -678,12 +777,12 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
       ii <- seq_len(n1)
 
-      aa_coll <- cbind(
+      aa_coll <- pair_block(
         ii,
         ii + n1,
         0L,
         1L,
-        0
+        rep.int(0, length(ii))
       )
 
     } else {
@@ -707,9 +806,10 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         is.finite(nn12$colidx) &
         (nn12$rowidx > 0) &
         (nn12$colidx > 0) &
-        is.finite(l12)
+        is.finite(l12) &
+        (l12 == 0)
 
-      aa_coll <- cbind(
+      aa_coll <- pair_block(
         nn12$rowidx[selc],
         nn12$colidx[selc] + n1,
         0L,
@@ -1071,15 +1171,28 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       stop("For bivariate = TRUE with common coordinates, coordx must have an even number of rows.")
     }
 
+    .GeoValidate3D(
+      coordx = coords,
+      distance = c("Eucl", "Chor", "Geod")[distance + 1L],
+      context = "GeoNeighIndex"
+    )
+
     numcoord <- nrow(coords)
 
   } else {
 
-    if (!is.list(coordx_dyn)) {
-      stop("coordx_dyn must be a list.")
-    }
+    coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+      coordx_dyn,
+      coordt = if (!bivariate) coordt else NULL,
+      context = "GeoNeighIndex"
+    )
 
     if (!bivariate) {
+      .GeoValidate3D(
+        coordx_dyn = coordx_dyn,
+        distance = c("Eucl", "Chor", "Geod")[distance + 1L],
+        context = "GeoNeighIndex"
+      )
       coords <- NULL
       numcoord <- nrow(coordx_dyn[[1L]])
     } else {
@@ -1272,7 +1385,7 @@ GeoNeighIndex <- function(coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
 
     K_target <- as.integer(round(p_neighb * n_all))
-    K_target <- max(1L, min(K_target, n_all))
+    K_target <- max(0L, min(K_target, n_all))
 
     stratum_id <- make_stratum_id(gb)
 

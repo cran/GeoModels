@@ -62,7 +62,7 @@ void Comp_Cond_Tukeyhh2mem_aniso(int *cormod, double *coord1, double *coord2,dou
     double nugget=nuis[0];
     double h1=nuis[3];
     double h2=nuis[2];
-      if( sill<0||h1<0||h1>0.5||h2<0||h2>0.5||nugget<0||nugget>=1){*res=LOW; return;}
+      if( sill<=0||h1<0||h1>=0.5||h2<0||h2>=0.5||nugget<0||nugget>=1){*res=LOW; return;}
         for(i=0;i<*npairs;i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
              
@@ -447,11 +447,10 @@ void Comp_Cond_Gauss_misp_Pois2mem_aniso(int *cormod, double *coord1, double *co
     double  weights=1.0,corr,corr1,mui,muj,bl,l2,lag=0.0;
     double nugget=nuis[0];
       if(nugget<0||nugget>=1){*res=LOW; return;}
-double **M;
-        M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
+    double M0[2] = {0.0, 0.0};
+    double M1[2] = {0.0, 0.0};
+    double *M[2] = {M0, M1};
+    double dat[2] = {0.0, 0.0};
     for(i=0;i<*npairs;i++){
 
                   if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
@@ -468,9 +467,6 @@ double **M;
 
                       *res+= bl*weights;
                     }}
-   for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
-
     if(!R_FINITE(*res))  *res = LOW;
     return;
 }
@@ -484,11 +480,10 @@ void Comp_Cond_BinomNNGauss_misp2mem_aniso(int *cormod, double *coord1, double *
     double p1=0.0,p2=0.0;//probability of marginal success
     double p11=0.0;//probability of joint success
 
-    double **M;
-    M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
+    double M0[2] = {0.0, 0.0};
+    double M1[2] = {0.0, 0.0};
+    double *M[2] = {M0, M1};
+    double dat[2] = {0.0, 0.0};
 
     double nugget=nuis[0];
     if( nugget>=1 || nugget<0){*res=LOW; return;}
@@ -512,77 +507,85 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                  bl= log(dNnorm(N,M,dat)) -l2; 
                  *res+= bl*weights;       
                 }}
-    for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
     if(!R_FINITE(*res))*res = LOW;
     return;
 }
 
-void Comp_Cond_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1,
+                                              double *coord2, double *data1,
+                                              double *data2, int *N1, int *N2,
+                                              double *par, int *weigthed,
+                                              double *res, double *mean1,
+                                              double *mean2, double *nuis,
+                                              int *type_cop, int *cond)
 {
-    int i=0,N=2;
-    double  weights=1.0,corr,corr1,mui,muj,bl,l2,bi,bj,vvi,vvj,lag=0.0;
-    double nugget=nuis[0];
-      if(nugget<0||nugget>=1){*res=LOW; return;}
-double **M;
-        M= (double **) R_Calloc(N,double *);
-    for(i=0;i<N;i++){M[i]=(double *) R_Calloc(N,double);}
-    double *dat;
-    dat=(double *) R_Calloc(N,double);
-    for(i=0;i<*npairs;i++){
-
-                  if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-             //***********/
-                    mui=exp(mean1[i]);muj=exp(mean2[i]);
-                    bi= nuis[2]/mui; bj= nuis[2]/muj;
-                    vvi= mui*(1+1/bi); vvj= muj*(1+1/bj);
-                      lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]); 
-                     corr=CorFct(cormod,lag,0,par,0,0)*(1-nugget);
-                      corr1=corr_pois_gen(corr,mui, muj, nuis[2]);
-                      if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                        M[0][0]=vvi; M[1][1]=vvj;M[0][1]=sqrt(vvi*vvj)*corr1;M[1][0]= M[0][1];
-                        dat[0]=data1[i]-mui;dat[1]=data2[i]-muj;
-                      l2=dnorm(data2[i],muj,sqrt(vvj),1);;
-                      bl=log(dNnorm(N,M,dat))-l2;
-                      *res+= bl*weights;
-                    }}
-   for(i=0;i<N;i++)  {R_Free(M[i]);}
-    R_Free(M);
-
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget = nuis[0], shape = nuis[2];
+    if (!R_FINITE(nugget) || nugget < 0.0 || nugget >= 1.0 ||
+        !R_FINITE(shape) || !(shape > 0.0) || !npairs) { *res = LOW; return; }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) continue;
+        if (!R_FINITE(data1[i]) || !R_FINITE(data2[i]) ||
+            !R_FINITE(mean1[i]) || !R_FINITE(mean2[i]) ||
+            mean1[i] > 700.0 || mean2[i] > 700.0) { *res = LOW; return; }
+        const double mi = exp(mean1[i]), mj = exp(mean2[i]);
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        const double weight = weigthed[0] ? CorFunBohman(lag, maxdist[0]) : 1.0;
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double base = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(base) || fabs(base) > 1.0 + 1e-8) { *res = LOW; return; }
+        double rho = lag <= 0.0 ? fmax2(-1.0, fmin2(1.0, base))
+                                : (1.0 - nugget) * base;
+        if (rho >= 1.0) rho = 1.0 - 1e-15;
+        if (rho <= -1.0) rho = -1.0 + 1e-15;
+        const double ll = GeoPGGaussLogConditional(rho, data1[i], data2[i],
+                                                    mi, mj, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
 }
+
 
 /*********************************************************/
-void Comp_Cond_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond)
+void Comp_Cond_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,
+                                   double *data1, double *data2, int *N1, int *N2,
+                                   double *par, int *weigthed, double *res,
+                                   double *mean1, double *mean2, double *nuis,
+                                   int *type_cop, int *cond)
 {
-    int i=0, uu,ww;
-    double weights=1.0,corr,mui,muj,bl,l2,lag=0.0;
-    double nugget=nuis[0];
-
-      if(nugget<0||nugget>=1){*res=LOW; return;}
-  // Rprintf("%d   \n",*npairs);
-      for(i=0;i<*npairs;i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-                    mui=exp(mean1[i]);muj=exp(mean2[i]);
-                      lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]); 
-                     corr=CorFct(cormod,lag,0,par,0,0);
-                    // if(fabs(corr)>1|| !R_FINITE(corr)) {*res=LOW; return;}
-                        if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                      uu=(int) data1[i];  ww=(int) data2[i];
-                    //  l1=one_log_dpoisgamma(uu,mui,nuis[2]);
-                      l2=one_log_dpoisgamma(ww,muj,nuis[2]);
-         //bl=2*log(biv_PoissonGamma((1-nugget)*corr,uu,ww,mui, muj,nuis[2]))  - (l1+l2);
-         bl=log(biv_PoissonGamma((1-nugget)*corr,uu,ww,mui, muj,nuis[2]))  - l2;
-                      *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget = nuis[0], shape = nuis[2];
+    if (!R_FINITE(nugget) || nugget < 0.0 || nugget >= 1.0 ||
+        !R_FINITE(shape) || !(shape > 0.0) || !npairs) { *res = LOW; return; }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        int r, t; double mi, mj;
+        const int prep = GeoPGPreparePairAt(i, data1[i], data2[i], mean1[i], mean2[i],
+                                             &r, &t, &mi, &mj);
+        if (prep == 0) continue;
+        if (prep < 0) { *res = LOW; return; }
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        const double weight = weigthed[0] ? CorFunBohman(lag, maxdist[0]) : 1.0;
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double base = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(base) || fabs(base) > 1.0 + 1e-8) { *res = LOW; return; }
+        double rho = lag <= 0.0 ? fmax2(-1.0, fmin2(1.0, base))
+                                : (1.0 - nugget) * base;
+        if (lag > 0.0 && rho >= 1.0) rho = 1.0 - 1e-15;
+        if (lag > 0.0 && rho <= -1.0) rho = -1.0 + 1e-15;
+        const double ll = GeoPGLogConditional(rho, r, t, mi, mj, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
 }
+
 /*********************************************************/
 void Comp_Cond_Pois2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
@@ -753,8 +756,7 @@ void Comp_Cond_BinomnegGauss2mem_aniso(int *cormod, double *coord1, double *coor
     }
     /* FIX 3: dimensione sicura */
     int cache_size = N + 2 * MAX_UV + 10;
-    double *lgamma_cache = (double*)malloc(cache_size * sizeof(double));
-    if (!lgamma_cache) { *res = LOW; return; }
+    double *lgamma_cache = (double *) R_alloc((size_t) cache_size, sizeof(double));
     for (int k = 0; k < cache_size; k++)
         lgamma_cache[k] = lgammafn(k + 1);
  
@@ -808,7 +810,6 @@ void Comp_Cond_BinomnegGauss2mem_aniso(int *cormod, double *coord1, double *coor
         *res += weights * bl;
     }
  
-    free(lgamma_cache);
  
 #undef P_CLAMP
  
@@ -1127,3 +1128,39 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
 /******************************************************************************************/
 
 
+void Comp_Cond_PoisGammaZIP2mem_aniso(int *cormod, double *coord1, double *coord2,
+                                      double *data1, double *data2, int *N1, int *N2,
+                                      double *par, int *weigthed, double *res,
+                                      double *mean1, double *mean2, double *nuis,
+                                      int *type_cop, int *cond)
+{
+    (void)N1; (void)N2; (void)type_cop; (void)cond;
+    const double nugget1 = nuis[0], nugget2 = nuis[1];
+    const double mup = nuis[2], shape = nuis[4];
+    if (!R_FINITE(nugget1) || !R_FINITE(nugget2) ||
+        nugget1 < 0.0 || nugget1 >= 1.0 || nugget2 < 0.0 || nugget2 >= 1.0 ||
+        !R_FINITE(mup) || !R_FINITE(shape) || !(shape > 0.0) || !npairs) {
+        *res = LOW; return;
+    }
+    GeoKahanSum total; GeoKahanInit(&total); int used = 0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        int r, t; double mi, mj;
+        const int prep = GeoPGPreparePairAt(i, data1[i], data2[i], mean1[i], mean2[i],
+                                             &r, &t, &mi, &mj);
+        if (prep == 0) continue;
+        if (prep < 0) { *res = LOW; return; }
+        const double lag = hypot(coord1[2*i] - coord2[2*i],
+                                 coord1[2*i+1] - coord2[2*i+1]);
+        const double weight = weigthed[0] ? CorFunBohman(lag, maxdist[0]) : 1.0;
+        if (!R_FINITE(weight)) { *res = LOW; return; }
+        if (weight <= 0.0) continue;
+        double rho = CorFct(cormod, lag, 0.0, par, 0, 0);
+        if (!R_FINITE(rho) || fabs(rho) > 1.0 + 1e-8) { *res = LOW; return; }
+        rho = fmax2(-1.0, fmin2(1.0, rho));
+        const double ll = GeoPGZIPLogConditional(rho, r, t, mi, mj, mup,
+                                                  nugget1, nugget2, shape);
+        if (!R_FINITE(ll)) { *res = LOW; return; }
+        GeoKahanAdd(&total, weight * ll); ++used;
+    }
+    *res = (used > 0 && R_FINITE(total.sum)) ? total.sum : LOW;
+}

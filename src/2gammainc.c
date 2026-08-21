@@ -427,24 +427,7 @@ double igamc(double a, double x) {
     }
 }
 
-void igam_call(double *a, double *x, double *res) {
-    __builtin_prefetch(a, 0, 3);
-    __builtin_prefetch(x, 0, 3);
-    __builtin_prefetch(res, 1, 3);
-    
-    *res = igam(*a, *x);
-}
 
-
-void igam_batch(double *a, double *x, double *res, int n) {
-    int i;
-    
-    lgamma_cache.valid = 0;
-    
-    for (i = 0; i < n; i++) {
-        res[i] = igam(a[i], x[i]);
-    }
-}
 
 
 //************************************* END igam.c*****************************************//

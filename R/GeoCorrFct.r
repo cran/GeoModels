@@ -21,17 +21,9 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
          INTENT =c("rw",rep("r",10)),PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 
              cc=p$corr
-           #p=.C('VectCorrelation', corr=double(numlags*numlagt), as.integer(corrmodel), as.double(lags),
-            #                 as.integer(numlags), as.integer(numlagt), as.double(mu),as.integer(model)
-             #                ,as.double(nuisance),as.double(param), as.double(lagt),as.integer(N), PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-                            
                     }
         else    {
                 nn=numlags*4
-                         #    p=.C('VectCorrelation_biv', corr=double(nn),vario=double(nn), as.integer(corrmodel), as.double(lags),
-                         #    as.integer(numlags), as.integer(numlagt),  as.double(mu),as.integer(model),as.double(nuisance), as.double(param),
-                         #    as.double(lagt), as.integer(N),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
-
                             p=dotCall64::.C64('VectCorrelation_biv',SIGNATURE = c("double","double","integer","double","integer","integer","double",
                   "integer","double","double","double","integer"),  
     corr=dotCall64::vector_dc("double",nn),vario=double(nn),corrmodel,lags,numlags, numlagt,mu,model,nuisance,param,lagt,N,
@@ -52,16 +44,54 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
 
    # if(covariance&&variogram||!covariance&&!variogram) covariance=TRUE;variogram=FALSE
  
+    model <- .GeoCovCanonicalModel(model)
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(is.null(CkModel(model)))   stop("The name of the  model  is not correct\n")
     if(!is.numeric(x)) stop("Distances must be numeric\n")
     if(sum(x<0)>=1) stop("Distances must be positive\n")
     if(!is.list(param)) stop("param  must be a list\n")
+    .GeoValidateHoleWendlandParameters(corrmodel, param, d=2L, context="GeoCorrFct")
 
     spacetime<-CheckST(CkCorrModel(corrmodel))
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
 
-    if(!bivariate) {if(is.null(param$sill)) param$sill=1}
+    supported_models <- c(
+      "Gaussian","SkewGaussian","StudentT","SkewStudentT","Tukeyh","Tukeyh2",
+      "Tukeygh","Kumaraswamy","Kumaraswamy2","SinhAsinh","TwoPieceStudentT",
+      "TwoPieceTukeyh","TwoPieceGaussian","Gamma","Weibull","LogLogistic",
+      "LogGaussian","Binary","Bernoulli","Binomial","BinomialNeg","Geom","Geometric","Poisson",
+      "PoissonGamma","SkewLaplace"
+    )
+    if(!(model %in% supported_models))
+      stop("GeoCorrFct: observed-scale correlation/covariance is not implemented for model = '",
+           model, "'.", call.=FALSE)
+    if(bivariate && model != "Gaussian")
+      stop("GeoCorrFct: bivariate observed-scale curves are currently implemented only for model = 'Gaussian'.",
+           call.=FALSE)
+
+    if(model %in% c("Binary","Bernoulli")) {
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || as.integer(round(n)) != 1L)
+        stop("GeoCorrFct: Binary/Bernoulli is the one-trial field; n must equal 1.", call.=FALSE)
+      n <- 1L
+    }
+    if(model == "Binomial") {
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 ||
+         abs(n-round(n)) > sqrt(.Machine$double.eps))
+        stop("GeoCorrFct: a lag-only Binomial curve requires one common positive integer n; use GeoCovmatrix for site-specific n.", call.=FALSE)
+      n <- as.integer(round(n))
+    }
+    if(model %in% c("BinomialNeg","Geom","Geometric")) {
+      if(model %in% c("Geom","Geometric")) n <- 1L
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 ||
+         abs(n-round(n)) > sqrt(.Machine$double.eps))
+        stop("GeoCorrFct: Negative-Binomial n is the common number r of successes and must be one positive integer scalar.", call.=FALSE)
+      n <- as.integer(round(n))
+    }
+
+    if(!bivariate) {
+      if(is.null(param$sill)) param$sill <- 1
+      if(is.null(param$nugget)) param$nugget <- 0
+    }
 
 if(is.null(t)) t=0
    
@@ -74,21 +104,38 @@ if(spacetime) nt=length(t)
 else nt=1
 
 num_betas=c(1,1)
-if(!bivariate) if(sum((names(param)=='mean'))==0) param$mean=0 # adding mean if missing
+if(!bivariate) {
+  supplied_mean <- .GeoMean_supplied_names(param)
+  if(length(setdiff(supplied_mean, "mean")))
+    stop("GeoCorrFct() has no design matrix X; only the intercept parameter 'mean' is allowed.\n")
+  if(is.null(param$mean)) param$mean <- 0
+  if(length(param$mean) != 1L || !is.numeric(param$mean) || !is.finite(param$mean))
+    stop("GeoCorrFct() requires a finite scalar intercept 'mean'.\n")
+}
 
-mu=as.numeric(param$mean)
-  ## selecting nuisance mean annd corr parameters
+mu=if(!bivariate) as.numeric(param$mean) else 0
+  ## selecting nuisance mean and correlation parameters
       if(!bivariate){
-        parcorr <- c(param)[CorrelationPar(CkCorrModel(corrmodel))]
-        nuisance <- c(param)[NuisParam(model,FALSE,num_betas)]
-        sel=substr(names(nuisance),1,4)=="mean"
-        mm=as.numeric(nuisance[sel])
-        nuisance=nuisance[!sel]
+        corr_names <- CorrelationPar(CkCorrModel(corrmodel))
+        parcorr <- unlist(param[corr_names], use.names=FALSE)
+        storage.mode(parcorr) <- "double"
+
+        nuis_names <- NuisParam(model,FALSE,num_betas)
+        nuisance <- unlist(param[nuis_names], use.names=TRUE)
+        storage.mode(nuisance) <- "double"
+        sel <- names(nuisance) %in% .GeoMean_names(1L)
+        mm <- as.numeric(nuisance[sel])
+        nuisance <- nuisance[!sel]
         }
       if(bivariate){
         if(!covariance) param$sill_1=param$sill_2=1
-        parcorr <- c(param)[CorrelationPar(CkCorrModel(corrmodel))]
-        nuisance <- c(param)[NuisParam(model,bivariate,num_betas)]
+        corr_names <- CorrelationPar(CkCorrModel(corrmodel))
+        parcorr <- unlist(param[corr_names], use.names=FALSE)
+        storage.mode(parcorr) <- "double"
+
+        nuis_names <- NuisParam(model,bivariate,num_betas)
+        nuisance <- unlist(param[nuis_names], use.names=TRUE)
+        storage.mode(nuisance) <- "double"
     }
 
 correlation <- CorrelationFct(bivariate,CkCorrModel(corrmodel), x, t, nx, nt,mu,
@@ -188,31 +235,13 @@ if(!bivariate){
                   }
    if(model=="Tukeyh2")        { if(bivariate) {}
                         else {
-                              
                 if(length(t)>1) correlation=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
                 else       correlation=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(x==0)
-
                               hr=as.numeric(nuisance['tail1']); hl=as.numeric(nuisance['tail2'])
-                              sill=as.numeric(nuisance['sill'])
-                              corr=correlation
-                              corr[corr>=0.9999999999]=0.9999999999
-                             x1=1-(1-corr^2)*hr; y1=1-(1-corr^2)*hl
-                             x2=(1-hr)^2-(corr*hr)^2;y2=(1-hl)^2-(corr*hl)^2
-                             g=1-hl-hr+(1-corr^2)*hl*hr
-                             h1=sqrt(1-corr^2/(x1^2))+(corr/x1)*asin(corr/x1);
-                             h2=sqrt(1-corr^2/(y1^2))+(corr/y1)*asin(corr/y1)
-                             h3=sqrt(1-corr^2/(x1*y1))+sqrt(corr^2/(x1*y1))*asin(sqrt(corr^2/(x1*y1)))
-                             p1=x1*h1/(2*pi*(x2)^(3/2))+corr/(4*(x2)^(3/2))
-                             p2=y1*h2/(2*pi*(y2)^(3/2))+corr/(4*(y2)^(3/2))
-                             p3=-(x1*y1)^(1/2)*h3/(2*pi*(g)^(3/2))+corr/(4*(g)^(3/2))
-
-                             mm=(hr-hl)/(sqrt(2*pi)*(1-hl)*(1-hr))
-                             vv1=0.5*(1-2*hl)^(-3/2)+0.5*(1-2*hr)^(-3/2)-(mm)^2
-                             cc=(p1+p2+2*p3-mm^2)/vv1  # correlation
-                             vs=as.numeric(nuisance['sill'])*vv1
-                            
-                             cova=cc; 
-                             } 
+                              mom_hh <- .GeoTukeyh2StandardMoments(hr, hl)
+                              cova=.GeoTukeyh2Correlation(correlation, hr, hl)
+                              vs=as.numeric(nuisance['sill'])*mom_hh$variance
+                             }
                   }   
 ##########################################
   if(model=="Tukeygh")       { if(bivariate) {}
@@ -232,17 +261,19 @@ if(!bivariate){
                                rho2=rho*rho; eta2=eta*eta; tail2=tail*tail;
                                u=1-tail; a=1+rho;
                                mu=(exp(eta2/(2*u))-1)/(eta*sqrt(u));
-                               vs=sill*(exp(2*eta2/(1-2*tail))-2*exp(eta2/(2*(1-2*tail)))+1)/(eta2*sqrt(1-2*tail))-mu*mu;
+                               var0=(exp(2*eta2/(1-2*tail))-2*exp(eta2/(2*(1-2*tail)))+1)/(eta2*sqrt(1-2*tail))-mu*mu
+                               vs=sill*var0
                                A1=exp(a*eta2/(1-tail*a));
                                A2=2*exp(0.5*eta2*  (1-tail*(1-rho2))  / (u*u- tail2*rho2)  );
                                A3=eta2*sqrt(u*u- rho2*tail*tail);
-                               cc=((A1-A2+1)/A3-mu*mu)/vs;
+                               cc=((A1-A2+1)/A3-mu*mu)/var0
                                
                                cova=cc;
                             } 
                         if(tail<=1e-05&&abs(eta)>1e-05){
-                              vs=sill*( -exp(eta^2)+exp(eta^2*2))*eta^(-2)
-                              cc= (( -exp(eta^2)+exp(eta^2*(1+rho)))*eta^(-2))/vs
+                              var0=( -exp(eta^2)+exp(eta^2*2))*eta^(-2)
+                              vs=sill*var0
+                              cc=(( -exp(eta^2)+exp(eta^2*(1+rho)))*eta^(-2))/var0
                               
                               cova=cc;
                             } 
@@ -275,17 +306,19 @@ ga=as.numeric(nuisance['shape2'])
 eta=as.numeric(nuisance['shape1'])
 }
 if(model=="Kumaraswamy2"){
-ga=as.numeric(nuisance['shape2'])
-eta=log1p(-(1+exp(mu))^(-ga))/log(0.5)
+ga=as.numeric(nuisance['shape'])
+pmed=plogis(mu)
+eta=log(0.5)/log1p(-(pmed^ga))
 }
 mm=eta*beta(1+1/ga,eta)
-sill=eta*beta(1+2/ga,eta)-mm^2
+ssup=as.numeric(nuisance['max'])-as.numeric(nuisance['min'])
+sill=ssup^2*(eta*beta(1+2/ga,eta)-mm^2)
 ###
 NN=length(correlation);
 res=double(NN)
 bb=.C("corr_kuma_vec",as.double(correlation),as.double(eta),as.double(ga), 
      res=as.double(res),
-    as.integer(NN),PACKAGE='GeoModels', DUP=TRUE, NAOK=TRUE)
+    as.integer(NN),PACKAGE='GeoModels', NAOK=TRUE)
 rho=bb$res
 cova=rho;
 vs=sill
@@ -296,296 +329,25 @@ vs=sill
 
 
 if(model == "SinhAsinh") {
-  if(bivariate) {
-    # Implementazione bivariata da definire
-  } else {
-    # ====================================================================
-    # APPROCCIO B: Versione ottimizzata inline
-    # Integra i miglioramenti di corrsas direttamente nel codice
-    # Pro: più efficiente (coefficienti calcolati una volta)
-    # Contro: codice più lungo
-    # ====================================================================
-    
-    # Estrazione parametri
+  if(bivariate) {} else {
     nugget <- as.numeric(nuisance['nugget'])
     d <- as.numeric(nuisance['tail'])
     e <- as.numeric(nuisance['skew'])
     sill <- as.numeric(nuisance['sill'])
-    
-    # Validazione parametri
-    if (!is.numeric(e) || !is.numeric(d) || !is.numeric(nugget) || !is.numeric(sill)) {
-      stop("All nuisance parameters must be numeric")
-    }
-    if (d <= 0) {
-      stop("tail parameter must be positive")
-    }
-    if (!is.finite(e) || !is.finite(d)) {
-      stop("skew and tail must be finite")
-    }
-    
-    if(length(t) > 1) {
-      correlation <- correlation * (1 - nugget) + nugget * I(A[,1] == 0 & A[,2] == 0)
-    } else {
-      correlation <- correlation * (1 - nugget) + nugget * I(x == 0)
-    }
-    corr_base <- correlation
-    
-    # Determinazione dinamica max_coeff con strategia migliorata
-    stability_indicator <- abs(e/d) + abs(d - 1) + max(abs(corr_base))
-    is_stable <- stability_indicator < 2.0
-    
-    if (is_stable) {
-      base_terms <- 6
-      adjustment <- min(ceiling(stability_indicator), 6)
-      max_coeff <- base_terms + adjustment
-    } else {
-      base_terms <- 8
-      adjustment <- min(ceiling(stability_indicator - 2), 6)
-      max_coeff <- base_terms + adjustment
-    }
-    max_coeff <- min(max_coeff, 12)
-    max_coeff <- max(max_coeff, 6)
-    
-    j_vec <- 1:max_coeff
-    
-    # Costanti pre-calcolate
-    sqrt_8pi <- sqrt(8 * pi)
-    sqrt_32pi <- sqrt(32 * pi)
-    sqrt_2pi <- sqrt(2 * pi)
-    exp_0.25 <- exp(0.25)
-    
-    # Gestione robusta funzioni iperboliche
-    if (abs(e / d) < 0.01) {
-      x <- e / d
-      sinh_e_d <- x * (1 + x^2/6)
-      cosh_2e_d <- 1 + 2*x^2 * (1 + x^2/3)
-    } else {
-      sinh_e_d <- if (abs(e / d) > 20) {
-        sign(e / d) * 0.5 * exp(abs(e / d))
-      } else {
-        sinh(e / d)
-      }
-      
-      cosh_2e_d <- if (abs(2 * e / d) > 20) {
-        0.5 * exp(abs(2 * e / d))
-      } else {
-        cosh(2 * e / d)
-      }
-    }
-    
-    # ====================================================================
-    # MIGLIORAMENTO: Gestione robusta Bessel
-    # ====================================================================
-    compute_bessel_terms <- function(d) {
-      tryCatch({
-        k1 <- besselK(0.25, (d + 1)/(2*d))
-        k2 <- besselK(0.25, abs(1 - d)/(2*d))
-        k3 <- besselK(0.25, (d + 2)/(2*d))
-        k4 <- besselK(0.25, abs(2 - d)/(2*d))
-        
-        if (any(!is.finite(c(k1, k2, k3, k4)))) {
-          return(NULL)
-        }
-        
-        list(k1 = k1, k2 = k2, k3 = k3, k4 = k4)
-      }, error = function(e) {
-        warning("Bessel function computation failed: ", e$message)
-        NULL
-      })
-    }
-    
-    bessel_vals <- compute_bessel_terms(d)
-    if (is.null(bessel_vals)) {
-      warning("Cannot compute Bessel functions, using Gaussian correlation")
-      vs <- sill
-      cova <- corr_base
-    } else {
-      besselK_1 <- bessel_vals$k1
-      besselK_2 <- bessel_vals$k2
-      besselK_3 <- bessel_vals$k3
-      besselK_4 <- bessel_vals$k4
-      
-      # Calcolo momento e varianza
-      mm <- sinh_e_d * exp_0.25 * (besselK_1 + besselK_2) / sqrt_8pi
-      vs <- cosh_2e_d * exp_0.25 * (besselK_3 + besselK_4) / sqrt_32pi - 0.5 - mm^2
-      
-      if (!is.finite(vs) || vs <= 0) {
-        warning("Non-positive variance, using minimum value")
-        vs <- 1e-10
-      }
-      
-      # ====================================================================
-      # Funzione integrand
-      # ====================================================================
-      integrand <- function(z, alpha, kappa, j, r) {
-        z_sq <- z^2
-        z_pow <- if (j - 2 * r == 0) 1 else z^(j - 2 * r)
-        aa <- z + sqrt(z_sq + 1)
-        exp_term <- exp(-z_sq/2 + alpha/kappa)
-        exp_term * z_pow * (aa^(1/kappa) - exp(-2*alpha/kappa) * aa^(-1/kappa))
-      }
-      
-      # ====================================================================
-      # MIGLIORAMENTO: Cache con gestione dimensioni
-      # ====================================================================
-      II_cache <- .GeoModels_env$II_global_cache
-      MAX_CACHE_SIZE <- 5000
-      
-      # Pulizia cache se necessario
-      cache_size <- length(names(II_cache))
-      if (cache_size >= MAX_CACHE_SIZE) {
-        keys_to_remove <- sample(names(II_cache), floor(MAX_CACHE_SIZE / 2))
-        rm(list = keys_to_remove, envir = II_cache)
-      }
-      
-      # ====================================================================
-      # MIGLIORAMENTO: Integrazione con limiti finiti
-      # ====================================================================
-      II <- function(alpha, kappa, j, r) {
-        key <- paste(round(alpha, 8), round(kappa, 8), j, r, sep = "_")
-        
-        if (exists(key, envir = II_cache)) {
-          return(get(key, envir = II_cache))
-        }
-        
-        val <- tryCatch({
-          # Limiti finiti: exp(-z²/2) decade oltre ±6
-          integrate(integrand, 
-                   lower = -6, 
-                   upper = 6,
-                   alpha = alpha, 
-                   kappa = kappa, 
-                   j = j, 
-                   r = r,
-                   rel.tol = 1e-7,
-                   abs.tol = 1e-9,
-                   subdivisions = 150,
-                   stop.on.error = FALSE)$value
-        }, error = function(err) {
-          0
-        })
-        
-        if (is.finite(val)) {
-          assign(key, val, envir = II_cache)
-        } else {
-          val <- 0
-        }
-        
-        val
-      }
-      
-      # Somma di Kahan
-      kahan_sum <- function(x) {
-        if (length(x) == 0) return(0)
-        s <- 0
-        c <- 0
-        for (xi in x) {
-          y <- xi - c
-          t <- s + y
-          c <- (t - s) - y
-          s <- t
-        }
-        s
-      }
-      
-      # ====================================================================
-      # Calcolo coefficienti
-      # ====================================================================
-      gamma_j_plus_1 <- gamma(j_vec + 1)
-      coeffs <- numeric(max_coeff)
-      
-      for (j in j_vec) {
-        max_r <- floor(j/2)
-        if (max_r < 0) {
-          coeffs[j] <- 0
-          next
-        }
-        
-        rr <- 0:max_r
-        II_vals <- sapply(rr, function(r_val) II(e, d, j, r_val))
-        
-        gamma_r_plus_1 <- gamma(rr + 1)
-        gamma_j_minus_2r_plus_1 <- gamma(j - 2*rr + 1)
-        
-        valid_gamma <- is.finite(gamma_r_plus_1) & is.finite(gamma_j_minus_2r_plus_1) & 
-                      gamma_r_plus_1 > 0 & gamma_j_minus_2r_plus_1 > 0
-        
-        if (any(valid_gamma)) {
-          terms <- II_vals[valid_gamma] * (-1)^rr[valid_gamma] / 
-                  (2^(rr[valid_gamma] + 1) * gamma_r_plus_1[valid_gamma] * 
-                   gamma_j_minus_2r_plus_1[valid_gamma])
-          
-          if (is.finite(gamma_j_plus_1[j]) && gamma_j_plus_1[j] > 0) {
-            coeffs[j] <- gamma_j_plus_1[j] * kahan_sum(terms) / sqrt_2pi
-          }
-        }
-      }
-      
-      # Validazione coefficienti
-      valid_idx <- is.finite(coeffs) & !is.na(coeffs) & abs(coeffs) > 1e-12
-      if (!any(valid_idx)) {
-        warning("No valid coefficients, using base correlation")
-        vs <- vs * sill
-        cova <- corr_base
-      } else {
-        coeffs_valid <- coeffs[valid_idx]
-        j_vec_valid <- j_vec[valid_idx]
-        gamma_terms_valid <- gamma_j_plus_1[valid_idx]
-        coeffs_sq <- coeffs_valid^2
-        
-        # ====================================================================
-        # Funzione di correlazione SAS
-        # ====================================================================
-        corrsas_inner <- function(rho) {
-          if (!is.finite(rho) || is.na(rho)) return(NA_real_)
-          if (abs(rho) < 1e-12) return(1)
-          
-          # Gestione overflow per correlazioni alte
-          max_j <- max(j_vec_valid)
-          if (abs(rho) > 0.99 && max_j > 50) {
-            log_rho <- log(abs(rho))
-            if (max_j * abs(log_rho) > 700) return(NA_real_)
-            
-            log_terms <- 2*log(abs(coeffs_valid)) + j_vec_valid * log_rho - 
-                        log(gamma_terms_valid)
-            max_log <- max(log_terms[is.finite(log_terms)])
-            if (!is.finite(max_log)) return(NA_real_)
-            
-            terms_scaled <- exp(log_terms - max_log)
-            numerator <- exp(max_log) * kahan_sum(terms_scaled)
-          } else {
-            rho_powers <- rho^j_vec_valid
-            if (any(is.infinite(rho_powers))) return(NA_real_)
-            
-            numerator <- kahan_sum(coeffs_sq * rho_powers / gamma_terms_valid)
-          }
-          
-          result <- numerator / vs
-          if (is.finite(result)) result else NA_real_
-        }
-        
-        # Applicazione vettorizzata
-        corr_transformed <- if (length(corr_base) > 1) {
-          vapply(corr_base, corrsas_inner, numeric(1))
-        } else {
-          corrsas_inner(corr_base)
-        }
-        
-        # Gestione fallimenti
-        if (any(is.na(corr_transformed))) {
-          warning("Some correlations failed, using base correlation for those")
-          corr_transformed[is.na(corr_transformed)] <- corr_base[is.na(corr_transformed)]
-        }
-        
-        # Scaling finale
-        vs <- vs * sill
-        cova <- corr_transformed
-      }
-    }
+    if(d <= 0 || !is.finite(d) || !is.finite(e))
+      stop("GeoCorrFct: SinhAsinh requires finite skew and a positive finite tail.", call.=FALSE)
+    if(length(t)>1)
+      rho_lat <- correlation*(1-nugget) + nugget*I(A[,1]==0&A[,2]==0)
+    else
+      rho_lat <- correlation*(1-nugget) + nugget*I(x==0)
+    mom_sas <- .GeoSASStandardMoments(e, d)
+    cova <- corrsas(rho_lat,e,d)
+    vs <- sill*mom_sas$variance
   }
 }
+
 ##########################################
- if(model=="TwopieceT")        { if(bivariate) {}
+ if(model=="TwoPieceStudentT")        { if(bivariate) {}
                         else {
 
                             if(length(t)>1)
@@ -609,7 +371,7 @@ if(model == "SinhAsinh") {
                                }
                   } 
   ##########################################
-  if(model=="TwopieceTukeyh")        { if(bivariate) {}
+  if(model=="TwoPieceTukeyh")        { if(bivariate) {}
                         else {
                               
 
@@ -634,7 +396,7 @@ if(model == "SinhAsinh") {
                                }
                   }  
 ##########################################
- if(model=="TwopieceGauss")        { 
+ if(model=="TwoPieceGaussian")        { 
                         if(bivariate) {}
                         else {        
 
@@ -652,6 +414,16 @@ if(model == "SinhAsinh") {
                         cova=cc;
                         }
                   } 
+    ##########################################
+ if(model=="SkewLaplace") { if(bivariate) {}
+                        else {
+                          if(length(t)>1) rho_lat=correlation*(1-as.numeric(nuisance['nugget']))+as.numeric(nuisance['nugget'])*I(A[,1]==0&A[,2]==0)
+                          else rho_lat=correlation*(1-as.numeric(nuisance['nugget']))+as.numeric(nuisance['nugget'])*I(x==0)
+                          sk=as.numeric(nuisance['skew'])
+                          cova=rho_lat^2
+                          vs=as.numeric(nuisance['sill'])*(1/sk^2+1/(1-sk)^2)
+                        }
+                  }
     ##########################################
  if(model=="Gamma")        { if(bivariate) {}
                         else {
@@ -677,13 +449,12 @@ if(model=="Weibull")        { if(bivariate) {}
 
                         sh=as.numeric(nuisance["shape"])
                         vs=exp(mm)^2*(gamma(1+2/sh)/gamma(1+1/sh)^2-1)
-                        auxcorr= (gamma(1+1/sh))^2/((gamma(1+2/sh))-(gamma(1+1/sh))^2)
-                        cc=auxcorr*(Re(hypergeo::hypergeo(-1/sh, -1/sh, 1,correlation^2)) -1)
+                        cc=.GeoWeibullCorr(correlation, sh)
                         cova=cc;
                      }
                     }
 ##########################################
-if(model=="Loglogistic")    { if(bivariate) {}  
+if(model=="LogLogistic")    { if(bivariate) {}  
                       else { 
 
 
@@ -709,25 +480,32 @@ if(model=="LogGaussian")    { if(bivariate) {}
                     vvar=as.numeric(nuisance["sill"])
                     yy=vvar*correlation
                     cc<-(exp(yy)-1)/(exp(vvar)-1)
-                    vs<-(exp(vvar)-1)
+                    vs<-exp(2*mm)*(exp(vvar)-1)
                     cova=cc; 
                      }
                   }
 #############################################
-if(model=="Binomial"||model=="BinomialNeg"||model=="Geometric"||model=="BinomialnegZINB")
+if(model %in% c("Binary","Bernoulli","Binomial","BinomialNeg","Geom","Geometric"))
    {
-                    if(bivariate) {}
-                    if(!bivariate) {          
+                    if(!bivariate) {
                            pp=pnorm(mu)
-                           if(model=="Binomial") vs=min(n)*pp*(1-pp)
-                           if(model=="BinomialNeg")      vs=(n)*(1-pp)/pp^2;
-                           if(model=="BinomialnegZINB") { 
-                                     pg=pnorm(as.numeric(nuisance['pmu']))
-                                     vs=n*(1-pp)*(1-pg)*(1+n*pg*(1-pp)) /pp^2
-                                               }
-                          ## en este caso el nugget ya se computo
-                           if(length(t)>1)  cova=correlation     +as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
-                           else cova=correlation     +as.numeric(nuisance["nugget"])*I(x==0)
+                           if(model %in% c("Binary","Bernoulli")) vs=pp*(1-pp)
+                           if(model=="Binomial") vs=as.numeric(n)*pp*(1-pp)
+                           if(model=="BinomialNeg") vs=as.numeric(n)*(1-pp)/pp^2
+                           if(model %in% c("Geom","Geometric")) vs=(1-pp)/pp^2
+                           ## VectCorrelation returns the observed-scale
+                           ## correlation.  Do not rely on numerical evaluation
+                           ## of the bivariate Gaussian cdf at latent rho = 1:
+                           ## that is a singular boundary point.  Enforce the
+                           ## exact same-site endpoint directly, so that
+                           ## correlation(0)=1, covariance(0)=Var(Y), and
+                           ## variogram(0)=0 by construction.
+                           cova=correlation
+                           if(spacetime) {
+                             if(length(t)>1L) zero_lag <- (A[,1] == 0 & A[,2] == 0)
+                             else zero_lag <- (x == 0 & t[1L] == 0)
+                           } else zero_lag <- (x == 0)
+                           cova[zero_lag] <- 1
                            }
    }
 if(model=="Poisson") {
@@ -744,21 +522,39 @@ if(model=="Poisson") {
                       }
 if(model=="PoissonGamma") {
         if(bivariate) {}
-                    if(!bivariate) {  
-                       if(length(t)>1) correlation=(1-as.numeric(nuisance['nugget']))*correlation  +as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
-                       else correlation=(1-as.numeric(nuisance['nugget']))*correlation  +as.numeric(nuisance["nugget"])*I(x==0)
-                       corr2=correlation^2  
-                       a=as.numeric(nuisance['shape'])
-                       b=a/exp(mu);
-                       KK=b*(1-corr2)
-                       KK1=(a+1)/(2+KK)
-                       dd=  exp(log(b)+0.5*log(KK)+a*log(2+KK)-log(1+b)-(a+0.5)*log(4+KK))
-                       aa=hypergeo::hypergeo((1 - a)/2, -a/2, 1, 4/(2+KK)^2)
-                       bb=KK1*hypergeo::hypergeo((2-a)/2, (1-a)/2, 2, 4/(2+KK)^2)
-                       cc=Re(corr2*(1-dd*(aa+bb)))
-                       vv=exp(mu)*(1+1/b)
-                       cova=vv*cc
-            }
+        if(!bivariate) {
+          ## PEM / Poisson-Erlang mixture correlation.  Corollary 5.1 is an
+          ## off-diagonal expression and contains terms involving
+          ## 1-rho^2.  At the same space-time point rho=1 is a singular
+          ## numerical boundary for the hypergeometric representation, while
+          ## the theoretical endpoint is exactly Corr{M(s),M(s)}=1.  Evaluate
+          ## the closed form only away from zero lag and impose the endpoint
+          ## directly.
+          if(length(t)>1L) {
+            zero_lag <- (A[,1] == 0 & A[,2] == 0)
+          } else {
+            zero_lag <- (x == 0 & t[1L] == 0)
+          }
+
+          nug <- as.numeric(nuisance['nugget'])
+          latent_corr <- (1-nug)*correlation + nug*zero_lag
+          a <- as.numeric(nuisance['shape'])
+          mean_pg <- exp(mu)
+
+          ## Use the compiled stationary PEM kernel shared with covariance
+          ## matrices and kriging.  Integer kappa values use terminating 2F1
+          ## polynomials; half-integers/general values use the compiled
+          ## evaluator rather than R-level integration/continued fractions.
+          cc <- .Call("GeoCorrPGsVecCall",
+                      as.double(latent_corr), as.double(mean_pg), as.double(a),
+                      PACKAGE="GeoModels")
+          cc[zero_lag] <- 1
+
+          ## Var{M(s)} = mu * (1 + mu/kappa), with kappa = shape.
+          vv <- mean_pg*(1+mean_pg/a)
+          vs <- vv
+          cova <- cc
+        }
     }
 
 

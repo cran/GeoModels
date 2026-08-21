@@ -28,8 +28,7 @@ CompLik(copula, bivariate, coordx, coordy, coordz, coordt,
  spatial coordinates; optional, default is \code{NULL}.}
  \item{coordz}{A numeric vector giving one dimension of
  spatial coordinates; optional, default is \code{NULL}.}
- \item{coordt}{A numeric vector giving one dimension of temporal coordinates;
- optional, default is \code{NULL} (in which case a spatial random field is assumed).}
+ \item{coordt}{A numeric vector giving one dimension of temporal coordinates; optional, default is \code{NULL} (in which case a spatial random field is assumed). Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
  \item{coordx_dyn}{A list of \eqn{m} numeric \eqn{d_t \times 2} matrices
  containing dynamic (in time) spatial coordinates; optional, default is \code{NULL}.}
  \item{corrmodel}{Numeric; the ID of the correlation model.}

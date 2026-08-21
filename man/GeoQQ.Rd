@@ -21,6 +21,18 @@
 \item{\dots}{Optional parameters passed to the plot function.}
 }
 
+\details{
+
+This diagnostic requires an intercept-only marginal representation.  For
+continuous models, fits with a nonconstant design matrix or a site-specific
+fixed mean can first be converted with \code{\link{GeoResiduals}}.  For
+discrete models with a nonconstant mean, use \code{\link{GeoPit}} instead,
+because there is no single common marginal distribution for a conventional QQ
+plot.  Likewise, Binomial and negative-binomial QQ/density plots require a
+constant \code{n}; site-specific \code{n} should be assessed with
+\code{GeoPit()}.
+}
+
 \value{ 
 Produces a plot. No values are returned.
 }

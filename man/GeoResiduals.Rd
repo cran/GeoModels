@@ -1,14 +1,22 @@
 \name{GeoResiduals}
 \alias{GeoResiduals}
 \encoding{UTF-8}
-\title{Computes fitted covariance and/or variogram}
+\title{Compute Residuals from a Fitted GeoModels Model}
 \description{
  The procedure return a GeoFit object associated to the estimated residuals. For a random field Y defined on the real line (Gaussian, Skew Gaussian, Tukeyh etcc) they are computed as (Y-m)/sqrt(v) where m and v are the estimated mean and variance respectively.
  For a random field Y defined on the positive real line (Gamma, Weibull, Log-Gaussian) they are computed as Y/m where m is the estimated mean.
  In the first case residuals have zero mean and unut variance with a specific distribution defined on the real line.
  In the second case residuals have unit mean with a specific distribution defined on the positive real line.
-When the function is coupled with the functions \code{\link{GeoQQ}} and \code{\link{GeoCovariogram}}, it is useful as diagnostic tool
-(See examples).
+ For the discrete Bernoulli/Binary, Binomial, Geometric/negative-binomial,
+ Poisson, and Poisson--Gamma models, the function returns Pearson residuals
+ computed from the fitted marginal mean and variance. The paper specifies these marginal moments but does
+ not prescribe a residual definition; Pearson residuals are an explicit package
+ convention.
+For continuous models, the returned object can be coupled with
+\code{\link{GeoQQ}} and \code{\link{GeoCovariogram}}. For discrete Pearson
+residuals, use the returned object for residual maps and variograms, and apply
+\code{GeoQQ()} or \code{GeoPit()} to the original fitted object for marginal
+assessment.
 }
 \usage{GeoResiduals(fit)}
 \arguments{
@@ -16,8 +24,34 @@ When the function is coupled with the functions \code{\link{GeoQQ}} and \code{\l
  \code{\link{GeoFit}}.}
 }
 
+\details{
+
+The fitted location is evaluated from the full mean specification: a
+site-specific fixed mean vector when present, otherwise \eqn{X\beta} with
+coefficients \code{mean}, \code{mean1}, and so on matched in order to the
+columns of \code{X}.  The returned residual object is converted to an
+intercept-only, standardized representation for subsequent diagnostics.  All
+other fields of the original \code{GeoFit} object, including neighbourhood,
+thinning, anisotropy, convergence, and pair-selection metadata, are preserved.
+
+For \code{Beta2} and \code{Kumaraswamy2}, the residual transformation uses
+the fitted support \code{min}/\code{max} and the corresponding fitted marginal
+CDF, so the standardized residual scale is the unit interval.
+
+For the discrete models described in the package paper, Pearson residuals are
+used: \eqn{(Y-E(Y))/\sqrt{Var(Y)}}.  Thus \eqn{p=\Phi(\mu)} for
+Bernoulli, Binomial and negative-binomial fields, while
+\eqn{\lambda=\exp(\mu)} for Poisson fields.  For Poisson--Gamma fields,
+with fitted mean \eqn{\lambda} and shape \eqn{\kappa}, the fitted variance is
+\eqn{\lambda(1+\lambda/\kappa)}.  These deterministic residuals
+are intended for residual maps and variograms; they are not randomized quantile
+residuals, and \code{GeoQQ()} intentionally rejects the Pearson-residual object.  Bivariate residuals are currently supported only
+for Gaussian models.
+}
+
 \value{
- Returns an (updated) object of class \code{GeoFit}
+ Returns an (updated) object of class \code{GeoFit}.  The component
+ \code{residual_type} records whether the data are Pearson or model-standardized residuals.
 }
 
 

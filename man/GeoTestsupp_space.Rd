@@ -23,8 +23,8 @@ GeoTestsupp_space(data, coordx,
  type = NULL,
  method = c("cholesky", "TB"),
  L = 10000,
- parallel = TRUE,
- ncores = NULL,
+ parallel = FALSE,
+ ncores = 6,
  progress = TRUE,
  seed = NULL)
 }
@@ -91,12 +91,9 @@ GeoTestsupp_space(data, coordx,
   \code{method = "TB"}. Default is \code{10000}. Ignored for Cholesky
   simulation.}
 
-  \item{parallel}{Logical value indicating whether bootstrap fits should be
-  evaluated in parallel when the required packages are available.}
+  \item{parallel}{Logical; default \code{FALSE}. Set \code{TRUE} to evaluate bootstrap fits in parallel when the required packages are available.}
 
-  \item{ncores}{Number of workers. If \code{NULL}, the value is selected
-  automatically from the available cores and the number of bootstrap
-  replications.}
+  \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and the number of bootstrap replications. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free.}
 
   \item{progress}{Logical value indicating whether progress information should
   be displayed through \pkg{progressr}.}

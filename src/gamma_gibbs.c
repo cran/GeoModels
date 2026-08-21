@@ -43,41 +43,7 @@ static inline void simple_krige_from_inv_core(const double *inv,
   *var_out = 1.0 / diag_val;
 }
 
-/* ====================== Funciones EXPORTADAS (C64) ====================== */
 
-/* ---- 1) Kriging simple a partir de la inversa ----
- inv:    matriz n×n (col-major, como en R)
- n:      dimensión (n)
- iii:    índice 1-based (como en R); internamente se pasa a 0-based
- w_out:  salida de largo n-1
- var_out: salida escalar
- */
-void C64_simple_krige_from_inv(double *inv,
-                               long long *n,
-                               long long *iii,
-                               double *w_out,
-                               double *var_out) {
-  int nloc = (int)(*n);
-  int iloc = (int)((*iii) - 1);  // R->C
-  if (nloc <= 1) error("n debe ser >= 2.");
-  simple_krige_from_inv_core(inv, nloc, iloc, w_out, var_out);
-}
-
-/* ---- 2) Densidad normal multivariante isótropa (s*I) ----
- x, u:  vectores de largo v
- s:     varianza escalar (>0)
- v:     dimensión
- out:   escalar con la densidad
- */
-void C64_mult_dist_u(double *x,
-                     double *u,
-                     double *s,
-                     long long *v,
-                     double *out) {
-  if (*s <= 0.0) error("s debe ser positivo.");
-  if (*v <= 0)   error("v debe ser positivo.");
-  *out = mvn_iso_pdf(x, u, *s, (int)(*v));
-}
 
 /* ---- 3) Bucle condicional (Gibbs + MH) IN-PLACE sobre U ----
  SigmaInv: n×n inversa (col-major)

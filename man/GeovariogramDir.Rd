@@ -76,6 +76,13 @@ GeoVariogramDir(data, coordx, coordy = NULL, coordz = NULL,
  \item{npairs}{Number of point pairs in each bin.}
 }
 
+
+\section{Three-dimensional coordinates}{
+With three-dimensional Euclidean coordinates, lag distances use all three
+coordinates, but direction classes are azimuths in the \eqn{xy} plane.
+Distances \code{"Geod"} and \code{"Chor"} require exactly two coordinate
+columns. The automatic maximum lag includes the extent of the z coordinate.
+}
 \seealso{
  \code{\link{GeoVariogram}}, \code{\link{GeoNeighIndex}}
 }

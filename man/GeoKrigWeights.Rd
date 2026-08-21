@@ -2,14 +2,14 @@
 \alias{GeoKrigWeights}
 \encoding{UTF-8}
 \title{
-Compute kriging weights (and related quantities) for Gaussian / non-Gaussian
-spatial, spatio-temporal or multivariate random fields
+Compute validated Gaussian kriging weights for spatial and spatio-temporal random fields
 }
 \description{
-Given a set of spatial locations (and possibly temporal instants)
-the function returns the vector (or matrix) of kriging weights,
-the covariance matrix used in the kriging system and,
-optionally, the inverse of the left-hand-side matrix.
+Given a set of spatial locations (and possibly temporal instants), the function
+returns Gaussian kriging weights and the covariance quantities used to build the
+kriging system.  Model-specific non-Gaussian prediction is provided by
+\code{\link{GeoKrig}} and \code{\link{GeoKrigloc}} rather than by this low-level
+weights helper.
 }
 \usage{
 GeoKrigWeights(
@@ -28,10 +28,8 @@ GeoKrigWeights(
  dimension. Ignored if \code{coordx} is already a matrix.}
  \item{coordz}{Optional numeric vector giving a third spatial coordinate
  dimension.}
- \item{coordt}{Optional numeric vector of temporal coordinates
- (length \eqn{t}{t}). If missing, a purely spatial random field is assumed.}
- \item{coordx_dyn}{List of \eqn{m} matrices (\eqn{d_t\times 2}{d_t x 2})
- containing time-varying spatial coordinates. See \code{\link{GeoKrig}}.}
+ \item{coordt}{Optional numeric vector containing the temporal coordinates of the observations. If missing, a purely spatial random field is assumed. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
+ \item{coordx_dyn}{List of one two- or three-column observation-coordinate matrix per temporal instant.  Blocks are concatenated by time; rows within each block retain their matrix order.  See \code{\link{GeoModels-spacetime-ordering}}.}
  \item{corrmodel}{Character string naming a valid correlation model.
  See \code{\link{GeoCovmatrix}} for admissible choices.}
  \item{distance}{Character string specifying the spatial distance.
@@ -42,9 +40,8 @@ GeoKrigWeights(
  the kriging weights are required.}
  \item{method}{Character string indicating the matrix factorisation
  used to solve the kriging system: \code{"cholesky"} (default) or \code{"svd"}.}
- \item{model}{Character string specifying the random field type
- (e.g.\ \code{"Gaussian"}, \code{"SkewGaussian"}, \code{"Gamma"}, …).
- See \code{\link{GeoFit}}.}
+ \item{model}{Character string.  The validated public implementation currently
+ requires \code{"Gaussian"} (the alias \code{"Gauss"} is accepted).}
  \item{n}{Integer. Number of trials for Binomial random fields
  (default \code{1}).}
  \item{nloc}{Integer. Number of trials for the prediction locations
@@ -58,20 +55,23 @@ GeoKrigWeights(
  \item{sparse}{Logical. If \code{TRUE}, sparse‐matrix algorithms
  (package \pkg{spam}) are employed. Only effective with compactly
  supported covariance functions.}
- \item{time}{Numeric vector of length \eqn{m}{m} giving the temporal
- instants for which weights are required. Ignored if \code{coordt} is
- missing.}
+ \item{time}{Numeric vector giving the temporal instants for which weights are required. Values need not be equally spaced and are interpreted on the same numeric time scale as \code{coordt}. Ignored if \code{coordt} is missing.}
  \item{which}{Integer (\code{1} or \code{2}) selecting the variable whose
  weights are returned in the bivariate case.}
- \item{copula}{Character string naming a copula when a non-Gaussian
- dependence structure is used (\code{"Clayton"} or \code{"Gaussian"}).}
- \item{X}{Numeric matrix of spatio-temporal covariates at data locations.}
- \item{Xloc}{Numeric matrix of spatio-temporal covariates at
- prediction locations.}
- \item{Mloc}{Numeric; Vector of spatio(temporal) estimated means 
- associated to predicted locations.}
+ \item{copula}{Must be \code{NULL}.  Copula conditional-simulation code requests
+ these weights on the latent Gaussian scale.}
+ \item{X}{Numeric design matrix at observation locations.  Fixed-location observations are ordered time then site; dynamic observations are ordered by the temporal blocks of \code{coordx_dyn}.}
+ \item{Xloc}{Numeric design matrix at prediction tasks, ordered location then time: all requested times for the first row of \code{loc}, then all requested times for the second row, and so on.}
+ \item{Mloc}{Numeric vector of known prediction means in the same location-major order as \code{Xloc}.  Use either \code{Mloc} or \code{Xloc}, not both.}
 }
 \details{
+
+Mean inputs follow \code{\link{GeoKrig}}.  Coefficients \code{mean},
+\code{mean1}, and so on correspond in order to the columns of \code{X}; an
+intercept-only model uses only \code{mean}.  A vector \code{param$mean} is a
+known observation mean and is mutually exclusive with \code{X}.  At
+prediction locations, use either \code{Xloc} or \code{Mloc}, not both.
+
 The function builds the kriging system
 \deqn{\Sigma \mathbf{w} = \boldsymbol{\sigma}_0}{Sigma w = sigma_0}
 where \eqn{\Sigma}{Sigma} is the covariance matrix between observed
@@ -79,25 +79,38 @@ locations and \eqn{\boldsymbol{\sigma}_0}{sigma_0} the vector of
 covariances between observed and prediction locations. 
 The solution \eqn{\mathbf{w}}{w} is returned together with \eqn{\Sigma}{Sigma}
 and, optionally, \eqn{\Sigma^{-1}}{Sigma^-1}.
-Universal kriging with covariates is supported; in that case the
-generalised least squares estimate of the mean parameters is appended.
-No actual prediction is carried out; for full kriging use
-\code{\link{GeoKrig}}.
+The returned weights solve the Gaussian covariance system only.  Mean inputs are
+validated for ordering compatibility, but no non-Gaussian covariance transform is
+performed here.  No actual prediction is carried out; for full Gaussian or
+non-Gaussian prediction use \code{\link{GeoKrig}}.
 }
+\section{Spatio-temporal ordering}{
+Observation-level rows follow time-major order.  For fixed sites this is the
+order of \code{c(t(data))}; for dynamic sites it is the row-binding of
+\code{coordx_dyn} by list element.  Prediction tasks follow location-major
+order, so rows of \code{Xloc} and elements of \code{Mloc} enumerate all
+requested times for the first prediction location before moving to the next
+location.  See \code{\link{GeoModels-spacetime-ordering}}.
+}
+
 \value{
-An object of class \code{KgWeights}, a list containing:
- \item{weights}{Numeric vector (or matrix) of kriging weights.}
- \item{covmat}{Covariance matrix \eqn{\Sigma}{Sigma} used in the kriging system.}
- \item{invcov}{Inverse of \eqn{\Sigma}{Sigma} (only if \code{sparse = FALSE}).}
- \item{beta}{Estimated regression coefficients when covariates are supplied.}
- \item{type}{Character string: \code{"simple"} or \code{"universal"}.}
- \item{model}{Input \code{model}.}
- \item{corrmodel}{Input \code{corrmodel}.}
- \item{spacetime}{Logical: \code{TRUE} for spatio-temporal case,
- \code{FALSE} otherwise.}
- \item{sparse}{Logical: was a sparse algorithm used?}
- \item{loc}{Copy of the \code{loc} argument.}
- \item{time}{Copy of the \code{time} argument (if any).}
+A list containing:
+ \item{weights}{Numeric matrix of Gaussian kriging weights.  The validated
+ orientation is observations by prediction tasks, as recorded in
+ \code{weights_orientation}.}
+ \item{weights_orientation}{Character string describing the weight-matrix
+ orientation.}
+ \item{covmatrix}{Observed Gaussian covariance matrix.}
+ \item{CC}{Observation--prediction Gaussian cross-covariance matrix.}
+ \item{model}{The canonical model name (currently \code{"Gaussian"}).}
+ \item{corrmodel}{Input correlation model.}
+ \item{param}{Parameters used to construct the Gaussian covariance matrix.}
+ \item{bivariate}{Logical indicating a bivariate Gaussian correlation model.}
+ \item{spacetime}{Logical indicating a space-time correlation model.}
+ \item{loc}{Prediction locations.}
+ \item{tloc}{Number of requested prediction times.}
+ \item{Xloc,Mloc,mean_obs}{Normalized mean inputs retained for alignment and
+ conditional-simulation workflows.}
 }
 \references{
  Gaetan, C. and Guyon, X. (2010) \emph{Spatial Statistics and Modeling}.

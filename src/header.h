@@ -27,6 +27,7 @@
 #include <math.h>
 #include <R_ext/Memory.h>
 #include <float.h>
+#include <limits.h>
 
 
 
@@ -261,7 +262,6 @@ double igamc_continued_fraction(double, double);
 double igam_series(double, double);
 double igamc_series(double, double);
 double asymptotic_series(double, double, int);
-void igam_call(double *a,double *x,double *res);
 
 
 double igam(double a, double x);
@@ -271,7 +271,6 @@ void  reghyperg_call(int *a,int *b,double *x,double *res);
 void hyperg_1F2_e_call( double *a,  double *b,double *c,  double *x, double *val);
 
 
-void Maxima_Minima_time(double *res,double *coordt,int *nsize);
 double lanczos_sum_expg_scaled(double x);
 
 
@@ -378,6 +377,10 @@ extern int *istap;//is tapering?
 extern double *lags;// vector of spatial distances for tapering
 extern double *lags_1;// vector of spatial distances for tapering
 extern double *lagt;// vector of temporal distance for tapering
+extern double *pairweights;// cached Bohman pair weights
+extern int *pg_count1;// cached Poisson-Gamma first counts
+extern int *pg_count2;// cached Poisson-Gamma second counts
+extern int *pg_count_n;// number of cached Poisson-Gamma pairs
 //double **mlags;// vector of spatial distances
 //double **mlagt;// vector of temporal distances
 extern double *maxdist;// the threshould of the spatial distances
@@ -404,6 +407,7 @@ extern int *cdyn; // dynamic coords indicator
 //char *fkernel; // path to kernel binary
 //int *totpairs;// total number of pairs
 //---------END GLOBAL VARIABLES-------------
+void DeleteGlobalVar2(void);
 //void indx(double *ind, int *n);
 
 
@@ -433,13 +437,10 @@ File name: CorrelationFunction.c
 Description: procedures for computation of correlation functions
 Start
  ---------------------------------------------------------------*/
-double Hyp_conf_laplace_approx(double a, double b, double z);
-double asym_aprox_1F1(double a, double b, double z);
 int fmax_int(int u,int v);
 int fmin_int(int u,int v);
 //double hypergeo(double aux, double *param);
 
-double bi_matern_bounds(double scale11,double scale22,double scale12,double nu11,double nu22,double nu12,double t,int c);
 double cdf_norm(double lim1,double lim2,double a11,double a12);
 double clamp_corr(double x);
 double owens_t(double h, double a);
@@ -460,7 +461,6 @@ double one_log_kumma2(double z,double m, double shape1,double shape2,double min,
 double one_log_kumma(double z,double m, double shape1,double shape2,double min,double  max);
 double one_log_beta(double z, double shape1,double shape2,double min,double  max);
 double one_log_loggaussian(double z,double m, double sill);
-double one_log_dpoisgamma(int z,double lambda, double a);
 double one_log_weibull(double z,double m, double shape);
 double one_log_gamma(double z,double m, double shape);
 double one_log_two_pieceTukey(double z,double m, double sill,double tail, double eta);
@@ -470,16 +470,23 @@ double one_log_gammagem(double z,double shape,double n);
 double one_log_bomidal(double z,double m, double sill,double nu,double delta, double eta);
 double one_log_BinomnegZIP(int z,double n, double mu, double mup);
 double one_log_PoisZIP(int z,double lambda, double mup);
-double one_log_PoisgammaZIP(int z,double lambda, double mup,double shape);
 double one_log_loglogistic(double z,double m, double shape);
 double one_log_logistic(double z,double m, double sill);
 double one_log_negbinom_marg(int u,int N, double p);
 double biv_binom (int NN, int u, int v, double p01,double p10,double p11);
-double biv_binom2(int NN_i,int NN_j, int k, int u, int v, double p01,double p10,double p11);
 double log_biv2gauss(int *cormod, double dij,double *par, double data1, double data2, int first,int second);
 double biv_Poisson(double corr,int r, int t, double mean_i, double mean_j);
 double appellF4(double a,double b,double c,double d,double x,double y);
 double biv_PoissonGamma(double corr,int r, int t, double mean_i, double mean_j, double a);
+void GeoPEMTimeReset(void);
+void GeoPEMTimeGet(double *out);
+void GeoPEMStatusGet(int *out);
+void GeoPEMHypRecGet(double *out);
+void GeoPEMPGrtBetaEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
+void GeoPEMPGrtLegacyEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
+void GeoPEMCorrEval(double *corr,double *mean_i,double *mean_j,double *shape,double *out);
+void GeoPEMZIPEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,
+                   double *mup,double *nugget1,double *nugget2,double *shape,double *out);
 double biv_PoissonZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2);
 double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape);
 //double biv_binomnegZINB(int N,double corr,int r, int t, double mean_i, double mean_j,double nugget1,double nugget2,double mup);
@@ -488,7 +495,6 @@ double biv_binomnegZINB(int N, double corr, int r, int t, double mean_i, double 
     double *lgamma_cache, int cache_size);
 double biv_wrapped(double alfa,double u, double v, double mi, double mj, double nugget,double sill,double corr);
 double biv_Weibull(double corr,double zi,double zj,double mui, double muj, double shape);
-double biv_Weibull2(double rho12,double zi,double zj,double mi,double mj, double shape1,double shape2);
 double biv_gamma(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_gamma2(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_gamma_gen(double corr,double zi,double zj,double mui, double muj, double shape,double n);
@@ -505,14 +511,8 @@ double biv_binegbinary(int NN, int u, int v,double pu,double pv, double p11);
 double biv_binom222(int n1,int n2, int u, int v, double p01,double p10,double p11);
 double bin_aux(int a,int NN,int u,int v,double p1, double p2,double p11);
 //double aux_biv_binomneg (int NN, int u, int v, double x,double y,double p11);
-double aux_biv_binomneg(int NN, int u, int v, double x, double y, double p11,
-                        double *lgamma_cache, int cache_size);
 //double aux_biv_binomneg_simple(int NN, int u, double p01,double p10,double p11);
-double aux_biv_binomneg_simple(int NN, int u, double p01, double p10, double p11,
-                               double *lgamma_cache, int cache_size);
-double aux_euv_binomneg (int N, double p1,double p2,double p11);
 double aux_biv_binom(int n1,int n2, int u, int v,double p01,double p10,double p11);
-double corr_binomneg (int N, double p1,double p2,double p11);
 double psi(int i, int j, double p1, double p2, double p12,double**cache);
 double cov_binom_neg(int m,double p11,double p1, double p2);
 double biv_poisbin (int NN,  int u, int v, double p01,double p10,double p11);
@@ -541,11 +541,8 @@ double biv_Mis_PoissonZIP(double corr,double data_i, double data_j,
                              double mean_i, double mean_j,double mup,double nugget1,double nugget2);
 double triv_skew(double x,double c_0i,double c_0j, double rho,double data_i,double data_j,double *nuis);
 
-double compute_biv_norm_density(double d1, double d2, double mui, double muj, 
-                                             double vvi, double vvj, double corr1);
 
 double LambertW(double z);
-double inverse_lamb(double x,double tail);
 double dbnorm(double x_i,double x_j,double mean_i,double mean_j,double sill,double corr);
 double biv_tukey_h(double data_i, double data_j, double mean_i, double mean_j, double tail, double sill, double corr);
 double biv_tukey_hh(double corr,double data_i,double data_j,double mui,double muj,
@@ -554,18 +551,53 @@ double cond_exp_skew(double c_0i,double c_0j,double rho, double data_i,double da
 double cond_exp_bin(int *cormod,double data_i,double data_j,double lags_i,double lags_j,double lags,double *nuis,double *par,double psm);
 double biv_cop(double rho,int type_cop,int cond,
              double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2);
-double marg_binom(int n,double x,double p);
-double marg_binomneg(int n,int x,double p);
-double marg_pois(int n,double x,double p);
-double marg_geom(int x,double p);
 double corr_pois_gen(double corr,double mean_i, double mean_j, double a);
+SEXP GeoCorrPGsVecCall(SEXP corr,SEXP mean,SEXP shape);
+void CorrPGsVec(double *corr,double *mean,double *shape,int *n,double *out);
 double corr_pois_s(double rho,double mi);
 double corr_pois(double rho,double mi,double mj);
 double corr_pois_gen(double corr,double mean_i, double mean_j, double a);
 double corr_tukeygh(double rho,double eta,double tail);
 double corr_skewt(double corr,double df,double skew);
 double corr_pois1(double rho,double lambda1,double lambda2);
-double marg_p(double categ_0,double psm,int *model,int n);
+
+typedef struct {
+    double sum;
+    double compensation;
+} GeoKahanSum;
+
+static R_INLINE void GeoKahanInit(GeoKahanSum *x)
+{
+    x->sum = 0.0;
+    x->compensation = 0.0;
+}
+
+static R_INLINE void GeoKahanAdd(GeoKahanSum *x, double value)
+{
+    const double y = value - x->compensation;
+    const double t = x->sum + y;
+    x->compensation = (t - x->sum) - y;
+    x->sum = t;
+}
+
+void SetPGPairCounts(double *data1,double *data2,int *n,int *ok);
+double GeoPGCachedWeight(int index,int weighted,int spacetime);
+int GeoPGPreparePair(double data_i,double data_j,double eta_i,double eta_j,
+                     int *r,int *t,double *mean_i,double *mean_j);
+int GeoPGPreparePairAt(int index,double data_i,double data_j,double eta_i,double eta_j,
+                       int *r,int *t,double *mean_i,double *mean_j);
+double GeoPGLogJoint(double corr,int r,int t,double mean_i,double mean_j,double shape);
+double GeoPGLogMarginal(int z,double mean,double shape);
+double GeoPGLogConditional(double corr,int r,int t,double mean_i,double mean_j,double shape);
+double GeoPGZIPLogJoint(double corr,int r,int t,double mean_i,double mean_j,double mup,
+                        double nugget1,double nugget2,double shape);
+double GeoPGZIPLogMarginal(int z,double mean,double mup,double shape);
+double GeoPGZIPLogConditional(double corr,int r,int t,double mean_i,double mean_j,double mup,
+                              double nugget1,double nugget2,double shape);
+double GeoPGGaussLogJoint(double corr,double data_i,double data_j,
+                          double mean_i,double mean_j,double shape);
+double GeoPGGaussLogConditional(double corr,double data_i,double data_j,
+                                double mean_i,double mean_j,double shape);
 
 double CheckCor(int *cormod, double *par);
 
@@ -596,11 +628,9 @@ double CorFunCauchy(double lag, double power2, double scale);
 double CorFunDagum(double lag, double power1, double power2, double scale);
 double CorFunGenCauchy(double lag, double power1, double power2, double scale);
 double CorFunGenCauchy2(double lag, double power1, double power2, double scale);
-double CorFunWitMatCau(double h, double scale12,double smo12);
 double Shkarofski(double lag, double a,double b, double k);
 double CorFunSmoke(double h, double  scale,double  smooth);
 double CorFunGenWitMatCau(double h, double scale,  double smoo,double beta);
-double CorFunSferical(double lag, double scale);
 double CorFunStable(double lag, double power, double scale);
 double CorFunWave(double lag, double scale);
 double CorFunWitMat(double lag, double scale, double smooth);
@@ -617,18 +647,7 @@ double CorFunW_genhole(double lag,double R_power1,double smooth,double scale,dou
 double CorFunHyperg2(double lag,double R_power,double R_power1,double smooth,double scale);
 double CorFunHyperg(double lag,double R_power,double smooth,double scale);
 double CorKummer(double lag,double R_power,double smooth,double scale);
-double CorFunWend1(double lag,double scale);
-double CorFunWend2(double lag,double scale);
-double CorFunWend3(double lag,double scale);
-double CorFunWend4(double lag,double scale);
-double CorFunWend5(double lag,double scale);
-double CorFunWendhole3(double lag,double scale);
-double CorFunWendhole2(double lag,double scale);
-double CorFunWendhole1(double lag,double scale);
-double CorFunWendhole(double lag,double scale);
-double CorFunWend0_tap(double lag,double scale,double smoo);
 double CorFunWend1_tap(double lag,double scale,double smoo);
-double CorFunWend2_tap(double lag,double scale,double smoo);
 double spherical (double lag, double scale);
 double Matern_Matern_nosep(double h, double u,
                            double scale_s, double scale_t,
@@ -667,13 +686,8 @@ double VarioGCauchy(double lag, double power1, double power2, double scale);
  ---------------------------------------------------------*/
 
 void CoFactor(double **a,int n,double **b);
-void Transpose(double **a,int n,double k);
-void Matrix_prod(double **a,double **b,double **c,int n);
-void Matrix_prod_vec(double **a,double *b,double *c,int n);
 double Determinant(double **a,int n);
 double QFORM(double **A,double *x,double *y,int n);
-double QFORM2(double **A,double *x,double *y,int n, int m);
-double Trace(double **A,int n);
 void lubksb(double **a, int n, int *indx, double *b);
 void ludcmp(double **a, int n, int *indx, double *dd);
 
@@ -695,35 +709,21 @@ double cdf_norm2(double lim1,double lim2,double a11,double a12, double a22);
 
 double log_biv_Norm(double corr,double zi,double zj,double mi,double mj,double vari, double nugget);
 
-double d2norm(double x, double y, double rho);
 double d22norm(double x, double y,double v11,double v22,double v12);
 double d2lognorm(double x, double y, double sill,double nugget, double mux,double muy,double rho);
 
 double dNnorm(int N,double **M, double *dat);
-
-double int_pt(double x, double df);
 double kummer(double a, double b,double c);
 
-double int_gen(double x,double mu, double alpha,double lag,double supp);
-double int_onef2(double x,double a, double b1,double b2,double y);
 double int_hyp(double x,double a, double b,double c,double z);
 double int_gen_hyp(double x,double a, double b,double z,double c);
-void integr_pt(double *x, int n, void *ex);
 void integr_hyp(double *x, int n, void *ex);
 void integr_gen_hyp(double *x, int n, void *ex);
-void integr_onef2(double *x, int n, void *ex);
 double HyperG_integral(double x, double *param);
 double IntHyp(double x, double *param);
-void integr_gen(double *x, int n, void *ex);
-
 double int_gen_skew(double x,double data_i, double data_j,double c_0i,double c_0j,double rho,double *nuis);
 void integr_gen_skew(double *x, int n, void *ex);
 double cond_exp_skew(double c_0i,double c_0j,double rho, double data_i,double data_j,double *nuis);
-
-double  wendintegral(double x, double *param);
-double onef2integral(double x, double *param);
-double pbnorm(int *cormod, double h, double u, double lim1, double lim2, double nugget, double var,double *par, double thr);
-double phalf_gauss (double z);
 double pbnorm22(double lim1,double lim2,double corr);
  double safe_pbnorm22(double x, double y, double rho);
 double bvnmvn_optimized(const double *lower, const double *upper, 
@@ -731,14 +731,6 @@ double bvnmvn_optimized(const double *lower, const double *upper,
 double pblogi22(double lim1,double lim2,double corr);
 double ptnorm(int which,int *cormod, double h0,double h1,double h2, double u0, double u1,double u2, 
                  double *nuis, double *par, double thr);
-double pbhalf_gauss (double zi,double zj,double rho,double nugget);
-double pnorm_two_piece(double x, double eta);
-double pbnorm_two_piece( int *cormod, double h, double u, 
-    double xi, double xj, double nugget, double var,double eta,double *par);
-
-
-
-
 // 4)
 /*----------------------------------------------------------------
 File name: Godambe.c
@@ -814,8 +806,6 @@ void Vari_SubSamp_biv(double *betas,double *coordx, double *coordy, double *coor
 void Vari_SubSamp_st2(double *betas,double *coordx, double *coordy, double *coordt, int *cormod, double *data, int *dst, double *eps, int *flagcor,
                    int *flagnuis,int *like,double *mean,int *model,double *NN,int *nbetas,int *npar, int *nparc,int *nparcT, double *nuis,int *np, double *parcor,
                    int *type_lik,double *varimat, double *winc, double *winstp,double *winc_t,double *winstp_t,int *weigthed,double *Z,int *ns,int *NS);
-void cumvec(int *ns,int *res,int len);
-void Rep(double *coordt,int *ns, double *res);
 /*----------------------------------------------------------------*/
 
 double mij(double qij, double w, double pij, double p);
@@ -835,10 +825,6 @@ Start
 
 void RangeDist(double *max, double *min);
 
-double fac(int x,int j);
-
-double logfac(int n);
-
 /*for bivariate t distributions*/
 double Poch(int q,int n);
 double biv_T(double rho,double zi,double zj,double nuu,double nugget);
@@ -848,11 +834,6 @@ double biv_two_pieceT(double rho,double zi,double zj,double sill,double nuu,doub
 double biv_half_Gauss(double rho,double zi,double zj);
 double biv_two_pieceGaussian(double rho,double zi,double zj,double sill,double eta,double p11,
   double mui,double muj);
-
-
-
-double stirling(double x);
-
 double dist(int type_dist,double coordx,double locx,double coordy,double locy,double coordz,double locz, double radius); 
 
 double Dist_geodesic(double loni, double lati, double lonj, double latj,double radius);
@@ -862,39 +843,20 @@ double Dist_chordal(double loni, double lati, double lonj, double latj,double ra
 
 int is_equal(double val1, double val2);
 
-double Maxima(double *x, int *size);
-double Maxima_i(int *x, int size);
-
-double Minima(double *x, int *size);
 
 
 
 
 
-void Range(double *x, double *ran, int *size);
-
-void Seq(double *x, int len, double *res);
-
-void SeqStep(double *x, int len, double step, double *res);
-
-void SetSampling(double *coordx, double *coordy, double *data, int n, int *npts, int nbetas,
-     double *scoordx, double *scoordy, double *sdata, double xmax,
-     double xmin, double ymax, double ymin, double **sX,double **X);
 
 
-void SetSampling_biv(double *coordx, double *coordy, double *data, int n, int *npts,
-                     double *scoordx, double *scoordy, double *sdata, double xmax,
-                     double xmin, double ymax, double ymin);
 
-void SetSampling_st(double *data,double *sdata, int *ncoordss,int *ntime, int nbetas,
-        int wint,int k, double **sX,double **X);
 
-void SetSampling_s(double *coordx, double *coordy, double *data, int *npts, int nbetas,
-                   double *scoordx, double *scoordy, double *sdata, double xmax,
-                   double xmin, double ymax, double ymin,double **sX,double **X,int *ns,int *NS, int *NS_sub, double *res_sub, double *coordt,int *ns_sub);
 
-void SetSampling_t(double *data,double *sdata, int nbetas,int npts,
-                   int nt,int wint,int k,double **sX,double **X,int *ns_sub,int *NS_sub,int nsub_t, int *ntimeS, double *s2cx, double *s2cy, double *scoordx, double *scoordy);
+
+
+
+
 
 
 
@@ -923,6 +885,7 @@ double hypergeometric_1F2(double a, double b, double c, double x, double tol);
 double biv_unif_CopulaGauss(double dat1,double dat2,double rho);
 double biv_unif_CopulaClayton(double dat1,double dat2,double rho,double nu);
 double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho,double alpha);
+void biv_unif_CopulaSkewGauss_rect_call(double *ulo,double *uhi,double *vlo,double *vhi,double *rho,double *nu,double *res);
 
 double lgam_sgn(double x, int *sign);
 //double lgam(double x);
@@ -992,41 +955,24 @@ double log_regularized1F1(int n, int m,double z) ;
 double aprox_reg_1F1(int n, int m,double z) ;
 
 double try(int m, double b,double z);
-double Phi(double x);
-double Phi2diag( double x, double a, double px, double pxs );
-
-double Phi2help( double x, double y, double rho );
-
-double Phi2( double x, double y, double rho );
-
 //double igam2(int n,double x);
 
 double igam_fac(double a, double x);
-double biv_chisqu2(double corr,double zi,double zj, double shape);
 
 
-double asy_log_besselI(double z,double nu);
 
 //double corrPGs(double corr,double mean,double a);
 
 double CorrPGns(double corr,double mean_i, double mean_j, double a);
-double biv_Norm(double corr,double zi,double zj,double mi,double mj,double vari1,double vari2, double nugget);
-
-
 double p3norm(int *cormod, double h0,double h1,double h2, double u0, double u1,double u2,
               double *nuis, double *par);
 
-double aprox(int k,double a, double b) ;
-double aprox1(double a) ;
 
-double appellF42211(double x,double y);
 
 double appellF4_mod(double nu,double rho,double x,double y,double nugget);
 
-double biv_Unif(double rho,double ui,double uj);
 
 double biv_half_Tukeyh(double rho,double ti,double tj,double tail);
-double  binomialCoeff(int n, int k) ;
 
 
 double Prt(double corr,int r, int t, double mean_i, double mean_j);

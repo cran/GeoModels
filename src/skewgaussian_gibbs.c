@@ -1,27 +1,5 @@
 #include "header.h"
 
-
-void krige_from_inv(double *Inv_mat, int *n, int *iii, double *mean, double *var){
-  int j, count = 0;
-  double diag_val = Inv_mat[(*iii-1)*(*n) + (*iii-1)];
-  
-  for (j = 0; j < *n; j++) {
-    if (j != (*iii-1)) {
-      mean[count] = -Inv_mat[(*iii-1)*(*n) + j] / diag_val;
-      count++;
-    }
-  }
-  *var = 1.0 / diag_val;
-}
-
-// Function to generate multivariate normal with diagonal covariance
-// For 2D case with diagonal covariance matrix
-void mvrnorm_diag_2d(double *mu, double *sigma_diag, double *result) {
-  // Generate two independent normal variates
-  result[0] = mu[0] + sigma_diag[0] * norm_rand();
-  result[1] = mu[1] + sigma_diag[0] * norm_rand();
-}
-
 // Main projection function
 void rnorm_constraint_simple(double *A, double *b, double *mu, 
                              double *sigma, double *result) {
@@ -186,10 +164,7 @@ void skew_gaussian_gibbs_sampler(double *data_obs,
             error("Non-positive diagonal element in the precision matrix");
     }
 
-    random_ind = (int *) malloc((size_t) N * sizeof(int));
-
-    if (random_ind == NULL)
-        error("Unable to allocate the Gibbs ordering vector");
+    random_ind = (int *) R_alloc((size_t) N, sizeof(int));
 
     one_plus_gamma2 = 1.0 + gamma * gamma;
 
@@ -352,5 +327,4 @@ void skew_gaussian_gibbs_sampler(double *data_obs,
 
     PutRNGstate();
 
-    free(random_ind);
 }

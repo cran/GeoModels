@@ -1,24 +1,83 @@
 ####################################################
 ### File name: GeoKrigloc.r
 ####################################################
+
+
+###########################################################################
+##  Future backend helpers                                                ##
+###########################################################################
+
+.GeoKriglocSetFuturePlan <- function(workers) {
+  backend <- tolower(as.character(
+    getOption("GeoModels.GeoKrigloc_future_backend", "auto")
+  )[1L])
+  if (!(backend %in% c("auto", "multicore", "multisession"))) {
+    stop(
+      "GeoKrigloc: option 'GeoModels.GeoKrigloc_future_backend' must be one of 'auto', 'multicore', or 'multisession'.",
+      call. = FALSE
+    )
+  }
+
+  can_multicore <- tryCatch(
+    isTRUE(future::supportsMulticore()),
+    error = function(e) FALSE
+  )
+  if ((identical(backend, "multicore") ||
+       (identical(backend, "auto") && can_multicore)) && can_multicore) {
+    future::plan(future::multicore, workers = workers)
+    return("multicore")
+  }
+  if (identical(backend, "multicore") && !can_multicore) {
+    warning(
+      "GeoKrigloc: multicore futures are not supported in this R session; using multisession.",
+      call. = FALSE
+    )
+  }
+
+  libs <- .libPaths()
+  pkg_dir <- tryCatch(find.package("GeoModels", quiet = TRUE),
+                      error = function(e) character(0))
+  if (length(pkg_dir) == 1L && nzchar(pkg_dir)) libs <- c(dirname(pkg_dir), libs)
+  libs <- unique(vapply(
+    libs[nzchar(libs)], normalizePath, character(1L),
+    winslash = "/", mustWork = FALSE
+  ))
+  future::plan(future::multisession, workers = workers, rscript_libs = libs)
+  "multisession"
+}
+
 ###########################################################################
 ##  Top-level worker — defined OUTSIDE GeoKrigloc 
 ###########################################################################
 
 .perform_kriging_worker <- function(k, neigh, param, corrmodel, distance,
-                                    n, model, type_krig, sparse, anisopars,
-                                    radius, mse, copula, varcov,
+                                    n, nloc, model, type_krig, sparse, anisopars,
+                                    radius, mse, copula, varcov, method,
                                     loc, time, Xloc, Mloc, M,
-                                    task_indices, is_space, spacetime) {
+                                    task_indices, is_space, spacetime,
+                                    which) {
+  .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
+  on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
+
+
+  if (!is.null(neigh$numpoints) && length(neigh$numpoints) >= k &&
+      neigh$numpoints[k] == 0L) {
+    return(list(indices = as.integer(k), pred = NA_real_,
+                mse = if (mse) NA_real_ else NULL))
+  }
 
   local_param <- param
   if (!is.null(M)) local_param$mean <- neigh$M[[k]]
 
-  Xloc_k <- if (!is.null(Xloc)) {
-    if (is.vector(Xloc)) matrix(Xloc[k], nrow = 1L) else Xloc[k, , drop = FALSE]
-  } else NULL
+  Xloc_k <- if (!is.null(Xloc)) Xloc[k, , drop = FALSE] else NULL
 
   Mloc_k <- if (!is.null(Mloc)) Mloc[k] else NULL
+  nloc_k <- if (is.null(nloc) || length(nloc) == 1L) nloc else nloc[k]
+  n_k <- n
+  if (length(n) > 1L && !is.null(neigh$indices) && length(neigh$indices) >= k) {
+    idx_n <- neigh$indices[[k]]
+    if (length(n) >= max(idx_n, 0L)) n_k <- n[idx_n]
+  }
 
   if (is_space) {
     pr <- GeoKrig(
@@ -27,7 +86,9 @@
       coordx    = neigh$coordx[[k]],
       corrmodel = corrmodel,
       distance  = distance,
-      n         = n,
+      n         = n_k,
+      nloc      = nloc_k,
+      method    = method,
       X         = neigh$X[[k]],
       Xloc      = Xloc_k,
       Mloc      = Mloc_k,
@@ -47,10 +108,12 @@
     j <- task_indices[k, 2L]
 
     if (spacetime) {
+      coordx_dyn_k <- if (!is.null(neigh$coordx_dyn)) neigh$coordx_dyn[[k]] else NULL
       pr <- GeoKrig(
         data      = neigh$data[[k]],
-        coordx    = neigh$coordx[[k]],
+        coordx    = if (is.null(coordx_dyn_k)) neigh$coordx[[k]] else NULL,
         coordt    = neigh$coordt[[k]],
+        coordx_dyn = coordx_dyn_k,
         loc       = loc[i, ],
         time      = time[j],
         X         = neigh$X[[k]],
@@ -67,13 +130,20 @@
         mse       = mse,
         varcov    = varcov,
         copula    = copula,
-        n         = n
+        n         = n_k,
+        nloc      = nloc_k,
+        method    = method
       )
     } else {
-      # bivariate
+      # bivariate: preserve the two variable-specific coordinate blocks.
+      coordx_dyn_k <- if (!is.null(neigh$coordx_dyn)) neigh$coordx_dyn[[k]] else NULL
+      if (!is.null(neigh$block_sizes) && any(neigh$block_sizes[[k]] == 0L)) {
+        return(list(pred = NA_real_, mse = if (mse) NA_real_ else NULL))
+      }
       pr <- GeoKrig(
         data      = neigh$data[[k]],
-        coordx    = neigh$coordx[[k]],
+        coordx    = if (is.null(coordx_dyn_k)) neigh$coordx[[k]] else NULL,
+        coordx_dyn = coordx_dyn_k,
         loc       = loc[i, ],
         X         = neigh$X[[k]],
         Mloc      = Mloc_k,
@@ -89,12 +159,16 @@
         radius    = radius,
         mse       = mse,
         copula    = copula,
-        n         = n
+        n         = n_k,
+        nloc      = nloc_k,
+        method    = method,
+        which     = which
       )
     }
   }
 
-  list(pred = pr$pred, mse = if (mse) pr$mse else NULL)
+  list(indices = as.integer(k), pred = pr$pred,
+       mse = if (mse) pr$mse else NULL)
 }
 
 
@@ -102,41 +176,31 @@
 ##  Main function                                                        ##
 ###########################################################################
 
-GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=NULL,
+GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn=NULL,
                       corrmodel, distance="Eucl", grid=FALSE, loc, neighb=NULL,
                       maxdist=NULL, maxtime=NULL, method="cholesky", model="Gaussian",
                       n=1, nloc=NULL, mse=FALSE, param, anisopars=NULL,
                       radius=1, sparse=FALSE, time=NULL, type="Standard",
                       type_krig="Simple", weigthed=TRUE, which=1,
                       copula=NULL, X=NULL, Xloc=NULL, Mloc=NULL, varcov=NULL,
-                      spobj=NULL, spdata=NULL, parallel=FALSE, ncores=NULL, progress=TRUE)
+                      spobj=NULL, spdata=NULL, parallel=FALSE, ncores=6, progress=TRUE,
+                      check.duplicates=FALSE)
 {
 
+
   ###########################################################################
-  ##  0. Internal helpers (parallel setup / RAM check)                    ##
+  ##  0. Parallel helpers                                                  ##
   ###########################################################################
 
-  setup_parallel <- function(ncores) {
-    coremax <- parallel::detectCores()
-    if (is.na(coremax) || coremax < 1L) coremax <- 1L
-
-    n.cores <- if (is.null(ncores)) {
-      max(1, min(4, coremax - 1))
-    } else {
-      if (!is.numeric(ncores) || ncores < 1 || ncores > coremax)
-        stop("Invalid number of cores specified")
-      as.integer(ncores)
-    }
-
+  setup_parallel <- function(workers) {
     old_opts <- options(
       warn = -1,
       verbose = FALSE,
       future.globals.maxSize = 4 * 1024^3
     )
-
     old_plan <- future::plan()
-
-    list(n.cores = n.cores, old_opts = old_opts, old_plan = old_plan)
+    .GeoKriglocSetFuturePlan(workers)
+    list(old_opts = old_opts, old_plan = old_plan)
   }
 
   cleanup_parallel <- function(cfg) {
@@ -145,30 +209,59 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     invisible(gc(verbose = FALSE))
   }
 
-  estimate_task_ram <- function(neigh, k) {
-    nn <- nrow(neigh$coordx[[k]])
-    p  <- if (!is.null(neigh$X[[k]])) ncol(neigh$X[[k]]) else 0L
-    8 * (nn * nn + nn * p) * 3
-  }
+  choose_workers_safe <- function(neigh, max_cores, n_jobs,
+                                      payload = neigh) {
+    max_cores <- min(as.integer(max_cores), max(1L, as.integer(n_jobs)))
+    if (max_cores <= 1L) return(1L)
 
-  choose_workers_safe <- function(neigh, total_tasks, max_cores) {
+    nn <- if (!is.null(neigh$numpoints)) {
+      suppressWarnings(max(as.integer(neigh$numpoints), na.rm = TRUE))
+    } else if (!is.null(neigh$indices)) {
+      suppressWarnings(max(vapply(neigh$indices, length, integer(1L)),
+                           na.rm = TRUE))
+    } else if (!is.null(neigh$coordx)) {
+      suppressWarnings(max(vapply(neigh$coordx, function(z) {
+        if (is.null(z)) 0L else nrow(as.matrix(z))
+      }, integer(1L)), na.rm = TRUE))
+    } else 0L
+    if (!is.finite(nn) || nn < 1L) nn <- 1L
+
+    p <- if (!is.null(neigh$X)) {
+      suppressWarnings(max(vapply(neigh$X, function(z) {
+        if (is.null(z)) 0L else ncol(as.matrix(z))
+      }, integer(1L)), na.rm = TRUE))
+    } else 0L
+    if (!is.finite(p) || p < 0L) p <- 0L
+
+    ## Conservative dense-local estimate: covariance, factor/solve workspaces,
+    ## cross-covariance/design temporaries and R object overhead.
+    nn <- as.double(nn)
+    p <- as.double(p)
+    bytes_per_job <- 8 * (nn^2 + nn * max(1, p) + 8 * nn) * 4
+    if (!is.finite(bytes_per_job) || bytes_per_job <= 0) return(1L)
+
+    ## Multisession workers each receive their own neighborhood object;
+    ## multicore workers can initially share it through copy-on-write.
+    backend <- tolower(as.character(
+      getOption("GeoModels.GeoKrigloc_future_backend", "auto")
+    )[1L])
+    can_multicore <- tryCatch(
+      isTRUE(future::supportsMulticore()), error = function(e) FALSE
+    )
+    multisession <- identical(backend, "multisession") ||
+      (identical(backend, "auto") && !can_multicore)
+    if (multisession) {
+      bytes_per_job <- bytes_per_job + as.numeric(object.size(payload))
+    }
+
     free_ram <- tryCatch({
       if (requireNamespace("memuse", quietly = TRUE)) {
-        mu <- memuse::Sys.meminfo()
-        as.numeric(mu["freeram"], units = "b")
-      } else {
-        2 * 1024^3   # default 2 GB if memuse not available
-      }
+        as.numeric(memuse::Sys.meminfo()["freeram"], units = "b")
+      } else 2 * 1024^3
     }, error = function(e) 2 * 1024^3)
 
-    sample_size <- min(100, total_tasks)
-    worst_ram   <- max(vapply(seq_len(sample_size),
-                              function(k) estimate_task_ram(neigh, k),
-                              numeric(1)))
-
-    needed_per_task <- worst_ram * 1.5
-    safe_cores      <- max(1L, as.integer(floor(free_ram / needed_per_task)))
-    min(max_cores, safe_cores)
+    safe <- max(1L, as.integer(floor(0.70 * free_ram / bytes_per_job)))
+    min(max_cores, safe)
   }
 
 
@@ -200,7 +293,7 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
       coordy = estobj$coordy
       coordz = estobj$coordz
     }
-    if (length(estobj$coordt) == 1) coordt = NULL else coordt = estobj$coordt
+    if (isTRUE(estobj$spacetime)) coordt = estobj$coordt else coordt = NULL
     coordx_dyn = estobj$coordx_dyn
     corrmodel  = estobj$corrmodel
     model      = estobj$model
@@ -213,40 +306,240 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     anisopars  = estobj$anisopars
     X          = estobj$X
     varcov     = estobj$varcov
+    if (!is.null(estobj$sparse)) sparse = estobj$sparse
   }
+
+  model_requested <- gsub("[[:blank:]]", "", as.character(model)[1L])
+  model <- .GeoPredictionCanonicalModel(model_requested)
+  if (is.null(CkModel(model))) stop("The name of the model is not correct")
+  if (!is.character(corrmodel) || is.null(CkCorrModel(corrmodel)))
+    stop("The name of the correlation model is wrong")
+  corrmodel <- gsub("[[:blank:]]", "", corrmodel)
+  if (!is.null(copula)) {
+    copula <- as.character(copula)[1L]
+    if (is.na(copula) || !nzchar(gsub("[[:blank:]]", "", copula))) {
+      copula <- NULL
+    } else {
+      copula <- gsub("[[:blank:]]", "", copula)
+    }
+  }
+  if (!is.null(copula) && !(copula %in% c("Gaussian", "Clayton", "SkewGaussian")))
+    stop("GeoKrigloc currently implements copula-based linear prediction for 'Gaussian', 'Clayton', and 'SkewGaussian'.", call. = FALSE)
+  distance <- gsub("[[:blank:]]", "", distance)
 
   bivariate = CheckBiv(CkCorrModel(corrmodel))
   spacetime = CheckST(CkCorrModel(corrmodel))
   space     = !spacetime && !bivariate
+  .GeoKrigValidatePredictionModel(model, copula = copula, bivariate = bivariate, context = "GeoKrigloc")
+
+  method <- .GeoKrigMatchMethod(method, sparse = sparse, context = "GeoKrigloc")
+  type_key <- tolower(gsub("[[:blank:]]", "", type))
+  if (!identical(type_key, "standard")) {
+    warning("GeoKrigloc currently computes the Standard local kriging system; ",
+            "the supplied type is ignored.", call. = FALSE)
+  }
+  type <- "Standard"
+  krig_key <- tolower(gsub("[[:blank:]]", "", type_krig))
+  if (!(krig_key %in% c("simple", "universal")))
+    stop("type_krig must be 'Simple' or 'Universal'")
+  type_krig <- if (krig_key == "simple") "Simple" else "Universal"
+  if (!is.logical(weigthed) || length(weigthed) != 1L || is.na(weigthed))
+    stop("weigthed must be TRUE or FALSE")
+  if (!isTRUE(weigthed))
+    warning("weigthed is retained for backward compatibility and has no effect for type = 'Standard'.", call. = FALSE)
+
+  ## GeoFit stores a single spatial realization as a 1 x n matrix.
+  ## GeoNeighborhood expects spatial data as a vector (or an n-row object).
+  ## Normalize only this representation; space-time and bivariate formats
+  ## must retain their matrix/list structure.
+  if (space && is.matrix(data) && nrow(data) == 1L) {
+    data <- as.numeric(data[1L, , drop = TRUE])
+  }
 
   if (!is.null(spobj)) {
     a = sp2Geo(spobj, spdata); coordx = a$coords
     if (!a$pj && distance != "Chor") distance = "Geod"
     if (spacetime) coordt = a$coordt
-    if (!is.null(a$Y) && !is.null(a$X)) { data = a$Y; X = a$X }
+    if (!is.null(a$Y)) data <- a$Y
+   if (!is.null(a$X)) X <- a$X
+  }
+
+  if (spacetime && !is.null(coordx_dyn)) {
+    coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+      coordx_dyn, coordt = coordt, context = "GeoKrigloc"
+    )
+    .GeoValidateDynamicData(data, coordx_dyn, context = "GeoKrigloc")
+    .GeoValidateDynamicRows(X, coordx_dyn, name = "X", context = "GeoKrigloc")
+  }
+
+  biv_info <- NULL
+  if (bivariate) {
+    biv_info <- .GeoBivariateCoordinateInfo(
+      coordx = coordx, coordy = coordy, coordz = coordz,
+      coordx_dyn = coordx_dyn, grid = grid,
+      context = "GeoKrigloc"
+    )
+    data <- .GeoBivariateDataVector(data, biv_info$ns,
+                                    context = "GeoKrigloc")
+    if (!is.null(X)) {
+      X <- .GeoBivariateDesign(X, biv_info$ns,
+                               context = "GeoKrigloc")
+    }
+    if (biv_info$dynamic) {
+      coordx_dyn <- biv_info$blocks
+      coordx <- coordy <- coordz <- NULL
+    }
   }
 
   if (is.null(coordx_dyn)) {
-    coords = coordx
-    if (!is.null(coordy)) {
-      if (!grid) coords = cbind(coordx, coordy, coordz)
-      else {
-        if (!is.null(coordz))
-          coords = as.matrix(expand.grid(coordx, coordy, coordz))
-        else
-          coords = as.matrix(expand.grid(coordx, coordy))
-      }
+    coords <- .GeoKrigCoordinateMatrix(
+      coordx = coordx, coordy = coordy, coordz = coordz, grid = grid,
+      context = "GeoKrigloc"
+    )
+    if (!bivariate) {
+      data <- .GeoKrigNormalizeData(
+        data, nspace = nrow(coords),
+        coordt = if (spacetime) coordt else NULL,
+        grid = grid, context = "GeoKrigloc"
+      )
     }
   } else {
     coordx = coordy = coordz = coords = NULL
   }
 
-  loc  = as.matrix(loc)
+  .GeoCheckDuplicateLocations(
+    coordx = if (is.null(coordx_dyn)) coords else NULL,
+    coordt = coordt, coordx_dyn = coordx_dyn,
+    spacetime = spacetime, bivariate = bivariate, grid = FALSE,
+    context = "GeoKrigloc", check.duplicates = check.duplicates
+  )
+  .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
+  on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
+
+  if (is.vector(loc) && !is.list(loc)) loc <- matrix(loc, nrow = 1L)
+  loc <- as.matrix(loc)
+  loc_orig <- loc
+  if (!is.numeric(loc) || !nrow(loc) || any(!is.finite(loc)))
+    stop("loc must be a finite numeric N x 2 or N x 3 matrix")
+  if (spacetime) {
+    if (is.null(time) || !is.numeric(time) || !length(time) || any(!is.finite(time)))
+      stop("time must be a non-empty finite numeric vector for space-time kriging")
+    time <- as.numeric(time)
+  }
+
+  .GeoValidate3D(
+    coordx = if (is.null(coordx_dyn)) coords else NULL,
+    coordx_dyn = coordx_dyn, distance = distance, grid = grid,
+    context = "GeoKrigloc"
+  )
+  .GeoValidate3D(
+    coordx = loc, distance = distance, grid = FALSE,
+    context = "GeoKrigloc prediction locations"
+  )
+  .GeoValidateCoordinateCompatibility(
+    coordx = if (is.null(coordx_dyn)) coords else NULL,
+    coordx_dyn = coordx_dyn, loc = loc, context = "GeoKrigloc"
+  )
+
+  ## Select neighbors and compute covariances in exactly the same metric.
+  coords_metric <- coords
+  coordx_dyn_metric <- coordx_dyn
+  loc_metric <- loc
+  worker_anisopars <- anisopars
+  if (!is.null(anisopars)) {
+    if (!identical(distance, "Eucl"))
+      stop("GeoKrigloc: anisopars requires distance = 'Eucl'.")
+    if (!is.null(coords_metric))
+      coords_metric <- GeoAniso(coords_metric, c(anisopars$angle, anisopars$ratio))
+    if (!is.null(coordx_dyn_metric))
+      coordx_dyn_metric <- lapply(coordx_dyn_metric, function(z)
+        GeoAniso(as.matrix(z), c(anisopars$angle, anisopars$ratio)))
+    loc_metric <- GeoAniso(loc_metric, c(anisopars$angle, anisopars$ratio))
+    ## Coordinates sent to GeoKrig are already transformed.
+    worker_anisopars <- NULL
+    param$angle <- NULL
+    param$ratio <- NULL
+  }
+
   Nloc = nrow(loc)
   if (is.null(Nloc)) Nloc = 1
+  if (spacetime && is.null(time))
+    stop("At least one prediction time is required for space-time kriging.")
   Tloc = length(time)
   if (bivariate) Tloc = 1
-  if (length(param$mean) > 1) M = param$mean else M = NULL
+
+  ## Normalize the same three mean specifications used by GeoKrig():
+  ## intercept only, X beta, or an external observation mean plus Mloc.
+  if (!bivariate) {
+    nobs_mean <- length(unlist(data, use.names = FALSE))
+    M <- .GeoMean_external(param, n = nobs_mean)
+    if (!is.null(M) && !is.null(X))
+      stop("A fixed observation mean and X cannot be used together.")
+    if (!is.null(Mloc) && !is.null(Xloc))
+      stop("Use either Mloc or Xloc, not both.")
+    if (!is.null(M) && is.null(Mloc))
+      stop("Mloc is required when the observation mean is supplied as a vector.")
+    if (!is.null(X)) {
+      X <- .GeoMean_design(X, n = nobs_mean, name = "X")
+      p_mean <- ncol(X)
+      invisible(.GeoMean_beta(param, p_mean))
+      if (is.null(Xloc) && is.null(Mloc))
+        stop("Xloc or Mloc is required when X is supplied.")
+    } else {
+      p_mean <- 1L
+      if (!is.null(Xloc)) stop("X must be supplied when Xloc is used.")
+      if (is.null(M)) {
+        if (length(setdiff(.GeoMean_supplied_names(param), "mean")))
+          stop("Parameters mean1, mean2, ... require an explicit design matrix X; without X the mean is intercept-only.")
+        invisible(.GeoMean_beta(param, 1L))
+      }
+    }
+
+    total_mean_tasks <- if (space) Nloc else Nloc * Tloc
+    if (!is.null(Mloc)) {
+      if (!is.numeric(Mloc) || any(!is.finite(Mloc)))
+        stop("Mloc must be finite and numeric.")
+      Mloc <- as.numeric(Mloc)
+      if (length(Mloc) == 1L) Mloc <- rep(Mloc, total_mean_tasks)
+      if (length(Mloc) != total_mean_tasks)
+        stop("Mloc must have one value per local prediction task.")
+      Xloc <- NULL
+    } else if (!is.null(Xloc)) {
+      Xloc <- .GeoMean_design(Xloc, n = total_mean_tasks, p = p_mean, name = "Xloc")
+    }
+  } else {
+    M <- NULL
+    p_mean <- if (is.null(X)) 1L else ncol(X)
+    invisible(.GeoBivariateValidateMeanParameters(
+      param, p_mean, context = "GeoKrigloc"
+    ))
+    if (!is.null(Mloc) && !is.null(Xloc))
+      stop("Use either Mloc or Xloc, not both.")
+    if (!is.null(X) && is.null(Xloc) && is.null(Mloc))
+      stop("Xloc or Mloc is required when X is supplied.")
+    if (is.null(X) && !is.null(Xloc))
+      stop("X must be supplied when Xloc is used.")
+    if (!is.null(Mloc)) {
+      if (!is.numeric(Mloc) || any(!is.finite(Mloc)))
+        stop("Mloc must be finite and numeric.")
+      Mloc <- as.numeric(Mloc)
+      if (length(Mloc) == 1L) Mloc <- rep(Mloc, Nloc)
+      if (length(Mloc) != Nloc)
+        stop("Mloc must have one value per prediction location.")
+      Xloc <- NULL
+    } else if (!is.null(Xloc)) {
+      Xloc <- .GeoMean_design(Xloc, n = Nloc, p = p_mean, name = "Xloc")
+    }
+  }
+
+  if (identical(type_krig, "Universal") && (!is.null(M) || !is.null(Mloc))) {
+    warning("External observation/prediction means are treated as known; ",
+            "type_krig is therefore set to 'Simple'.", call. = FALSE)
+    type_krig <- "Simple"
+  }
+  if (identical(type_krig, "Universal") && isTRUE(mse) && is.null(varcov)) {
+    stop("Universal kriging with mse = TRUE requires varcov (the covariance matrix of the estimated parameters).")
+  }
 
 
   ###########################################################################
@@ -274,23 +567,24 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
   ###########################################################################
 
   if (space) {
-    neigh       = GeoNeighborhood(data, coordx = coords, distance = distance,
-                                  loc = loc, neighb = neighb, maxdist = maxdist,
+    neigh       = GeoNeighborhood(data, coordx = coords_metric, distance = distance,
+                                  loc = loc_metric, neighb = neighb, maxdist = maxdist,
                                   X = X, M = M, parallel = FALSE, ncores = ncores)
     total_tasks <- Nloc
 
   } else if (spacetime) {
-    neigh       = GeoNeighborhood(data, coordx = coords, coordt = coordt,
+    neigh       = GeoNeighborhood(data, coordx = coords_metric, coordt = coordt,
                                   distance = distance, neighb = neighb,
-                                  coordx_dyn = coordx_dyn, loc = loc, time = time,
+                                  coordx_dyn = coordx_dyn_metric, loc = loc_metric, time = time,
                                   maxdist = maxdist, maxtime = maxtime,
                                   X = X, M = M, parallel = FALSE, ncores = ncores)
     total_tasks <- Nloc * Tloc
 
   } else {   # bivariate
-    neigh       = GeoNeighborhood(data, coordx = coords, distance = distance,
-                                  neighb = neighb, coordx_dyn = coordx_dyn,
-                                  loc = loc, maxdist = maxdist,
+    neigh       = GeoNeighborhood(data, coordx = coords_metric, distance = distance,
+                                  neighb = neighb, coordx_dyn = coordx_dyn_metric,
+                                  bivariate = TRUE,
+                                  loc = loc_metric, maxdist = maxdist,
                                   X = X, M = M, parallel = FALSE, ncores = ncores)
     total_tasks <- Nloc * Tloc
   }
@@ -303,9 +597,16 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
   if (!is.logical(progress)) stop("progress must be logical (TRUE/FALSE)")
 
   if (progress) {
-    progressr::handlers(global = TRUE)
-    progressr::handlers("txtprogressbar")
-    pb <- progressr::progressor(along = seq_len(total_tasks))
+    restore_progress_handlers <- .GeoProgressHandlersPush(
+      handler = "txtprogressbar", global = TRUE
+    )
+    on.exit(restore_progress_handlers(), add = TRUE)
+    pb <- progressr::progressor(
+      along = seq_len(total_tasks), on_exit = FALSE, auto_finish = FALSE
+    )
+    ## Finish before restoring the temporary global handler, including on
+    ## errors or user interrupts.
+    on.exit(pb(type = "finish"), add = TRUE, after = FALSE)
   } else {
     pb <- function(...) {}
   }
@@ -316,106 +617,92 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
 
 
   ###########################################################################
-  ##  5. Kriging execution — sequential                                    ##
+  ##  5. Kriging jobs                                                      ##
   ###########################################################################
 
-  if (!parallel) {
+  ## GeoKrigloc deliberately uses GeoKrig as its single local prediction
+  ## engine.  GeoNeighborhood defines each local data set; GeoKrig then
+  ## performs exactly the same validated kriging calculation used elsewhere
+  ## in the package.  Keeping one numerical path avoids duplicating covariance,
+  ## copula, mean, MSE, and solver logic inside GeoKrigloc.
+  jobs <- seq_len(total_tasks)
+  worker_args <- list(
+    neigh = neigh, param = param, corrmodel = corrmodel,
+    distance = distance, n = n, nloc = nloc, model = model,
+    type_krig = type_krig, sparse = sparse,
+    anisopars = worker_anisopars, radius = radius, mse = mse,
+    copula = copula, varcov = varcov, method = method,
+    loc = loc_metric, time = time, Xloc = Xloc, Mloc = Mloc, M = M,
+    task_indices = task_indices, is_space = space,
+    spacetime = spacetime, which = which
+  )
 
-    for (k in seq_len(total_tasks)) {
-      pb(sprintf("k=%d", k))
-      pr      <- .perform_kriging_worker(
-        k            = k,
-        neigh        = neigh,
-        param        = param,
-        corrmodel    = corrmodel,
-        distance     = distance,
-        n            = n,
-        model        = model,
-        type_krig    = type_krig,
-        sparse       = sparse,
-        anisopars    = anisopars,
-        radius       = radius,
-        mse          = mse,
-        copula       = copula,
-        varcov       = varcov,
-        loc          = loc,
-        time         = time,
-        Xloc         = Xloc,
-        Mloc         = Mloc,
-        M            = M,
-        task_indices = task_indices,
-        is_space     = space,
-        spacetime    = spacetime
+
+  ###########################################################################
+  ##  6. Execute jobs                                                       ##
+  ###########################################################################
+
+  parallel_exec <- isTRUE(parallel) && total_tasks > 1L
+  workers <- 1L
+  if (parallel_exec) {
+    requested <- .GeoResolveWorkers(TRUE, ncores, n_jobs = total_tasks)
+
+    ## A numeric ncores value is an explicit worker request.  Respect it up to
+    ## the number of detected cores and available prediction tasks.  The RAM
+    ## safety heuristic is reserved for ncores = NULL, which remains available
+    ## as an opt-in automatic/safe mode.
+    if (is.null(ncores)) {
+      workers <- choose_workers_safe(
+        neigh, requested, total_tasks, payload = worker_args
       )
-      res1[k] <- pr$pred
-      if (mse) res2[k] <- pr$mse
+      if (workers < requested) {
+        warning("Reducing cores from ", requested, " to ", workers,
+                " to avoid memory pressure.")
+      }
+    } else {
+      workers <- requested
     }
+    parallel_exec <- workers > 1L
+  }
 
-
-  ###########################################################################
-  ##  6. Kriging execution — parallel                                      ##
-  ##     worker_args bundles everything so future ships it ONCE           ##
-  ##     (no closure → no duplicate serialisation of the parent env)      ##
-  ###########################################################################
-
-  } else {
-
-    config     <- setup_parallel(ncores)
+  if (parallel_exec) {
+    config <- setup_parallel(workers)
     on.exit(cleanup_parallel(config), add = TRUE)
-
-    max_cores  <- config$n.cores
-    safe_cores <- choose_workers_safe(neigh, total_tasks, max_cores)
-
-    if (safe_cores < max_cores) {
-      warning("Reducing cores from ", max_cores, " to ", safe_cores,
-              " to avoid memory pressure.")
-    }
-
-    future::plan(future::multisession, workers = safe_cores)
-
-    cat("Performing local kriging using", safe_cores, "cores...\n")
-
-    # Single list exported to each worker — no closure captures the env
-    worker_args <- list(
-      neigh        = neigh,
-      param        = param,
-      corrmodel    = corrmodel,
-      distance     = distance,
-      n            = n,
-      model        = model,
-      type_krig    = type_krig,
-      sparse       = sparse,
-      anisopars    = anisopars,
-      radius       = radius,
-      mse          = mse,
-      copula       = copula,
-      varcov       = varcov,
-      loc          = loc,
-      time         = time,
-      Xloc         = Xloc,
-      Mloc         = Mloc,
-      M            = M,
-      task_indices = task_indices,
-      is_space     = space,
-      spacetime    = spacetime
-    )
+    if (progress) cat("Performing local kriging using", workers, "cores...\n")
 
     res <- future.apply::future_lapply(
-      seq_len(total_tasks),
+      jobs,
       function(k) {
+        worker <- get(
+          ".perform_kriging_worker",
+          envir = asNamespace("GeoModels"),
+          inherits = FALSE
+        )
+        ans <- do.call(worker, c(list(k = as.integer(k)), worker_args))
         if (progress) pb(sprintf("k=%d", k))
-        do.call(.perform_kriging_worker, c(list(k = k), worker_args))
+        ans
       },
-      future.globals   = c("worker_args", ".perform_kriging_worker"),
-      future.packages  = "GeoModels",
-      future.seed      = TRUE,
-      future.stdout    = FALSE,
-      future.conditions = "none"
+      future.globals = c("worker_args", "progress", "pb"),
+      future.packages = "GeoModels",
+      future.seed = TRUE,
+      future.stdout = FALSE,
+      future.conditions = if (progress) "condition" else "none"
     )
+  } else {
+    res <- vector("list", total_tasks)
+    for (k in jobs) {
+      ans <- do.call(
+        .perform_kriging_worker,
+        c(list(k = as.integer(k)), worker_args)
+      )
+      res[[k]] <- ans
+      if (progress) pb(sprintf("k=%d", k))
+    }
+  }
 
-    # Unpack results
-    res1 <- vapply(res, `[[`, numeric(1), "pred")
-    if (mse) res2 <- vapply(res, `[[`, numeric(1), "mse")
+  for (ans in res) {
+    res1[ans$indices] <- as.numeric(ans$pred)
+    if (mse) res2[ans$indices] <- as.numeric(ans$mse)
   }
 
 
@@ -444,11 +731,12 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     coordy    = coordy,
     coordz    = coordz,
     coordt    = coordt,
+    coordx_dyn = coordx_dyn,
     corrmodel = corrmodel,
     data      = data,
     distance  = distance,
     grid      = grid,
-    loc       = loc,
+    loc       = loc_orig,
     copula    = copula,
     numcoord  = if (exists("coords", inherits = FALSE)) nrow(coords) else NA,
     numloc    = Nloc,
@@ -457,13 +745,18 @@ GeoKrigloc = function(estobj=NULL, data, coordx, coordy=NULL, coordz=NULL, coord
     maxdist   = maxdist,
     maxtime   = maxtime,
     model     = model,
+    fit_model = model_requested,
     n         = n,
     param     = param,
     pred      = pred,
     radius    = radius,
     spacetime = spacetime,
     time      = time,
+    type       = type,
     type_krig = type_krig,
+    method     = method,
+    weigthed   = weigthed,
+    which     = which,
     mse       = varpred,
     varcov    = varcov
   )

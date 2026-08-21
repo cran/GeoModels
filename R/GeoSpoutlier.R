@@ -2,123 +2,100 @@
 ### File name: GeoSpoutlier.r
 ####################################################
 
-GeoOutlier <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, 
-                         distance="Eucl", grid=FALSE,  neighb=10,alpha=0.001,
-                         method="Z-Median",radius=1, bivariate=FALSE,X=NULL)
+GeoOutlier <- function(data, coordx, coordy = NULL, coordz = NULL,
+                       coordt = NULL, coordx_dyn = NULL,
+                       distance = "Eucl", grid = FALSE, neighb = 10,
+                       alpha = 0.001, method = "Z-Median", radius = 1,
+                       bivariate = FALSE, X = NULL) {
+  if (!is.numeric(alpha) || length(alpha) != 1L || !is.finite(alpha) ||
+      alpha <= 0 || alpha >= 1) {
+    stop("alpha must be between 0 and 1", call. = FALSE)
+  }
+  if (!is.logical(bivariate) || length(bivariate) != 1L || is.na(bivariate))
+    stop("bivariate must be logical", call. = FALSE)
+  if (!is.numeric(neighb) || length(neighb) != 1L || !is.finite(neighb) ||
+      neighb < 2 || neighb != as.integer(neighb)) {
+    stop("neighb must be an integer >= 2", call. = FALSE)
+  }
+  neighb <- as.integer(neighb)
+  if (!identical(method, "Z-Median")) stop("method is not valid", call. = FALSE)
+  if ((is.numeric(coordt) && length(coordt) > 1L) || !is.null(coordx_dyn)) {
+    stop("GeoOutlier is currently implemented only for purely spatial data.",
+         call. = FALSE)
+  }
+  if (isTRUE(bivariate)) {
+    stop("GeoOutlier is currently implemented only for univariate data.",
+         call. = FALSE)
+  }
 
-{
-    
-    if(abs(alpha)>=1) stop("alpha must be between 0 and 1")
-    if(!is.logical(bivariate))   stop("bivariate must be logical")
-    if(is.null(neighb))     stop("maxdist (maxtime) or neighb must  be specified")
-    if(method!="Z-Median") stop("method is not valid")
-#########################
-spacetime=FALSE
-dyn=FALSE
-  if(!is.null(coordx_dyn))  dyn=TRUE  
-
-
-## handling spatial coordinates
-    if(is.null(coordy)&&is.null(coordz)) coords=as.matrix(coordx)
-    else{
-    if(is.null(coordz)) { if(grid) coords=as.matrix(expand.grid(coordx,coordy))
-                         else     coords=cbind(coordx,coordy)  
-                        }
-    else  { if(grid) coords=as.matrix(expand.grid(coordx,coordy,coordz))
-                         else     coords=cbind(coordx,coordy,coordz)  
-          }
+  if ((is.matrix(coordx) || is.data.frame(coordx)) &&
+      is.null(coordy) && is.null(coordz)) {
+    coords <- as.matrix(coordx)
+  } else {
+    if (is.null(coordy)) {
+      stop("coordy is required when coordx is not a coordinate matrix.",
+           call. = FALSE)
     }
-
-#####################################
-if(is.numeric(coordt)) if(length(coordt)>1) {spacetime=TRUE}
-space=!spacetime&&!bivariate 
-##################################################################
-
-
-   if(grid)     { if(is.null(coordz)) { a=expand.grid(coordx,coordy);
-                                        coordx=a[,1];coordy=a[,2] 
-                                      }
-                  else   { a=expand.grid(coordx,coordy,coordz);
-                           coordx=a[,1];coordy=a[,2];coordz=a[,3] 
-                         }
-                }
-
-    if(is.null(coordx_dyn))
-    {
-      if(!is.null(coordy)){
-                          if(is.null(coordz)) {coordz=NULL
-                                              coordy <- coordx[,2]
-                                              coordx <- coordx[,1]
-                                              }
-                          else             {  
-                                              coordz <- coordx[,3]
-                                              coordy <- coordx[,2]
-                                              coordx <- coordx[,1]
-                                          }        
-                          coords=cbind(coordx,coordy,coordz)}
-      else 
-      {
-        if(!bivariate) coords=coordx
-        if(bivariate)  coords=rbind(coordx,coordx)} 
-      data=c(t(data))   
-      numcoord=nrow(coords)               
-      ns<-rep(numcoord,length(coordt))
-      if(bivariate) ns=ns/2
+    coords <- if (is.null(coordz)) {
+      if (isTRUE(grid)) as.matrix(expand.grid(coordx, coordy))
+      else cbind(coordx, coordy)
+    } else {
+      if (isTRUE(grid)) as.matrix(expand.grid(coordx, coordy, coordz))
+      else cbind(coordx, coordy, coordz)
     }
-    else
-    {
-       env <- new.env()
-       coords=do.call(rbind,args=c(coordx_dyn),envir = env) 
-       data=unlist(data)
-       ns=lengths(coordx_dyn)/2 
+  }
+  coords <- as.matrix(coords)
+  storage.mode(coords) <- "double"
+  .GeoValidate3D(coords, distance = distance, grid = grid,
+                 context = "GeoOutlier")
+
+  data <- as.numeric(c(t(data)))
+  if (length(data) != nrow(coords)) {
+    stop("The number of observations must match the number of coordinate rows.",
+         call. = FALSE)
+  }
+  if (neighb > nrow(coords)) {
+    stop("neighb cannot exceed the number of observations.", call. = FALSE)
+  }
+  if (!is.null(X) && nrow(as.matrix(X)) != length(data)) {
+    stop("X must have one row per observation.", call. = FALSE)
+  }
+
+  distance <- gsub("[[:blank:]]", "", distance)
+  coords_original <- coords
+  if (distance %in% c("Geod", "Chor")) {
+    if (!requireNamespace("mapproj", quietly = TRUE)) {
+      stop("Package 'mapproj' is required by GeoOutlier() for geodesic or chordal distance.",
+           call. = FALSE)
     }
+    prj <- mapproj::mapproject(coords[, 1L], coords[, 2L],
+                              projection = "sinusoidal")
+    coords <- radius * cbind(prj$x, prj$y)
+  } else if (!identical(distance, "Eucl")) {
+    stop("distance must be one of 'Eucl', 'Geod', or 'Chor'.", call. = FALSE)
+  }
 
-  if(distance=="Geod"||distance=="Chor")
-{
-   coords_p=coords; 
-   prj=mapproj::mapproject(coords[,1], coords[,2], projection="sinusoidal") 
-   coords=radius*cbind(prj$x,prj$y)
-}
+  aa <- nabor::knn(coords, coords, k = neighb)
+  local_values <- lapply(seq_len(nrow(coords)), function(i) {
+    data[aa$nn.idx[i, -1L]]
+  })
+  res <- matrix(unlist(local_values, use.names = FALSE),
+                ncol = neighb - 1L, byrow = TRUE)
+  local_median <- apply(res, 1L, stats::median)
+  deviation <- data - local_median
+  sd_deviation <- stats::sd(deviation)
+  if (!is.finite(sd_deviation) || sd_deviation <= 0) {
+    selected <- rep(FALSE, length(deviation))
+  } else {
+    zscore <- (deviation - mean(deviation)) / sd_deviation
+    selected <- zscore > stats::qnorm(1 - alpha / 2) |
+      zscore < stats::qnorm(alpha / 2)
+  }
 
-#####################################################################
-###  space
-if(!bivariate&&!spacetime)
- {
-       N=nrow(coords)
-  ####     
-  if(method=="Z-Median"){
-       #aa=RANN::nn2(coords,k = neighb)
-       aa = nabor::knn(coords,coords,k = neighb) ### case neighboord
-       a=list()
-       for(i in 1:N) a[[i]]=data[aa$nn.idx[i,]][-1]
-       res=matrix(unlist(a),ncol=neighb-1,byrow=T)
-       g=apply(res,1,median)
-       h=data-g
-       hh=(h-mean(h))/sqrt(var(h))
-       sel=(hh>qnorm(1-alpha/2))|(hh<qnorm(alpha/2))
- 
-    if(distance=="Eucl"){
-       if(!is.null(X)) a=cbind(coords,data,X)[sel,]
-       if( is.null(X)) a=cbind(coords,data)[sel,]
-                        }
-    if(distance=="Geod"||distance=="Chor"){
-       if(!is.null(X)) a=cbind(coords_p,data,X)[sel,]
-       if( is.null(X)) a=cbind(coords_p,data)[sel,]
-                       }
-
-     }
-   }    
-#####################################################################
-###  spacetime
-if(spacetime)
- {     
- }
-#####################################################################
-## bivariate
-if(bivariate)
- {
- 
- }
-
-return(a) 
+  output_coords <- if (distance %in% c("Geod", "Chor")) coords_original else coords
+  if (is.null(X)) {
+    cbind(output_coords, data = data)[selected, , drop = FALSE]
+  } else {
+    cbind(output_coords, data = data, as.matrix(X))[selected, , drop = FALSE]
+  }
 }

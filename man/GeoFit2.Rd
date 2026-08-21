@@ -3,15 +3,15 @@
 \encoding{UTF-8}
 \title{Fitting Gaussian and Non-Gaussian Random Fields with Automatic Marginal Initialization}
 \description{
- A starting-value wrapper around \code{\link{GeoFit}}. The function optionally
+ A univariate starting-value wrapper around \code{\link{GeoFit}}. The function optionally
  performs a preliminary fit under spatial independence to estimate available
- marginal parameters, uses those estimates to update the corresponding supplied
- starting values, and then calls \code{GeoFit} for the requested final fit.
- If the preliminary independence fit is unavailable or fails, the original
- starting values are retained.
+ marginal parameters, uses those estimates to update the starting values, and
+ then calls \code{GeoFit} for the requested final fit. If the preliminary
+ independence fit is unavailable or fails, the original starting values are
+ retained. Bivariate correlation models are not supported.
 }
 \usage{
-GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
+GeoFit2(data, coordx = NULL, coordy = NULL, coordz = NULL, coordt = NULL,
  coordx_dyn = NULL, copula = NULL, corrmodel = NULL,
  distance = "Eucl", fixed = NULL, anisopars = NULL,
  est.aniso = c(FALSE, FALSE), grid = FALSE,
@@ -24,7 +24,7 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  upper = NULL, varest = FALSE, weighted = FALSE, X = NULL,
  spobj = NULL, spdata = NULL, independence_start = TRUE,
  independence_optimizer = "Nelder-Mead",
- warn_independence_failure = TRUE)
+ warn_independence_failure = TRUE, check.duplicates = FALSE)
 }
 \arguments{
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid)
@@ -33,14 +33,14 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  See Details for the accepted data layouts.}
 
  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix.
- Coordinates on a sphere for a fixed radius \code{radius} are passed in lon/lat format expressed in decimal degrees.}
+ Coordinates on a sphere for a fixed radius \code{radius} are passed in lon/lat format expressed in decimal degrees.
+ It may be omitted when coordinates are supplied through \code{coordx_dyn} or \code{spobj}.}
 
  \item{coordy}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
 
  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
 
- \item{coordt}{A numeric vector assigning 1-dimension of temporal coordinates. Optional argument, default is \code{NULL}:
- if \code{NULL} then a spatial RF is expected.}
+ \item{coordt}{A numeric vector assigning one dimension of the observation-time coordinates. Optional argument, default is \code{NULL}; if \code{NULL}, a spatial random field is expected. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
 
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d_t x 2})-matrices containing dynamical (in time) spatial coordinates.
  Optional argument, default is \code{NULL}.}
@@ -54,17 +54,16 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{fixed}{An optional named list giving the values of the parameters that will be considered as known values.
  The listed parameters for a given correlation function will not be estimated.}
 
- \item{anisopars}{A list of two elements: \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively.}
+ \item{anisopars}{A list of two elements: \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively. Geometric anisotropy requires \code{distance="Eucl"}.}
 
  \item{est.aniso}{A bivariate logical vector providing which anisotropic parameters must be estimated.}
 
- \item{grid}{Logical; if \code{FALSE} (default) the data are interpreted as spatial or spatio-temporal realisations on a set
- of non-equispaced spatial sites (irregular grid).}
+ \item{grid}{Logical; if \code{FALSE} (default) the data are interpreted as spatial or spatio-temporal realisations on a set of non-equispaced spatial sites. If \code{TRUE}, the grid axes and data dimensions are handled by \code{GeoFit} and converted internally to the canonical explicit-coordinate layout before fitting.}
 
  \item{likelihood}{String; the configuration of the composite likelihood. \code{"Marginal"} is the default; see Details for the accepted options.}
 
  \item{lower}{An optional named list giving lower bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
- Names must match those in \code{start}.}
+ Names must match parameters that are being estimated.}
 
  \item{maxdist}{Numeric; an optional positive value indicating the maximum spatial distance considered in the composite likelihood computation.
  See Details for more information.}
@@ -72,13 +71,11 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{neighb}{Numeric; an optional positive integer indicating the order of neighborhood in the composite likelihood computation.
  See Details for more information.}
 
- \item{p_neighb}{Numeric; a value in \eqn{(0,1]} specifying the expected fraction of nearest-neighbor pairs retained through stochastic thinning.
- If \code{1} (default), no thinning is applied and all nearest-neighbor pairs are used. If \code{<1}, pairs are randomly retained using independent Bernoulli sampling.}
+ \item{p_neighb}{Numeric scalar in \eqn{(0,1]}. If \code{1} (default), no thinning is applied. For \code{thin_method="bernoulli"}, it is the candidate-pair inclusion probability in the constant-weight design and controls the retained size in expectation. For \code{thin_method="FixedBudget"}, it defines the exact global retained-pair budget \eqn{K=\mathrm{round}(p_{neighb}d)}, where \eqn{d} is the candidate-pair count.}
 
- \item{maxtime}{Numeric; an optional positive integer indicating the order of temporal neighborhood in the composite likelihood computation.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal-distance threshold, expressed in the same units as \code{coordt}, used to select pairwise composite-likelihood contributions.}
 
- \item{memdist}{Logical; if \code{TRUE} then all distances useful in the composite likelihood estimation are computed before the optimization.
- \code{FALSE} is deprecated.}
+ \item{memdist}{Deprecated logical argument retained for backward compatibility. The selected pair structure is always precomputed and reused during composite-likelihood optimization. Supplying \code{FALSE} produces a warning and is treated as \code{TRUE}.}
 
  \item{method}{String; the type of matrix decomposition used in the likelihood computation. Default is \code{"cholesky"}.
  Another possible choice is \code{"svd"} (when available).}
@@ -86,7 +83,7 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{model}{String; the type of RF and therefore the densities associated to the likelihood objects.
  \code{"Gaussian"} is the default; see Details for the accepted options.}
 
- \item{n}{Numeric; number of trials in a binomial RF; number of successes in a negative binomial random field.}
+ \item{n}{Positive integer scalar, or one positive integer per observation, for models using a Binomial/Negative-Binomial trial or success count.}
 
  \item{onlyvar}{Logical; if \code{TRUE} (and \code{varest=TRUE}) only the variance-covariance matrix is computed without optimizing.
  Default is \code{FALSE}.}
@@ -105,14 +102,14 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  It should be used with compactly supported covariance models. Default is \code{FALSE}.}
 
  \item{start}{An optional named list with initial values for parameters used by the numerical routines in the maximization procedure.
- Default is \code{NULL} (see Details).}
+ Default is \code{NULL}; omitted parameters receive internal starting values (see Details).}
 
- \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is \code{"FixedBudget"}.}
+ \item{thin_method}{String; thinning scheme used when \code{p_neighb < 1}. Default is \code{"bernoulli"} (independent Bernoulli thinning). An alternative thinning scheme is \code{"FixedBudget"}. The legacy name \code{"TargetBalanced"} is accepted as an alias for \code{"FixedBudget"}.}
 
  \item{type}{String; the type of the likelihood objects. If \code{"Pairwise"} (default) then the marginal composite likelihood is formed by pairwise marginal likelihoods (see Details).}
 
  \item{upper}{An optional named list giving upper bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
- Names must match those in \code{start}.}
+ Names must match parameters that are being estimated.}
 
  \item{varest}{Logical; if \code{TRUE} the estimates' variances and standard errors are returned. For composite likelihood estimation it is deprecated.
  Use \code{sensitivity=TRUE} and update the object using \code{GeoVarest}. Default is \code{FALSE}.}
@@ -129,7 +126,8 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{independence_start}{Logical; if \code{TRUE} (default), \code{GeoFit2}
  attempts a preliminary marginal fit under spatial independence before the final
  fit. The preliminary fit is skipped when the requested fit already has
- \code{type="Independence"} or when the correlation model is bivariate.}
+ \code{type="Independence"}. Bivariate correlation models are not supported by
+ \code{GeoFit2}; use \code{GeoFit} directly for those models.}
 
  \item{independence_optimizer}{String; optimizer used only for the preliminary
  independence fit. Default is \code{"Nelder-Mead"}. The optimizer used for the
@@ -138,6 +136,7 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{warn_independence_failure}{Logical; if \code{TRUE} (default), a warning
  is issued when the preliminary independence fit is unavailable or fails. In
  that case the supplied \code{start} values are used unchanged.}
+\item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
 \details{
  \code{GeoFit2} does not implement a second fitting engine. It is a wrapper
@@ -146,10 +145,12 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  When \code{independence_start=TRUE}, the function first constructs a
  preliminary call to \code{GeoFit} with \code{likelihood="Marginal"} and
  \code{type="Independence"}. The preliminary fit estimates the marginal
- parameters available for the selected model. Only parameters whose names occur
- both in the preliminary estimates and in the user-supplied \code{start} list
- are replaced. Dependence parameters and all unmatched starting values are left
- unchanged.
+ parameters available for the selected model. When \code{start} is supplied,
+matching marginal entries and omitted mean coefficients are updated as before.
+When \code{start=NULL}, all eligible marginal estimates from the independence
+fit are used, while dependence parameters use the conservative automatic
+initial values prepared by \code{GeoFit}. Parameters supplied in \code{fixed}
+always take precedence.
 
  The final model is then fitted by calling \code{GeoFit} with the original
  requested likelihood, likelihood-object type, optimizer, bounds, pair-selection
@@ -157,11 +158,18 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  parameter constraints, and returned standard \code{GeoFit} components are the
  same as in a direct call to \code{GeoFit}; only the starting values may differ.
 
- The preliminary initialization is skipped for bivariate correlation models and
- when \code{type="Independence"}. If an independence likelihood is not
+ For Gaussian models, \code{sill} is the total marginal variance and
+ \code{nugget} attenuates off-diagonal correlation. Therefore an independence
+ estimate may initialize \code{sill}, while a user-supplied \code{nugget} is
+ preserved unchanged and is never added to or subtracted from \code{sill}.
+
+ Bivariate correlation models are not supported by \code{GeoFit2}; use
+ \code{GeoFit} directly. The preliminary initialization is skipped when
+ \code{type="Independence"}. If an independence likelihood is not
  implemented for the selected model, or if the preliminary optimization fails,
- the final fit still proceeds using the supplied starting values. This behavior
- can be controlled with \code{warn_independence_failure}.
+ the final fit still proceeds using the supplied starting values or, when
+\code{start=NULL}, the internal starting values prepared by \code{GeoFit}. This
+behavior can be controlled with \code{warn_independence_failure}.
 
  Stochastic thinning of nearest-neighbor pairs in the final fit can be enabled
  through \code{p_neighb < 1}; \code{thin_method} specifies the thinning
@@ -187,7 +195,7 @@ GeoFit2(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
  \item{likelihood}{The configuration of the composite likelihood.}
  \item{logCompLik}{The value of the log composite-likelihood at the maximum.}
  \item{maxdist}{The maximum spatial distance used in the weighted composite likelihood (or \code{NULL}).}
- \item{maxtime}{The order of temporal neighborhood in the composite likelihood computation.}
+ \item{maxtime}{The maximum temporal-distance threshold used in the composite likelihood, expressed in the same units as \code{coordt}.}
  \item{message}{Extra message passed from the numerical routines.}
  \item{model}{The density associated to the likelihood objects.}
  \item{missp}{\code{TRUE} if a misspecified Gaussian model is used in the composite likelihood.}

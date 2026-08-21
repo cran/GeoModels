@@ -5,12 +5,12 @@
  for Gaussian and non-Gaussian random fields.}
 \description{
 For a given set of spatial location sites (and temporal instants),
-the function computes optmal local linear prediction and the associated mean squared error 
+the function computes optimal local linear prediction and the associated mean squared error 
 for the Gaussian and non-Gaussian case using a spatial (temporal) neighborhood
 computed using the function \code{\link{GeoNeighborhood}}
 }
 \usage{
-GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
+GeoKrigloc(estobj=NULL,data, coordx=NULL, coordy=NULL, coordz=NULL,coordt=NULL,
  coordx_dyn=NULL, corrmodel, distance="Eucl", grid=FALSE, 
  loc, neighb=NULL, maxdist=NULL, 
  maxtime=NULL, method="cholesky",
@@ -19,27 +19,25 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
  sparse=FALSE, time=NULL, type="Standard",
  type_krig="Simple",weigthed=TRUE, 
  which=1, copula=NULL,X=NULL,Xloc=NULL,Mloc=NULL,varcov=NULL,
- spobj=NULL,spdata=NULL,parallel=FALSE,ncores=NULL,progress=TRUE)
+ spobj=NULL,spdata=NULL,parallel=FALSE,ncores=6,progress=TRUE,
+ check.duplicates=FALSE)
 }
 \arguments{
  \item{estobj}{An object of class Geofit that includes information about data, model and estimates.}
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid) or a
  (\eqn{t \times d}{t x d})-matrix (a single spatio-temporal realisation) or an (\eqn{d \times d \times t \times n }{d x d x t})-array
  (a single spatio-temporal realisation on regular grid) giving the data used for prediction.}
- \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix 
- Coordinates on a sphere for a fixed radius \code{radius} 
- are passed in lon/lat format expressed in decimal degrees.}
+ \item{coordx}{A numeric \eqn{d \times 2}{d x 2} or \eqn{d \times 3}{d x 3}
+coordinate matrix.  It may be omitted when \code{coordx_dyn} or \code{spobj}
+is supplied.  Coordinates on a sphere for a fixed radius \code{radius} are
+passed in lon/lat format expressed in decimal degrees.}
  \item{coordy}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
 
- \item{coordt}{A numeric vector giving 1-dimension of
- temporal coordinates used for prediction; the default is \code{NULL}
- then a spatial random field is expected.}
- \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
- containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}
- }
+ \item{coordt}{A numeric vector giving the temporal coordinates of the observations. The default is \code{NULL}, in which case a spatial random field is expected. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
+ \item{coordx_dyn}{For dynamic observation locations, a list with one two- or three-column coordinate matrix per element of \code{coordt}.  The rows of \code{coordx_dyn[[t]]} correspond to \code{data[[t]]} and to the same temporal block of \code{X}.  Dynamic observation locations do not alter the ordering of prediction tasks.  See \code{\link{GeoModels-spacetime-ordering}}.}
  \item{corrmodel}{String; the name of a correlation model, for the
  see \code{\link{GeoCovmatrix}} for the list of implemented correlation models.}
  \item{distance}{String; the name of the spatial distance. The default
@@ -52,13 +50,12 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
  \item{neighb}{Numeric; an optional positive integer indicating the 
  order of the neighborhood.}
  \item{maxdist}{Numeric; an optional positive value indicating the distance in the spatial neighborhood.}
- \item{maxtime}{Numeric; an optional positive integer value indicating the order of the temporal neighborhood.}
- \item{method}{String; the type of matrix decomposition used in the simulation. Default is \code{cholesky}. 
- The other possible choices is \code{svd}.}
- \item{n}{Numeric; the number of trials in a binomial random fields.
- Default is \eqn{1}.} 
- \item{nloc}{Numeric; the number of trials of the locations sites to be predicted in the binomial random field.
- If missing then a rounded mean of n is considered.} 
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal-distance threshold, expressed in the same units as \code{coordt}, used for the local temporal neighborhood.}
+ \item{method}{String; matrix decomposition used to solve each local
+kriging system.  The choices are \code{cholesky} (default) and \code{svd}.
+Only \code{cholesky} is available when \code{sparse=TRUE}.}
+ \item{n}{Positive integer size parameter. For Binomial it may be scalar or contain one value per observation. For direct Negative Binomial it is the single common number \eqn{r} of successes; Geometric corresponds to \eqn{r=1}. Default is \eqn{1}.}
+ \item{nloc}{Positive integer size at prediction tasks. For Binomial, site-specific observation sizes require explicit prediction sizes. For direct Negative Binomial, \code{nloc}, if supplied, must equal the common \eqn{r}; for Geometric it must equal 1. No prediction size is inferred by averaging observation-side values.} 
  \item{mse}{Logical; if \code{TRUE} (the default) MSE of the kriging predictor is computed} 
  \item{model}{String; the type of RF and therefore the densities associated to the likelihood
  objects. \code{Gaussian} is the default, see the Section
@@ -68,39 +65,117 @@ GeoKrigloc(estobj=NULL,data, coordx, coordy=NULL, coordz=NULL,coordt=NULL,
  \item{radius}{Numeric: the radius of the sphere if coordinates are passed in lon/lat format;Default value is 1.}
  \item{sparse}{Logical; if \code{TRUE} kriging is computed with sparse matrices algorithms 
  using spam package. Default is FALSE. It should be used with compactly supported covariances.} 
- \item{time}{A numeric (\eqn{m \times 1}{m x 1}) vector (where
- \code{m} is the number of temporal instants) giving the temporal instants to be predicted; the default is \code{NULL}
- then only spatial prediction is performed.}
- \item{type}{String; if \code{Standard} then standard kriging is performed;if \code{Tapering} 
- then kriging with covariance tapering is performed;if \code{Pairwise} then pairwise
- kriging is performed}
- \item{type_krig}{String; the type of kriging. If \code{Simple} (the
- default) then simple kriging is performed. Otherwise \code{Universal} }
- \item{weigthed}{Logical; if \code{TRUE} then decreasing weigths coming 
- from a compactly supported correlation function
- with compact support \code{maxdist} (\code{maxtime})are used in the pairwise kriging.}
+ \item{time}{A numeric vector giving the temporal instants to be predicted. Values need not be equally spaced and are interpreted on the same numeric time scale as \code{coordt}. The default is \code{NULL}, in which case only spatial prediction is performed.}
+ \item{type}{String; currently only \code{Standard} is computed.
+Other legacy values produce a warning and are treated as \code{Standard}.}
+ \item{type_krig}{String; \code{Simple} (default) treats fitted mean
+coefficients as known.  \code{Universal} uses the same coefficients and adds
+their uncertainty from \code{varcov} to each local prediction MSE.}
+ \item{weigthed}{Logical legacy argument retained for backward
+compatibility.  It has no effect for \code{type="Standard"}.}
  \item{which}{Numeric; In the case of bivariate (tapered) cokriging it indicates which variable to predict.
  It can be 1 or 2}
- \item{copula}{String; the type of copula. It can be "Clayton" or "Gaussian"}
- \item{X}{Numeric; Matrix of spatio(temporal)covariates in the linear mean specification.}
- \item{Xloc}{Numeric; Matrix of spatio(temporal)covariates in the linear mean specification
- associated to predicted locations.}
- \item{Mloc}{Numeric; Vector of spatio(temporal) estimated means 
- associated to predicted locations.}
- \item{varcov}{Inverse of the covariance matrix estimates.}
- \item{spobj}{An object of class sp or spacetime}
+ \item{copula}{String; optional copula specification. Local linear prediction is implemented for \code{"Gaussian"}, \code{"Clayton"}, and \code{"SkewGaussian"}.}
+ \item{X}{Numeric design matrix at the observations.  For fixed-location space-time data, rows follow \code{c(t(data))}, i.e. time then site.  For dynamic observations, use a stacked matrix ordered by temporal blocks, or a list aligned with \code{coordx_dyn}.}
+ \item{Xloc}{Numeric design matrix at prediction tasks.  For space-time prediction its rows are location-major: all requested times for \code{loc[1, ]}, then all requested times for \code{loc[2, ]}, and so on.}
+ \item{Mloc}{Numeric vector giving the known marginal location predictor at prediction tasks, in the same location-major order as \code{Xloc}. For Gaussian additive margins this is the mean itself; for models with link-scale parametrizations (for example Gamma/Weibull/LogGaussian or Beta2) it is on the same scale as \code{param$mean}. Use either \code{Mloc} or \code{Xloc}, not both.}
+ \item{varcov}{Covariance matrix of the estimated parameters, required
+for \code{type_krig="Universal"} when \code{mse=TRUE}.  With a composite
+fit it should be the sandwich covariance (inverse Godambe information).
+It is normally inherited from \code{estobj}.}
+ \item{spobj}{An object of class \code{sp} or \code{spacetime}. For space-time objects, the current \code{sp2Geo()} conversion uses sequential temporal indices and does not preserve irregular original time spacing; to retain irregular temporal distances, use the explicit-coordinate interface with numeric \code{coordt}.}
  \item{spdata}{Character:The name of data in the sp or spacetime object}
- \item{parallel}{Logical; if \code{TRUE} then 
- the prediction computation is parallelized 
- }
- \item{ncores}{Numeric; number of cores involved in parallelization.} 
+ \item{parallel}{Logical; default \code{FALSE}. If \code{TRUE}, the
+ independent local \code{GeoKrig} calls are evaluated with
+ \pkg{future.apply}.}
+ \item{ncores}{Numeric or \code{NULL}; default \code{6}. With
+ \code{parallel=TRUE}, a numeric value requests that many worker processes,
+ capped only by the number of prediction tasks and detected cores. Thus the
+ default parallel execution uses up to six workers. Set \code{ncores=NULL} to
+ request the automatic/safe mode, in which the package-wide automatic cap of
+ six workers and the internal RAM safety check may further reduce the worker
+ count.}
  \item{progress}{If TRUE then a progress bar is shown.}
+\item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
 
 \details{
-This function use the \code{\link{GeoKrig}} with a
-spatial or spatio-temporal neighborhood computed using the function \code{\link{GeoNeighborhood}}.
-The neighborhood is specified with the option \code{maxdist} and \code{maxtime}.}
+
+The univariate mean convention is the same as in \code{\link{GeoKrig}}:
+\eqn{\mu=X\beta} with coefficients named \code{mean}, \code{mean1}, and so
+on, or an external observation mean vector in \code{param$mean}.  The
+intercept-only case is equivalent to a one-column matrix of ones.
+At prediction tasks, use either \code{Xloc} for \eqn{X_{loc}\beta} or
+\code{Mloc} for a directly supplied local mean.  The rows of \code{Xloc} and
+the entries of \code{Mloc} follow the local-task order; for fixed-location
+space-time kriging this is location first and prediction time second.
+
+For \code{type_krig="Universal"}, each local prediction uses the mean
+coefficients already supplied or estimated by \code{GeoFit}; they are not
+re-estimated by GLS inside each neighborhood.  If \code{mse=TRUE}, the local
+MSE includes the uncertainty of those coefficients using the corresponding
+block of \code{varcov}.  For composite likelihood this is the sandwich
+covariance (inverse Godambe information).  Mean coefficients missing from
+\code{varcov} are treated as fixed.  External mean vectors are already
+known, so a requested universal prediction is treated as simple kriging with
+a warning.
+
+For \code{copula="Gaussian"}, \code{copula="Clayton"}, and
+\code{copula="SkewGaussian"}, each local prediction uses the same
+observed-scale copula covariance, marginal-mean calculations, solver, and MSE
+implementation as \code{\link{GeoKrig}}. The local predictor is an optimal
+linear predictor, not in general the full conditional mean.
+
+\code{GeoKrigloc} uses a single computational path. First,
+\code{\link{GeoNeighborhood}} constructs the requested neighborhood for each
+prediction task. Then \code{\link{GeoKrig}} is called on each local data set.
+This keeps covariance, copula, mean, numerical-solver, and MSE logic centralized
+in \code{GeoKrig} rather than duplicating those calculations inside
+\code{GeoKrigloc}.
+
+With \code{parallel=TRUE}, independent local \code{GeoKrig} calls are
+submitted through \pkg{future.apply}. The default \code{ncores=6} requests
+up to six workers, subject only to the number of prediction tasks and detected
+cores. Any other numeric \code{ncores} value is treated in the same way and is
+not reduced by the RAM safety heuristic. Set \code{ncores=NULL} explicitly to
+select the automatic/safe mode, where the package-wide worker resolver and the
+internal RAM safety check may reduce the worker count. On platforms where
+\pkg{future} reports that forked workers are safe, the automatic backend uses
+\code{multicore}; otherwise it uses \code{multisession}. Parallel and serial
+execution use the same local neighborhoods and the same \code{GeoKrig}
+calculations.
+
+When geometric anisotropy is supplied, observation coordinates, prediction
+locations, and neighborhood selection are transformed by the same metric.
+Thus the selected local neighbors are the nearest points under the covariance
+metric, not under the original isotropic distance.
+
+This function uses \code{\link{GeoKrig}} with a
+spatial or spatio-temporal neighborhood computed using \code{\link{GeoNeighborhood}}.
+Each local prediction task is evaluated through the same \code{GeoKrig}
+implementation used by the non-local prediction interface.
+The neighborhood is specified with \code{neighb}, \code{maxdist}, and
+\code{maxtime}.  Regular-grid data are internally vectorized in the same
+order as \code{expand.grid}; fixed-location space-time observations remain
+in time-major order.}
+
+\section{Spatio-temporal ordering}{
+Observed fixed-location data use time-major order: a \eqn{T \times N}{T x N}
+matrix is vectorized as \code{c(t(data))}.  Dynamic observations are supplied
+as aligned lists \code{data[[t]]} and \code{coordx_dyn[[t]]}, concatenated by
+time.  The rows of \code{X} and any known observation mean use the same
+observation order.
+
+Prediction tasks use the different, location-major order
+\preformatted{
+loc[1, ] at time[1], ..., loc[1, ] at time[Tloc],
+loc[2, ] at time[1], ..., loc[2, ] at time[Tloc], ...
+}
+Rows of \code{Xloc} and elements of \code{Mloc} must follow this order.  The
+returned \code{pred} and \code{mse} objects are \eqn{Tloc \times Nloc}{Tloc x Nloc}
+matrices with prediction times in rows and prediction locations in columns.
+See \code{\link{GeoModels-spacetime-ordering}}.
+}
 
 \value{
  Returns an object of class \code{Kg}.
@@ -117,16 +192,19 @@ The neighborhood is specified with the option \code{maxdist} and \code{maxtime}.
  \item{distance}{String: the type of spatial distance;}
  \item{grid}{\code{TRUE} if the spatial data used for prediction are observed in a regular grid, otherwise \code{FALSE};}
  \item{loc}{A (\eqn{n \times 2}{n x 2})-matrix of spatial locations to be predicted.}
- \item{n}{The number of trial for Binomial random fields} 
+ \item{n}{The Binomial number of trials, or the common Negative-Binomial number \eqn{r} of successes.} 
  \item{nozero}{In the case of tapered simple kriging the percentage of non zero values in the covariance matrix.
  Otherwise is NULL.}
  \item{numcoord}{Numeric:he number \eqn{d}{d} of spatial coordinates used for prediction;}
  \item{numloc}{Numeric: the number \eqn{n}{n} of spatial coordinates to be predicted;}
  \item{numtime}{Numeric: the number \eqn{d}{d} of the temporal instants used for prediction;}
  \item{numt}{Numeric: the number \eqn{m}{m} of the temporal instants to be predicted;}
- \item{model}{The type of RF, see \code{\link{GeoFit}}.}
- \item{param}{Numeric: The covariance parameters;}
- \item{pred}{A (\eqn{m \times n}{n x m})-matrix of spatio or spatio temporal kriging prediction;}
+ \item{model}{The response model used for prediction after canonicalizing any
+ misspecified-Gaussian fitting name.}
+ \item{fit_model}{The model name supplied by the caller or stored in the input
+ \code{GeoFit} object before prediction canonicalization.}
+ \item{param}{The parameter list used for prediction;}
+ \item{pred}{For spatio-temporal prediction, a \eqn{m \times n}{m x n} matrix with rows corresponding to \code{time} and columns corresponding to rows of \code{loc}; for spatial prediction, a numeric vector.}
  \item{radius}{Numeric: the radius of the sphere if coordinates are pssed in lon/lat format;}
  \item{spacetime}{\code{TRUE} if spatio-temporal kriging and \code{FALSE} if
  spatial kriging;}
@@ -134,7 +212,7 @@ The neighborhood is specified with the option \code{maxdist} and \code{maxtime}.
  \item{time}{A \eqn{m}{m}-dimensional vector of temporal coordinates to be predicted;}
  \item{type}{String: the type of kriging (Standard or Tapering).}
  \item{type_krig}{String: the type of kriging: Simple or Universal}
- \item{mse}{A (\eqn{m \times n}{n x m})-matrix of spatio or spatio temporal mean square error kriging prediction;}
+ \item{mse}{When \code{mse=TRUE}, the prediction MSE; otherwise \code{NULL}.}
 
 }
 
@@ -215,7 +293,6 @@ pr_loc$pred
 
 
 require(GeoModels)
-require(fields)
 set.seed(78)
 coords=cbind(runif(100),runif(100))
 coordt=seq(0,5,0.25)
@@ -303,8 +380,8 @@ pr_loc$pred
 #par(mfrow=c(1,2))
 #zlim=c(-2.5,2.5)
 #colour = rainbow(100)
-#quilt.plot(coords,data[1,] ,col=colour,main = paste(" Fist component")) 
-#quilt.plot(loc_to_pred,pr1$pred,col=colour,
+#fields::quilt.plot(coords,data[1,] ,col=colour,main = paste(" Fist component")) 
+#fields::quilt.plot(loc_to_pred,pr1$pred,col=colour,
 # main = paste(" Kriging first component"),ylab="")
 #par(opar)
 

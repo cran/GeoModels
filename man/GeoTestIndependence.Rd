@@ -24,8 +24,8 @@ GeoTestIndependence(data, coordx,
  est.aniso = c(FALSE, FALSE),
  sparse = FALSE,
  B = 1000,
- parallel = TRUE,
- ncores = NULL,
+ parallel = FALSE,
+ ncores = 6,
  progress = TRUE,
  seed = NULL)
 }
@@ -92,12 +92,9 @@ GeoTestIndependence(data, coordx,
  \code{1000}. Values below \code{99} produce a coarse bootstrap \emph{p}-value
  and generate a warning.}
 
- \item{parallel}{Logical value indicating whether the bootstrap fits should be
- evaluated in parallel when the required packages are available.}
+ \item{parallel}{Logical; default \code{FALSE}. Set \code{TRUE} to evaluate bootstrap fits in parallel when the required packages are available.}
 
- \item{ncores}{Number of worker processes. If \code{NULL}, the value is chosen
- automatically from the available cores and the requested number of bootstrap
- replications.}
+ \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and the number of bootstrap replications. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free.}
 
  \item{progress}{Logical value indicating whether progress bars should be
  displayed through \pkg{progressr}.}

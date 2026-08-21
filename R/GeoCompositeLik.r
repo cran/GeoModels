@@ -20,10 +20,14 @@ CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,c
 
         #aniso<-param[namesaniso]
 
-        sel=substr(names(nuisance),1,4)=="mean"
-        mm=as.numeric(nuisance[sel])
-        Mean=c(X%*%mm)
-        if(!is.null(MM)) Mean=MM
+        mean_names <- .GeoMean_names(ncol(X))
+        sel <- names(nuisance) %in% mean_names
+        if (is.null(MM)) {
+          beta <- .GeoMean_beta(nuisance, ncol(X))
+          Mean <- as.numeric(X %*% beta)
+        } else {
+          Mean <- as.numeric(MM)
+        }
 
        other_nuis=as.numeric(nuisance[!sel])   ## or nuis parameters (nugget sill skew df)
 
@@ -94,7 +98,6 @@ CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,c
     namesaniso=c("angle","ratio")
 
     if(all(model==1,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss'
-    if(all(model==1,likelihood==3,type==1)) fname <- 'Comp_Diff_Gauss'
     if(all(model==1,likelihood==3,type==2)) {fname <- 'Comp_Pair_Gauss'
                                               if(varest ) hessian <- TRUE}
     if(all(model==2,likelihood==3,type==2)){ fname <- 'Comp_Pair_BinomGauss'
@@ -173,8 +176,6 @@ CompLik <- function(copula,bivariate, coordx, coordy ,coordz,coordt,coordx_dyn,c
                                               if(varest ) hessian <- TRUE}
     if(all(model==46,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisGamma'
                                               if(varest ) hessian <- TRUE}
-    if(all(model==46,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisGamma'
-                                              if(varest ) hessian <- TRUE}
     if(all(model==43,likelihood==3,type==2)){ fname <- 'Comp_Pair_PoisZIP'
                                               if(varest ) hessian <- TRUE}
     if(all(model==44,likelihood==3,type==2)){ fname <- 'Comp_Pair_Gauss_misp_PoisZIP'
@@ -217,10 +218,13 @@ coords=cbind(coordx,coordy,coordz)
    if(!bivariate)           {
     if(length(param)==1) {
          optimizer="optimize"  
-     CompLikelihood <- optimize(f=comploglik, coords=coords, coordt=coordt,corrmodel=corrmodel, 
-                              data=data, fixed=fixed, fan=fname,  lower=lower, n=n,
-                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso, maximum = FALSE,
-                              upper=upper,weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM)
+     CompLikelihood <- .GeoModels_optimize_1d(
+                              f=comploglik, param=param, lower=lower, upper=upper,
+                              namesparam=namesparam,
+                              coords=coords, coordt=coordt,corrmodel=corrmodel,
+                              data=data, fixed=fixed, fan=fname, n=n,
+                              namescorr=namescorr, namesnuis=namesnuis,namesaniso=namesaniso,
+                              weigthed=weigthed,X=X,ns=ns,NS=NS,MM=MM)
           }
    if(length(param)>1) {
     if(optimizer=='L-BFGS-B')
@@ -284,10 +288,13 @@ coords=cbind(coordx,coordy,coordz)
      if(length(param)==1)
         {
          optimizer="optimize" 
-       CompLikelihood <- optimize(f=comploglik_biv, coords=coords, coordt=coordt,corrmodel=corrmodel, 
-                              data=data, fixed=fixed,fan=fname,  lower=lower,n=n,MM=MM,
-                              namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso, maximum = FALSE,
-                              upper=upper,weigthed=weigthed,X=X,ns=ns,NS=NS)}
+       CompLikelihood <- .GeoModels_optimize_1d(
+                              f=comploglik_biv, param=param, lower=lower, upper=upper,
+                              namesparam=namesparam,
+                              coords=coords, coordt=coordt,corrmodel=corrmodel,
+                              data=data, fixed=fixed,fan=fname,n=n,MM=MM,
+                              namescorr=namescorr, namesnuis=namesnuis,namesaniso=namesaniso,
+                              weigthed=weigthed,X=X,ns=ns,NS=NS)}
       if(length(param)>1) {   
     if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(param,comploglik_biv, control=list(pgtol=1e-14, maxit=100000),

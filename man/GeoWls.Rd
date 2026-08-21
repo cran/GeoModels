@@ -2,16 +2,17 @@
 \alias{GeoWLS}
 \alias{print.GeoWLS}
 \encoding{UTF-8}
-\title{WLS of random fields}
+\title{WLS of Gaussian random fields}
 \description{
- the function returns the parameters' estimates of a random field obtained by 
- the weigthed least squares estimator.
+ the function returns the parameter estimates of a Gaussian random field obtained by
+ the weighted least squares estimator.
 }
 \usage{
 GeoWLS(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corrmodel, 
  distance="Eucl", fixed=NULL, grid=FALSE, maxdist=NULL,neighb=NULL,
- maxtime=NULL, model='Gaussian', optimizer='Nelder-Mead',
- numbins=NULL, radius=1, start=NULL, weighted=FALSE,optimization=TRUE)
+ maxtime=NULL, optimizer='Nelder-Mead',
+ numbins=NULL, radius=1, start=NULL, weighted=FALSE,optimization=TRUE,
+ numbins_t=NULL)
 }
 \arguments{
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid) or a
@@ -24,8 +25,7 @@ GeoWLS(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corr
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
- \item{coordt}{A numeric vector giving 1-dimension of
- temporal coordinates. Optional argument, the default is \code{NULL} then a spatial random field is expected.}
+ \item{coordt}{A numeric vector giving one dimension of temporal coordinates. Optional argument; the default is \code{NULL}, in which case a spatial random field is expected. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
  containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL}
  } 
@@ -46,15 +46,12 @@ GeoWLS(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corr
  \code{\link{GeoFit}} for details.}
  \item{neighb}{Numeric; an optional positive integer indicating the 
  order of neighborhood. See \code{\link{GeoFit}} for details}
- \item{maxtime}{Numeric; an optional positive value indicating the maximum
- temporal lag considered. See \code{\link{GeoFit}} for details.}
- \item{model}{String; the type of random field. \code{Gaussian} is the default, see
- \code{\link{GeoFit}} for the different types.}
+ \item{maxtime}{Numeric; an optional positive maximum temporal lag, expressed in the same units as \code{coordt}. See \code{\link{GeoFit}} for details.}
  \item{optimizer}{String; the optimization algorithm
  (see \code{\link{optim}} for details). 'Nelder-Mead' is the
  default.}
- \item{numbins}{A numeric value denoting the numbers of bins, see the
- Details}
+ \item{numbins}{Historical GeoModels argument giving the number of spatial bin boundaries; \code{numbins - 1} empirical spatial classes are used. See Details.}
+ \item{numbins_t}{Optional positive integer giving the number of temporal classes for irregularly spaced \code{coordt}. If \code{NULL}, \code{numbins - 1} is used. Regularly spaced times use their directly attainable temporal lags.}
  \item{radius}{Numeric; a value indicating the radius of the sphere when using the great circle distance. Default value is 1.} 
  \item{start}{A named list with the initial values of the
  parameters that are used by the numerical routines in maximization
@@ -67,13 +64,24 @@ GeoWLS(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corr
 }
 
 \details{
- The \code{numbins} parameter indicates the number of adjacent
- intervals to consider in order to grouped distances with which to
- compute the (weighted) lest squares.
+ \code{GeoWLS} is defined for Gaussian random fields and therefore does
+ not expose a \code{model} argument. Its native least-squares kernels compare
+ the empirical variogram with the Gaussian variogram parameterized by nugget,
+ sill, and the selected correlation model.
 
- The \code{maxdist} parameter indicates the maximum distance below which
- the shorter distances will be considered in the calculation of
- the (weigthed) least squares.
+ The historical \code{numbins} parameter gives the number of spatial bin
+ boundaries, so \code{numbins - 1} spatial classes are used. For
+ spatio-temporal data, regular temporal coordinates are handled from their
+ common spacing without constructing all pairwise temporal differences;
+ irregular temporal coordinates use \code{numbins_t} temporal classes.
+
+ Empty empirical cells are retained in the rectangular spatial-temporal lag
+ grid and are skipped by the least-squares objective through their zero pair
+ count. This preserves the correspondence between empirical cells and their
+ spatial/temporal lags.
+
+ The \code{maxdist} parameter indicates the positive finite maximum distance
+ below which pairs are considered in the (weighted) least squares.
 }
 
 \value{
@@ -97,8 +105,8 @@ GeoWLS(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL, coordx_dyn=NULL, corr
  If no spatial distance is specified then it is NULL;}
  \item{maxtime}{The maximum temporal distance used for the calculation of the variogram used in least square estimation.
  If no temporal distance is specified then it is NULL;}
+ \item{numbins_t}{The requested number of temporal classes for irregular time coordinates, or \code{NULL};}
  \item{message}{Extra message passed from the numerical routines;}
- \item{model}{The type of random fields;}
  \item{numcoord}{The number of spatial coordinates;}
  \item{numtime}{The number the temporal realisations of the random field;}
  \item{param}{The vector of parameters' estimates;}

@@ -74,19 +74,6 @@ one_log_tukeyh <- function(data, mm, sill, tail) {
   extra <- 1 / (1 + lambert_vals)
   return(log(dnorm(x) * x * extra / (q * sqrt(sill))))
 }
-qllogis1 <- function(p, shape, rate = 1, scale = 1/rate, lower.tail = TRUE, log.p = FALSE) {
-  if (missing(shape)) stop("argument 'shape' is missing, with no default")
-  if (shape <= 0) stop("'shape' must be positive")
-  if (scale <= 0) stop("'scale' must be positive")
-  if (log.p) { p <- exp(p)}
-  if (any(p < 0 | p > 1)) stop("probabilities must be between 0 and 1")
-  if (!lower.tail) {p <- 1 - p }
-  result <- numeric(length(p)); result[p == 0] <- 0;result[p == 1] <- Inf
-  valid <- p > 0 & p < 1
-  if (any(valid)) {p_valid <- p[valid];result[valid] <- scale * (p_valid / (1 - p_valid))^(1/shape)}
-  return(result)
-}
-
 
 indloglik <- function(fan, data, mm, nuis) {
 
@@ -344,11 +331,15 @@ compindloglik2 <- function(param, data, fixed, fan, n, namesnuis, namesparam, X,
     names(param) <- namesparam
     param <- c(param, fixed)
     nuisance <- param[namesnuis]
-    sel <- substr(names(nuisance), 1, 4) == "mean"
-    mm <- as.numeric(nuisance[sel])
+    mean_names <- .GeoMean_names(ncol(X))
+    sel <- names(nuisance) %in% mean_names
     other_nuis <- as.numeric(nuisance[!sel])
     
-    Mean <- if(is.null(MM)) c(X %*% mm) else c(MM)
+    Mean <- if (is.null(MM)) {
+      as.numeric(X %*% .GeoMean_beta(nuisance, ncol(X)))
+    } else {
+      as.numeric(MM)
+    }
     result <- indloglik(fan, data, Mean, other_nuis)
     if(!is.finite(result)) result <- 1e8
     return(result)
@@ -744,6 +735,11 @@ if (optimizer %in% c("L-BFGS-B", "nlminb", "bobyqa") &&
           CompLikelihood=as.list(0)
           names(CompLikelihood)="value"
           CompLikelihood$par <- param
+          ## param is converted to an unnamed numeric vector above so that the
+          ## optimizers receive a plain numeric vector.  In the onlyvar path no
+          ## optimizer runs to restore the parameter names; preserve the same
+          ## named output contract as the fitted Independence paths.
+          names(CompLikelihood$par) <- namesparam
           CompLikelihood$claic <- NULL;CompLikelihood$clbic <- NULL;
           CompLikelihood$convergence <- 'Successful'
           if(!bivariate) CompLikelihood$value = -  compindloglik2(param=CompLikelihood$par ,     

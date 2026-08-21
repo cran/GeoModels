@@ -1,5 +1,9 @@
 sp2Geo <- function(spobj, spdata = NULL)
 {
+  if (!requireNamespace("sp", quietly = TRUE)) {
+    stop("Package 'sp' is required to use sp2Geo().", call. = FALSE)
+  }
+
   # spobj: sp or spacetime object
   # spdata: name of dependent variable;
   # one of the columns in the @data slot must be the dependent variable

@@ -22,8 +22,7 @@ CkInput(coordx, coordy, coordz,coordt, coordx_dyn,corrmodel, data, distance,
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  
- \item{coordt}{A numeric vector assigning 1-dimension of
- temporal coordinates.}
+ \item{coordt}{A numeric vector assigning one dimension of temporal coordinates. The values need not be equally spaced; input validation does not impose a regular temporal grid.}
  \item{corrmodel}{String; the name of a correlation model, for the
  description see \code{\link{GeoFit}}.}
  \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
@@ -48,8 +47,7 @@ CkInput(coordx, coordy, coordz,coordt, coordx_dyn,corrmodel, data, distance,
  \item{maxdist}{Numeric; an optional positive value indicating the maximum
  spatial distance considered in the composite-likelihood
  computation.}
- \item{maxtime}{Numeric; an optional positive value indicating the maximum
- temporal lag separation in the composite-likelihood.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal-distance threshold, expressed in the same units as \code{coordt}.}
  \item{radius}{Numeric; the radius of the sphere in the case of lon-lat coordinates.
  The default is 6371, the radius of the earth.} 
  \item{model}{String; the density associated to the likelihood

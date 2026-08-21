@@ -242,53 +242,6 @@ void integrand2_opt(double *u, int n, void *params) {
     }
 }
 //
-static double optimized_series_v2(double a, double b, double x) {
-    if (x == 0.0) return 1.0;
-    const KummerConfig *cfg = kummer_cfg();
-    const double tol = cfg->tol;
-    const int max_iter = cfg->max_iter_series;
-    double sum = 1.0;
-    double ck = 0.0;
-    double term = (a / (1.0 * b)) * x;
-    // Add first term
-    {
-        double y = term - ck;
-        double t = sum + y;
-        ck = (t - sum) - y;
-        sum = t;
-    }
-    if (fabs(term) <= tol) return sum;
-    // Second term
-    term *= ((a + 1.0) / (2.0 * (b + 1.0))) * x;
-    {
-        double y = term - ck;
-        double t = sum + y;
-        ck = (t - sum) - y;
-        sum = t;
-    }
-    if (fabs(term) <= tol) return sum;
-    // Now loop from k=3
-    double a_k = a + 2.0;
-    double b_k = b + 2.0;
-    double prev_sum;
-    for (int k = 3; k <= max_iter; k++) {
-        term *= (a_k / ((double)k * b_k)) * x;
-        prev_sum = sum;
-        {
-            double y = term - ck;
-            double t = sum + y;
-            ck = (t - sum) - y;
-            sum = t;
-        }
-        if (fabs(term) <= tol * fabs(sum)) break;
-        if (fast_converged(sum, prev_sum, tol)) break;
-        if (fabs(term) > 1e100) return R_NaN;
-        a_k += 1.0;
-        b_k += 1.0;
-    }
-    return sum;
-}
-//
 void chguit_opt(double a, double b, double x, double *hu, int *id) {
     *id = 9;
     *hu = 0.0;
@@ -315,15 +268,18 @@ void chguit_opt(double a, double b, double x, double *hu, int *id) {
     int limit = cfg->quad_limit;
     int lenw = 4 * limit;
    
-    int *iwork = (int*)calloc(limit, sizeof(int));
-    double *work = (double*)calloc(lenw, sizeof(double));
-   
-    if (!iwork || !work) {
-        free(iwork);
-        free(work);
-        *id = -1;
-        return;
-    }
+    /*
+     * Temporary QUADPACK workspaces. chguit_opt() can be called many times
+     * within one native entry point, so bracket R_alloc() with a local
+     * allocation-stack watermark to avoid accumulating temporary memory.
+     */
+    void *vmax = vmaxget();
+    int *iwork = (int *) R_alloc((size_t) limit, sizeof(int));
+    double *work = (double *) R_alloc((size_t) lenw, sizeof(double));
+
+    /* Preserve the previous zero-initialization semantics. */
+    memset(iwork, 0, (size_t) limit * sizeof(int));
+    memset(work, 0, (size_t) lenw * sizeof(double));
    
     double result1, abserr1;
     int neval1, ier1;
@@ -332,8 +288,7 @@ void chguit_opt(double a, double b, double x, double *hu, int *id) {
            &neval1, &ier1, &limit, &lenw, &last, iwork, work);
    
     if (ier1 > 1) {
-        free(iwork);
-        free(work);
+        vmaxset(vmax);
         *id = -1;
         return;
     }
@@ -347,8 +302,7 @@ void chguit_opt(double a, double b, double x, double *hu, int *id) {
            &neval2, &ier2, &limit, &lenw, &last, iwork, work);
    
     if (ier2 > 1) {
-        free(iwork);
-        free(work);
+        vmaxset(vmax);
         *id = -1;
         return;
     }
@@ -364,87 +318,9 @@ void chguit_opt(double a, double b, double x, double *hu, int *id) {
         *id = (int)fmax(1.0, -log10(total_error / fabs(*hu)));
     }
    
-    free(iwork);
-    free(work);
+    vmaxset(vmax);
 }
-// CHGM
-void chgm_opt(double a, double b, double x, double *hg) {
-    const double pi_val = M_PI;
-    double a0 = a, a1 = a, x0 = x;
-    *hg = 0.0;
-   
-    if (!R_FINITE(a) || !R_FINITE(b) || !R_FINITE(x)) {
-        *hg = R_NaN;
-        return;
-    }
-   
-    if (x < 0.0) {
-        a = b - a;
-        a0 = a;
-        x = fabs(x);
-    }
-   
-    int nl = 0, la = 0;
-    if (a >= 2.0) {
-        nl = 1;
-        la = (int)a;
-        a = a - la - 1.0;
-    }
-   
-    double y0 = 0.0, y1 = 0.0;
-   
-    for (int n = 0; n <= nl; n++) {
-        if (a0 >= 2.0) a = a + 1.0;
-       
-        if (x <= 35.0 + fabs(b) || a < 0.0) {
-            *hg = optimized_series_v2(a, b, x);
-            if (x0 < 0.0) *hg *= exp(x0);
-        } else {
-            double sum1 = 1.0, sum2 = 1.0;
-            double r1 = 1.0, r2 = 1.0;
-            const double inv_x = 1.0 / x;
-           
-            const KummerConfig *cfg = kummer_cfg();
-            for (int i = 1; i <= cfg->max_iter_asympt; i++) {
-                r1 *= -(a + i - 1.0) * (a - b + i) * inv_x / i;
-                r2 *= -(b - a + i - 1.0) * (a - i) * inv_x / i;
-                sum1 += r1;
-                sum2 += r2;
-               
-                if (fabs(r1) + fabs(r2) < cfg->tol * (fabs(sum1) + fabs(sum2))) break;
-            }
-           
-            double hg1, hg2;
-            if (x0 >= 0.0) {
-                hg1 = exp(lgammafn(b) - lgammafn(b-a)) * optimized_pow(x, -a) * cos(pi_val * a) * sum1;
-                hg2 = exp(lgammafn(b) - lgammafn(a) + x) * optimized_pow(x, a - b) * sum2;
-            } else {
-                hg1 = exp(lgammafn(b) - lgammafn(b-a) + x0) * optimized_pow(x, -a) * cos(pi_val * a) * sum1;
-                hg2 = exp(lgammafn(b) - lgammafn(a)) * optimized_pow(x, a - b) * sum2;
-            }
-           
-            // NUOVO: usa Kahan
-            double hg_parts[2] = {hg1, hg2};
-            *hg = kahan_sum(hg_parts, 2);
-        }
-       
-        if (n == 0) y0 = *hg;
-        if (n == 1) y1 = *hg;
-    }
-   
-    if (a0 >= 2.0) {
-        for (int i = 1; i <= la - 1; i++) {
-            double temp = ((2.0 * a - b + x) * y1 + (b - a) * y0) / a;
-            y0 = y1;
-            y1 = temp;
-            a += 1.0;
-        }
-        *hg = y1;
-    }
-   
-    a = a1;
-    x = x0;
-}
+
 // CHGUS
 void chgus_opt(double a, double b, double x, double *hu, int *id) {
     *id = -100;

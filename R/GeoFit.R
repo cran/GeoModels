@@ -2,6 +2,169 @@
 ### File name: GeoFit.r
 ####################################################
 
+.GeoFit_validate_likelihood_type <- function(likelihood, type) {
+  if (!is.character(likelihood) || length(likelihood) != 1L || is.na(likelihood))
+    stop("likelihood must be a single character string.", call. = FALSE)
+  if (!is.character(type) || length(type) != 1L || is.na(type))
+    stop("type must be a single character string.", call. = FALSE)
+
+  if (identical(likelihood, "Difference") || identical(type, "Difference")) {
+    stop("The Difference composite likelihood is no longer supported.", call. = FALSE)
+  }
+
+  allowed <- switch(likelihood,
+    Full = c("Standard", "Tapering", "Tapering1", "Tapering2", "CV"),
+    Marginal = c("Pairwise", "Independence"),
+    Conditional = "Pairwise",
+    Marginal_2 = "Pairwise",
+    NULL
+  )
+  if (is.null(allowed)) {
+    stop("The setting name of the likelihood objects is not correct.", call. = FALSE)
+  }
+  if (!(type %in% allowed)) {
+    stop(sprintf(
+      "likelihood='%s' is not compatible with type='%s'. Allowed type value(s): %s.",
+      likelihood, type, paste(allowed, collapse = ", ")
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+
+.GeoFit_parameter_suggestions <- function(bad, valid) {
+  valid <- unique(valid[nzchar(valid)])
+  if (!length(valid)) return(character(0))
+  out <- character(0)
+  for (nm in bad) {
+    dd <- as.numeric(utils::adist(nm, valid, ignore.case = TRUE))
+    if (!length(dd) || all(!is.finite(dd))) next
+    jj <- which.min(dd)
+    lim <- max(1, min(3, ceiling(nchar(nm) / 2)))
+    if (is.finite(dd[jj]) && dd[jj] <= lim)
+      out <- c(out, sprintf("'%s' -> '%s'", nm, valid[jj]))
+  }
+  out
+}
+
+.GeoFit_unit_sill_models <- function() {
+  c(
+    "Weibull", "Poisson", "Binomial", "Gamma", "LogLogistic",
+    "BinomialNeg", "Binary", "Bernoulli", "Geom", "Geometric",
+    "Gaussian_misp_Poisson", "Binary_misp_BinomialNeg",
+    "PoissonZIP", "Gaussian_misp_PoissonZIP", "BinomialNegZINB", "BinomNeg",
+    "PoissonZIP1", "Gaussian_misp_PoissonZIP1", "BinomialNegZINB1",
+    "Gaussian_misp_PoissonGamma", "PoissonGamma", "PoissonGammaZIP",
+    "PoissonGammaZIP1", "Beta2", "Kumaraswamy2", "Beta", "Kumaraswamy"
+  )
+}
+
+.GeoFit_normalize_unit_sill <- function(start, fixed, model, bivariate) {
+  if (bivariate || !(model %in% .GeoFit_unit_sill_models())) return(fixed)
+
+  if (!is.null(start$sill))
+    stop("'sill' is fixed at 1 for this model and must not be supplied in 'start'.",
+         call. = FALSE)
+
+  if (is.null(fixed)) fixed <- list()
+  if (!is.null(fixed$sill)) {
+    fsill <- fixed$sill
+    ok <- is.numeric(fsill) && length(fsill) == 1L && !is.na(fsill) &&
+      is.finite(fsill) && isTRUE(all.equal(as.numeric(fsill), 1,
+                                           tolerance = sqrt(.Machine$double.eps)))
+    if (!ok)
+      stop("'sill' is fixed at 1 for this model; if supplied in 'fixed', it must equal 1.",
+           call. = FALSE)
+  }
+  fixed$sill <- 1
+  fixed
+}
+
+.GeoFit_validate_parameter_names <- function(start, fixed, model, corrmodel,
+                                             copula, bivariate, X) {
+  num_betas <- if (!bivariate) {
+    if (is.null(X)) 1L
+    else if (is.list(X)) ncol(X[[1L]])
+    else ncol(as.matrix(X))
+  } else {
+    if (is.null(X)) c(1L, 1L)
+    else if (is.list(X)) c(ncol(X[[1L]]), ncol(X[[2L]]))
+    else rep(ncol(as.matrix(X)), 2L)
+  }
+
+  nuisance_start <- unique(NuisParam(model, bivariate, num_betas, copula = copula))
+  nuisance_fixed <- unique(NuisParam2(model, bivariate, num_betas, copula = copula))
+  corr <- unique(CorrParam(corrmodel))
+
+  check_one <- function(x, arg, nuisance) {
+    valid <- unique(c(nuisance, corr))
+    if (is.null(x) || !length(x)) return(invisible(TRUE))
+    if (!is.list(x)) return(invisible(TRUE))  # CkInput reports the type error.
+
+    nm <- names(x)
+    if (is.null(nm) || anyNA(nm) || any(!nzchar(nm))) {
+      stop(sprintf("GeoFit: every entry of '%s' must have a parameter name.", arg),
+           call. = FALSE)
+    }
+    dup <- unique(nm[duplicated(nm)])
+    if (length(dup)) {
+      stop(sprintf("GeoFit: duplicated parameter name(s) in '%s': %s.",
+                   arg, paste(dup, collapse = ", ")), call. = FALSE)
+    }
+
+    bad <- setdiff(nm, valid)
+    if (!length(bad)) return(invisible(TRUE))
+
+    cp <- if (is.null(copula)) "" else sprintf(" with copula='%s'", copula)
+    msg <- sprintf(
+      "GeoFit: invalid parameter name(s) in '%s': %s.\nValid nuisance/marginal parameter names for model='%s'%s: %s.\nValid correlation parameter names for corrmodel='%s': %s.",
+      arg, paste(bad, collapse = ", "), model, cp,
+      if (length(nuisance)) paste(nuisance, collapse = ", ") else "none",
+      corrmodel, if (length(corr)) paste(corr, collapse = ", ") else "none"
+    )
+    sug <- .GeoFit_parameter_suggestions(bad, valid)
+    if (length(sug))
+      msg <- paste0(msg, "\nPossible correction(s): ", paste(sug, collapse = "; "), ".")
+    stop(msg, call. = FALSE)
+  }
+
+  check_one(start, "start", nuisance_start)
+  check_one(fixed, "fixed", nuisance_fixed)
+
+  if (!is.null(start) && !is.null(fixed) && is.list(start) && is.list(fixed)) {
+    overlap <- intersect(names(start), names(fixed))
+    if (length(overlap)) {
+      stop(sprintf(
+        "GeoFit: parameter(s) cannot be supplied in both 'start' and 'fixed': %s.",
+        paste(overlap, collapse = ", ")
+      ), call. = FALSE)
+    }
+  }
+  invisible(TRUE)
+}
+
+.GeoFit_check_st_pairwise_support <- function(model, likelihood) {
+  code <- CkModel(model)
+  ## These sets mirror the space-time native routines registered in
+  ## GeoModels_init.c.  Spatial-only kernels are deliberately not considered
+  ## here: this guard exists only to prevent an unavailable _st2mem dispatch.
+  marginal_codes <- c(
+    1L, 2L, 10L, 11L, 12L, 13L, 14L, 16L, 20L, 21L, 22L, 24L, 25L,
+    26L, 27L, 28L, 29L, 30L, 33L, 34L, 35L, 36L, 38L, 39L, 40L, 42L,
+    43L, 44L, 45L, 46L, 47L, 49L, 59L
+  )
+  conditional_codes <- marginal_codes
+  allowed <- if (identical(likelihood, "Marginal")) marginal_codes else conditional_codes
+
+  if (!(code %in% allowed)) {
+    stop(sprintf(
+      "Model '%s' is not implemented for spatio-temporal %s pairwise composite likelihood.",
+      model, tolower(likelihood)
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                    coordx_dyn = NULL, copula = NULL, corrmodel = NULL,
                    distance = "Eucl", fixed = NULL, anisopars = NULL,
@@ -13,14 +176,25 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                    score = FALSE, sensitivity = FALSE, sparse = FALSE,
                    start = NULL, thin_method = "bernoulli", type = "Pairwise",
                    upper = NULL, varest = FALSE, weighted = FALSE, X = NULL,
-                    spobj = NULL, spdata = NULL)
+                    spobj = NULL, spdata = NULL, check.duplicates = FALSE)
 {
   ###########  first preliminary check  ###############
   call <- match.call()
 
+  if (!isTRUE(memdist)) {
+    warning(
+      "'memdist = FALSE' is deprecated and ignored; GeoFit now always precomputes the selected pair structure.",
+      call. = FALSE
+    )
+  }
+  memdist <- TRUE
+
   suppressWarnings({
 
-    if (is.null(start)) stop("Starting parameters are missing")
+    ## start is genuinely optional.  WlsStart/StartParam provide conservative
+    ## internal initial values for parameters omitted by the user.
+    if (is.null(start)) start <- list()
+    grid_requested <- isTRUE(grid)
 
     ## normalize strings early (before checks)
     if (!is.null(corrmodel)) corrmodel <- gsub("[[:blank:]]", "", corrmodel)
@@ -29,6 +203,8 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (!is.null(optimizer)) optimizer <- gsub("[[:blank:]]", "", optimizer)
     if (!is.null(likelihood))likelihood<- gsub("[[:blank:]]", "", likelihood)
     if (!is.null(type))      type      <- gsub("[[:blank:]]", "", type)
+
+    .GeoFit_validate_likelihood_type(likelihood, type)
 
     ## default corrmodel for Independence+Marginal
     if (is.null(corrmodel) && likelihood == "Marginal" && type == "Independence") {
@@ -45,11 +221,35 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     ## checks on corrmodel/model/copula
     if (!is.character(corrmodel) || is.null(CkCorrModel(corrmodel)))
       stop("the name of the correlation model is wrong\n")
-    if (is.null(CkModel(model)))
+    model_code <- CkModel(model)
+    if (is.null(model_code))
       stop("The name of the model is not correct\n")
 
+    ## GeoLik has explicit full-likelihood objectives only for this set of
+    ## model codes.  Older calls for other models (notably Gamma/Weibull)
+    ## reached GeoLik with no objective name selected and failed with internal
+    ## errors such as `object 'lname' not found`.  Stop here with a stable,
+    ## user-facing capability message instead.
+    if (likelihood == "Full") {
+      full_model_codes <- c(1L, 20L, 22L, 34L, 35L, 36L, 37L, 40L, 47L)
+      if (!(model_code %in% full_model_codes)) {
+        stop(
+          sprintf(
+            "GeoFit: Full likelihood is not implemented for model='%s'. Use pairwise likelihood where available.",
+            model
+          ),
+          call. = FALSE
+        )
+      }
+    }
+
+    ## Preserve the inferential model separately from the data-generating
+    ## model.  For misspecified likelihoods these are intentionally different
+    ## and bootstrap routines must be able to recover the original criterion.
+    estimation_model <- model
+
     if (!is.null(copula)) {
-      if (!((copula == "Clayton") || (copula == "Gaussian") || (copula == "SkewGaussian")))
+      if (!copula %in% c("Clayton", "Gaussian", "SkewGaussian"))
         stop("the type of copula is wrong\n")
     }
 
@@ -77,13 +277,14 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       est.aniso <- c(FALSE, FALSE)
     }
 
-    if (!is.logical(memdist)) memdist <- FALSE
-
     if (!is.null(X) && is.null(coordx_dyn)) X <- as.matrix(X)
 
-    if (is.numeric(neighb)) {
-      neighb <- round(neighb)
-      if (any(neighb < 1)) stop("neighb must be an integer >=1\n")
+    if (!is.null(neighb)) {
+      if (!is.numeric(neighb) || length(neighb) != 1L || !is.finite(neighb) ||
+          neighb < 1 || abs(neighb - round(neighb)) > sqrt(.Machine$double.eps)) {
+        stop("neighb must be a finite positive integer", call. = FALSE)
+      }
+      neighb <- as.integer(round(neighb))
     }
 
     if (!is.null(anisopars) && !is.list(anisopars))
@@ -96,6 +297,95 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     bivariate <- CheckBiv(CkCorrModel(corrmodel))
     spacetime <- CheckST(CkCorrModel(corrmodel))
     space <- !spacetime && !bivariate
+
+    if (bivariate && type == "Pairwise") {
+      if (CkModel(model) != 1L || likelihood != "Marginal") {
+        stop(
+          "Bivariate pairwise fitting is currently implemented only for model='Gaussian' with likelihood='Marginal'.",
+          call. = FALSE
+        )
+      }
+    }
+
+    if (spacetime && type == "Pairwise" &&
+        likelihood %in% c("Marginal", "Conditional", "Marginal_2")) {
+      .GeoFit_check_st_pairwise_support(
+        model, if (likelihood == "Marginal_2") "Conditional" else likelihood
+      )
+    }
+
+    ## Pairwise copula likelihood is currently a univariate spatial implementation.
+    ## Keep the accepted marginal set synchronized with biv_cop() and the
+    ## native Comp_Pair_*Cop2mem wrappers.
+    if (!is.null(copula) && type == "Pairwise") {
+      if (!space)
+        stop("Pairwise copula fitting is currently implemented only for univariate purely spatial data.",
+             call. = FALSE)
+      if (!(likelihood %in% c("Marginal", "Conditional")))
+        stop("Copula fitting with type='Pairwise' requires likelihood='Marginal' or 'Conditional'.",
+             call. = FALSE)
+
+      model_cop <- switch(model,
+        Gauss = "Gaussian",
+        LogGauss = "LogGaussian",
+        weibull = "Weibull",
+        gamma = "Gamma",
+        model
+      )
+      continuous_copula_margins <- c(
+        "Gaussian", "StudentT", "LogGaussian", "Gamma", "Weibull",
+        "Beta", "Beta2", "Kumaraswamy", "Kumaraswamy2",
+        "Logistic", "SkewLaplace"
+      )
+      discrete_copula_margins <- c("Poisson", "Binomial", "BinomialNeg")
+      supported_copula_margins <- if (copula %in% c("Gaussian", "SkewGaussian"))
+        c(continuous_copula_margins, discrete_copula_margins)
+      else
+        continuous_copula_margins
+
+      if (!(model_cop %in% supported_copula_margins)) {
+        stop(sprintf(
+          "Marginal model '%s' is not implemented for pairwise %s-copula fitting. Supported margins are: %s.",
+          model, copula, paste(supported_copula_margins, collapse = ", ")
+        ), call. = FALSE)
+      }
+
+      ## The Clayton option in GeoModels is the constructive Clayton-like RF
+      ## of Bevilacqua et al.; its nu parameter is a positive integer. Because
+      ## nu is discrete, it must be fixed rather than optimized continuously.
+      if (copula == "Clayton") {
+        ## Use exact name matching: '$nu' can partially match 'nugget' in R.
+        has_nu_fixed <- !is.null(fixed) && "nu" %in% names(fixed)
+        has_nu_start <- !is.null(start) && "nu" %in% names(start)
+        if (!has_nu_fixed || has_nu_start)
+          stop("For copula='Clayton', nu must be supplied only in fixed and must be a positive integer.",
+               call. = FALSE)
+        nu_clay <- as.numeric(fixed[["nu", exact = TRUE]])
+        if (length(nu_clay) != 1L || !is.finite(nu_clay) || nu_clay <= 0 ||
+            abs(nu_clay - round(nu_clay)) > sqrt(.Machine$double.eps))
+          stop("For copula='Clayton', fixed$nu must be a finite positive integer.",
+               call. = FALSE)
+      }
+
+      ## For the skew-Gaussian copula, nu is the bounded eta parameter in the
+      ## paper. It may be estimated (start$nu) or fixed (fixed$nu), but it must
+      ## be supplied in exactly one of them. Exact name matching is essential:
+      ## in R, fixed$nu can otherwise partially match fixed$nugget.
+      ## The objective also guards every optimizer proposal so Nelder-Mead
+      ## cannot leave (-1,1).
+      if (copula == "SkewGaussian") {
+        has_nu_start <- !is.null(start) && "nu" %in% names(start)
+        has_nu_fixed <- !is.null(fixed) && "nu" %in% names(fixed)
+        if (identical(has_nu_start, has_nu_fixed))
+          stop("For copula='SkewGaussian', nu (eta) must be supplied exactly once: either in start (estimated) or in fixed.",
+               call. = FALSE)
+        nu0 <- if (has_nu_start) start[["nu", exact = TRUE]] else fixed[["nu", exact = TRUE]]
+        nu0 <- suppressWarnings(as.numeric(nu0))
+        if (length(nu0) != 1L || !is.finite(nu0) || abs(nu0) >= 1)
+          stop("For copula='SkewGaussian', nu (eta) must lie strictly between -1 and 1.",
+               call. = FALSE)
+      }
+    }
 
     ###### checking if neighb or maxdist or maxtime has been specified when using cl
     if (space) {
@@ -140,8 +430,100 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
         coordt <- a$coordt
         if (!a$pj) { if (distance != "Chor") distance <- "Geod" }
       }
-      if (!is.null(a$Y) && !is.null(a$X)) { data <- a$Y; X <- a$X }
+      if (!is.null(a$Y)) data <- a$Y
+      if (!is.null(a$X)) X <- a$X
     }
+
+    if (!is.null(anisopars) && tolower(distance) != "eucl") {
+      stop("anisopars requires distance='Eucl'", call. = FALSE)
+    }
+
+    ## Canonicalize regular-grid inputs before generic input checking and
+    ## likelihood setup.  This avoids dimension-dependent grid branches and
+    ## makes spatial, space-time and bivariate grids use the same explicit
+    ## coordinate/data layouts as irregular designs.
+    if (grid_requested) {
+      if (!is.null(coordx_dyn))
+        stop("grid=TRUE cannot be combined with coordx_dyn", call. = FALSE)
+      gg <- .GeoVariogram_normalize_grid(
+        data = data, coordx = coordx, coordy = coordy, coordz = coordz,
+        coordt = coordt, bivariate = bivariate
+      )
+      data <- gg$data
+      coordx <- gg$coordx
+      coordy <- gg$coordy
+      coordz <- gg$coordz
+      grid <- FALSE
+    }
+
+    if (spacetime && !is.null(coordx_dyn)) {
+      coordx_dyn <- .GeoNormalizeDynamicCoordinates(
+        coordx_dyn, coordt = coordt, context = "GeoFit"
+      )
+      .GeoValidateDynamicData(
+        data, coordx_dyn, context = "GeoFit", require_list = TRUE
+      )
+      .GeoValidateDynamicRows(X, coordx_dyn, name = "X", context = "GeoFit")
+    }
+    if (bivariate) {
+      biv_info <- .GeoBivariateCoordinateInfo(
+        coordx = coordx, coordy = coordy, coordz = coordz,
+        coordx_dyn = coordx_dyn, grid = grid, context = "GeoFit"
+      )
+      if (biv_info$dynamic) coordx_dyn <- biv_info$blocks
+      biv_data <- .GeoBivariateDataVector(
+        data, biv_info$ns, context = "GeoFit", allow_na = TRUE
+      )
+      ## Downstream fitting code historically expects a 2 x n matrix for
+      ## common locations and a two-element list for heterotopic locations.
+      data <- if (biv_info$dynamic) {
+        list(
+          biv_data[seq_len(biv_info$ns[1L])],
+          biv_data[biv_info$ns[1L] + seq_len(biv_info$ns[2L])]
+        )
+      } else {
+        matrix(biv_data, nrow = 2L, byrow = TRUE)
+      }
+      if (!is.null(X)) {
+        X <- .GeoBivariateDesign(X, biv_info$ns, context = "GeoFit")
+      }
+      .GeoBivariateValidateFitMeans(
+        start, fixed, X, biv_info$ns, context = "GeoFit"
+      )
+    }
+
+    .GeoCheckDuplicateLocations(
+      coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+      coordx_dyn = coordx_dyn, spacetime = spacetime, bivariate = bivariate,
+      grid = grid, context = "GeoFit", check.duplicates = check.duplicates
+    )
+    .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
+    on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
+
+    ##############################################################################
+    ###### Normalize and validate the univariate mean specification
+    ##
+    ## A vector fixed$mean is an externally supplied mean at the observations.
+    ## It must be removed before CkInput/WlsStart, otherwise unlist() turns it
+    ## into apparent coefficients mean1, mean2, ... .  A scalar fixed$mean is
+    ## instead the intercept coefficient beta[1].
+    MM <- NULL
+    if (!bivariate) {
+      nobs_mean <- length(unlist(data, use.names = FALSE))
+      mean_check <- .GeoMean_validate_fit(start, fixed, X, nobs_mean)
+      X <- mean_check$X
+      MM <- mean_check$external
+      if (!is.null(MM)) fixed$mean <- 0
+    }
+
+    ## Validate user-supplied parameter names before internal defaults (such as
+    ## nugget=0 or the fixed unit sill used by constructive count/positive
+    ## models) are added.  Exact matching is intentional: partial names such as
+    ## `shap` must not silently match `shape`.
+    .GeoFit_validate_parameter_names(
+      start = start, fixed = fixed, model = model, corrmodel = corrmodel,
+      copula = copula, bivariate = bivariate, X = X
+    )
 
     ##############################################################################
     ###### setting nugget if missing
@@ -152,18 +534,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
 
     ###############################################################
     ###############################################################
-    if (!bivariate) {
-      if (model %in% c("Weibull","Poisson","Binomial","Gamma","LogLogistic",
-                       "BinomialNeg","Bernoulli","Geometric","Gaussian_misp_Poisson",
-                       "Binary_misp_BinomialNeg","PoissonZIP","Gaussian_misp_PoissonZIP",
-                       "BinomialNegZINB","BinomNeg","PoissonZIP1","Gaussian_misp_PoissonZIP1",
-                       "BinomialNegZINB1","Gaussian_misp_PoissonGamma","PoissonGamma",
-                       "PoissonGammaZIP","PoissonGammaZIP1","Beta2","Kumaraswamy2","Beta",
-                       "Kumaraswamy")) {
-        if (!is.null(start$sill)) stop("sill parameter must not be considered for this model\n")
-        fixed$sill <- 1
-      }
-    }
+    fixed <- .GeoFit_normalize_unit_sill(start, fixed, model, bivariate)
 
     ##### all parameters are estimated
     allest <- FALSE
@@ -204,6 +575,13 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                           radius, start, taper, tapsep, type, varest, weighted, copula,
                           X, memdist, nosym, p_neighb, thin_method)
 
+    if (identical(type, "Pairwise") &&
+        (!is.numeric(initparam$numpairs) || length(initparam$numpairs) != 1L ||
+         !is.finite(initparam$numpairs) || initparam$numpairs < 1L)) {
+      stop("No pairwise contributions were retained. Increase 'p_neighb', 'neighb', 'maxdist', or 'maxtime'.",
+           call. = FALSE)
+    }
+
     ### fixing initparam if all parameters are estimated
     if (allest) {
       if (!bivariate) {
@@ -223,14 +601,17 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
 
     if (type == "Independence") {
-      if (sum(NuisParam(model, bivariate = initparam$bivariate,
-                        num_betas = initparam$num_betas - 1) %in% names(unlist(start))) == 0)
+      marginal_names <- NuisParam(
+        model, bivariate = initparam$bivariate,
+        num_betas = initparam$num_betas - 1
+      )
+      if (!any(marginal_names %in% names(initparam$param)))
         stop("No marginal parameters to estimate")
     }
 
     ## moving sill from starting to fixed parameters if necessary (in some model sill must be 1)
     if (sum(initparam$namesparam == "sill") == 1) {
-      if (initparam$model %in% c(2,14,16,21,42,50,26,24,30,46,43,11,54)) {
+      if (initparam$model %in% c(2,14,16,21,28,33,42,50,26,24,30,46,43,11,54)) {
         initparam$param <- initparam$param[initparam$namesparam != "sill"]
         initparam$namesparam <- names(initparam$param)
         a <- 1; names(a) <- "sill"
@@ -239,6 +620,73 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
 
     if (!is.null(initparam$error)) stop(initparam$error)
+
+    ## After WlsStart() has initialized any missing regression coefficients,
+    ## enforce the canonical mapping beta = (mean, mean1, ...) to the columns
+    ## of X.  This check is deliberately post-initialization so callers may
+    ## omit starting values and let WlsStart() provide them.
+    if (!bivariate && !is.null(X) && is.null(MM)) {
+      p_mean <- ncol(X)
+      if (length(initparam$num_betas) != 1L ||
+          is.na(initparam$num_betas) || initparam$num_betas != p_mean) {
+        stop(
+          "The number of mean coefficients initialized by WlsStart() does not match ncol(X).",
+          call. = FALSE
+        )
+      }
+      expected_mean <- .GeoMean_names(p_mean)
+      available_mean <- unique(c(names(initparam$param), names(initparam$fixed)))
+      missing_mean <- setdiff(expected_mean, available_mean)
+      unexpected_mean <- setdiff(
+        .GeoMean_supplied_names(c(initparam$param, initparam$fixed)),
+        expected_mean
+      )
+      if (length(missing_mean) || length(unexpected_mean)) {
+        msg <- paste0(
+          "The columns of X must correspond, in order, to coefficients ",
+          paste(expected_mean, collapse = ", "), "."
+        )
+        if (length(missing_mean))
+          msg <- paste0(msg, " Missing: ", paste(missing_mean, collapse = ", "), ".")
+        if (length(unexpected_mean))
+          msg <- paste0(msg, " Unexpected: ", paste(unexpected_mean, collapse = ", "), ".")
+        stop(msg, call. = FALSE)
+      }
+    }
+
+    if (bivariate && !is.null(X)) {
+      p_mean <- ncol(X)
+      if (length(initparam$num_betas) != 2L ||
+          any(is.na(initparam$num_betas)) ||
+          any(initparam$num_betas != c(p_mean, p_mean))) {
+        stop(
+          "The number of bivariate mean coefficients initialized by WlsStart() does not match ncol(X).",
+          call. = FALSE
+        )
+      }
+      expected_mean <- c(
+        .GeoMean_names(p_mean, "mean_1"),
+        .GeoMean_names(p_mean, "mean_2")
+      )
+      available_mean <- unique(c(names(initparam$param), names(initparam$fixed)))
+      supplied_mean <- unique(c(
+        .GeoMean_supplied_names(c(initparam$param, initparam$fixed), "mean_1"),
+        .GeoMean_supplied_names(c(initparam$param, initparam$fixed), "mean_2")
+      ))
+      missing_mean <- setdiff(expected_mean, available_mean)
+      unexpected_mean <- setdiff(supplied_mean, expected_mean)
+      if (length(missing_mean) || length(unexpected_mean)) {
+        msg <- paste0(
+          "The columns of X must correspond, in order, to bivariate coefficients ",
+          paste(expected_mean, collapse = ", "), "."
+        )
+        if (length(missing_mean))
+          msg <- paste0(msg, " Missing: ", paste(missing_mean, collapse = ", "), ".")
+        if (length(unexpected_mean))
+          msg <- paste0(msg, " Unexpected: ", paste(unexpected_mean, collapse = ", "), ".")
+        stop(msg, call. = FALSE)
+      }
+    }
 
     ## Defensive fallback: some StartParam/WlsStart paths may not carry this
     ## flag into initparam.  Downstream methods such as GeoCovariogram()
@@ -298,7 +746,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     ## switches internally to stats::optimize().  optimize() requires finite
     ## scalar bounds; automatic bounds from WlsStart() can be 0 and Inf
     ## for parameters such as scale.  Sanitize only the internal bounds here.
-    if (length(initparam$param) == 1) {
+    if (!onlyvar && length(initparam$param) == 1) {
       pname <- names(initparam$param)
 
       if (is.null(initparam$lower) || is.null(initparam$upper))
@@ -316,8 +764,25 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       if (length(lb) != 1 || length(ub) != 1 || is.na(lb) || is.na(ub))
         stop("invalid lower/upper bounds for optimize()\n")
 
+      p0 <- as.numeric(initparam$param[1L])
+      if (!is.finite(p0))
+        stop("invalid starting value for one-parameter optimization\n")
+
       if (lb == 0) lb <- .Machine$double.eps
-      if (is.infinite(ub)) ub <- 1e+12
+
+      ## Positive parameters keep the broad automatic upper bound; the
+      ## one-dimensional composite-likelihood optimizer now works on the log
+      ## scale, so [eps, 1e12] no longer destroys resolution near the start.
+      ## For genuinely unbounded parameters (for example a single mean), use
+      ## a finite start-centred interval because stats::optimize() requires it.
+      if (!is.finite(lb) && !is.finite(ub)) {
+        span <- 20 * (1 + abs(p0))
+        lb <- p0 - span
+        ub <- p0 + span
+      } else {
+        if (!is.finite(lb)) lb <- p0 - 20 * (1 + abs(p0))
+        if (!is.finite(ub)) ub <- 1e+12
+      }
 
       if (!is.finite(lb) || !is.finite(ub) || lb >= ub)
         stop("invalid lower/upper bounds for optimize()\n")
@@ -329,11 +794,9 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
     ############################################################
 
-    ## in the case on external fixed mean
-    MM <- NULL
-    if (!is.null(fixed)) {
-      if (length(fixed$mean) > 1) { MM <- as.numeric(fixed$mean); initparam$mean <- 1e-07 }
-    }
+    ## MM was extracted before CkInput/WlsStart.  Keep the internal scalar
+    ## placeholder fixed at zero; all likelihood paths receive MM explicitly.
+    if (!is.null(MM)) initparam$mean <- 0
 
     ###################################################################################
     ####################################################################
@@ -407,34 +870,20 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
                     initparam$upper, initparam$ns, unname(initparam$X), initparam$neighb,
                     MM, aniso, score)
 
-    ## Composite likelihood:
-    if ((likelihood %in% c("Marginal","Conditional","Difference","Marginal_2")) && type == "Pairwise") {
-
-      if (!memdist) {
-        fitted <- CompLik(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
-                          initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
-                          unname(initparam$data), initparam$distance, initparam$flagcorr,
-                          initparam$flagnuis, initparam$fixed, grid, initparam$likelihood,
-                          initparam$lower, initparam$model, initparam$n, initparam$namescorr,
-                          initparam$namesnuis, initparam$namesparam, initparam$numparam,
-                          initparam$numparamcorr, optimizer, onlyvar, initparam$param,
-                          initparam$spacetime, initparam$type, initparam$upper, varest,
-                          initparam$weighted, initparam$ns, unname(initparam$X), sensitivity,
-                          MM, aniso, score)
-      }
-
-      if (memdist) {
-        fitted <- CompLik2(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
-                           initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
-                           unname(initparam$data), initparam$distance, initparam$flagcorr,
-                           initparam$flagnuis, initparam$fixed, grid, initparam$likelihood,
-                           initparam$lower, initparam$model, initparam$n, initparam$namescorr,
-                           initparam$namesnuis, initparam$namesparam, initparam$numparam,
-                           initparam$numparamcorr, optimizer, onlyvar, initparam$param,
-                           initparam$spacetime, initparam$type, initparam$upper, varest,
-                           initparam$weighted, initparam$ns, unname(initparam$X), sensitivity,
-                           initparam$colidx, initparam$rowidx, initparam$neighb, MM, aniso, score)
-      }
+    ## Composite likelihood.  The selected pair structure is always
+    ## precomputed and reused during optimization, Hessian and score
+    ## evaluation.  The legacy CompLik() path is intentionally retired.
+    if ((likelihood %in% c("Marginal","Conditional","Marginal_2")) && type == "Pairwise") {
+      fitted <- CompLik2(copula, initparam$bivariate, initparam$coordx, initparam$coordy,
+                         initparam$coordz, initparam$coordt, coordx_dyn, initparam$corrmodel,
+                         unname(initparam$data), initparam$distance, initparam$flagcorr,
+                         initparam$flagnuis, initparam$fixed, grid, initparam$likelihood,
+                         initparam$lower, initparam$model, initparam$n, initparam$namescorr,
+                         initparam$namesnuis, initparam$namesparam, initparam$numparam,
+                         initparam$numparamcorr, optimizer, onlyvar, initparam$param,
+                         initparam$spacetime, initparam$type, initparam$upper, varest,
+                         initparam$weighted, initparam$ns, unname(initparam$X), sensitivity,
+                         initparam$colidx, initparam$rowidx, initparam$neighb, MM, aniso, score)
     }
 
     if (likelihood == "Marginal" && type == "Independence")
@@ -452,6 +901,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (model == "Gaussian_misp_Tukeygh")      { model <- "Tukeygh";      missp <- TRUE }
     if (model == "Gaussian_misp_Poisson")      { model <- "Poisson";      missp <- TRUE }
     if (model == "Gaussian_misp_Binomial")     { model <- "Binomial";     missp <- TRUE }
+    if (model == "Gaussian_misp_BinomialNeg")  { model <- "BinomialNeg";  missp <- TRUE }
     if (model == "Gaussian_misp_PoissonGamma") { model <- "PoissonGamma"; missp <- TRUE }
     if (model == "Gaussian_misp_PoissonZIP")   { model <- "PoissonZIP";   missp <- TRUE }
     if (model == "Gaussian_misp_StudentT")     { model <- "StudentT";     missp <- TRUE }
@@ -463,9 +913,12 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (initparam$bivariate) numtime <- 2
     dimat <- initparam$numcoord
 
-    if (!(likelihood == "Marginal" && type == "Independence")) {
-      if (memdist) .C("DeleteGlobalVar2", PACKAGE = "GeoModels", DUP = TRUE, NAOK = TRUE)
-      else         .C("DeleteGlobalVar" , PACKAGE = "GeoModels", DUP = TRUE, NAOK = TRUE)
+    keep_fit_context <- is.environment(
+      getOption("GeoModels.fit_context_cache", NULL)
+    )
+    if (!(likelihood == "Marginal" && type == "Independence") &&
+        !keep_fit_context) {
+      .C("DeleteGlobalVar2", PACKAGE = "GeoModels", NAOK = TRUE)
     }
 
     ff <- as.list(initparam$fixed)
@@ -497,7 +950,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
 
     if (model %in% c("Weibull","Poisson","Binomial","Gamma","PoissonGamma","Gaussian_misp_PoissonGamma",
-                     "LogLogistic","BinomialNeg","BinomNeg","Bernoulli","Geometric","Binary_misp_BinomialNeg",
+                     "LogLogistic","BinomialNeg","BinomNeg","Binary","Bernoulli","Geom","Geometric","Binary_misp_BinomialNeg",
                      "Gaussian_misp_Poisson","PoissonZIP","PoissonGammaZIP","PoissonGammaZIP1",
                      "Gaussian_misp_PoissonZIP","BinomialNegZINB","PoissonZIP1","Gaussian_misp_PoissonZIP1",
                      "BinomialNegZINB1","Beta2","Kumaraswamy2","Beta","Kumaraswamy")) {
@@ -535,12 +988,13 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       bivariate = if (is.null(initparam$bivariate)) bivariate else initparam$bivariate,
       claic = fitted$claic,
       clbic = fitted$clbic,
-      colidx= initparam$colidx,
+      colidx = as.integer(initparam$colidx),
       coordx = initparam$coordx,
       coordy = initparam$coordy,
       coordz = initparam$coordz,
       coordt = initparam$coordt,
       coordx_dyn = coordx_dyn,
+      duplicate_locations_checked = isTRUE(check.duplicates),
       conf.int = conf.int,
       convergence = fitted$convergence,
       copula = copula,
@@ -549,13 +1003,14 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       distance = distance,
       est.aniso = est.aniso,
       fixed = ff,
-      grid = grid,
+      grid = grid_requested,
       iterations = fitted$counts,
       likelihood = likelihood,
       logCompLik = fitted$value,
       lower = lower,
       message = fitted$message,
       model = model,
+      estimation_model = estimation_model,
       n = initparam$n,
       ns = initparam$ns,
       numbetas = initparam$num_betas,
@@ -565,7 +1020,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       param = as.list(fitted$par),
       p_neighb = p_neighb,
       thin_method = thin_method,
-      memdist = memdist,
+      memdist = TRUE,
       nozero = initparam$setup$nozero,
       score = fitted$score,
       maxdist = maxdist,
@@ -575,7 +1030,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       missp = missp,
       pvalues = pvalues,
       radius = radius,
-      rowidx= initparam$rowidx,
+      rowidx = as.integer(initparam$rowidx),
       spacetime = initparam$spacetime,
       stderr = fitted$stderr,
       sensmat = fitted$sensmat,

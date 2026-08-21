@@ -33,6 +33,7 @@ extern void skew_gaussian_gibbs_sampler(double *data_obs, int *n, double *Sigma_
                                         int *n_iter, double *data_x, double *data_y);
 
 extern void gamma_gibbs_sampler(double *SigmaInv,double *y,int *n,int *v,double *U,int *nIte,int *nRep);
+extern void clayton_gibbs_sampler(double *SigmaInv,double *ratio,int *n,int *nu,double *U,int *nIter);
 
 extern void rnorm_constraint_simple(double *A, double *b, double *mu, 
                              double *sigma, double *result);
@@ -45,6 +46,10 @@ extern void TBD1d_amp(double *ux, double *uy,
                double *sx, double *sy,
                double *phi, double *amp,
                int *L, int *N,
+               double *result);
+extern void TBDnd_amp(double *omega, double *coords,
+               double *phi, double *amp,
+               int *L, int *N, int *d,
                double *result);
 extern void spectraldensityC(double u,int model,int d,int L,double *f,double *av,double *Cv,double *nu1v,double *nu2v, double *params_other);
 extern void extraer(double *coord,int sequen1,double *sub_coord,int fila,int col, int d);
@@ -100,9 +105,23 @@ extern void WLeastSquare_G(double *bins, double *bint, int *cormod, double *lbin
 
 extern void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, double *res);
 extern void biv_unif_CopulaGauss_call(double *x,double *y,double *rho, double *res);
+extern void biv_unif_CopulaSkewGauss_rect_call(double *ulo,double *uhi,double *vlo,double *vhi,double *rho,double *nu,double *res);
 extern void corr_kuma_vec(double *rho,double *eta,double *gam,double *res, int *n);
+extern void CorrPGsVec(double *corr,double *mean,double *shape,int *n,double *out);
+extern void SetPGPairCounts(double *data1,double *data2,int *n,int *ok);
+extern void GeoPEMStatusGet(int *out);
+extern void GeoPEMCorrEval(double *corr,double *mean_i,double *mean_j,double *shape,double *out);
+extern void GeoPEMPGrtBetaEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
+extern void GeoPEMPGrtLegacyEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
+extern void GeoPEMZIPEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,
+                          double *mup,double *nugget1,double *nugget2,double *shape,double *out);
+extern SEXP GeoCorrPGsVecCall(SEXP corr,SEXP mean,SEXP shape);
+extern SEXP GeoDuplicateCoordinates(SEXP coords);
 
 /*********************** for correlation computations ***************************************************/
+
+extern void Corr_spatial_packed(double *rho, double *coordx, double *coordy, double *coordz, int *cormod, int *ncoord, double *par, int *type, double *radius);
+extern void GeoDenseSPDSolve(double *A, double *B, int *n, int *nrhs, int *info);
 
 extern void Corr_c(double *cc,double *coordx, double *coordy,double *coordz, double *coordt, int *cormod, int *grid, double *locx,double *locy,double *locz,
         int *ncoord, int *nloc,int *tloc,int *ns,int *NS,int *ntime, double *par, int *spt, int *biv, double *time,int *type, int *which,double *radius);
@@ -169,10 +188,6 @@ extern void Comp_Pair_Gauss2mem(int *cormod, double *data1,double *data2,int *N1
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 
-extern void Comp_Diff_Gauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond);
-
 extern void Comp_Pair_WrapGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
@@ -210,9 +225,6 @@ extern void Comp_Pair_PoisbinGauss2mem(int *cormod, double *data1,double *data2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_BinomnegGauss2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond);
-extern void Comp_Pair_BinomnegLogi2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_BinomnegGaussZINB2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -302,6 +314,9 @@ extern void Comp_Pair_T_st2mem(int *cormod, double *data1,double *data2,int *N1,
 extern void Comp_Pair_Pois_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_PoisGammaZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed,double *res,double *mean1, double *mean2, double *nuis, int *type_cop, int *cond);
+
 extern void Comp_Pair_PoisGamma_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
@@ -357,9 +372,6 @@ extern void Comp_Pair_BinomnegLogi_st2mem(int *cormod, double *data1,double *dat
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_BinomnegGaussZINB_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
- double *par, int *weigthed, double *res,double *mean1,double *mean2,
- double *nuis, int *type_cop, int *cond);
-extern void Comp_Diff_Gauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_SkewGauss_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -424,6 +436,12 @@ extern void Comp_Pair_BetaCop2mem(int *cormod, double *data1,double *data2,int *
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_Beta2Cop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_KumaraswamyCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_Kumaraswamy2Cop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Pair_GammaCop2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
@@ -618,6 +636,9 @@ extern void Comp_Cond_Gauss_misp_Pois_st2mem(int *cormod, double *data1,double *
 extern void Comp_Cond_Gauss_misp_PoisGamma_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                            double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_PoisGammaZIP_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed,double *res,double *mean1, double *mean2, double *nuis, int *type_cop, int *cond);
+
 extern void Comp_Cond_PoisGamma_st2mem(int *cormod, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                 double *nuis, int *type_cop, int *cond);
@@ -751,6 +772,9 @@ extern void Comp_Pair_Logistic2mem_aniso(int *cormod, double *coord1,double *coo
 extern void Comp_Pair_Pois2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                               double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_PoisGammaZIP2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed,double *res,double *mean1, double *mean2, double *nuis, int *type_cop, int *cond);
+
 extern void Comp_Pair_PoisGamma2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                    double *nuis, int *type_cop, int *cond);
@@ -817,10 +841,34 @@ extern void Comp_Pair_KumaraswamyCop2mem_aniso(int *cormod, double *coord1,doubl
 extern void Comp_Pair_Kumaraswamy2Cop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
                                           double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_WeibullCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_GammaCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_LogGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_LogisticCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_SkewLaplaceCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_BinomNNGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Pair_BinomnegGaussCop2mem_aniso(int *cormod, double *coord1,double *coord2, double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
 
 
 /********************** spatial anisotropic conditional ************************************/
 extern void Comp_Cond_Gauss2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed, double *res,double *mean1,double *mean2,
+ double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_Tukeyh2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
 extern void Comp_Cond_Tukeyhh2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
@@ -874,6 +922,9 @@ extern void Comp_Cond_BinomNNGauss_misp2mem_aniso(int *cormod, double *coord1, d
 extern void Comp_Cond_Gauss_misp_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
+extern void Comp_Cond_PoisGammaZIP2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
+ double *par, int *weigthed,double *res,double *mean1, double *mean2, double *nuis, int *type_cop, int *cond);
+
 extern void Comp_Cond_PoisGamma2mem_aniso(int *cormod, double *coord1, double *coord2,double *data1,double *data2,int *N1,int *N2,
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond);
@@ -954,7 +1005,50 @@ extern void qnorm55_call(double *p, double *mu, double *sigma, int *lower_tail, 
 extern void integr_kuma(double *x, int n, void *ex);
 
 
+extern void GeoBivDensity(int *model, int *cormod, int *type_cop,
+                   double *copula_par,
+                   double *x, double *y, int *n,
+                   double *lag, double *lagt, double *par,
+                   double *mean1, double *mean2,
+                   double *nuis, int *NN1, int *NN2,
+                   double *res);
+extern void GeoCopulaDensity(int *type_cop,
+                      double *copula_par,
+                      double *u, double *v, int *n,
+                      double *rho, double *res);
+extern void GeoCovSeriesForward(double *rho, int *n,
+                                double *coefficient, int *degree,
+                                double *scale, int *use_scale,
+                                double *out);
+extern void GeoGaussianCovSeriesIndexed(double *rho, int *n,
+                                         double *A1, int *nrow1, int *idx1,
+                                         double *A2, int *nrow2, int *idx2,
+                                         int *degree, double *fac,
+                                         double *out);
+extern void GeoCovSeriesInterp2Forward(double *rho, int *n,
+                                       double *gram, int *ng, int *degree,
+                                       int *i1, int *i2,
+                                       double *a1, double *a2,
+                                       double *out);
+extern void GeoClaytonInterp1(double *grid, int *ng,
+                               double *values, double *x,
+                               double *eta1, double *eta2,
+                               int *n, int *multiplicative,
+                               double *out);
+extern void GeoClaytonInterp3(double *eta_grid, int *ne,
+                               double *x_grid, int *nx,
+                               double *tab, double *eta1, double *eta2,
+                               double *x, int *n, double *out);
+
 static const R_CMethodDef CEntries[] = {
+    {"GeoBivDensity",               (DL_FUNC) &GeoBivDensity,              16},
+    {"GeoCopulaDensity",            (DL_FUNC) &GeoCopulaDensity,            7},
+    {"GeoCovSeriesForward",          (DL_FUNC) &GeoCovSeriesForward,          7},
+    {"GeoGaussianCovSeriesIndexed",   (DL_FUNC) &GeoGaussianCovSeriesIndexed,  11},
+    {"GeoCovSeriesInterp2Forward",   (DL_FUNC) &GeoCovSeriesInterp2Forward,  10},
+    {"GeoClaytonInterp1",            (DL_FUNC) &GeoClaytonInterp1,             9},
+    {"GeoClaytonInterp3",            (DL_FUNC) &GeoClaytonInterp3,            10},
+
     //{"hyperg_U_e_call",             (DL_FUNC) &hyperg_U_e_call,          4},
     {"integr_kuma",                 (DL_FUNC) &integr_kuma,              3},
     {"lgnd",                        (DL_FUNC) &lgnd,                     3},
@@ -973,12 +1067,12 @@ static const R_CMethodDef CEntries[] = {
     {"CorrelationMat_st_dyn2",      (DL_FUNC) &CorrelationMat_st_dyn2,      11},
     {"CorrelationMat_biv_dyn2",     (DL_FUNC) &CorrelationMat_biv_dyn2,     11},
     {"CorrelationMat_st_dyn_dis2",  (DL_FUNC) &CorrelationMat_st_dyn_dis2,  14},
-    {"CorrelationMat_biv_tap",      (DL_FUNC) &CorrelationMat_biv_tap,      10},
+    {"CorrelationMat_biv_tap",      (DL_FUNC) &CorrelationMat_biv_tap,      11},
     {"DCorrelationMat_biv",         (DL_FUNC) &DCorrelationMat_biv,         11},
     {"DCorrelationMat_biv2",        (DL_FUNC) &DCorrelationMat_biv2,        11},
     {"DCorrelationMat_biv_tap",     (DL_FUNC) &DCorrelationMat_biv_tap,     11},
     {"CorrelationMat_biv_skew_dyn2",(DL_FUNC) &CorrelationMat_biv_skew_dyn2,11},
-    {"CorrelationMat_tap",          (DL_FUNC) &CorrelationMat_tap,          10},
+    {"CorrelationMat_tap",          (DL_FUNC) &CorrelationMat_tap,          11},
     {"CorrelationMat_dis_tap",      (DL_FUNC) &CorrelationMat_dis_tap,      16},
     {"CorrelationMat_st_tap",       (DL_FUNC) &CorrelationMat_st_tap,       11},
     {"Binned_Variogram2",           (DL_FUNC) &Binned_Variogram2,            9},
@@ -992,10 +1086,20 @@ static const R_CMethodDef CEntries[] = {
     {"WLeastSquare_G",              (DL_FUNC) &WLeastSquare_G,              10},
     {"biv_unif_CopulaClayton_call", (DL_FUNC) &biv_unif_CopulaClayton_call,  5},
     {"biv_unif_CopulaGauss_call",   (DL_FUNC) &biv_unif_CopulaGauss_call,    4},
+    {"biv_unif_CopulaSkewGauss_rect_call", (DL_FUNC) &biv_unif_CopulaSkewGauss_rect_call, 7},
+    {"Corr_spatial_packed",         (DL_FUNC) &Corr_spatial_packed,          9},
+    {"GeoDenseSPDSolve",             (DL_FUNC) &GeoDenseSPDSolve,              5},
     {"Corr_c",                      (DL_FUNC) &Corr_c,                      23},
     {"Corr_c_bin",                  (DL_FUNC) &Corr_c_bin,                  30},
     {"Corr_c_tap",                  (DL_FUNC) &Corr_c_tap,                  27},
     {"corr_kuma_vec",               (DL_FUNC) &corr_kuma_vec,                5},
+    {"CorrPGsVec",                  (DL_FUNC) &CorrPGsVec,                   5},
+    {"SetPGPairCounts",             (DL_FUNC) &SetPGPairCounts,              4},
+    {"GeoPEMStatusGet",             (DL_FUNC) &GeoPEMStatusGet,              1},
+    {"GeoPEMCorrEval",              (DL_FUNC) &GeoPEMCorrEval,               5},
+    {"GeoPEMPGrtBetaEval",          (DL_FUNC) &GeoPEMPGrtBetaEval,           7},
+    {"GeoPEMPGrtLegacyEval",        (DL_FUNC) &GeoPEMPGrtLegacyEval,         7},
+    {"GeoPEMZIPEval",               (DL_FUNC) &GeoPEMZIPEval,               10},
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
     {"DeleteGlobalVar2",            (DL_FUNC) &DeleteGlobalVar2,             0},
     {"Maxima_Minima_dist",          (DL_FUNC) &Maxima_Minima_dist,           7},
@@ -1004,7 +1108,8 @@ static const R_CMethodDef CEntries[] = {
     {"SetGlobalVar",                (DL_FUNC) &SetGlobalVar,                 31},
      {"geo_distances",            (DL_FUNC) &geo_distances,                 6},
     {"skew_gaussian_gibbs_sampler", (DL_FUNC) &skew_gaussian_gibbs_sampler, 7},
-	{"gamma_gibbs_sampler", (DL_FUNC) &gamma_gibbs_sampler, 7},
+    {"gamma_gibbs_sampler", (DL_FUNC) &gamma_gibbs_sampler, 7},
+    {"clayton_gibbs_sampler", (DL_FUNC) &clayton_gibbs_sampler, 6},
     {"rnorm_constraint_simple", (DL_FUNC) &rnorm_constraint_simple, 5},
    /* {"simu_on_coords",              (DL_FUNC) &simu_on_coords,               8},*/
 
@@ -1012,6 +1117,7 @@ static const R_CMethodDef CEntries[] = {
 
     {"TBD1d",                       (DL_FUNC) &TBD1d,                      8},
      {"TBD1d_amp",                       (DL_FUNC) &TBD1d_amp,                      9},
+     {"TBDnd_amp",                       (DL_FUNC) &TBDnd_amp,                      8},
     {"spectraldensityC",            (DL_FUNC) &spectraldensityC,          10},
    // {"spectral_density_1d",         (DL_FUNC) &spectral_density_1d,        7},
     {"extraer",                     (DL_FUNC) &extraer,                    6},
@@ -1058,6 +1164,8 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_PoisGammaZIP2mem",         (DL_FUNC) &Comp_Pair_PoisGammaZIP2mem,         13},
     {"Comp_Pair_Pois2mem",         (DL_FUNC) &Comp_Pair_Pois2mem,         13},
     {"Comp_Pair_BinomGauss2mem",         (DL_FUNC) &Comp_Pair_BinomGauss2mem,         13},
+    {"Comp_Pair_PoisbinGauss2mem",         (DL_FUNC) &Comp_Pair_PoisbinGauss2mem,         13},
+    {"Comp_Pair_PoisbinnegGauss2mem",         (DL_FUNC) &Comp_Pair_PoisbinnegGauss2mem,         13},
     {"Comp_Pair_BinomLogi2mem",         (DL_FUNC) &Comp_Pair_BinomLogi2mem,         13},
     {"Comp_Pair_BinomNNGauss2mem",         (DL_FUNC) &Comp_Pair_BinomNNGauss2mem,         13},
     {"Comp_Pair_BinomNNLogi2mem",         (DL_FUNC) &Comp_Pair_BinomNNLogi2mem,         13},
@@ -1088,8 +1196,11 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Gauss_misp_Pois_st2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_Pois_st2mem,         13},
     {"Comp_Pair_Gauss_misp_PoisGamma_st2mem",         (DL_FUNC) &Comp_Pair_Gauss_misp_PoisGamma_st2mem,         13},
     {"Comp_Pair_PoisGamma_st2mem",         (DL_FUNC) &Comp_Pair_PoisGamma_st2mem,         13},
+    {"Comp_Pair_PoisGammaZIP_st2mem",      (DL_FUNC) &Comp_Pair_PoisGammaZIP_st2mem,      13},
     {"Comp_Pair_Pois_st2mem",         (DL_FUNC) &Comp_Pair_Pois_st2mem,         13},
     {"Comp_Pair_BinomGauss_st2mem",         (DL_FUNC) &Comp_Pair_BinomGauss_st2mem,         13},
+    {"Comp_Pair_PoisbinGauss_st2mem",         (DL_FUNC) &Comp_Pair_PoisbinGauss_st2mem,         13},
+    {"Comp_Pair_PoisbinnegGauss_st2mem",         (DL_FUNC) &Comp_Pair_PoisbinnegGauss_st2mem,         13},
     {"Comp_Pair_BinomLogi_st2mem",         (DL_FUNC) &Comp_Pair_BinomLogi_st2mem,         13},
     {"Comp_Pair_BinomNNGauss_st2mem",         (DL_FUNC) &Comp_Pair_BinomNNGauss_st2mem,         13},
     {"Comp_Pair_BinomNNLogi_st2mem",         (DL_FUNC) &Comp_Pair_BinomNNLogi_st2mem,         13},
@@ -1107,18 +1218,20 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Logistic_st2mem",         (DL_FUNC) &Comp_Pair_Logistic_st2mem,         13},
     {"Comp_Pair_WrapGauss_st2mem",         (DL_FUNC) &Comp_Pair_WrapGauss_st2mem,         13},
   /*********************** for copula ***************************************************/
-    {"Comp_Pair_GaussCop2mem",         (DL_FUNC) &Comp_Pair_GaussCop2mem,         12},
-    {"Comp_Pair_LogGaussCop2mem",         (DL_FUNC) &Comp_Pair_LogGaussCop2mem,         12},
-     {"Comp_Pair_SkewLaplaceCop2mem",         (DL_FUNC) &Comp_Pair_SkewLaplaceCop2mem,         12},
-    {"Comp_Pair_LogisticCop2mem",         (DL_FUNC) &Comp_Pair_LogisticCop2mem,         12},
-    {"Comp_Pair_PoisCop2mem",         (DL_FUNC) &Comp_Pair_PoisCop2mem,         12},
-    {"Comp_Pair_WeibullCop2mem",         (DL_FUNC) &Comp_Pair_WeibullCop2mem,         12},
-    {"Comp_Pair_GammaCop2mem",         (DL_FUNC) &Comp_Pair_GammaCop2mem,         14},
-    {"Comp_Pair_BinomNNGaussCop2mem",         (DL_FUNC) &Comp_Pair_BinomNNGaussCop2mem,         12}, 
-    {"Comp_Pair_BinomnegGaussCop2mem",         (DL_FUNC) &Comp_Pair_BinomnegGaussCop2mem,         12},    
-    {"Comp_Pair_TCop2mem",         (DL_FUNC) &Comp_Pair_TCop2mem,         12},
-    {"Comp_Pair_BetaCop2mem",         (DL_FUNC) &Comp_Pair_BetaCop2mem,         12},
-    {"Comp_Pair_Beta2Cop2mem",         (DL_FUNC) &Comp_Pair_Beta2Cop2mem,         12},
+    {"Comp_Pair_GaussCop2mem",         (DL_FUNC) &Comp_Pair_GaussCop2mem,         13},
+    {"Comp_Pair_LogGaussCop2mem",         (DL_FUNC) &Comp_Pair_LogGaussCop2mem,         13},
+     {"Comp_Pair_SkewLaplaceCop2mem",         (DL_FUNC) &Comp_Pair_SkewLaplaceCop2mem,         13},
+    {"Comp_Pair_LogisticCop2mem",         (DL_FUNC) &Comp_Pair_LogisticCop2mem,         13},
+    {"Comp_Pair_PoisCop2mem",         (DL_FUNC) &Comp_Pair_PoisCop2mem,         13},
+    {"Comp_Pair_WeibullCop2mem",         (DL_FUNC) &Comp_Pair_WeibullCop2mem,         13},
+    {"Comp_Pair_GammaCop2mem",         (DL_FUNC) &Comp_Pair_GammaCop2mem,         13},
+    {"Comp_Pair_BinomNNGaussCop2mem",         (DL_FUNC) &Comp_Pair_BinomNNGaussCop2mem,         13}, 
+    {"Comp_Pair_BinomnegGaussCop2mem",         (DL_FUNC) &Comp_Pair_BinomnegGaussCop2mem,         13},    
+    {"Comp_Pair_TCop2mem",         (DL_FUNC) &Comp_Pair_TCop2mem,         13},
+    {"Comp_Pair_BetaCop2mem",         (DL_FUNC) &Comp_Pair_BetaCop2mem,         13},
+    {"Comp_Pair_Beta2Cop2mem",         (DL_FUNC) &Comp_Pair_Beta2Cop2mem,         13},
+    {"Comp_Pair_KumaraswamyCop2mem",         (DL_FUNC) &Comp_Pair_KumaraswamyCop2mem,         13},
+    {"Comp_Pair_Kumaraswamy2Cop2mem",         (DL_FUNC) &Comp_Pair_Kumaraswamy2Cop2mem,         13},
 
 
     /*********************** for conditional composite likelihood ***************************************************/
@@ -1177,6 +1290,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_Gauss_misp_Pois_st2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_Pois_st2mem,         13},
     {"Comp_Cond_Gauss_misp_PoisGamma_st2mem",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisGamma_st2mem,         13},
     {"Comp_Cond_PoisGamma_st2mem",         (DL_FUNC) &Comp_Cond_PoisGamma_st2mem,         13},
+    {"Comp_Cond_PoisGammaZIP_st2mem",      (DL_FUNC) &Comp_Cond_PoisGammaZIP_st2mem,      13},
     {"Comp_Cond_Pois_st2mem",         (DL_FUNC) &Comp_Cond_Pois_st2mem,         13},
     {"Comp_Cond_BinomGauss_st2mem",         (DL_FUNC) &Comp_Cond_BinomGauss_st2mem,         13},
     {"Comp_Cond_BinomLogi_st2mem",         (DL_FUNC) &Comp_Cond_BinomLogi_st2mem,         13},
@@ -1197,7 +1311,7 @@ static const R_CMethodDef CEntries[] = {
 
     /********************** spatial anisotropic +************************************/
     {"Comp_Pair_Gauss2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss2mem_aniso,         15},
-    {"Comp_Pair_Pois2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss2mem_aniso,         15},
+    {"Comp_Pair_Pois2mem_aniso",         (DL_FUNC) &Comp_Pair_Pois2mem_aniso,         15},
     {"Comp_Diff_Gauss2mem_aniso",         (DL_FUNC) &Comp_Diff_Gauss2mem_aniso,         15},
     {"Comp_Pair_WrapGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_WrapGauss2mem_aniso,         15},
     {"Comp_Pair_SinhGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_SinhGauss2mem_aniso,         15},
@@ -1206,6 +1320,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Gamma2mem_aniso",         (DL_FUNC) &Comp_Pair_Gamma2mem_aniso,         15},
     {"Comp_Pair_Weibull2mem_aniso",         (DL_FUNC) &Comp_Pair_Weibull2mem_aniso,         15},
     {"Comp_Pair_Kumaraswamy22mem_aniso",         (DL_FUNC) &Comp_Pair_Kumaraswamy22mem_aniso,         15},
+    {"Comp_Pair_Kumaraswamy2mem_aniso",         (DL_FUNC) &Comp_Pair_Kumaraswamy2mem_aniso,         15},
     {"Comp_Pair_Beta2mem_aniso",         (DL_FUNC) &Comp_Pair_Beta2mem_aniso,         15},
     {"Comp_Pair_LogGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_LogGauss2mem_aniso,         15},
     {"Comp_Pair_PoisbinnegGauss2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisbinnegGauss2mem_aniso,         15},
@@ -1221,6 +1336,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_LogLogistic2mem_aniso",         (DL_FUNC) &Comp_Pair_LogLogistic2mem_aniso,         15},
     {"Comp_Pair_Logistic2mem_aniso",         (DL_FUNC) &Comp_Pair_Logistic2mem_aniso,         15},
     {"Comp_Pair_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisGamma2mem_aniso,         15},
+    {"Comp_Pair_PoisGammaZIP2mem_aniso",      (DL_FUNC) &Comp_Pair_PoisGammaZIP2mem_aniso,      15},
     {"Comp_Pair_Gauss_misp_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss_misp_PoisGamma2mem_aniso,         15},
     {"Comp_Pair_PoisZIP2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisZIP2mem_aniso,         15},
     {"Comp_Pair_Gauss_misp_Pois2mem_aniso",         (DL_FUNC) &Comp_Pair_Gauss_misp_Pois2mem_aniso,         15},
@@ -1241,23 +1357,35 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Pair_Beta2Cop2mem_aniso",         (DL_FUNC) &Comp_Pair_Beta2Cop2mem_aniso,         15},
     {"Comp_Pair_KumaraswamyCop2mem_aniso",         (DL_FUNC) &Comp_Pair_KumaraswamyCop2mem_aniso,         15},
     {"Comp_Pair_Kumaraswamy2Cop2mem_aniso",         (DL_FUNC) &Comp_Pair_Kumaraswamy2Cop2mem_aniso,         15},
+    {"Comp_Pair_WeibullCop2mem_aniso",         (DL_FUNC) &Comp_Pair_WeibullCop2mem_aniso,         15},
+    {"Comp_Pair_GammaCop2mem_aniso",         (DL_FUNC) &Comp_Pair_GammaCop2mem_aniso,         15},
+    {"Comp_Pair_LogGaussCop2mem_aniso",         (DL_FUNC) &Comp_Pair_LogGaussCop2mem_aniso,         15},
+    {"Comp_Pair_LogisticCop2mem_aniso",         (DL_FUNC) &Comp_Pair_LogisticCop2mem_aniso,         15},
+    {"Comp_Pair_SkewLaplaceCop2mem_aniso",         (DL_FUNC) &Comp_Pair_SkewLaplaceCop2mem_aniso,         15},
+    {"Comp_Pair_PoisCop2mem_aniso",         (DL_FUNC) &Comp_Pair_PoisCop2mem_aniso,         15},
+    {"Comp_Pair_BinomNNGaussCop2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomNNGaussCop2mem_aniso,         15},
+    {"Comp_Pair_BinomnegGaussCop2mem_aniso",         (DL_FUNC) &Comp_Pair_BinomnegGaussCop2mem_aniso,         15},
     {"Comp_Cond_Gauss2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss2mem_aniso,         15},
+    {"Comp_Cond_Tukeyh2mem_aniso",         (DL_FUNC) &Comp_Cond_Tukeyh2mem_aniso,         15},
     {"Comp_Cond_Tukeyhh2mem_aniso",         (DL_FUNC) &Comp_Cond_Tukeyhh2mem_aniso,         15},
     {"Comp_Cond_SkewGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_SkewGauss2mem_aniso,         15},
     {"Comp_Cond_SkewLaplace2mem_aniso",         (DL_FUNC) &Comp_Cond_SkewLaplace2mem_aniso,         15},
     {"Comp_Cond_T2mem_aniso",         (DL_FUNC) &Comp_Cond_T2mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_T2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_T2mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_SkewT2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_SkewT2mem_aniso,         15},
+    {"Comp_Cond_Gauss_misp_Tukeygh2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_Tukeygh2mem_aniso,         15},
     {"Comp_Cond_SinhGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_SinhGauss2mem_aniso,         15},
     {"Comp_Cond_Gamma2mem_aniso",         (DL_FUNC) & Comp_Cond_Gamma2mem_aniso,         15},
     {"Comp_Cond_Weibull2mem_aniso",         (DL_FUNC) &Comp_Cond_Weibull2mem_aniso,         15},
     {"Comp_Cond_LogGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_LogGauss2mem_aniso,         15},
     {"Comp_Cond_Beta2mem_aniso",         (DL_FUNC) &Comp_Cond_Beta2mem_aniso,         15},
     {"Comp_Cond_Kumaraswamy2mem_aniso",         (DL_FUNC) &Comp_Cond_Kumaraswamy2mem_aniso,         15},
+    {"Comp_Cond_Kumaraswamy22mem_aniso",         (DL_FUNC) &Comp_Cond_Kumaraswamy22mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_Pois2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_Pois2mem_aniso,         15},
     {"Comp_Cond_BinomNNGauss_misp2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomNNGauss_misp2mem_aniso,         15},
     {"Comp_Cond_Gauss_misp_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisGamma2mem_aniso,         15},
     {"Comp_Cond_PoisGamma2mem_aniso",         (DL_FUNC) &Comp_Cond_PoisGamma2mem_aniso,         15},
+    {"Comp_Cond_PoisGammaZIP2mem_aniso",      (DL_FUNC) &Comp_Cond_PoisGammaZIP2mem_aniso,      15},
     {"Comp_Cond_Pois2mem_aniso",         (DL_FUNC) &Comp_Cond_Pois2mem_aniso,         15},
     {"Comp_Cond_BinomGauss2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomGauss2mem_aniso,         15},
     {"Comp_Cond_BinomLogi2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomLogi2mem_aniso,         15},
@@ -1270,6 +1398,7 @@ static const R_CMethodDef CEntries[] = {
     {"Comp_Cond_TWOPIECEBIMODAL2mem_aniso",         (DL_FUNC) &Comp_Cond_TWOPIECEBIMODAL2mem_aniso,         15},
   //  {"Comp_Cond_BinomnegGaussZINB2mem_aniso",         (DL_FUNC) &Comp_Cond_BinomnegGaussZINB2mem_aniso,         15},
     {"Comp_Cond_PoisZIP2mem_aniso",         (DL_FUNC) &Comp_Cond_PoisZIP2mem_aniso,         15},
+    {"Comp_Cond_Gauss_misp_PoisZIP2mem_aniso",         (DL_FUNC) &Comp_Cond_Gauss_misp_PoisZIP2mem_aniso,         15},
     {"Comp_Cond_LogLogistic2mem_aniso",         (DL_FUNC) &Comp_Cond_LogLogistic2mem_aniso,         15},
     {"Comp_Cond_Logistic2mem_aniso",         (DL_FUNC) &Comp_Cond_Logistic2mem_aniso,         15},
 /*************************/
@@ -1277,9 +1406,26 @@ static const R_CMethodDef CEntries[] = {
     {NULL, NULL, 0}
 };
 
+extern SEXP GeoBuildSpatialPairCache(SEXP neighborhoods, SEXP coords, SEXP cormod, SEXP par, SEXP type, SEXP radius);
+extern SEXP GeoBuildSpacetimePairCache(SEXP neighborhoods, SEXP coords, SEXP times, SEXP cormod, SEXP par, SEXP type, SEXP radius);
+extern SEXP GeoPairCachePacked(SEXP indices, SEXP row_ptr, SEXP col_idx, SEXP rho);
+extern SEXP GeoPairCrossCorrelation(SEXP indices, SEXP coords, SEXP times, SEXP loc, SEXP pred_time, SEXP cormod, SEXP par, SEXP type, SEXP radius);
+extern SEXP GeoCountCondSim(SEXP Q, SEXP muObs, SEXP freeLen, SEXP successCount, SEXP forcedSuccess, SEXP W, SEXP muLoc, SEXP cholCond, SEXP cholLoc, SEXP sizePred, SEXP modelCode, SEXP burn, SEXP thin, SEXP nrep, SEXP L);
+
+static const R_CallMethodDef CallEntries[] = {
+    {"GeoDuplicateCoordinates", (DL_FUNC) &GeoDuplicateCoordinates, 1},
+    {"GeoCorrPGsVecCall",       (DL_FUNC) &GeoCorrPGsVecCall,       3},
+    {"GeoBuildSpatialPairCache", (DL_FUNC) &GeoBuildSpatialPairCache, 6},
+    {"GeoBuildSpacetimePairCache", (DL_FUNC) &GeoBuildSpacetimePairCache, 7},
+    {"GeoPairCachePacked", (DL_FUNC) &GeoPairCachePacked, 4},
+    {"GeoPairCrossCorrelation", (DL_FUNC) &GeoPairCrossCorrelation, 9},
+    {"GeoCountCondSim",        (DL_FUNC) &GeoCountCondSim,       15},
+    {NULL, NULL, 0}
+};
+
 void R_init_GeoModels(DllInfo *dll)
 {
-    R_registerRoutines(dll, CEntries, NULL, NULL, NULL);
+    R_registerRoutines(dll, CEntries, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }
 void R_unload_GeoModels(DllInfo *info) {

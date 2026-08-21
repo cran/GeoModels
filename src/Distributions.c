@@ -1,11 +1,5 @@
 #include "header.h"
 /*************************************************/
-int is_integer(double x) {
-    return fabs(x - round(x)) < DBL_EPSILON;
-}
-int is_nonneg_integer(double x) {
-    return is_integer(x) && x >= -DBL_EPSILON;
-}
 //******************************************************************************
 double polevl(double x, const double coef[], int N)
 
@@ -98,154 +92,8 @@ double poch(double a, double m)
 
 // ===================================== START: Bivariate Normal  =====================================//
 
-#define HSQRT 1.414213562373095048801688724209698078569671
-//#define HSQRT 1.4142
-
-double Phi(double x)
-{
-    double val =(1+     (1-erfc(x/HSQRT) )    )/2;
-    return ( val );
-}
-double Phi2diag( double x, double a, double px, double pxs )
-{
-    double sol=NAN;
-    if( a <= 0.0 ) sol = px;
-    if( a >= 1.0 ) sol =  px * px;
-    double b = 2.0 - a, sqrt_ab = sqrt( a * b );
-    double c1 = 6.36619772367581343e-001;
-    double c2 = 1.25331413731550025;
-    double c3 = 1.57079632679489662;
-    double c4 = 1.591549430918953358e-001;
-    //double asr = ( a > 0.1 ? asin( 1.0 - a ) : acos( sqrt_ab ) );
-    double asr;
-    if(a > 0.1)
-    {
-        asr = asin( 1.0 - a );
-    }else
-    {
-        asr = acos( sqrt_ab );
-    }
-    
-    double comp = px * pxs;
-    if( comp * ( 1.0 - a - c1 * asr ) < 5e-17 ) sol =  b * comp;
-    double tmp = c2 * x;
-    double alpha = a * x * x / b;
-    double a_even = -tmp * a;
-    double a_odd = -sqrt_ab * alpha;
-    double beta = x * x;
-    double b_even = tmp * sqrt_ab;
-    double b_odd = sqrt_ab * beta;
-    double delta = 2.0 * x * x / b;
-    double d_even = ( 1.0 - a ) * c3 - asr;
-    double d_odd = tmp * ( sqrt_ab - a );
-    double res = 0.0, res_new = d_even + d_odd;
-    int k = 2;
-    double cond = fabs(res-res_new);
-    while( cond>DEPSILON )
-    {
-        d_even = ( a_odd + b_odd + delta * d_even ) / k;
-        a_even *= alpha / k;
-        b_even *= beta / k;
-        k++;
-        a_odd *= alpha / k;
-        b_odd *= beta / k;
-        d_odd = ( a_even + b_even + delta * d_odd ) / k;
-        k++;
-        res = res_new;
-        res_new += d_even + d_odd;
-        cond = fabs(res-res_new);
-    }
-    double sol1;
-    if(isnan(sol))
-    {
-        res *= exp( -x * x / b ) * c4;
-        sol1 =  fmax( ( 1.0 + c1 * asr ) * comp, b * comp - fmax( 0.0, res ) );
-    }else{
-        sol1 = sol;
-    }
-    return sol1;
-}
 
 
-double Phi2help( double x, double y, double rho )
-{
-    double s = sqrt( ( 1.0 - rho ) * ( 1.0 + rho ) );
-    double a = 0.0, b1 = -fabs( x ), b2 = 0.0;
-    if( rho > 0.99 )
-    {
-        double tmp = sqrt( ( 1.0 - rho ) / ( 1.0 + rho ) );
-        b2 = -fabs( ( x - y ) / s - x * tmp );
-        a = R_pow( ( x - y ) / x / s - tmp,2 );
-    }
-    else if( rho < -0.99 )
-    {
-        double tmp = sqrt( ( 1.0 + rho ) / ( 1.0 - rho ) );
-        b2 = -fabs( ( x + y ) / s - x * tmp );
-        a = R_pow( ( x + y ) / x / s - tmp,2 );
-    }
-    else
-    {
-        b2 = -fabs( rho * x - y ) / s;
-        a = R_pow( b2 / x ,2);
-    }
-    
-    double p1 = Phi( b1 ), p2 = Phi( b2 ), q = 0.0;
-    if( a <= 1.0 )
-        q = 0.5 * Phi2diag( b1, 2.0 * a / ( 1.0 + a ), p1, p2 );
-    else
-        q = p1 * p2 - 0.5 * Phi2diag( b2, 2.0 / ( 1.0 + a ), p2, p1 );
-    int c1 = ( y / x >= rho ), c2 = ( x < 0.0 ), c3 = c2 && ( y >= 0.0 );
-    
-    bool c13 = (c1 && c3);
-    bool c12 = (c1 && c2);
-    double sol;
-    if(c13) {sol = (q - 0.5);}
-    else if(c12) {sol = (q);}
-    else if(c1 ) {sol = (0.5 - p1 + q);}
-    else if(c3 ) {sol = (p1 - q - 0.5);}
-    else if(c2 ) {sol = (p1 - q);}
-    else {sol = (0.5 - q);}
-    return (sol );
-}
-
-double Phi2( double x, double y, double rho )
-{
-    double sol = NAN;
-    if( ( 1.0 - rho ) * ( 1.0 + rho ) <= 0.0 )
-    {
-        if( rho > 0.0 )
-        {
-            //return (Phi( min( x, y ) ));
-            sol = (Phi( fmin( x, y ) ));
-        }
-        else
-        {
-            //return (max( 0.0, min( 1.0, Phi( x ) + Phi( y ) - 1.0 ) ));
-            sol = (fmax( 0.0, fmin( 1.0, Phi( x ) + Phi( y ) - 1.0 ) ));
-        }
-    }
-    if( x == 0.0 && y == 0.0 )
-    {
-        if( rho > 0.0 )
-        {
-            //return (Phi2diag( 0.0, 1.0 - rho, 0.5, 0.5 ));
-            sol = (Phi2diag( 0.0, 1.0 - rho, 0.5, 0.5 ));
-        }
-        else
-        {
-            //return (0.5 - Phi2diag( 0.0, 1.0 + rho, 0.5, 0.5 ));
-            sol = (0.5 - Phi2diag( 0.0, 1.0 + rho, 0.5, 0.5 ));
-        }
-    }
-    else
-    {
-        sol = (fmax( 0.0,
-                   fmin( 1.0,
-                       Phi2help( x, y, rho ) + Phi2help( y, x, rho ) ) ));
-    }
-    
-    return (sol);
-}
 
 /*for bivariate t distributions*/
 double A[] = {
@@ -276,109 +124,7 @@ double C[] = {
 };
 
 
- /****** integrand  in  generalized wendland function ************************/
-double int_onef2(double x,double a, double b1,double b2,double y)
-{
-    double res=0.0,of1;
-    of1=gammafn(b1)*R_pow(x*y,1-b1/2)*bessel_i(2*sqrt(x*y),b1-1,1);
-    res=R_pow(1-x,b2-a-1)*R_pow(x,a-1)*of1;
-    return (res);
-}
-void integr_onef2(double *x, int n, void *ex){
-    int i;double a,b1,b2,y;
-    a =    ((double*)ex)[0];  //smooth
-    b1 = ((double*)ex)[1];  //alpha
-    b2 =     ((double*)ex)[2];  //h
-    y =     ((double*)ex)[3];  //h
-    for (i=0;i<n;i++) {x[i]=int_onef2(x[i],a,b1,b2,y);}
-    return;
-}
-// function computing generalized wendland
-double onef2integral(double x, double *param) {
-    
-    double ex[4], lower, upper, epsabs, epsrel, result, abserr, *work;
-    int neval, ier, subdiv, lenw, last, *iwork;
-    subdiv = 100;
-    epsabs = R_pow(DBL_EPSILON, 0.25);
-    epsrel = epsabs;
-    lenw = 4 * subdiv;           /* as instructed in WRE */
-    iwork =   (int *) R_Calloc(subdiv, int);  /* idem */
-    work = (double *) R_Calloc(lenw, double); /* idem */
-    ex[0] = param[0]; ex[1] = param[1];ex[2]= param[2];ex[3]=x;
-    lower=0;
-    upper=1;
-    // Compute the integral
-    Rdqags(integr_onef2, (void *) &ex,
-               &lower, &upper, &epsabs, &epsrel, &result,
-               &abserr, &neval, &ier, &subdiv, &lenw, &last, iwork, work);
-    R_Free(iwork);R_Free(work);
-    return(result);
-}
-/******************************************************************************/
-/******************************************************************************/
-/* Wendland covariance */
-
-/* integrand  in  generalized wendland function*/
-double int_gen(double x,double mu, double alpha,double lag,double supp)
-{
-    double res=0.0,y;
-    y=lag/supp;
-    res=R_pow(1-x,mu-1)*R_pow(x*x-y*y,alpha)/beta(2*alpha+1,mu);
-    return (res);///(R_pow(2,alpha-1)*gamma(alpha)*R_pow(supp,2*alpha)));
-}
-void integr_gen(double *x, int n, void *ex){
-    int i;double mu,alpha,beta,y;
-    mu =    ((double*)ex)[0];  //mu
-    alpha = ((double*)ex)[1];  //alpha
-    beta =     ((double*)ex)[2];  //csupp
-    y =     ((double*)ex)[3];  //h
-    for (i=0;i<n;i++) {x[i]=int_gen(x[i],mu,alpha,y,beta);}
-    return;
-}
-// function computing generalized wendland
-double wendintegral(double x, double *param) {
-    double ex[4], lower, upper, epsabs, epsrel, result, abserr, *work;
-    int neval, ier, subdiv, lenw, last, *iwork;
-    subdiv = 100;
-    epsabs = R_pow(DBL_EPSILON, 0.25);
-    epsrel = epsabs;
-    lenw = 4 * subdiv;           /* as instructed in WRE */
-    iwork =   (int *) R_Calloc(subdiv, int);  /* idem */
-    work = (double *) R_Calloc(lenw, double); /* idem */
-    ex[0] = param[0]; ex[1] = param[1]; ex[2] = param[2];ex[3]=x;
-    lower=x/param[2];
-    upper=1;
-    // Compute the integral
-    if(x<=param[2]) {
-    Rdqags(integr_gen, (void *) &ex,
-               &lower, &upper, &epsabs, &epsrel, &result,
-               &abserr, &neval, &ier, &subdiv, &lenw, &last, iwork, work);
-
-    }else   {result=0;}
-    R_Free(iwork);R_Free(work);
-    return(result);
-}
-/******************************************************************************/
-/******************************************************************************/
 // Integrand function (derivatives of the Student-t cdf):
-double int_pt(double x, double df)
-  {
-    double res=0.0, x2=0.0, y=0.0;
-    x2=R_pow(x,2);
-    y=1+x2/df;
-    res=0.5*dt(x,df,0)*((df+1)*x2/R_pow(df,2)/y-log(y));
-    return res;
-  }
-// Vectorised integrand function:
-void integr_pt(double *x, int n, void *ex)
-{
-  int i=0;
-  double d=0.0;
-  d=*((double *)ex);
-  for(i=0;i<n;i++)
-    x[i]=int_pt(x[i],d);
-  return;
-}
 // bivariate of Gaussian bivariate rf
 double log_biv2gauss(int *cormod, double dij,double *par, double data1, double data2, int first,int second)
 {
@@ -390,13 +136,7 @@ det=rhott*rhovv-R_pow(rhotv,2);
 dens=-0.5*(2*log(2*M_PI)+log(det)+(rhovv*R_pow(data1,2)+rhott*R_pow(data2,2)-2*(data1*data2)*rhotv)/det);
 return dens;
 }
-// compute  bivariate normal standard pdf:
-double d2norm(double x, double y, double rho)
-{
-  double res=0.0, omr=1-R_pow(rho,2);
-  res=(1/(2*M_PI))*exp(-0.5*(R_pow(x,2)-2*rho*x*y+R_pow(y,2))/omr)/sqrt(omr);
-  return(res);
-}
+
 // compute  bivariate normal standard pdf:
 double d22norm(double x, double y,double v11,double v22,double v12)
 {
@@ -409,42 +149,7 @@ double d22norm(double x, double y,double v11,double v22,double v12)
   res=exp(-0.5*zz/omr)/aa;
   return(res);
 }
- double compute_biv_norm_density(double d1, double d2, double mui, double muj, 
-                                             double vvi, double vvj, double corr1) {
-    // Centered data
-    double z1 = d1 - mui;
-    double z2 = d2 - muj;
-    
-    // Compute correlation coefficient
-    double rho = corr1;
-    
-    // Ensure correlation is within valid bounds
-    if (rho >= 1.0) rho = 0.9999;
-    if (rho <= -1.0) rho = -0.9999;
-    
-    // Compute standardized values
-    double s1 = sqrt(vvi);
-    double s2 = sqrt(vvj);
-    double u1 = z1 / s1;
-    double u2 = z2 / s2;
-    
-    // Compute discriminant
-    double rho2 = rho * rho;
-    double disc = 1.0 - rho2;
-    
-    if (disc < 1e-10) {
-        // Handle near-singular case
-        return 1e-10;
-    }
-    
-    // Compute quadratic form
-    double quad = (u1 * u1 - 2.0 * rho * u1 * u2 + u2 * u2) / disc;
-    
-    // Compute log density
-    double log_density = -0.5 * (quad + log(2.0 * M_PI * s1 * s2 * disc));
-    
-    return exp(log_density);
-}
+
 
 double d2lognorm(double x, double y, double sill, double nugget, double mux, double muy, double rho)
 {
@@ -499,27 +204,7 @@ double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,
   return (lp == -INFINITY) ? 0.0 : exp(lp);
 }
 
-void CBessel(double *xxx, double *nuu, int *expscale,double *res, int *tipo)
-{
-    switch (*tipo) {
-        case 1:
-            *res = bessel_k(*xxx,*nuu,*expscale);
-            break;
-        case 2:
-            *res = bessel_i(*xxx,*nuu,*expscale);
-        default:
-            break;
-}}
 
-double biv_chisqu2(double corr,double zi,double zj, double shape)
-{
-double KK1,KK2,KK3,rr;
-   rr=1-corr*corr;  
-   KK1=R_pow(gammafn(shape/2),2)*R_pow(rr,shape/2);
-   KK2=R_pow(2,-shape)*R_pow(zi*zj,shape/2-1)*exp(-0.5*(zi+zj)/rr)/KK1;
-   KK3= KK2* gammafn(shape/2)*R_pow(0.5*fabs(corr)*sqrt(zi*zj)/rr,1-shape/2)*bessel_i(fabs(corr)*sqrt(zi*zj)/rr ,shape/2-1,1);
-   return(KK3);
-}
 
 
 double biv_two_piece_bimodal(double rho,double zi,double zj,double sill,double nu,double delta,double eta,
@@ -545,52 +230,72 @@ if(zi<mui&&zj<muj)
 return(R_pow(alpha,2)*res/sill);
 }
 
-double biv_Weibull2(double rho12,double zi,double zj,double mi,double mj,double shape1,double shape2){
 
-double a1=gammafn(1.0+1.0/shape1);
-double a2=gammafn(1.0+1.0/shape2);
-double mui=exp(mi);
-double muj=exp(mj);
-double k=1.0-rho12*rho12;
-double zi_mui=zi/mui;
-double zj_muj=zj/muj;
-double a1zi=zi_mui*a1;
-double a2zj=zj_muj*a2;
-double pow1=R_pow(a1zi,shape1);
-double pow2=R_pow(a2zj,shape2);
-double pow1_sqrt=R_pow(a1zi,shape1/2.0);
-double pow2_sqrt=R_pow(a2zj,shape2/2.0);
-double a=shape1*shape2*R_pow(a1,shape1)*R_pow(a2,shape2)*R_pow(zi,shape1-1.0)*R_pow(zj,shape2-1.0)/(R_pow(mui,shape1)*R_pow(muj,shape2)*k);
-double b=exp(-(pow1+pow2)/k);
-double c=bessel_i(2.0*fabs(rho12)*pow1_sqrt*pow2_sqrt/k,0,1);
-return a*b*c;
-}
-double asy_log_besselI(double z,double nu)
-{
-     double val;
-     double K=4*R_pow(nu,2);
-     val =  (z-0.5*log(2*M_PI*z))+
-           log((1-(K-1)/(8*z)*(1-(K-9)/(2*8*z)*(1-(K-25)/(3*8*z)))));
-     return(val);
-}
 
 double biv_Weibull(double corr,double zi,double zj,double mui,double muj,double shape){
 
-double ci=exp(mui);
-double cj=exp(muj);
-double k=1.0/gammafn(1.0+1.0/shape);
-double ui=zi/ci;
-double uj=zj/cj;
-double a=1.0-corr*corr;
-double uipow=R_pow(ui,shape);
-double ujpow=R_pow(uj,shape);
-double uipow_half=R_pow(ui,shape/2.0);
-double ujpow_half=R_pow(uj,shape/2.0);
-double kpow=R_pow(k,-shape);
-double z=2.0*fabs(corr)*uipow_half*ujpow_half*kpow/a;
-double A=2.0*log(shape)-2.0*shape*log(k)+(shape-1.0)*log(ui*uj)-log(a);
-double B=-kpow*(uipow+ujpow)/a;
-double res=A+B+log(bessel_i(z,0,2))+z-(mui+muj);
+/*
+ * Cache constants that depend only on the Weibull shape.  During one
+ * composite-likelihood evaluation, shape is common to all pairs, so the
+ * original code recomputed gammafn(), R_pow() and logarithms thousands of
+ * times with identical arguments.  The cache is process-local, matching
+ * the correlation-kernel context caches used elsewhere in the package.
+ */
+typedef struct {
+    int valid;
+    double shape;
+    double half_shape;
+    double shape_minus_one;
+    double kpow;
+    double log_prefactor;
+} WeibullShapeContext;
+
+static WeibullShapeContext ctx = {0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+if (!ctx.valid || shape != ctx.shape) {
+    const double k = 1.0 / gammafn(1.0 + 1.0 / shape);
+    ctx.shape = shape;
+    ctx.half_shape = 0.5 * shape;
+    ctx.shape_minus_one = shape - 1.0;
+    ctx.kpow = R_pow(k, -shape);
+    ctx.log_prefactor = 2.0 * log(shape) - 2.0 * shape * log(k);
+    ctx.valid = 1;
+}
+
+const double ci=exp(mui);
+const double cj=exp(muj);
+const double ui=zi/ci;
+const double uj=zj/cj;
+const double a=1.0-corr*corr;
+
+double uipow, ujpow, uipow_half, ujpow_half;
+
+/* Common integer shapes avoid generic power calls entirely. */
+if (shape == 2.0) {
+    uipow = ui * ui;
+    ujpow = uj * uj;
+    uipow_half = ui;
+    ujpow_half = uj;
+} else if (shape == 1.0) {
+    uipow = ui;
+    ujpow = uj;
+    uipow_half = (ui >= 0.0) ? sqrt(ui) : R_pow(ui, ctx.half_shape);
+    ujpow_half = (uj >= 0.0) ? sqrt(uj) : R_pow(uj, ctx.half_shape);
+} else {
+    uipow = R_pow(ui, shape);
+    ujpow = R_pow(uj, shape);
+
+    /* Weibull support is non-negative: sqrt(u^shape) = u^(shape/2). */
+    uipow_half = (ui >= 0.0 && R_FINITE(uipow))
+        ? sqrt(uipow) : R_pow(ui, ctx.half_shape);
+    ujpow_half = (uj >= 0.0 && R_FINITE(ujpow))
+        ? sqrt(ujpow) : R_pow(uj, ctx.half_shape);
+}
+
+const double z=2.0*fabs(corr)*uipow_half*ujpow_half*ctx.kpow/a;
+const double A=ctx.log_prefactor+ctx.shape_minus_one*log(ui*uj)-log(a);
+const double B=-ctx.kpow*(uipow+ujpow)/a;
+const double res=A+B+log(bessel_i(z,0,2))+z-(mui+muj);
 return res;
 }
 
@@ -611,166 +316,62 @@ double psi(int i,int j,double p1,double p2,double p12,double**cache){
 }
 
 double** create_cache(int max_i,int max_j){
-    double** cache=(double**)malloc((max_i+1)*sizeof(double*));
-    for(int i=0;i<=max_i;i++){
-        cache[i]=(double*)malloc((max_j+1)*sizeof(double));
-        for(int j=0;j<=max_j;j++)cache[i][j]=-1.0;
+    const size_t nrow = (size_t) max_i + 1u;
+    const size_t ncol = (size_t) max_j + 1u;
+    double **cache = (double **) R_Calloc(nrow, double *);
+    double *storage = (double *) R_Calloc(nrow * ncol, double);
+
+    for (int i = 0; i <= max_i; i++) {
+        cache[i] = storage + (size_t) i * ncol;
+        for (int j = 0; j <= max_j; j++) {
+            cache[i][j] = -1.0;
+        }
     }
     return cache;
 }
 
-double cov_binom_neg(int m,double p11,double p1, double p2) {
+static void free_cache(double **cache){
+    if (cache == NULL) return;
+    R_Free(cache[0]);
+    R_Free(cache);
+}
 
-double** cache=create_cache(m,m);
-double a;
-if(fabs(p11-p1*p2)<1e-32) return(0.0); //indipendence case
-else    
- a=psi( m, m, p1, p2, p11,cache)- m*m/(p1*p2);
-return(a);
+double cov_binom_neg(int m,double p11,double p1, double p2) {
+    double **cache;
+    double a;
+
+    /* Avoid allocating the recursion cache in the independence case. */
+    if (fabs(p11 - p1 * p2) < 1e-32) return 0.0;
+
+    cache = create_cache(m, m);
+    a = psi(m, m, p1, p2, p11, cache) - ((double) m * (double) m) / (p1 * p2);
+    free_cache(cache);
+    return a;
 }
 
 /********************************************************************/
 /********* poisson gamma correlation*********************************/
 /********************************************************************/
-/********************************************************************/
-/*===========================================================================
- * IMPLEMENTAZIONE COMPLETA - CORRELAZIONE PEM (Poisson-Erlang Mixture)
- * 
- * Include tutti i metodi necessari:
- * 1. CorrPGs - Caso stazionario (già funzionante)
- * 2. CorrPGns_SmallA - Approssimazione per a piccolo
- * 3. CorrPGns_Stable - Metodo originale
- * 4. CorrPGns_AdaptiveBlocks - Metodo migliorato con Kahan
- * 5. CorrPGns_Asymptotic - Approssimazione per medie molto diverse
- * 6. corr_pois_gen_smart - Dispatcher intelligente
- *===========================================================================*/
+/* Corrected PEM (Poisson-Erlang mixture) correlation.
+ *
+ * Theorem 5.1, with nu_i=a/mean_i and nu_j=a/mean_j:
+ *
+ * rho_M = rho^2 / sqrt((1+nu_i)(1+nu_j))
+ *       + A * sum_{r,l>=0} C_{r,l} H_{r,l}(nu_i,nu_j),
+ *
+ * where H is the product of two regularized Gauss 2F1 functions.
+ * hypergeo() returns the ordinary 2F1, so Gamma(r+2)^(-2) is included
+ * explicitly in the logarithmic coefficient below.
+ *
+ * This core is used for the non-stationary case and as a numerical fallback.
+ * The stationary case uses the closed Corollary 5.1 below.  Stationarity
+ * means identical marginal distributions, not Lambda_i == Lambda_j.
+ */
 
 #define MIN_CORRELATION_THRESHOLD 1e-15
 #define MIN_MEAN_THRESHOLD 1e-15
 #define MIN_A_THRESHOLD 1e-15
 #define MAX_NU_THRESHOLD 1e10
-
-/*---------------------------------------------------------------------------
- * 1. CASO STAZIONARIO (mean_i == mean_j)
- *---------------------------------------------------------------------------*/
-double CorrPGs(double corr, double mean, double a) {
-    if (!R_FINITE(corr) || !R_FINITE(mean) || !R_FINITE(a)) {
-        return R_NaN;
-    }
-    if (fabs(corr) >= 1.0 || mean <= MIN_MEAN_THRESHOLD || a <= MIN_A_THRESHOLD) {
-        return R_NaN;
-    }
-    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
-        return 0.0;
-    }
-    
-    const double corr2 = corr * corr;
-    const double one_minus_corr2 = 1.0 - corr2;
-    const double nu = a / mean;
-    
-    if (nu > MAX_NU_THRESHOLD) {
-        return corr2;
-    }
-    
-    const double KK = nu * one_minus_corr2;
-    const double two_plus_KK = 2.0 + KK;
-    const double four_plus_KK = 4.0 + KK;
-
-    if (two_plus_KK <= 0.0 || four_plus_KK <= 0.0) {
-        return R_NaN;
-    }
-    
-    const double cc = 4.0 / (two_plus_KK * two_plus_KK);
-    if (cc >= 1.0 || cc < 0.0) {
-        return R_NaN;
-    }
-
-    // Calcolo in log-space per stabilità
-    const double log_nu = log(nu);
-    const double log_one_minus_corr2 = log1p(-corr2);
-    const double log_two_plus_KK = log(two_plus_KK);
-    const double log_four_plus_KK = log(four_plus_KK);
-    const double log1p_nu = log1p(nu);
-    
-    const double log_dd = log_nu + 0.5 * (log_nu + log_one_minus_corr2) + 
-                          a * log_two_plus_KK - log1p_nu - (a + 0.5) * log_four_plus_KK;
-    
-    if (!R_FINITE(log_dd)) {
-        return R_NaN;
-    }
-    
-    const double dd = exp(log_dd);
-    if (!R_FINITE(dd) || dd <= 0.0) {
-        return R_NaN;
-    }
-    
-    const double aa_param1 = (1.0 - a) / 2.0;
-    const double aa_param2 = -a / 2.0;
-    const double bb_param1 = (2.0 - a) / 2.0;
-    const double bb_param2 = (1.0 - a) / 2.0;
-    
-    const double aa = hypergeo(aa_param1, aa_param2, 1.0, cc);
-    const double bb_hypergeo = hypergeo(bb_param1, bb_param2, 2.0, cc);
-    
-    if (!R_FINITE(aa) || !R_FINITE(bb_hypergeo) || aa <= 0.0 || bb_hypergeo <= 0.0) {
-        return R_NaN;
-    }
-    
-    const double bb_coeff = (a + 1.0) / two_plus_KK;
-    const double bb = bb_coeff * bb_hypergeo;
-    const double aa_plus_bb = aa + bb;
-    
-    if (!R_FINITE(aa_plus_bb)) {
-        return R_NaN;
-    }
-    
-    const double result = corr2 * (1.0 - dd * aa_plus_bb);
-    
-    if (!R_FINITE(result)) {
-        return R_NaN;
-    }
-    
-    return fmax(0.0, fmin(1.0, result));
-}
-
-/*---------------------------------------------------------------------------
- * 2. APPROSSIMAZIONE PER a PICCOLO
- *---------------------------------------------------------------------------
-double CorrPGns_SmallA(double corr, double mean_i, double mean_j, double a) {
-    const double rho2 = corr * corr;
-    const double nu_i = a / mean_i;
-    const double nu_j = a / mean_j;
-    
-    const double denom = (1.0 + nu_i) * (1.0 + nu_j);
-    if (denom <= 0.0) {
-        return R_NaN;
-    }
-    
-    const double term1 = rho2 * nu_i * nu_j / denom;
-    
-    if (a < 1e-6) {
-        return term1;
-    }
-    // Correzione del secondo ordine
-    const double log_nu_prod = log(nu_i * nu_j);
-    const double log1p_nu_sum = log1p(nu_i) + log1p(nu_j);
-    const double log_means = log(mean_i * mean_j);
-    
-    const double log_factor = log_nu_prod - log1p_nu_sum - 0.5 * log_means;
-    
-    if (!R_FINITE(log_factor)) {
-        return term1;
-    }
-    
-    const double term2 = a * rho2 * log_factor;
-    const double result = term1 + term2;
-    
-    return fmax(0.0, fmin(1.0, result));
-}
-*/
-/*---------------------------------------------------------------------------
- * 3. STRUTTURE DI SUPPORTO PER KAHAN SUMMATION
- *---------------------------------------------------------------------------*/
 #ifndef RHO_EPS
 #define RHO_EPS 1e-15
 #endif
@@ -794,359 +395,828 @@ static R_INLINE void kahan_add(KahanSum *ks, double value)
     ks->sum = t;
 }
 
-double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double a)
+/* Poisson--Gamma numerical status.  These kernels are deliberately serial;
+ * no OpenMP/thread-local state is used. */
+typedef enum {
+    PG_STATUS_OK = 0,
+    PG_STATUS_INVALID_ARGUMENT = 1,
+    PG_STATUS_SPECIAL_FUNCTION = 2,
+    PG_STATUS_MAXITER = 3,
+    PG_STATUS_INVALID_PROBABILITY = 4
+} PGStatus;
+
+static int pg_last_status = PG_STATUS_OK;
+
+static R_INLINE void pg_set_status(PGStatus status)
 {
-    if (!R_FINITE(corr) ||
-        !R_FINITE(mean_i) ||
-        !R_FINITE(mean_j) ||
-        !R_FINITE(a) ||
-        mean_i <= MIN_MEAN_THRESHOLD ||
-        mean_j <= MIN_MEAN_THRESHOLD ||
-        a <= MIN_A_THRESHOLD) {
+    pg_last_status = (int)status;
+}
+
+static R_INLINE double pg_fail(PGStatus status)
+{
+    pg_set_status(status);
+    return R_NaN;
+}
+
+void GeoPEMStatusGet(int *out)
+{
+    if (out) *out = pg_last_status;
+}
+
+#ifndef PG_PROB_TOL
+#define PG_PROB_TOL 1e-10
+#endif
+
+#ifndef PG_POISSON_REL_TOL
+#define PG_POISSON_REL_TOL 1e-8
+#endif
+#ifndef PG_MAX_OUTER
+#define PG_MAX_OUTER 900
+#endif
+/*
+ * The off-diagonal Poisson-Gamma series can require a longer outer tail
+ * for large counts and high correlation.  Keep the global limit unchanged
+ * and extend only the PGrt outer loop; ordinary cases still stop through the
+ * existing relative convergence criterion.
+ */
+#ifndef PG_PGRT_MAX_OUTER
+#define PG_PGRT_MAX_OUTER 1500
+#endif
+#ifndef PG_MAX_INNER
+#define PG_MAX_INNER 900
+#endif
+#ifndef PG_SUM_TOL
+#define PG_SUM_TOL 2e-14
+#endif
+#ifndef PG_MIN_QUIET
+#define PG_MIN_QUIET 4
+#endif
+
+/* Safety guards for the non-stationary PEM correlation only.
+ * The series itself is stopped by the relative convergence checks. */
+#ifndef PEM_CORR_MAX_OUTER
+#define PEM_CORR_MAX_OUTER 200000
+#endif
+#ifndef PEM_CORR_MAX_INNER
+#define PEM_CORR_MAX_INNER 8192
+#endif
+#ifndef PEM_CORR_FAST_TOL
+#define PEM_CORR_FAST_TOL 1e-10
+#endif
+
+static R_INLINE double pg_logspace_add_pos(double a, double b)
+{
+    if (a == R_NegInf) return b;
+    if (b == R_NegInf) return a;
+    if (!R_FINITE(a) || !R_FINITE(b)) return R_NaN;
+    if (a < b) { const double tmp = a; a = b; b = tmp; }
+    return a + log1p(exp(b - a));
+}
+
+static R_INLINE double pg_logspace_sub_pos(double a, double b)
+{
+    if (a == R_NegInf) return R_NaN;
+    if (b == R_NegInf) return a;
+    if (!R_FINITE(a) || !R_FINITE(b)) return R_NaN;
+    if (b > a) {
+        if (b - a <= 64.0 * DBL_EPSILON * fmax2(1.0, fabs(a)))
+            return R_NegInf;
         return R_NaN;
     }
+    if (a == b) return R_NegInf;
+    {
+        const double u = -expm1(b - a);
+        if (!(u > 0.0) || !R_FINITE(u)) return R_NaN;
+        return a + log(u);
+    }
+}
 
-    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
-        return 0.0;
+static R_INLINE double pg_exp_log_signed(double logabs, int sign)
+{
+    if (logabs == R_NegInf) return 0.0;
+    if (!R_FINITE(logabs) || logabs > 700.0) return R_NaN;
+    if (logabs < -745.0) return 0.0;
+    return sign < 0 ? -exp(logabs) : exp(logabs);
+}
+
+static R_INLINE double pg_signed_logdiff(double logpos, double logneg)
+{
+    if (ISNAN(logpos) || ISNAN(logneg)) return R_NaN;
+    if (logpos == R_NegInf && logneg == R_NegInf) return 0.0;
+    if (logpos == R_NegInf) return pg_exp_log_signed(logneg, -1);
+    if (logneg == R_NegInf) return pg_exp_log_signed(logpos, +1);
+    if (!R_FINITE(logpos) || !R_FINITE(logneg)) return R_NaN;
+    if (logpos == logneg) return 0.0;
+    if (logpos > logneg) {
+        const double u = -expm1(logneg - logpos);
+        if (!(u > 0.0) || !R_FINITE(u)) return R_NaN;
+        return pg_exp_log_signed(logpos + log(u), +1);
+    }
+    {
+        const double u = -expm1(logpos - logneg);
+        if (!(u > 0.0) || !R_FINITE(u)) return R_NaN;
+        return pg_exp_log_signed(logneg + log(u), -1);
+    }
+}
+
+/* q-sequence: I_w(p,q+l), B(p,q+l), l=0,1,... . */
+typedef struct {
+    double p, shape, w, logw, log1mw;
+    double logI, logDelta, logBeta;
+    int last_l1;
+} PGBetaBSeq;
+
+static R_INLINE int pg_beta_bseq_init_seeded(PGBetaBSeq *st,
+                                              double p, double shape,
+                                              double w, double seeded_logI,
+                                              double seeded_logBeta)
+{
+    if (!(p > 0.0) || !(shape > 0.0) || !(w > 0.0 && w < 1.0) ||
+        !R_FINITE(seeded_logBeta) || ISNAN(seeded_logI)) return 0;
+    st->p = p;
+    st->shape = shape;
+    st->w = w;
+    st->logw = log(w);
+    st->log1mw = log1p(-w);
+    st->logBeta = seeded_logBeta;
+    st->logI = seeded_logI;
+    st->logDelta = p * st->logw + shape * st->log1mw -
+                   log(shape) - st->logBeta;
+    st->last_l1 = 0;
+    return !ISNAN(st->logDelta);
+}
+
+
+static R_INLINE double pg_beta_bseq_get(PGBetaBSeq *st, int l1)
+{
+    if (l1 < 0 || l1 < st->last_l1) return R_NaN;
+    while (st->last_l1 < l1) {
+        const double q = st->shape + (double)st->last_l1;
+        st->logI = pg_logspace_add_pos(st->logI, st->logDelta);
+        if (ISNAN(st->logI)) return R_NaN;
+        st->logBeta += log(q) - log(st->p + q);
+        st->logDelta += st->log1mw + log(st->p + q) - log(q + 1.0);
+        ++st->last_l1;
+    }
+    return st->logI;
+}
+
+/* p-sequence: I_w(p+k,q), B(p+k,q), k=0,1,... . */
+typedef struct {
+    double p, q, w, logw, log1mw;
+    double logI, logDelta, logBeta;
+    int steps_since_anchor;
+} PGBetaPSeq;
+
+static R_INLINE int pg_beta_pseq_init(PGBetaPSeq *st, double p, double q,
+                                      double w)
+{
+    if (!(p > 0.0) || !(q > 0.0) || !(w > 0.0 && w < 1.0)) return 0;
+    st->p = p;
+    st->q = q;
+    st->w = w;
+    st->logw = log(w);
+    st->log1mw = log1p(-w);
+    st->logBeta = lbeta(p, q);
+    st->logI = pbeta(w, p, q, 1, 1);
+    st->logDelta = p * st->logw + q * st->log1mw -
+                   log(p) - st->logBeta;
+    st->steps_since_anchor = 0;
+    return !ISNAN(st->logI) && !ISNAN(st->logDelta) &&
+           R_FINITE(st->logBeta);
+}
+
+static R_INLINE int pg_beta_pseq_advance(PGBetaPSeq *st)
+{
+    const double oldp = st->p;
+    const double newp = oldp + 1.0;
+    double next = pg_logspace_sub_pos(st->logI, st->logDelta);
+    if (ISNAN(next) || st->logDelta > st->logI - 18.0 ||
+        st->steps_since_anchor >= 31) {
+        next = pbeta(st->w, newp, st->q, 1, 1);
+        st->steps_since_anchor = 0;
+    } else {
+        ++st->steps_since_anchor;
+    }
+    if (ISNAN(next)) return 0;
+    st->logDelta += st->logw + log(oldp + st->q) - log(newp);
+    st->logBeta += log(oldp) - log(oldp + st->q);
+    st->logI = next;
+    st->p = newp;
+    return !ISNAN(st->logDelta) && R_FINITE(st->logBeta);
+}
+
+static R_INLINE int pg_beta_bseq_from_pseq(PGBetaBSeq *st,
+                                           const PGBetaPSeq *seed)
+{
+    return pg_beta_bseq_init_seeded(st, seed->p, seed->q, seed->w,
+                                    seed->logI, seed->logBeta);
+}
+
+/* Fast positive-series evaluation of the non-stationary PEM correlation.
+ *
+ * In the stable representation of Theorem 5.1, for q=a+l and
+ * w_i=mu_i/(a+mu_i),
+ *
+ *   I_{w_i}(r+1,q) = P(X_i > r),
+ *
+ * where X_i is negative binomial with size q and success probability
+ * p_i=a/(a+mu_i).  Therefore the inner sum over r is
+ *
+ *   sum_{r>=0} I_{w_i}(r+1,q) I_{w_j}(r+1,q)
+ *     = E[min(X_i,X_j)]
+ *
+ * for independent X_i and X_j.  Evaluating the two NB survival sequences
+ * recursively avoids thousands of incomplete-beta evaluations per
+ * correlation.  Occasional pbeta anchors prevent accumulated roundoff.
+ *
+ * This is algebraically the same positive-term representation used by
+ * pem_corr_corrected_core; it only changes the order and numerical method
+ * used to sum the terms.  R_NaN means "use the robust fallback".
+ */
+static double pem_nb_min_expect_fast(double q, double pi, double pj,
+                                     double wi, double wj)
+{
+    if (!(q > 0.0) || !(pi > 0.0 && pi < 1.0) ||
+        !(pj > 0.0 && pj < 1.0) ||
+        !(wi > 0.0 && wi < 1.0) || !(wj > 0.0 && wj < 1.0))
+        return R_NaN;
+
+    const double logpmi0 = q * log(pi);
+    const double logpmj0 = q * log(pj);
+
+    /* If the mass at zero underflows, a forward PMF recurrence cannot
+       recover reliably.  The general beta-based evaluator remains the
+       safe fallback for such extreme parameter combinations. */
+    if (logpmi0 < -700.0 || logpmj0 < -700.0)
+        return R_NaN;
+
+    double pmi = exp(logpmi0);
+    double pmj = exp(logpmj0);
+    double si = -expm1(logpmi0);  /* P(X_i > 0) */
+    double sj = -expm1(logpmj0);  /* P(X_j > 0) */
+
+    if (!R_FINITE(pmi) || !R_FINITE(pmj) ||
+        !R_FINITE(si) || !R_FINITE(sj))
+        return R_NaN;
+
+    KahanSum total;
+    kahan_init(&total);
+    int quiet = 0;
+
+    for (int r = 0; r < PEM_CORR_MAX_OUTER; ++r) {
+        if (si < 0.0 && si > -1e-13) si = 0.0;
+        if (sj < 0.0 && sj > -1e-13) sj = 0.0;
+        if (!(si >= 0.0 && si <= 1.0 + 1e-12) ||
+            !(sj >= 0.0 && sj <= 1.0 + 1e-12))
+            return R_NaN;
+
+        const double term = fmax2(0.0, si) * fmax2(0.0, sj);
+        kahan_add(&total, term);
+
+        if (r > 12) {
+            const double scale = fmax2(1e-300, fabs(total.sum));
+            if (term <= PEM_CORR_FAST_TOL * scale) {
+                if (++quiet >= PG_MIN_QUIET)
+                    return total.sum;
+            } else {
+                quiet = 0;
+            }
+        }
+
+        /* Advance from r to r+1. */
+        const double rr = (double)r;
+        const double denom = rr + 1.0;
+        pmi *= ((rr + q) / denom) * wi;
+        pmj *= ((rr + q) / denom) * wj;
+
+        if (!R_FINITE(pmi) || !R_FINITE(pmj) || pmi < 0.0 || pmj < 0.0)
+            return R_NaN;
+
+        si -= pmi;
+        sj -= pmj;
+
+        /* Re-anchor the tails periodically, and immediately if subtraction
+           has produced a negative survival probability. */
+        if (((r + 1) & 255) == 0 || si < 0.0 || sj < 0.0) {
+            const double ppar = rr + 2.0;
+            si = pbeta(wi, ppar, q, 1, 0);
+            sj = pbeta(wj, ppar, q, 1, 0);
+            if (!R_FINITE(si) || !R_FINITE(sj))
+                return R_NaN;
+        }
     }
 
+    return R_NaN;
+}
+
+static double pem_corr_positive_fast(double corr, double mean_i,
+                                     double mean_j, double a)
+{
+    const double rho2 = corr * corr;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double wi = 1.0 / (1.0 + nu_i);
+    const double wj = 1.0 / (1.0 + nu_j);
+    const double pi = nu_i / (1.0 + nu_i);
+    const double pj = nu_j / (1.0 + nu_j);
+    const double logD = log1p(nu_i) + log1p(nu_j);
+    const double term_erlang = rho2 * exp(-0.5 * logD);
+
+    if (!(rho2 > 0.0 && rho2 < 1.0) ||
+        !(nu_i > 0.0) || !(nu_j > 0.0) ||
+        !(wi > 0.0 && wi < 1.0) || !(wj > 0.0 && wj < 1.0))
+        return R_NaN;
+
+    const double log_pref = log(rho2) + (a + 1.0) * log1p(-rho2) +
+                            log(nu_i) + log(nu_j) - lgammafn(a + 1.0) -
+                            0.5 * logD;
+    if (!R_FINITE(log_pref) || log_pref > 700.0)
+        return R_NaN;
+    if (log_pref < -745.0)
+        return term_erlang;
+
+    const double pref = exp(log_pref);
+    KahanSum total;
+    kahan_init(&total);
+    int quiet_l = 0;
+    double logcoef = lgammafn(a); /* log{rho2^l Gamma(a+l)/l!}, l=0 */
+
+    for (int l = 0; l < PEM_CORR_MAX_INNER; ++l) {
+        const double q = a + (double)l;
+        const double inner = pem_nb_min_expect_fast(q, pi, pj, wi, wj);
+        if (!R_FINITE(inner) || inner < 0.0)
+            return R_NaN;
+
+        double contribution = 0.0;
+        if (inner > 0.0) {
+            const double lc = logcoef + log(inner);
+            if (!R_FINITE(lc) || lc > 700.0)
+                return R_NaN;
+            contribution = lc < -745.0 ? 0.0 : exp(lc);
+        }
+        kahan_add(&total, contribution);
+
+        if (l > 10) {
+            const double scale = fmax2(1e-300, fabs(total.sum));
+            if (contribution <= PEM_CORR_FAST_TOL * scale) {
+                if (++quiet_l >= PG_MIN_QUIET) {
+                    const double ans = term_erlang + pref * total.sum;
+                    if (R_FINITE(ans) && ans >= -PG_PROB_TOL &&
+                        ans <= 1.0 + PG_PROB_TOL)
+                        return fmax2(0.0, fmin2(1.0, ans));
+                    return R_NaN;
+                }
+            } else {
+                quiet_l = 0;
+            }
+        }
+
+        if (l + 1 < PEM_CORR_MAX_INNER)
+            logcoef += log(rho2) + log(a + (double)l) -
+                       log((double)l + 1.0);
+    }
+
+    return R_NaN;
+}
+
+static double pem_corr_corrected_core(double corr, double mean_i,
+                                      double mean_j, double a,
+                                      int stationary)
+{
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(a) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        mean_i <= MIN_MEAN_THRESHOLD || mean_j <= MIN_MEAN_THRESHOLD ||
+        a <= MIN_A_THRESHOLD)
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const int equal_means =
+        fabs(mean_i - mean_j) <=
+        1e-12 * fmax2(1.0, fmax2(mean_i, mean_j));
+    stationary = stationary || equal_means;
+
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) return 0.0;
     if (fabs(corr) >= 1.0 - RHO_EPS) {
-        return 1.0;
+        if (equal_means) return 1.0;
+        corr = copysign(1.0 - RHO_EPS, corr);
+    }
+
+    /* The negative-binomial marginals converge to Poisson when mu/kappa
+       is negligible.  This also avoids very large nu in the PEM series. */
+    if (fmax2(mean_i, mean_j) / a <= PG_POISSON_REL_TOL) {
+        const double out = corr_pois(corr, mean_i, mean_j);
+        if (!R_FINITE(out)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        return fmax2(0.0, fmin2(1.0, out));
     }
 
     const double rho2 = corr * corr;
-
     const double nu_i = a / mean_i;
     const double nu_j = a / mean_j;
-
     if (!R_FINITE(nu_i) || !R_FINITE(nu_j) ||
-        nu_i <= 0.0 || nu_j <= 0.0 ||
-        nu_i > MAX_NU_THRESHOLD ||
-        nu_j > MAX_NU_THRESHOLD) {
-        return R_NaN;
+        !(nu_i > 0.0) || !(nu_j > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    /* The negative-binomial survival recurrence is substantially faster
+       for non-stationary means, especially for small kappa.  Keep the
+       beta-based positive series below as a robust fallback for extreme
+       cases in which the fast recurrence cannot be initialized safely. */
+    if (!stationary) {
+        const double fast = pem_corr_positive_fast(corr, mean_i, mean_j, a);
+        if (R_FINITE(fast)) return fast;
     }
 
-    const double log_nu_i = log(nu_i);
-    const double log_nu_j = log(nu_j);
-
-    const double lnuij = log_nu_i + log_nu_j;
-    const double lpnuij = log1p(nu_i) + log1p(nu_j);
-
-    const double mnui = -1.0 / nu_i;
-    const double mnuj = -1.0 / nu_j;
-
+    const double wi = 1.0 / (1.0 + nu_i);
+    const double wj = 1.0 / (1.0 + nu_j);
     const double log_rho2 = log(rho2);
     const double log1m_rho2 = log1p(-rho2);
+    const double logD = log1p(nu_i) + log1p(nu_j);
 
-    const double lgamma_a = lgammafn(a);
-    const double log_mean_prod = log(mean_i) + log(mean_j);
+    /*
+     * Stable positive-term form of Theorem 5.1.
+     *
+     * For p=r+1, q_l=a+l, and w=1/(1+nu), the regularized Gauss factor
+     * appearing in the theorem satisfies
+     *
+     *  2F1~(1,1-q_l;p+1;-1/nu)
+     *   = (1+nu)^(p+q_l-1) nu^(1-q_l)
+     *     Gamma(q_l)/Gamma(p+q_l) I_w(p,q_l),
+     *
+     * where I_w is the regularized incomplete beta function.  Substitution
+     * into the double series cancels the large Gamma and power factors
+     * exactly and gives
+     *
+     *  rho_M = rho2/sqrt(D)
+     *        + C sum_r sum_l rho2^l Gamma(a+l)/l!
+     *              I_wi(r+1,a+l) I_wj(r+1,a+l),
+     *
+     *  C = rho2 (1-rho2)^(a+1) nu_i nu_j /
+     *      {Gamma(a+1) sqrt(D)},
+     *  D = (1+nu_i)(1+nu_j).
+     *
+     * Every summand is non-negative.  This form is algebraically identical
+     * to the theorem but avoids the cancellation and slow hypergeometric
+     * scaling that caused non-finite correlations for small kappa and large
+     * non-stationary means.
+     */
+    const double term_erlang = exp(log_rho2 - 0.5 * logD);
+    const double log_pref = log_rho2 + (a + 1.0) * log1m_rho2 +
+                            log(nu_i) + log(nu_j) - lgammafn(a + 1.0) -
+                            0.5 * logD;
+    if (!R_FINITE(log_pref)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+    if (log_pref < -745.0) return term_erlang;
+    if (log_pref > 700.0) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+    const double pref = exp(log_pref);
 
-    if (!R_FINITE(log_rho2) ||
-        !R_FINITE(log1m_rho2) ||
-        !R_FINITE(lgamma_a) ||
-        !R_FINITE(log_mean_prod)) {
-        return R_NaN;
-    }
+    PGBetaPSeq pseq_i, pseq_j;
+    if (!pg_beta_pseq_init(&pseq_i, 1.0, a, wi) ||
+        (!stationary && !pg_beta_pseq_init(&pseq_j, 1.0, a, wj)))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
 
-    int max_m = 150;
-    int max_r = 150;
+    KahanSum total;
+    kahan_init(&total);
+    int quiet_r = 0;
+    int outer_converged = 0;
 
-    if (a <= 1.0) {
-        max_m = 120;
-        max_r = 120;
-    } else if (a <= 2.0) {
-        max_m = 150;
-        max_r = 150;
-    } else if (a > 5.0) {
-        max_m = 220;
-        max_r = 220;
-    }
+    /* These are guards only.  The actual truncation is controlled by the
+       relative contribution tests below.  The larger correlation-specific
+       limits are needed because I_w(r+1,q) can decay slowly when nu is small
+       (large local means), even though the series itself is well behaved. */
+    for (int r = 0; r < PEM_CORR_MAX_OUTER; ++r) {
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_l = 0;
+        int row_converged = 0;
 
-    if (fabs(corr) > 0.85) {
-        max_m = (int)(1.35 * (double)max_m);
-        max_r = (int)(1.35 * (double)max_r);
-    }
+        PGBetaBSeq bseq_i, bseq_j;
+        if (!pg_beta_bseq_from_pseq(&bseq_i, &pseq_i) ||
+            (!stationary && !pg_beta_bseq_from_pseq(&bseq_j, &pseq_j)))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
 
-    const double tol = (a <= 1.0) ? 1e-13 : 1e-14;
-    const int block_size = 10;
+        double logcoef_l = lgammafn(a);
+        if (!R_FINITE(logcoef_l))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
 
-    double *lgamma_a_m = (double *) malloc((size_t)max_m * sizeof(double));
-    double *log_fact_m = (double *) malloc((size_t)max_m * sizeof(double));
-    double *lgamma_r_m_a1 = (double *) malloc((size_t)(max_r + max_m) * sizeof(double));
+        for (int l = 0; l < PEM_CORR_MAX_INNER; ++l) {
+            const double li = pg_beta_bseq_get(&bseq_i, l);
+            const double lj = stationary ? li : pg_beta_bseq_get(&bseq_j, l);
+            if (ISNAN(li) || ISNAN(lj))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
 
-    if (lgamma_a_m == NULL || log_fact_m == NULL || lgamma_r_m_a1 == NULL) {
-        free(lgamma_a_m);
-        free(log_fact_m);
-        free(lgamma_r_m_a1);
-        return R_NaN;
-    }
-
-    for (int m = 0; m < max_m; ++m) {
-        lgamma_a_m[m] = lgammafn(a + (double)m);
-        log_fact_m[m] = lgammafn((double)m + 1.0);
-    }
-
-    for (int i = 0; i < max_r + max_m; ++i) {
-        lgamma_r_m_a1[i] = lgammafn((double)i + a + 1.0);
-    }
-
-    KahanSum total_sum;
-    kahan_init(&total_sum);
-
-    double prev_sum_value = 0.0;
-    int convergence_count = 0;
-    int inactive_blocks = 0;
-
-    for (int r = 0; r < max_r; ++r) {
-        const int r2 = r + 2;
-
-        const double log_gamma_r2 = lgammafn((double)r2);
-        const double log_gamma_r2_sq = 2.0 * log_gamma_r2;
-
-        KahanSum row_sum;
-        kahan_init(&row_sum);
-
-        for (int m = 0; m < max_m; ++m) {
-            const double b_param = 1.0 - a - (double)m;
-
-            const double h1 = hypergeo(1.0, b_param, (double)r2, mnui);
-            const double h2 = hypergeo(1.0, b_param, (double)r2, mnuj);
-
-            if (!R_FINITE(h1) || !R_FINITE(h2)) {
-                break;
+            double term = 0.0;
+            if (li != R_NegInf && lj != R_NegInf) {
+                const double logterm = logcoef_l + li + lj;
+                if (ISNAN(logterm) || logterm > 700.0)
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                term = (logterm < -745.0) ? 0.0 : exp(logterm);
             }
 
-            const double hprod = h1 * h2;
+            if (!R_FINITE(term) || term < 0.0)
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
 
-            if (!R_FINITE(hprod)) {
-                break;
-            }
-
-            if (hprod == 0.0) {
-                if (m > 5) break;
-                continue;
-            }
-
-            const int rm = r + m;
-
-            const double log_coeff =
-                (double)m * log_rho2 +
-                (double)m * lnuij +
-                2.0 * lgamma_r_m_a1[rm] -
-                log_gamma_r2_sq -
-                ((double)r + (double)m) * lpnuij -
-                lgamma_a_m[m] -
-                log_fact_m[m];
-
-            if (!R_FINITE(log_coeff)) {
-                break;
-            }
-
-            const double log_abs_term = log_coeff + log(fabs(hprod));
-
-            if (!R_FINITE(log_abs_term)) {
-                break;
-            }
-
-            if (log_abs_term < -745.0) {
-                if (m > 5) break;
-                continue;
-            }
-
-            if (log_abs_term > 700.0) {
-                free(lgamma_a_m);
-                free(log_fact_m);
-                free(lgamma_r_m_a1);
-                return R_NaN;
-            }
-
-            const double term = (hprod > 0.0 ? 1.0 : -1.0) * exp(log_abs_term);
-
-            if (!R_FINITE(term)) {
-                break;
-            }
-
-            kahan_add(&row_sum, term);
-
-            if (!R_FINITE(row_sum.sum) || fabs(row_sum.sum) > 1e100) {
-                free(lgamma_a_m);
-                free(log_fact_m);
-                free(lgamma_r_m_a1);
-                return R_NaN;
-            }
-
-            if (m > 8) {
-                const double rel_term = fabs(term) / fmax2(1.0, fabs(row_sum.sum));
-                if (rel_term < tol * 0.1) {
-                    break;
+            if (l > 10) {
+                const double scale = fmax2(1e-300, fabs(row.sum));
+                if (term <= PG_SUM_TOL * scale) {
+                    if (++quiet_l >= PG_MIN_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else {
+                    quiet_l = 0;
                 }
             }
+
+            if (l + 1 < PEM_CORR_MAX_INNER) {
+                logcoef_l += log_rho2 + log(a + (double)l) -
+                             log((double)l + 1.0);
+            }
         }
 
-        kahan_add(&total_sum, row_sum.sum);
+        if (!row_converged)
+            return pg_fail(PG_STATUS_MAXITER);
 
-        if (!R_FINITE(total_sum.sum) || fabs(total_sum.sum) > 1e100) {
-            free(lgamma_a_m);
-            free(log_fact_m);
-            free(lgamma_r_m_a1);
-            return R_NaN;
-        }
+        kahan_add(&total, row.sum);
 
-        if (r > 0 && r % block_size == 0) {
-            const double abs_change = fabs(total_sum.sum - prev_sum_value);
-            const double rel_change = abs_change / fmax2(1.0, fabs(total_sum.sum));
-
-            if (rel_change < tol) {
-                ++convergence_count;
-                if (convergence_count >= 3) {
+        if (r > 12) {
+            const double scale = fmax2(1e-300, fabs(total.sum));
+            if (fabs(row.sum) <= PG_SUM_TOL * scale) {
+                if (++quiet_r >= PG_MIN_QUIET) {
+                    outer_converged = 1;
                     break;
                 }
             } else {
-                convergence_count = 0;
+                quiet_r = 0;
             }
-
-            prev_sum_value = total_sum.sum;
         }
 
-        if (r > 20) {
-            const double row_contrib = fabs(row_sum.sum) / fmax2(1.0, fabs(total_sum.sum));
-
-            if (row_contrib < tol * 0.01) {
-                ++inactive_blocks;
-                if (inactive_blocks >= 3) {
-                    break;
-                }
-            } else {
-                inactive_blocks = 0;
-            }
+        if (r + 1 < PEM_CORR_MAX_OUTER) {
+            if (!pg_beta_pseq_advance(&pseq_i) ||
+                (!stationary && !pg_beta_pseq_advance(&pseq_j)))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
         }
     }
 
-    free(lgamma_a_m);
-    free(log_fact_m);
-    free(lgamma_r_m_a1);
+    if (!outer_converged)
+        return pg_fail(PG_STATUS_MAXITER);
+    if (total.sum < -PG_PROB_TOL || !R_FINITE(total.sum))
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
 
-    const double log_aux4 =
-        log_rho2 +
-        0.5 * (lnuij - lpnuij);
-
-    if (!R_FINITE(log_aux4) || log_aux4 < -745.0 || log_aux4 > 700.0) {
-        return R_NaN;
-    }
-
-    const double aux4 = exp(log_aux4);
-
-    const double log_aux3 =
-        log_rho2 +
-        (a + 1.0) * log1m_rho2 +
-        (a - 0.5) * lnuij -
-        lgamma_a -
-        (a + 0.5) * lpnuij -
-        0.5 * log_mean_prod;
-
-    if (!R_FINITE(log_aux3) || log_aux3 < -745.0 || log_aux3 > 700.0) {
-        return R_NaN;
-    }
-
-    const double aux3 = exp(log_aux3);
-
-    if (!R_FINITE(aux3) || !R_FINITE(aux4)) {
-        return R_NaN;
-    }
-
-    const double result = aux4 + aux3 * total_sum.sum;
-
-    if (!R_FINITE(result)) {
-        return R_NaN;
-    }
-
-    if (result < -1e-8 || result > 1.0 + 1e-8) {
-        return R_NaN;
-    }
+    const double result = term_erlang + pref * fmax2(0.0, total.sum);
+    if (!R_FINITE(result) || result < -PG_PROB_TOL ||
+        result > 1.0 + PG_PROB_TOL)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
 
     return fmax2(0.0, fmin2(1.0, result));
 }
-/*---------------------------------------------------------------------------
- * 5. APPROSSIMAZIONE ASINTOTICA (per medie molto diverse)
- *---------------------------------------------------------------------------
-double CorrPGns_Asymptotic(double corr, double mean_i, double mean_j, double a) {
-    const double rho2 = corr * corr;
-    const double nu_i = a / mean_i;
-    const double nu_j = a / mean_j;
-    
-    // Primo termine (esatto)
-    const double denom = (1.0 + nu_i) * (1.0 + nu_j);
-    if (denom <= 0.0) {
-        return R_NaN;
+
+/* Stable special evaluation for kappa=3/2 in the stationary PEM
+ * correlation.  In CorrPGs the hypergeometric factor is
+ *
+ *   F = 2F1(-1/2, 1/2; 2; z).
+ *
+ * At exactly kappa=3/2 the bundled generic 2F1 code sees
+ * c-a-b=2 as an exact integer and, for z close to one, switches to its
+ * integer-d digamma expansion.  That branch is unnecessarily delicate for
+ * this very simple case and can make an optimizer behave discontinuously at
+ * the exactly representable value 1.5.
+ *
+ * Use instead the exact elliptic-integral identity
+ *
+ *   F = 4[(z-1)K(z) + (z+1)E(z)] / (3*pi*z),
+ *
+ * evaluating K and E by the arithmetic-geometric mean.  For small z the
+ * elliptic expression suffers cancellation, so use the defining convergent
+ * series there.  No generic special-function implementation is modified.
+ */
+static double pem_corr_hyp_kappa15(double z)
+{
+    if (!R_FINITE(z) || z < 0.0 || z > 1.0) return R_NaN;
+    if (z == 0.0) return 1.0;
+    if (z >= 1.0 - 8.0 * DBL_EPSILON)
+        return 8.0 / (3.0 * M_PI);
+
+    if (z < 1.0e-2) {
+        const double aa = -0.5;
+        const double bb =  0.5;
+        const double cc =  2.0;
+        double sum = 1.0;
+        double term = 1.0;
+        for (int n = 0; n < 80; ++n) {
+            term *= ((aa + (double)n) * (bb + (double)n) /
+                     ((cc + (double)n) * ((double)n + 1.0))) * z;
+            const double next = sum + term;
+            if (!R_FINITE(next)) return R_NaN;
+            sum = next;
+            if (fabs(term) <= 4.0 * DBL_EPSILON * fmax2(1.0, fabs(sum)))
+                break;
+        }
+        return sum;
     }
-    
-    const double term1 = rho2 * sqrt(nu_i * nu_j / denom);
-    
-    // Per differenze piccole, usa solo term1
-    double nu_small = fmin(nu_i, nu_j);
-    double nu_large = fmax(nu_i, nu_j);
-    
-    if (nu_large / nu_small < 2.0) {
-        return term1;
+
+    double agm_a = 1.0;
+    double agm_b = sqrt(1.0 - z);
+    double corr_sum = 0.5 * z;  /* 2^(-1) c_0^2, c_0^2=z */
+    double weight = 1.0;
+
+    for (int it = 0; it < 32; ++it) {
+        const double cnext = 0.5 * (agm_a - agm_b);
+        const double anext = 0.5 * (agm_a + agm_b);
+        const double bnext = sqrt(agm_a * agm_b);
+
+        corr_sum += weight * cnext * cnext;
+        weight *= 2.0;
+        agm_a = anext;
+        agm_b = bnext;
+
+        if (fabs(cnext) <= 4.0 * DBL_EPSILON * agm_a)
+            break;
     }
-    
-    // Correzione del primo ordine
-    const double delta_nu = nu_large - nu_small;
-    const double correction1 = rho2 * a * delta_nu * (1.0 - rho2) / 
-                               ((1.0 + nu_i) * (1.0 + nu_j));
-    
-    // Correzione del secondo ordine (solo per a moderato)
-    double correction2 = 0.0;
-    if (a < 10.0) {
-        correction2 = rho2 * a * (a + 1.0) * delta_nu * delta_nu * 
-                     (1.0 - rho2) * (1.0 - rho2) /
-                     (2.0 * pow(1.0 + nu_i, 2) * pow(1.0 + nu_j, 2));
-    }
-    
-    double result = term1 + correction1 + correction2;
-    
-    return fmax(0.0, fmin(1.0, result));
+
+    const double K = M_PI / (2.0 * agm_a);
+    const double E = K * (1.0 - corr_sum);
+    const double num = (z - 1.0) * K + (z + 1.0) * E;
+    const double F = 4.0 * num / (3.0 * M_PI * z);
+    return R_FINITE(F) ? F : R_NaN;
 }
-*/
-/*---------------------------------------------------------------------------
- * 6. DISPATCHER INTELLIGENTE (Funzione principale da usare)
- *---------------------------------------------------------------------------*/
+
+#define PEM_CORR_INTEGER_MAX 4096
+
+static int pem_corr_integer_degree(double a)
+{
+    const double aa = nearbyint(a);
+    if (!(aa >= 1.0) || aa > (double)(PEM_CORR_INTEGER_MAX + 1) ||
+        fabs(a - aa) > 1e-12 * fmax2(1.0, fabs(a)))
+        return -1;
+    return (int)aa - 1;
+}
+
+/* Stable contiguous recurrence for
+ * F_m(z)=2F1(-m,1/2;2;z), m=0,1,... .  Direct Horner evaluation of the
+ * terminating polynomial suffers severe coefficient cancellation near z=1
+ * for large m; this recurrence remains positive and stable. */
+static double pem_corr_hyp_integer(int degree, double z)
+{
+    if (degree < 0 || degree > PEM_CORR_INTEGER_MAX ||
+        !R_FINITE(z) || z < 0.0 || z > 1.0)
+        return R_NaN;
+    if (degree == 0) return 1.0;
+
+    double previous = 1.0;
+    double current = 1.0 - 0.25 * z;
+    if (degree == 1) return current;
+
+    double apar = -1.0;
+    for (int m = 1; m < degree; ++m) {
+        const double den = 2.0 - apar;
+        const double next =
+            -(2.0 * apar - 2.0 - apar * z + 0.5 * z) * current / den -
+            apar * (z - 1.0) * previous / den;
+        if (!R_FINITE(next) || !(next > 0.0)) return R_NaN;
+        previous = current;
+        current = next;
+        apar -= 1.0;
+    }
+    return current;
+}
+
+/* Stationary PEM correlation, Corollary 5.1.
+ *
+ * With q=rho^2 and nu=kappa/mu, the corrected stationary result is
+ *
+ *   rho_M = q [ 1 - nu*sqrt(1-q)/sqrt(nu^2(1-q)+4(1+nu))
+ *                 * 2F1(1-kappa,1/2;2;z) ],
+ *
+ *   z = 4(1+nu)/(nu^2(1-q)+4(1+nu)).
+ *
+ * Gamma(2)=1, so the ordinary and regularized 2F1 coincide here.
+ * This closed form replaces the double-series evaluation in the stationary
+ * case.  If the bundled 2F1 evaluator fails, fall back to the corrected
+ * non-stationary theorem specialized to equal means.
+ */
+static double pem_corr_stationary_eval(double corr, double mean, double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean) || !R_FINITE(a) ||
+        fabs(corr) > 1.0 + PG_PROB_TOL ||
+        mean <= MIN_MEAN_THRESHOLD || a <= MIN_A_THRESHOLD)
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) return 0.0;
+    if (fabs(corr) >= 1.0 - RHO_EPS) return 1.0;
+
+    if (mean / a <= PG_POISSON_REL_TOL) {
+        const double out = corr_pois_s(corr, mean);
+        if (!R_FINITE(out)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        return fmax2(0.0, fmin2(1.0, out));
+    }
+
+    const double q = corr * corr;
+    const double d = 1.0 - q;
+    const double nu = a / mean;
+    if (!R_FINITE(nu) || !(nu > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double den = nu * nu * d + 4.0 * (1.0 + nu);
+    if (!R_FINITE(den) || !(den > 0.0))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    double z = 4.0 * (1.0 + nu) / den;
+    if (z < 0.0 && z > -64.0 * DBL_EPSILON) z = 0.0;
+    if (z > 1.0 && z < 1.0 + 64.0 * DBL_EPSILON) z = 1.0;
+    if (!(z >= 0.0 && z <= 1.0))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    const double scale = nu * sqrt(d / den);
+    const int degree = pem_corr_integer_degree(a);
+    double F;
+    if (degree >= 0) {
+        F = pem_corr_hyp_integer(degree, z);
+    } else if (fabs(a - 1.5) <= 32.0 * DBL_EPSILON) {
+        F = pem_corr_hyp_kappa15(z);
+    } else {
+        F = hypergeo(1.0 - a, 0.5, 2.0, z);
+    }
+
+    if (!R_FINITE(F) || !(F > 0.0))
+        return pem_corr_corrected_core(corr, mean, mean, a, 1);
+
+    const double result = q * (1.0 - scale * F);
+    if (!R_FINITE(result) || result < -PG_PROB_TOL ||
+        result > 1.0 + PG_PROB_TOL)
+        return pem_corr_corrected_core(corr, mean, mean, a, 1);
+
+    return fmax2(0.0, fmin2(1.0, result));
+}
+
+double CorrPGs(double corr, double mean, double a)
+{
+    return pem_corr_stationary_eval(corr, mean, a);
+}
+
+/* Non-stationary corrected Theorem 5.1. */
+double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double a)
+{
+    return pem_corr_corrected_core(corr, mean_i, mean_j, a, 0);
+}
+
 double corr_pois_gen(double corr, double mean_i, double mean_j, double a)
 {
-    if (!R_FINITE(corr) ||
-        !R_FINITE(mean_i) ||
-        !R_FINITE(mean_j) ||
-        !R_FINITE(a)) {
-        return R_NaN;
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(a) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        mean_i <= MIN_MEAN_THRESHOLD || mean_j <= MIN_MEAN_THRESHOLD ||
+        a <= MIN_A_THRESHOLD)
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) return 0.0;
+    const int equal_means =
+        fabs(mean_i - mean_j) <=
+        1e-12 * fmax2(1.0, fmax2(mean_i, mean_j));
+    if (fabs(corr) >= 1.0 - RHO_EPS) {
+        if (equal_means) return 1.0;
+        corr = copysign(1.0 - RHO_EPS, corr);
     }
-
-    if (mean_i <= MIN_MEAN_THRESHOLD ||
-        mean_j <= MIN_MEAN_THRESHOLD ||
-        a <= MIN_A_THRESHOLD) {
-        return R_NaN;
-    }
-
-    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) {
-        return 0.0;
-    }
-
-    if (fabs(corr) >= 1.0) {
-        return 1.0;
-    }
-
-    const double mean_ratio = fmax2(mean_i, mean_j) / fmin2(mean_i, mean_j);
-
-    /*
-       Usa il caso stazionario solo se le medie sono davvero uguali.
-       1.001 è troppo largo per una likelihood.
-    */
-    if (mean_ratio < 1.0 + 1e-10) {
-        const double mean = 0.5 * (mean_i + mean_j);
-        return CorrPGs(corr, mean, a);
-    }
-
+    if (equal_means)
+        return CorrPGs(corr, 0.5 * (mean_i + mean_j), a);
     return CorrPGns_AdaptiveBlocks(corr, mean_i, mean_j, a);
 }
+
+void CorrPGsVec(double *corr, double *mean, double *shape, int *n, double *out)
+{
+    if (!corr || !mean || !shape || !n || !out || n[0] < 0) return;
+    for (int i = 0; i < n[0]; ++i)
+        out[i] = CorrPGs(corr[i], mean[0], shape[0]);
+}
+
+SEXP GeoCorrPGsVecCall(SEXP corrS, SEXP meanS, SEXP shapeS)
+{
+    SEXP corrR, meanR, shapeR, ans;
+    int nprotect = 0;
+    PROTECT(corrR = coerceVector(corrS, REALSXP)); ++nprotect;
+    PROTECT(meanR = coerceVector(meanS, REALSXP)); ++nprotect;
+    PROTECT(shapeR = coerceVector(shapeS, REALSXP)); ++nprotect;
+
+    const R_xlen_t n = XLENGTH(corrR);
+    const R_xlen_t nm = XLENGTH(meanR);
+    const R_xlen_t ns = XLENGTH(shapeR);
+    if (!((nm == 1 || nm == n) && (ns == 1 || ns == n))) {
+        UNPROTECT(nprotect);
+        error("GeoCorrPGsVecCall: mean and shape must have length 1 or length(corr)");
+    }
+
+    PROTECT(ans = allocVector(REALSXP, n)); ++nprotect;
+    const double *cc = REAL(corrR);
+    const double *mm = REAL(meanR);
+    const double *aa = REAL(shapeR);
+    double *out = REAL(ans);
+    for (R_xlen_t i = 0; i < n; ++i)
+        out[i] = CorrPGs(cc[i], mm[nm == 1 ? 0 : i], aa[ns == 1 ? 0 : i]);
+
+    UNPROTECT(nprotect);
+    return ans;
+}
+
 /******************************************/
 /******** Poisson correlation *************/
 /******************************************/
@@ -1350,42 +1420,7 @@ void biv_gamma_call(double *corr,double *zi,double *zj,double *mui, double *muj,
     *res = biv_gamma(*corr,*zi,*zj,*mui,*muj,*shape);
 }
 
-/***********/
-double Hyp_conf_laplace_approx(double a, double b, double z)
-{
-double y=0.0,r=0.0,A=0.0;
-  y=2*a/(b-z+sqrt(R_pow(z-b,2)+ 4*a*z ));
 
-  r=(R_pow(y,2)/a)+(R_pow(1-y,2)/(b-a));
-
-  A=R_pow(b,b-0.5)*R_pow(r,-0.5)*R_pow((y/a),a)*R_pow((1-y)/(b-a),b-a)*exp(z*y);
-  return(A);
-}
-/*****************************************************/
-double asym_aprox_1F1(double a, double b, double z)
-{
-double k1,k2,k3,res=0.0;
-double alpha=(b-a-1)/z;
-if(b<z+a+1)
-{
-  k1=(gammafn(b)*exp(z)*R_pow(1-alpha,a-1))/(gammafn(a)*gammafn(b-a));
-  k2=sqrt(2*M_PI*alpha/z)*R_pow(alpha/exp(1),alpha*z);
-  k3=(2-a*alpha)*(1-a)/(2*R_pow(1-alpha,2));
-  res=k1*k2*(1+ (k3+ 1/(12*alpha))/z);  
-}
-if(b>z+a+1)
-{
-k1=gammafn(b)/(gammafn(b-a)*R_pow(b-a-z-1,a));
-k2=a*(a+1)*(a+1-b)/(2*R_pow(b-a-z-1,2));
-res=k1*(1-k2);
-}
-if(b==z+a+1)
-{k1=gammafn(b)/(2*gammafn(a)*gammafn(b-a));
- k2=R_pow(2/(b-a-1),a/2);
- k3=2*gammafn(0.5*(a+3))*sqrt(2/(b-a-1))/3;
-res=k1*k2*(gammafn(a/2)-k3);}
-return(res);
-}
     
 double biv_skew(double corr, double z1, double z2, double mi, double mj, double vari, double skew, double nugget) {
     double zi = z1 - mi;
@@ -1538,18 +1573,6 @@ double log_biv_Norm(double corr, double zi, double zj, double mi, double mj, dou
     return dens;
 }
 
-double biv_Norm(double corr, double zi, double zj, double mi, double mj, double vari1, double vari2, double nugget) {
-    double u = zi - mi;
-    double v = zj - mj;
-    double u2 = u * u; // u^2
-    double v2 = v * v; // v^2
-    double s1 = sqrt(vari1 * vari2);
-    double s12 = s1 * corr * (1 - nugget);
-    double det = s1 * s1 - s12 * s12;
-    double dens = -0.5 * (2 * log(2 * M_PI) + log(det) + (s1 * (u2 + v2) - 2 * s12 * u * v) / det);
-    return exp(dens); // ritorna l'esponenziale della densità
-}
-
 
 
 /*multivariate gaussian PDF*/
@@ -1587,16 +1610,7 @@ double dNnorm(int N, double **M, double *dat) {
     R_Free(inverse);
     return pdf;
 }
-// compute the inverse lambert w transformation
-double inverse_lamb(double x,double tail)
-{
-  double sign,value=0.0;
-  value = sqrt(LambertW(tail*x*x)/tail);
-  if (x >= 0) sign= 1;
-  //if(x==0.0) sign=1;
-  if (x < 0) sign= -1;
-   return(sign*value);
-}
+
 static inline double inv_tukey_h(double z, double h) {
     if (h == 0.0) return z;
     const double arg = h * z * z;          
@@ -1626,7 +1640,7 @@ double biv_tukey_hh(double rho,
         !isfinite(mui)||!isfinite(muj)||!isfinite(sill)||
         !isfinite(hl) ||!isfinite(hr)) return NAN;
 
-    if (sill <= 0.0 || hl < 0.0 || hr < 0.0) return NAN;
+    if (sill <= 0.0 || hl < 0.0 || hr < 0.0 || hl >= 0.5 || hr >= 0.5) return NAN;
 
     /* Trasformazione y -> z = (y - mu)/sqrt(sill) */
     const double sqrt_sill = sqrt(sill);
@@ -2164,64 +2178,6 @@ static double log_aux_biv_binomneg_simple(
 
 
 
-/**********************************************************************/
-/* Compatibility wrappers for the previous public auxiliary functions */
-/**********************************************************************/
-
-double aux_biv_binomneg(
-    int NN,
-    int u,
-    int v,
-    double x,
-    double y,
-    double p11,
-    double *lgamma_cache,
-    int cache_size)
-{
-    double logp = log_aux_biv_binomneg(
-        NN, u, v, x, y, p11,
-        lgamma_cache, cache_size
-    );
-
-    if (ISNAN(logp))
-        return R_NaN;
-
-    if (logp == R_NegInf || logp < log(DBL_MIN))
-        return 0.0;
-
-    if (logp == R_PosInf)
-        return R_PosInf;
-
-    return exp(logp);
-}
-
-
-double aux_biv_binomneg_simple(
-    int NN,
-    int u,
-    double p1,
-    double p2,
-    double p11,
-    double *lgamma_cache,
-    int cache_size)
-{
-    double logp = log_aux_biv_binomneg_simple(
-        NN, u, p1, p2, p11,
-        lgamma_cache, cache_size
-    );
-
-    if (ISNAN(logp))
-        return R_NaN;
-
-    if (logp == R_NegInf || logp < log(DBL_MIN))
-        return 0.0;
-
-    if (logp == R_PosInf)
-        return R_PosInf;
-
-    return exp(logp);
-}
-
 
 /**********************************************************************/
 /* Stable log-pmf dispatcher                                           */
@@ -2448,34 +2404,6 @@ double biv_binom222(int n1, int n2, int u, int v, double p1, double p2, double p
     return res;
 }
 
-/// biv binomial type II
-double  biv_binom2 (int NN_i,int NN_j, int k, int u, int v, double p01,double p10,double p11)
-{
-
-int a,i,j;
-double const1=0.0,const2=0.0,const3=0.0,dens=0.0,dens1;
-double P10=p01-p11;
-double P01=p10-p11;
-double P00=1+p11-(p01+p10);
-double P11=p11;
-
-for(i=0;i<=fmin_int(NN_i-k,u);i++){
-   for(j=0;j<=fmin_int(NN_j-k,v);j++){
-     
-for(a=fmax_int(0,u+v-k-i-j);a<=fmin_int(u-i,v-j);a++){         
-       const1=exp(lgammafn(k+1)-(lgammafn(a+1)+lgammafn(u-i-a+1)+lgammafn(v-j-a+1)+lgammafn(k-u-v+i+j+a+1)));
-        dens1=const1*R_pow(P11,a)*R_pow(P00,k-u-v+i+j+a)*
-             R_pow(P10,u-i-a)*R_pow(P01,v-j-a);
-   
-       const2=exp(lgammafn(NN_i-k+1)-(lgammafn(NN_i-k-i+1)+lgammafn(i+1)));
-       const3=exp(lgammafn(NN_j-k+1)-(lgammafn(NN_j-k-j+1)+lgammafn(j+1)));
-
-       dens+=dens1*const2*const3*
-             R_pow(P11+P10,i) * R_pow(P11+P01,j) *
-             R_pow(P00+P01,NN_i-k-i) * R_pow(P00+P10,NN_j-k-j);
-  }}}
-    return(dens);
-}
 
 
 
@@ -2512,35 +2440,8 @@ double biv_poisbinneg (int NN, int u, int v, double p01,double p10,double p11)
 }
 
 // marginal binomial
-double marg_binom(int n,double x,double p)
-{
- double pr=0.0;double kk;
- kk=fac(n,n-x+1)/fac(x,1);
- pr=kk*R_pow(p,x)*R_pow(1-p,n-x);
-return(pr);
-}
 //marginal geom
-double marg_geom(int x,double p)
-{
- double pr=0.0;
- pr=p*R_pow(1-p,x);
-    return(pr);
-}
-//marginal binom neg
-double marg_binomneg(int n,int x,double p)
-{
- double pr=0.0;
- pr=(fac(x+n-1,1)/(fac(n-1,1)*fac(x,1)))*R_pow(p,n)*R_pow(1-p,x);
-    return(pr);
-}
 //marginal poisson
-double marg_pois(int n,double x,double p)
-{
- double pr=0.0,lambda=0.0;
- lambda=n*p;
- pr=R_pow(lambda,x)*exp(-lambda)/fac(x,1);
-    return(pr);
-}
        
 /* cdf inflated poisson*/
 double ppoisinflated(double z, double m, double p)
@@ -2562,27 +2463,7 @@ double pbneginflated(double z, int N,double m, double p)
 }
 
 
-double marg_p(double categ_0,double psm,int *model,int n)
-{
-    double res=0.0;
-    if(model[0]==2||model[0]==11) res=marg_binom (n-1,categ_0,psm);
-    if(model[0]==14)           res=marg_geom (categ_0,psm);
-    if(model[0]==15)           res=marg_pois (n-1,categ_0,psm);
-    return(res);
-}
 
-
-/*********** ratio of gamma function type 1********************/
-double aprox(int k,double a, double b) 
-{
-return(R_pow(k,a-b)*(1+ (a-b)*(a+b-1)/(2*k)));
-}
-/************ ratio of gamma function type 2 *******************/
-double aprox1(double a) {
-  double res=0.0;
-    res=R_pow(R_pow(a,5)+(5*R_pow(a,4)/4)+(25*R_pow(a,3)/32)+(35*R_pow(a,2)/128)+(75*a/2048)+3/8192,1/10);
-    return(res);
- }
 
 /**********************************************************/
 double lgam_sgn(double x, int *sign)
@@ -2827,21 +2708,6 @@ double appellF4(double a, double b, double c, double d, double x, double y)
 }
 
 
-double appellF42211(double x,double y)
-{
-double RR=0.0,bb=0.0;int k=0;
-  while( k<=5000 )
-    {
-    bb=exp(k*log(y)+2*(lgammafn(2+k)-lgammafn(1+k))
-       +(1-2*(2+k))*log1p(-x)+log(hypergeo(-1-k,-1-k,1,x))); 
-    if((fabs(bb)<1e-10||!R_FINITE(bb))  ) {break;}
-        RR=RR+bb;
-        k++;
-    }
-    if(!R_finite(RR)) RR=1e-320;
-return(RR);
-}
-
 
 
 
@@ -3034,15 +2900,6 @@ if(rho) {
 return(res/R_pow(dd,2));
 }
 
-double biv_Unif(double rho,double ui,double uj)
-{
-  double res,rho2;
-if(fabs(rho)>1e-8){
-  rho2=rho*rho;
-  res= 4*(1-rho2)*appellF4(2,2,1,1,rho2*ui*uj,rho2*(1-ui)*(1-uj));}
- else  {res= 1.0;}
-return(res);
-}
 
 double biv_Kumara(double rho,double zi,double zj,double ai,double aj,double shape1,double shape2,double min,double  max)
 {
@@ -3122,50 +2979,8 @@ value= sum2*kk;
 }
 
 // cdf bivariate half-normal distribution
-double pbhalf_gauss(double zi,double zj,double rho,double nugget)
-{
-  double dens = 0;
-  dens = pbnorm22(zi,zj,(1-nugget)*rho) + pbnorm22(-zi,-zj,(1-nugget)*rho) -
-              pbnorm22(-zi,zj,(1-nugget)*rho) - pbnorm22(zi,-zj,(1-nugget)*rho);
-  return(dens); 
-}
-/****** cdf univariate two-piece gaussian distribution *****/
-double pnorm_two_piece(double x, double eta)
-{
-    double cdf = 0;
-    if (x <=  0) cdf = (1 + eta)*pnorm(x/(1 + eta),0,1,1,0);
-    if (x > 0)   cdf = eta + (1 - eta)*pnorm(x/(1 - eta),0,1,1,0);
-  return(cdf);
-}
 //***********************************************//
 // cdf univariate half-gaussian distribution
-double phalf_gauss (double z){
-  double dens = 0;
-  dens = 2 * pnorm(z,0,1,1,0) - 1;
-  return(dens);
-}
-
-// cdf bivariate two_piece gaussian distribution
-double pbnorm_two_piece(int *cormod, double h, double u, 
-    double xi, double xj, double nugget, double var,double eta,double *par)
-{
-    double p11,g_eta=0.0,q_g_eta=0.0,dens=0.0,corr=0.0;
-    double etamos,etamas;
-    g_eta   = (1 - eta)/2;
-    q_g_eta = qnorm(g_eta,0,1,1,0);
-    corr    = CorFct(cormod,h,u,par,0,0);
-    p11     = pbnorm22(q_g_eta,q_g_eta,(1-nugget)*corr);
-    etamas = 1+eta;
-    etamos = 1-eta;
-    if((xi  <= 0) & (xj <= 0)) dens = (1 + pbhalf_gauss(-xi/etamas,-xj/etamas,corr,nugget) - phalf_gauss(-xi/etamas) - phalf_gauss(-xj/etamas)) * ( 1 + p11 - 2*pnorm(q_g_eta,0,1,1,0) );
-    if((xi  > 0)  & (xj <= 0)) dens = (1 + pbhalf_gauss(0,-xj/etamas,corr,nugget) - phalf_gauss(-xj/etamas)) * ( 1 + p11 - 2*pnorm(q_g_eta,0,1,1,0) ) + 
-      (phalf_gauss(xi/etamos) - pbhalf_gauss(xi/etamos,-xj/etamas,corr,nugget)) * (pnorm(q_g_eta,0,1,1,0) - p11);
-    if((xi  <= 0) & (xj >  0)) dens =  (1 + pbhalf_gauss(-xi/etamas,0,corr,nugget) - phalf_gauss(-xi/etamas)) * ( 1 + p11 - 2*pnorm(q_g_eta,0,1,1,0) ) + 
-      (phalf_gauss(xj/etamos) - pbhalf_gauss(-xi/etamas,xj/etamos,corr,nugget)) * (pnorm(q_g_eta,0,1,1,0) - p11);
-    if((xi  > 0)  & (xj >  0)) dens =  ( 1 + p11 - 2*pnorm(q_g_eta,0,1,1,0) ) + (phalf_gauss(xi/etamos) - pbhalf_gauss(xi/etamos,0,corr,nugget))*(pnorm(q_g_eta,0,1,1,0)-p11) + 
-     (phalf_gauss(xj/etamos) - pbhalf_gauss(0,xj/etamos,corr,nugget))* (pnorm(q_g_eta,0,1,1,0)-p11) + pbhalf_gauss(xi/etamos,xj/etamos,corr,nugget)* p11;
-    return(dens);
-}
 /***********************************************************************************/
 /***********************************************************************************/
 /********** bivariate log-logistic **********/
@@ -3296,24 +3111,36 @@ double dbnorm(double x_i,double x_j,double mean_i,double mean_j,double sill,doub
 // pdf bivariate tukey h random field 
 double biv_tukey_h(double corr,double data_i, double data_j, double mean_i, double mean_j, double tail, double sill)
 {
-  double dens = 0.0,x_i = 0.0,x_j = 0.0,est_mean_i = 0.0,est_mean_j = 0.0;
-  double est_mean_ij = 1.0,extra = 1.0;
+    double z_i, z_j, x_i, x_j, jac_i, jac_j, phi2, dens;
 
-  est_mean_i = (data_i - mean_i)/sqrt(sill);
-  est_mean_j = (data_j - mean_j)/sqrt(sill);
-  
-  x_i = inverse_lamb(est_mean_i,tail);
-  x_j = inverse_lamb(est_mean_j,tail);
+    if (!R_FINITE(corr) || !R_FINITE(data_i) || !R_FINITE(data_j) ||
+        !R_FINITE(mean_i) || !R_FINITE(mean_j) || !R_FINITE(tail) ||
+        !R_FINITE(sill) || sill <= 0.0 || tail < 0.0) {
+        return R_NaN;
+    }
 
-  est_mean_ij = 1/(est_mean_i*est_mean_j);
-  extra       = 1/( (1 + LambertW(tail*est_mean_i*est_mean_i))*(1 + LambertW(tail*est_mean_j*est_mean_j)));
-  dens = dbnorm(x_i,x_j,0,0,1,corr)*x_i*x_j * est_mean_ij * extra/sill;
+    z_i = (data_i - mean_i) / sqrt(sill);
+    z_j = (data_j - mean_j) / sqrt(sill);
 
-  
-  if((x_i==0.0)&&(x_j!=0.0))  dens = dbnorm(x_i,x_j,0,0,1,corr)*x_j/(est_mean_j*(1 + LambertW(tail*est_mean_j*est_mean_j)));
-  if((x_j==0.0)&&(x_i!=0.0))  dens = dbnorm(x_i,x_j,0,0,1,corr)*x_i/(est_mean_i*(1 + LambertW(tail*est_mean_i*est_mean_i)));
-  if((x_j==0.0)&&(x_i==0.0))  dbnorm(x_i,x_j,0,0,1,corr);
-  return(dens);
+    x_i = inv_tukey_h(z_i, tail);
+    x_j = inv_tukey_h(z_j, tail);
+    jac_i = jac_tukey_h(z_i, tail);
+    jac_j = jac_tukey_h(z_j, tail);
+
+    if (!R_FINITE(x_i) || !R_FINITE(x_j) ||
+        !R_FINITE(jac_i) || !R_FINITE(jac_j)) {
+        return R_NaN;
+    }
+
+    if (corr <= -1.0) corr = -1.0 + 1e-12;
+    if (corr >=  1.0) corr =  1.0 - 1e-12;
+
+    phi2 = dbnorm(x_i, x_j, 0.0, 0.0, 1.0, corr);
+    if (!R_FINITE(phi2)) return R_NaN;
+
+    /* The two location-scale derivatives contribute the factor 1/sill. */
+    dens = phi2 * jac_i * jac_j / sill;
+    return R_FINITE(dens) ? dens : R_NaN;
 }
 
 
@@ -3357,15 +3184,7 @@ double zjstd=(zj-muj)/sqrt(sill);
       }*/
 return(res/sill);
 }
-
-/*******************************************************************************/
-
-double  binomialCoeff(int n, int k) 
-{ 
-    double res=0.0;
-    res=lgammafn(n+1)-(lgammafn(k+1)+lgammafn(n-k+1));
-    return(exp(res)); 
-} 
+ 
 
 
 void biv_pois_call(double *corr,int *r, int *t, double *mean_i, double *mean_j,double *res)
@@ -3515,7 +3334,129 @@ static inline double log_add3_minus1(double a, double b, double c) {
     return logdiffexp_local(log_pos, 0.0);
 }
 /*******************************************************************************/
-/*  Prt  (ora ritorna LOG(Prt)) */
+/*
+ * Off-diagonal Poisson probability: exact positive single-series form.
+ *
+ * For r > t >= 0, write rho2=corr^2, d=1-rho2,
+ *   ai = mean_i/d, aj = mean_j/d,
+ *   x  = rho2*ai, y = x*aj, n = r-t.
+ * Then
+ *
+ * p_{r,t} = exp(-ai-aj) mean_i^r aj^t/t!
+ *           * sum_{s>=0} y^s/s! * 1F1~(n+1; r+s+1; x),
+ *
+ * where 1F1~(a;b;x)=1F1(a;b;x)/Gamma(b).
+ *
+ * This is algebraically equivalent to the former Prt/Pr0 formulas, but it
+ * contains only positive terms, removes the former double sum in Prt and the
+ * subtraction of nearly equal positive quantities.  Hence it also avoids the
+ * cancellation that could make logdiffexp_local() return -Inf in difficult
+ * off-diagonal cases.
+ */
+static inline double log_reg_1F1_offdiag(int a, int b, double x) {
+    const double log_gamma_b = (b < 255) ? fast_lgamma(b - 1) : lgammafn((double)b);
+
+    /* Primary evaluation. */
+    double h = hyperg((double)a, (double)b, x);
+    if (R_finite(h) && h > 0.0) {
+        return log(h) - log_gamma_b;
+    }
+
+    /* aprox_reg_1F1() already approximates the REGULARIZED 1F1. */
+    double ar = aprox_reg_1F1(a, b, x);
+    if (R_finite(ar) && ar > 0.0) {
+        return log(ar);
+    }
+
+    /* Last fallback: Kummer transformation
+     * 1F1(a;b;x)=exp(x) 1F1(b-a;b;-x). */
+    const int ak = b - a;
+    if (ak >= 0) {
+        double hk = hyperg((double)ak, (double)b, -x);
+        if (R_finite(hk) && hk > 0.0) {
+            return x + log(hk) - log_gamma_b;
+        }
+    }
+
+    return -INFINITY;
+}
+
+static double Prt_single(double corr, int r, int t,
+                         double mean_i, double mean_j) {
+    if (mean_i <= 0.0 || mean_j <= 0.0 || r < 0 || t < 0 || r <= t) {
+        return -INFINITY;
+    }
+
+    const double rho2 = R_pow(corr, 2);
+    const double one_minus_rho2 = 1.0 - rho2;
+    if (one_minus_rho2 <= 1e-15 || rho2 <= 0.0) return -INFINITY;
+
+    const double auxi = mean_i / one_minus_rho2;
+    const double auxj = mean_j / one_minus_rho2;
+    const double x = rho2 * auxi;
+    const int n = r - t;
+
+    /* y = rho2*auxi*auxj is used only through log(y), which avoids overflow. */
+    const double log_y = log(rho2) + log(auxi) + log(auxj);
+
+    /* A generous deterministic cap centred on the Bessel-like sqrt(y) scale.
+     * The actual exit is controlled by the relative positive-term tail below. */
+    double sqrt_y;
+    if (0.5 * log_y > log(50000.0)) sqrt_y = 50000.0;
+    else sqrt_y = exp(0.5 * log_y);
+
+    int max_iter = (int)ceil(4.0 * sqrt_y + 4.0 * (r + t + 1) + 100.0);
+    if (max_iter < 200) max_iter = 200;
+    if (max_iter > 50000) max_iter = 50000;
+
+    const double log_rel_tol = log(1e-13);
+    double log_sum = -INFINITY;
+    double prev_log_term = INFINITY;
+    int tail_small = 0;
+    bool converged = false;
+
+    for (int s = 0; s < max_iter; ++s) {
+        const int b = r + s + 1;
+        const double log_reg = log_reg_1F1_offdiag(n + 1, b, x);
+
+        if (log_reg == -INFINITY) {
+            /* Do not terminate on one special-function failure: a later b can
+             * still be evaluable.  Repeated failures trigger the legacy path. */
+            ++tail_small;
+            if (tail_small > 20 && s > 20) break;
+            continue;
+        }
+
+        const double log_term = s * log_y - fast_lgamma(s) + log_reg;
+        log_sum = (log_sum == -INFINITY) ? log_term : log_sum_exp(log_sum, log_term);
+
+        /* All summands are positive.  Once terms are decreasing and several
+         * consecutive terms are negligible relative to the accumulated sum,
+         * truncation is safe at the requested scale. */
+        if (s > 10 && log_term < prev_log_term && (log_term - log_sum) < log_rel_tol) {
+            ++tail_small;
+            if (tail_small >= 6) {
+                converged = true;
+                break;
+            }
+        } else {
+            tail_small = 0;
+        }
+        prev_log_term = log_term;
+    }
+
+    if (log_sum == -INFINITY || !converged) return -INFINITY;
+
+    const double log_base = -auxi - auxj
+                          + r * log(mean_i)
+                          + t * log(auxj)
+                          - fast_lgamma(t);
+    const double out = log_base + log_sum;
+    return R_finite(out) ? out : -INFINITY;
+}
+
+/*******************************************************************************/
+/*  Prt  (legacy exact representation; now used as numerical fallback) */
 /*******************************************************************************/
 double Prt(double corr, int r, int t, double mean_i, double mean_j) {
     if (mean_i <= 0.0 || mean_j <= 0.0 || r < 0 || t < 0 || r <= t) {
@@ -3547,6 +3488,24 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
     double prev_log_sum  = -INFINITY;
     double prev_log_sum1 = -INFINITY;
 
+    /*
+     * Exact-control-flow cache for the expensive special functions used in
+     * the first (m,k) sum.  Their arguments depend on s=m+k, so values are
+     * identical along each diagonal.  We keep the original nested loops,
+     * summation order and stopping rules unchanged and only reuse already
+     * computed function values.  igam() and hyperg() themselves are untouched.
+     *
+     * iter1<=1000 and iter2<=500 by estimate_iterations(), hence the largest
+     * offset used below is iter1+iter2+1 <= 1501.
+     */
+#define PRT_CACHE_MAX 1502
+    double igam_cache[PRT_CACHE_MAX];
+    double q1_cache[PRT_CACHE_MAX];
+    unsigned char igam_ready[PRT_CACHE_MAX];
+    unsigned char q1_ready[PRT_CACHE_MAX];
+    memset(igam_ready, 0, sizeof(igam_ready));
+    memset(q1_ready, 0, sizeof(q1_ready));
+
     for (int m = 0; m <= iter1; m++) {
         int tm = t + m;
         double log_gamma_tm = fast_lgamma(tm - 1);
@@ -3558,30 +3517,56 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
         int consecutive_small = 0;
 
         for (int k = 0; k <= iter2; k++) {
-            int cc = t + m + n + k + 1;
+            int ss = m + k;
+            int aa = t + ss + 1;
+            int cc = r + ss + 1;
+            int ig_idx = aa - t;  /* 1..iter1+iter2+1 */
             double log_gamma_cc = (cc < 255) ? fast_lgamma(cc - 1) : lgammafn(cc);
 
-            double log_igam = safe_log_igam_fast(1 + k + tm, auxj);
+            double log_igam;
+            if (ig_idx >= 0 && ig_idx < PRT_CACHE_MAX && igam_ready[ig_idx]) {
+                log_igam = igam_cache[ig_idx];
+            } else {
+                log_igam = safe_log_igam_fast(aa, auxj);
+                if (ig_idx >= 0 && ig_idx < PRT_CACHE_MAX) {
+                    igam_cache[ig_idx] = log_igam;
+                    igam_ready[ig_idx] = 1;
+                }
+            }
+
             if (log_igam == -INFINITY) {
                 consecutive_small++;
                 if (consecutive_small > 3) break;
                 continue;
             }
 
-            double hyper = hyperg(n, cc, rho2auxi);
             double log_q1;
-
-            if (R_finite(hyper) && hyper > 0.0) {
-                log_q1 = log(hyper) - log_gamma_cc;
+            if (ss >= 0 && ss < PRT_CACHE_MAX && q1_ready[ss]) {
+                log_q1 = q1_cache[ss];
             } else {
-                double approx = aprox_reg_1F1(n, cc, rho2auxi);
-                if (approx > 0.0 && R_finite(approx)) {
-                    log_q1 = log(approx) - log_gamma_cc;
+                double hyper = hyperg(n, cc, rho2auxi);
+
+                if (R_finite(hyper) && hyper > 0.0) {
+                    log_q1 = log(hyper) - log_gamma_cc;
                 } else {
-                    consecutive_small++;
-                    if (consecutive_small > 3) break;
-                    continue;
+                    double approx = aprox_reg_1F1(n, cc, rho2auxi);
+                    if (approx > 0.0 && R_finite(approx)) {
+                        log_q1 = log(approx) - log_gamma_cc;
+                    } else {
+                        log_q1 = -INFINITY;
+                    }
                 }
+
+                if (ss >= 0 && ss < PRT_CACHE_MAX) {
+                    q1_cache[ss] = log_q1;
+                    q1_ready[ss] = 1;
+                }
+            }
+
+            if (log_q1 == -INFINITY) {
+                consecutive_small++;
+                if (consecutive_small > 3) break;
+                continue;
             }
 
             double log_term = (k + m) * log_rho2_ratio
@@ -3606,7 +3591,7 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
             log_sum = (log_sum == -INFINITY) ? log_inner_sum : log_sum_exp(log_sum, log_inner_sum);
         }
 
-        // -------- seconda somma (term1) --------
+        // -------- seconda somma (term1), control flow unchanged --------
         int cc2 = tm + n + 1;
         double hyper2 = hyperg(n + 1, cc2, rho2auxi);
         double log_q2;
@@ -3622,7 +3607,19 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
             }
         }
 
-        double log_igam2 = safe_log_igam_fast(tm, auxj);
+        /* Reuse igam when the same (a, auxj) was already requested in the
+         * first sum; this does not change any summation or stopping decision. */
+        int ig2_idx = tm - t; /* m */
+        double log_igam2;
+        if (ig2_idx >= 0 && ig2_idx < PRT_CACHE_MAX && igam_ready[ig2_idx]) {
+            log_igam2 = igam_cache[ig2_idx];
+        } else {
+            log_igam2 = safe_log_igam_fast(tm, auxj);
+            if (ig2_idx >= 0 && ig2_idx < PRT_CACHE_MAX) {
+                igam_cache[ig2_idx] = log_igam2;
+                igam_ready[ig2_idx] = 1;
+            }
+        }
         if (log_igam2 == -INFINITY) continue;
 
         double log_term1 = m * log_rho2_ratio
@@ -3644,17 +3641,18 @@ double Prt(double corr, int r, int t, double mean_i, double mean_j) {
         prev_log_sum1 = log_sum1;
     }
 
-    // -------- finale in log: log_prt = log( exp(-auxi+log_sum1) - exp(-auxi+log_sum) ) --------
+#undef PRT_CACHE_MAX
+
+    // -------- finale in log: unchanged --------
     if (log_sum1 == -INFINITY) return -INFINITY;
 
     double a = -auxi + log_sum1;
     if (log_sum == -INFINITY) {
-        // secondo termine = 0
         return a;
     }
 
     double b = -auxi + log_sum;
-    return logdiffexp_local(a, b); // se a<=b -> -Inf (prt=0)
+    return logdiffexp_local(a, b);
 }
 /*******************************************************************************/
 /*  Prr  (ora ritorna LOG(Prr)) */
@@ -3669,6 +3667,8 @@ double Prr(double corr, int r, int t, double mean_i, double mean_j) {
 
     const double auxi = mean_i / one_minus_rho2;
     const double auxj = mean_j / one_minus_rho2;
+    const double rho2_auxi = rho2 * auxi;
+    const double rho2_auxj = rho2 * auxj;
 
     const double log_rho2 = log(rho2);
     const double log_one_minus_rho2 = log1p(-rho2);
@@ -3676,97 +3676,145 @@ double Prr(double corr, int r, int t, double mean_i, double mean_j) {
 
     const int iter1 = estimate_iterations(mean_scale, 600);
     const int iter2 = estimate_iterations(mean_scale, 300);
+    const int iter_collapsed = iter1 + iter2 - 1;
 
-    const double log_gamma_r = fast_lgamma(r - 1);
+    const double log_gamma_r = fast_lgamma(r - 1); /* log Gamma(r) */
+    const double log_gamma_r1 = fast_lgamma(r);    /* log Gamma(r+1) */
 
-    double log_sum  = -INFINITY; // (inner_sum)
-    double log_sum1 = -INFINITY; // term1
-    double log_sum2 = -INFINITY; // term2+term3
-    double prev_log_sum1 = -INFINITY, prev_log_sum2 = -INFINITY;
+    double log_sum  = -INFINITY; /* collapsed former double sum */
+    double log_sum1 = -INFINITY; /* term1 */
+    double log_sum2 = -INFINITY; /* term2+term3 */
 
-    for (int k = 0; k < iter1; k++) {
-        double log_gamma_k1 = fast_lgamma(k);
-        double log_gamma_rk = (r + k < 255) ? fast_lgamma(r + k - 1) : lgammafn(r + k);
+    /*
+     * Cache only repeated requests already present in opt1.
+     * In the collapsed series, safe_log_igam_fast() is evaluated at
+     *   a = r + ss + 1, x = auxi/auxj.
+     * The following one-dimensional series asks again for
+     *   a = r + k,      x = auxi/auxj.
+     * Thus k>=1 reuses exactly the value computed at ss=k-1 whenever
+     * that collapsed-series entry was reached.  igam() itself, all loop
+     * bounds, summation order, and convergence tests are unchanged.
+     */
+#define PRR_AUX_CACHE_MAX 902
+    double auxi_logigam_cache[PRR_AUX_CACHE_MAX];
+    double auxj_logigam_cache[PRR_AUX_CACHE_MAX];
+    int aux_cache_max = 0; /* largest valid index a-r; index 0 is uncached */
 
-        double log_igam_auxi = safe_log_igam_fast(r + k, auxi);
-        double log_igam_auxj = safe_log_igam_fast(r + k, auxj);
-        if (log_igam_auxi == -INFINITY || log_igam_auxj == -INFINITY) break;
+    {
+        int stable_count = 0;
+        int consecutive_small = 0;
 
-        // ---- inner sum su m ----
-        double log_inner_sum = -INFINITY;
-        int consecutive_fails = 0;
+        for (int ss = 0; ss < iter_collapsed; ++ss) {
+            const int upper_m = (ss < iter2) ? ss : (iter2 - 1);
+            const int lower_m = (ss >= iter1) ? (ss - iter1 + 1) : 0;
+            if (lower_m > upper_m) continue;
 
-        for (int m = 0; m < iter2; m++) {
-            double log_igam_i = safe_log_igam_fast(r + k + m + 1, auxi);
-            double log_igam_j = safe_log_igam_fast(r + k + m + 1, auxj);
+            const double log_cum_upper =
+                ((r + upper_m) < 255 ? fast_lgamma(r + upper_m) : lgammafn(r + upper_m + 1.0))
+                - log_gamma_r1
+                - ((upper_m < 255) ? fast_lgamma(upper_m) : lgammafn(upper_m + 1.0));
 
-            if (log_igam_i == -INFINITY || log_igam_j == -INFINITY) {
-                consecutive_fails++;
-                if (consecutive_fails > 5) break;
-                continue;
+            double log_coeff = log_cum_upper;
+            if (lower_m > 0) {
+                const int lm1 = lower_m - 1;
+                const double log_cum_lower =
+                    ((r + lm1) < 255 ? fast_lgamma(r + lm1) : lgammafn(r + lm1 + 1.0))
+                    - log_gamma_r1
+                    - ((lm1 < 255) ? fast_lgamma(lm1) : lgammafn(lm1 + 1.0));
+                log_coeff = logdiffexp_local(log_cum_upper, log_cum_lower);
+                if (log_coeff == -INFINITY) continue;
             }
 
-            double log_gamma_rm = (r + m < 255) ? fast_lgamma(r + m - 1) : lgammafn(r + m);
-            double log_gamma_m  = fast_lgamma(m);
+            const int aa = r + ss + 1;
+            const double log_igam_i = safe_log_igam_fast(aa, auxi);
+            const double log_igam_j = safe_log_igam_fast(aa, auxj);
 
-            double log_term = log_one_minus_rho2 + (k + m) * log_rho2
-                            + log_gamma_rm - log_gamma_r - log_gamma_m
-                            + log_igam_i + log_igam_j;
-
-            if (log_term < -500) {
-                consecutive_fails++;
-                if (consecutive_fails > 8) break;
-                continue;
+            const int cache_idx = ss + 1;
+            if (cache_idx < PRR_AUX_CACHE_MAX) {
+                auxi_logigam_cache[cache_idx] = log_igam_i;
+                auxj_logigam_cache[cache_idx] = log_igam_j;
+                aux_cache_max = cache_idx;
             }
 
-            consecutive_fails = 0;
-            log_inner_sum = (log_inner_sum == -INFINITY) ? log_term : log_sum_exp(log_inner_sum, log_term);
+            /* For fixed x, once both tails underflow at increasing a they
+             * cannot recover at larger a. */
+            if (log_igam_i == -INFINITY || log_igam_j == -INFINITY) break;
+
+            const double log_term = log_one_minus_rho2
+                                  + ss * log_rho2
+                                  + log_coeff
+                                  + log_igam_i + log_igam_j;
+
+            if (log_term < -500.0) {
+                ++consecutive_small;
+                if (consecutive_small > 8) break;
+                continue;
+            }
+            consecutive_small = 0;
+
+            log_sum = (log_sum == -INFINITY) ? log_term : log_sum_exp(log_sum, log_term);
+
+            if (ss > 8 && (log_term - log_sum) < -29.933606208922594) {
+                ++stable_count;
+                if (stable_count >= 4) break;
+            } else {
+                stable_count = 0;
+            }
         }
-
-        if (log_inner_sum != -INFINITY) {
-            log_sum = (log_sum == -INFINITY) ? log_inner_sum : log_sum_exp(log_sum, log_inner_sum);
-        }
-
-        // ---- term1 ----
-        double log_term1 = k * log_rho2 + log_gamma_rk + log_igam_auxi + log_igam_auxj
-                         - log_gamma_k1 - log_gamma_r;
-
-        if (log_term1 >= -500) {
-            log_sum1 = (log_sum1 == -INFINITY) ? log_term1 : log_sum_exp(log_sum1, log_term1);
-        }
-
-        // ---- term2 + term3 ----
-        double rho2_auxi = rho2 * auxi;
-        double rho2_auxj = rho2 * auxj;
-
-        double log_igam_rho_auxi = safe_log_igam_fast(r + k, rho2_auxi);
-        double log_igam_rho_auxj = safe_log_igam_fast(r + k, rho2_auxj);
-
-        if (log_igam_rho_auxi != -INFINITY && log_igam_rho_auxj != -INFINITY) {
-            double log_term2 = -mean_i - r * log_rho2 + log_gamma_rk + log_igam_rho_auxi
-                             + log_igam_auxj - log_gamma_k1 - log_gamma_r;
-
-            double log_term3 = -mean_j - r * log_rho2 + log_gamma_rk + log_igam_auxi
-                             + log_igam_rho_auxj - log_gamma_k1 - log_gamma_r;
-
-            double log_terms23 = log_sum_exp(log_term2, log_term3);
-            log_sum2 = (log_sum2 == -INFINITY) ? log_terms23 : log_sum_exp(log_sum2, log_terms23);
-        }
-
-        if (k > 3 &&
-            check_ultra_fast_convergence(log_sum1, prev_log_sum1, mean_scale, k) &&
-            check_ultra_fast_convergence(log_sum2, prev_log_sum2, mean_scale, k)) {
-            break;
-        }
-        prev_log_sum1 = log_sum1;
-        prev_log_sum2 = log_sum2;
     }
 
-    // prr = exp(r*log_one_minus_rho2) * ( -exp(log_sum1) + exp(log_sum2) + exp(log_sum) )
-    const double log_factor = r * log_one_minus_rho2;
+    {
+        double prev_log_sum1 = -INFINITY, prev_log_sum2 = -INFINITY;
 
-    // log_body = log( exp(log_sum2) + exp(log_sum) - exp(log_sum1) )
-    double log_body = log_add_add_sub(log_sum2, log_sum, log_sum1);
+        for (int k = 0; k < iter1; k++) {
+            const double log_gamma_k1 = fast_lgamma(k);
+            const double log_gamma_rk = (r + k < 255) ? fast_lgamma(r + k - 1) : lgammafn(r + k);
+
+            double log_igam_auxi, log_igam_auxj;
+            if (k >= 1 && k <= aux_cache_max) {
+                log_igam_auxi = auxi_logigam_cache[k];
+                log_igam_auxj = auxj_logigam_cache[k];
+            } else {
+                log_igam_auxi = safe_log_igam_fast(r + k, auxi);
+                log_igam_auxj = safe_log_igam_fast(r + k, auxj);
+            }
+            if (log_igam_auxi == -INFINITY || log_igam_auxj == -INFINITY) break;
+
+            const double log_term1 = k * log_rho2 + log_gamma_rk + log_igam_auxi + log_igam_auxj
+                                   - log_gamma_k1 - log_gamma_r;
+
+            if (log_term1 >= -500.0) {
+                log_sum1 = (log_sum1 == -INFINITY) ? log_term1 : log_sum_exp(log_sum1, log_term1);
+            }
+
+            const double log_igam_rho_auxi = safe_log_igam_fast(r + k, rho2_auxi);
+            const double log_igam_rho_auxj = safe_log_igam_fast(r + k, rho2_auxj);
+
+            if (log_igam_rho_auxi != -INFINITY && log_igam_rho_auxj != -INFINITY) {
+                const double log_term2 = -mean_i - r * log_rho2 + log_gamma_rk + log_igam_rho_auxi
+                                       + log_igam_auxj - log_gamma_k1 - log_gamma_r;
+
+                const double log_term3 = -mean_j - r * log_rho2 + log_gamma_rk + log_igam_auxi
+                                       + log_igam_rho_auxj - log_gamma_k1 - log_gamma_r;
+
+                const double log_terms23 = log_sum_exp(log_term2, log_term3);
+                log_sum2 = (log_sum2 == -INFINITY) ? log_terms23 : log_sum_exp(log_sum2, log_terms23);
+            }
+
+            if (k > 3 &&
+                check_ultra_fast_convergence(log_sum1, prev_log_sum1, mean_scale, k) &&
+                check_ultra_fast_convergence(log_sum2, prev_log_sum2, mean_scale, k)) {
+                break;
+            }
+            prev_log_sum1 = log_sum1;
+            prev_log_sum2 = log_sum2;
+        }
+    }
+
+#undef PRR_AUX_CACHE_MAX
+
+    const double log_factor = r * log_one_minus_rho2;
+    const double log_body = log_add_add_sub(log_sum2, log_sum, log_sum1);
     if (log_body == -INFINITY) return -INFINITY;
 
     return log_factor + log_body;
@@ -3934,13 +3982,21 @@ double biv_Poisson(double corr, int r, int t, double mean_i, double mean_j) {
             logdens = Prr(corr, r, r, mean_i, mean_j);
         }
     } else {
-        if (r == 0 && t > 0) {
-            logdens = Pr0(corr, t, r, mean_j, mean_i);
-        } else if (r > 0 && t == 0) {
-            logdens = Pr0(corr, r, t, mean_i, mean_j);
-        } else if (r > 0 && t > 0) {
-            if (r > t) logdens = Prt(corr, r, t, mean_i, mean_j);
-            else       logdens = Prt(corr, t, r, mean_j, mean_i);
+        /* Exact positive single-series representation for every off-diagonal
+         * case.  It unifies the former Pr0 and Prt branches.  The legacy
+         * formulas are retained below as a numerical fallback only. */
+        if (r > t) {
+            logdens = Prt_single(corr, r, t, mean_i, mean_j);
+            if (!R_finite(logdens)) {
+                logdens = (t == 0) ? Pr0(corr, r, t, mean_i, mean_j)
+                                   : Prt(corr, r, t, mean_i, mean_j);
+            }
+        } else {
+            logdens = Prt_single(corr, t, r, mean_j, mean_i);
+            if (!R_finite(logdens)) {
+                logdens = (r == 0) ? Pr0(corr, t, r, mean_j, mean_i)
+                                   : Prt(corr, t, r, mean_j, mean_i);
+            }
         }
     }
 
@@ -4170,29 +4226,6 @@ static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z) {
 #ifndef PG_INDEP_TOL
 #define PG_INDEP_TOL 1e-8
 #endif
-/*
-static R_INLINE int is_integer_pg(double x)
-{
-    if (!R_FINITE(x)) return 0;
-    const double y = nearbyint(x);
-    return fabs(x - y) <= 1e-12 * fmax2(1.0, fabs(x));
-}
-
-static R_INLINE double clamp_prob_pg(double p)
-{
-    if (!R_FINITE(p) || p <= 0.0) return PG_PROB_MIN;
-    if (p > 1.0) return 1.0;
-    return p;
-}
-
-static R_INLINE double clamp_corr_pg(double rho)
-{
-    if (!R_FINITE(rho)) return R_NaN;
-    if (rho >=  1.0) return  1.0 - PG_RHO_EPS;
-    if (rho <= -1.0) return -1.0 + PG_RHO_EPS;
-    return rho;
-}*/
-
 /* 2F1(a1, -m; c; z), m >= 0 integer. Standard, not regularized. */
 static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z)
 {
@@ -4234,578 +4267,1800 @@ static R_INLINE double hyp2F1_trunc_recur_1(double a1, int m, double c, double z
 /* Case r = t = 0                                                     */
 /* ------------------------------------------------------------------ */
 
-// ---------------------------------------------------------------------------
-// Versión optimizada de PG00 con truncamiento si a es entero
-double PG00(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    // Pre-cálculo de constantes
-    const double rho2 = corr * corr;
-    const double beta_i = a / mean_i;
-    const double beta_j = a / mean_j;
-    const double beta_ij = beta_i * beta_j;
-    const double auxi = 1.0 / (1.0 + beta_i);
-    const double auxj = 1.0 / (1.0 + beta_j);
-    const double auxij = auxi * auxj;
+/* Corrected PEM bivariate probabilities, Theorem 5.2.
+ *
+ * The implementation below follows the corrected formulas directly.
+ * The triple sums in the diagonal and off-diagonal cases are replaced by
+ * their exact diagonal reductions:
+ *
+ *   sum_{l=0}^s (n)_l/l! = (n+1)_s/s!,
+ *   sum_{l=0}^s (c)_l/l! = (c+1)_s/s!.
+ *
+ * No special-function implementation is modified.  hypergeo() is the
+ * ordinary Gauss 2F1, hence Gamma(c)^(-1) factors from the regularized
+ * functions are included explicitly in the logarithmic coefficients.
+ */
 
-    // Logs precomputados
-    const double log_beta_ij = log(beta_ij);
-    const double log_rho2 = log(rho2);
-    const double log_auxij = log(auxij);
-    const double log_p1mrho2 = log1p(-rho2);
+/* Series limits are defined with the PEM correlation helpers above. */
 
-    // Parámetros de las 2F1
-    const double neg_inv_beta_i = -1.0 / beta_i;
-    const double neg_inv_beta_j = -1.0 / beta_j;
-    const double log_gamma_a = lgammafn(a);
-    const double a_plus_1 = a + 1.0;
-
-    // Términos constantes del resultado
-    const double auxi_beta_i_pow_a = R_pow(auxi * beta_i, a);
-    const double auxj_beta_j_pow_a = R_pow(auxj * beta_j, a);
-
-    double sum = 0.0, prev_sum = 0.0;
-
-    const int iter1 = 600, iter2 = 600;
-    const double convergence_threshold = 1e-30;
-    const double term_threshold = 1e-30;
-
-    const int a_is_int = is_integer(a);
-
-    for (int k = 0; k < iter1; ++k) {
-        const int k_plus_2 = k + 2;
-        const double log_gamma_k_plus_2 = lgammafn(k_plus_2);
-
-        double local_sum = 0.0;
-
-        for (int l = 0; l < iter2; ++l) {
-            const int l_plus_1 = l + 1;
-            const int k_plus_l = k + l;
-            const int k_plus_l_plus_a = k_plus_l + a;
-            const int k_plus_l_plus_a_plus_1 = k_plus_l_plus_a + 1;
-            const double l_plus_a = l + a;
-            const double l_plus_a_minus_1 = l_plus_a - 1.0;
-            const double one_minus_l_plus_a = 1.0 - l_plus_a; // = -m si a es entero
-
-            // Parte logarítmica común
-            const double log_aa = l_plus_a_minus_1 * log_beta_ij +
-                                  k_plus_l * log_rho2 +
-                                  k_plus_l_plus_a * log_auxij +
-                                  a_plus_1 * log_p1mrho2;
-
-            // bb ya incluye el factor 1/Gamma(k+2)^2 (dos hipergeométricas)
-            const double bb = 2.0 * lgammafn(k_plus_l_plus_a_plus_1) -
-                              2.0 * log_gamma_k_plus_2 -
-                              lgammafn(l_plus_1) -
-                              log_gamma_a -
-                              lgammafn(l_plus_a);
-
-            // Evaluación de las 2F1
-            double hg1, hg2;
-            if (a_is_int) {
-                // b = 1 - (l+a) = -m  con m = l + a - 1
-                int m = (int)llround(l + a - 1.0);
-                if (m < 0) continue;
-                // Usamos la 2F1 estándar truncada por recurrencia (más estable)
-                hg1 = hyp2F1_trunc_recur_1(1.0, m, (double)k_plus_2, neg_inv_beta_i);
-                hg2 = hyp2F1_trunc_recur_1(1.0, m, (double)k_plus_2, neg_inv_beta_j);
-            } else {
-                // Caso general: 2F1 estándar de tu implementación
-                hg1 = hypergeo(1.0, one_minus_l_plus_a, k_plus_2, neg_inv_beta_i);
-                hg2 = hypergeo(1.0, one_minus_l_plus_a, k_plus_2, neg_inv_beta_j);
-            }
-
-            if (!R_finite(hg1) || !R_finite(hg2)) continue;
-
-            const double term = exp(log_aa + bb) * hg1 * hg2;
-
-            if (!R_finite(term) || fabs(term) < term_threshold) break;
-
-            local_sum += term;
-        }
-
-        sum += local_sum;
-
-        if (fabs(sum - prev_sum) < convergence_threshold) break;
-        prev_sum = sum;
-    }
-
-    const double p00 = -1.0 + auxi_beta_i_pow_a + auxj_beta_j_pow_a + sum;
-    return (p00 < 1e-320) ? 1e-320 : p00;
-}
-
-double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    // Pre-calcolo di tutte le costanti
-    const double rho2 = corr * corr;
-    const double beta_i = a / mean_i;
-    const double beta_j = a / mean_j;
-    const double beta_ij = beta_i * beta_j;
-    const double bmi = -1.0 / beta_i;
-    const double bmj = -1.0 / beta_j;
-    const double auxi = 1.0 / (1.0 + beta_i);
-    const double auxj = 1.0 / (1.0 + beta_j);
-    const double auxij = auxi * auxj;
-    const double bri = 1.0 + beta_i - rho2;
-    const double brj = 1.0 + beta_j - rho2;
-    const double fji = brj * beta_i * auxij;
-    const double fij = bri * beta_j * auxij;
-    const double ra = r + a;
-    
-    // Logaritmi pre-calcolati
-    const double log_rho2 = log(rho2);
-    const double log_beta_ij = log(beta_ij);
-    const double log_auxij = log(auxij);
-    const double log1mrho2 = log1p(-rho2);
-    const double r2br  = -rho2 / bri;
-    const double r2brj = -rho2 / brj;
-    
-    // Costanti per i calcoli logaritmici
-    const double log_gamma_r = lgammafn(r);
-    const double log_gamma_a = lgammafn(a);
-    const double ra_plus_1 = ra + 1.0;
-    const double beta_ij_auxij = beta_ij * auxij;
-    const double inv_beta_ij_auxij = 1.0 / beta_ij_auxij;
-    const double inv_fij = 1.0 / fij;
-    const double inv_fji = 1.0 / fji;
-    
-    const int iter1 = 600, iter2 = 500, iter3 = 400;
-    const double convergence_threshold = 1e-30;
-    const double term_threshold = 1e-30;
-    
-    double sum = 0.0, sum1 = 0.0, sum2 = 0.0;
-    double prev_sum1 = 0.0, prev_sum2 = 0.0;
-
-    // Activamos truncamiento sólo si a es entero
-    const int a_is_int = is_integer(a);
-    const int a_int    = a_is_int ? (int)llround(a) : 0;
-    
-    for (int k = 0; k < iter1; ++k) {
-        const int mm = r + k + 1;
-        const int r_plus_k = r + k;
-        const double log_gamma_r_plus_k = lgammafn(r_plus_k);
-        const double log_gamma_mm = lgammafn(mm);
-        
-        double local_sum = 0.0, local_sum1 = 0.0, local_sum2 = 0.0;
-        
-        for (int l1 = 0; l1 < iter2; ++l1) {
-            const double ff = 1.0 - l1 - a;           // = -m si a entero
-            const int    mpoly = a_is_int ? (l1 + a_int - 1) : -1;
-            const int kl1 = k + l1;
-            const int l1_plus_1 = l1 + 1;
-            const double l1_plus_a = l1 + a;
-            const double l1_plus_a_minus_1 = l1_plus_a - 1.0;
-            const double one_minus_l1_plus_a = 1.0 - l1_plus_a;
-            
-            // Pre-calcolo per il loop interno
-            const double log_gamma_l1_plus_1 = lgammafn(l1_plus_1);
-            const double log_gamma_l1_plus_a = lgammafn(l1_plus_a);
-            
-            // Calcolo del loop più interno (sum)
-            double inner_sum = 0.0;
-            for (int l = 0; l < iter3; ++l) {
-                const int mml1 = mm + l + 1;      // "c" de 2F1 nel blocco interno
-                const int kll1 = k + l + l1;
-                const int r_plus_l = r + l;
-                
-                const double log_aa = l1_plus_a_minus_1 * log_beta_ij + 
-                                      kll1 * log_rho2 + 
-                                      (ra + kll1) * log_auxij + 
-                                      ra_plus_1 * log1mrho2;
-                
-                const double bb = lgammafn(r_plus_l) + 2.0 * lgammafn(mm + l + l1 + a) - 
-                                  2.0 * lgammafn(mml1) - lgammafn(l + 1) - log_gamma_l1_plus_1 - 
-                                  log_gamma_r - log_gamma_a - log_gamma_l1_plus_a;
-                
-                double hg1, hg2;
-                if (a_is_int && mpoly >= 0) {
-                    // 2F1(1, -m; mml1; z) estándar (NO regularizada)
-                    hg1 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mml1, bmi);
-                    hg2 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mml1, bmj);
-                } else {
-                    hg1 = hypergeo(1.0, one_minus_l1_plus_a, mml1, bmi);
-                    hg2 = hypergeo(1.0, ff,                 mml1, bmj);
-                }
-                
-                if (!R_finite(hg1) || !R_finite(hg2)) break;
-                
-                const double term = exp(log_aa + bb) * hg1 * hg2;
-                if (fabs(term) < term_threshold || !R_finite(term)) break;
-                inner_sum += term;
-            }
-            local_sum += inner_sum;
-            
-            // Calcolo dei termini per sum1 e sum2
-            const double log_aa1 = l1_plus_a * log_beta_ij + 
-                                   kl1 * log_rho2 + 
-                                   (ra + kl1) * log_auxij + 
-                                   ra * log1mrho2;
-            
-            const double bb1_log = log_gamma_r_plus_k + 2.0 * lgammafn(ra + kl1) - 
-                                   2.0 * log_gamma_mm - lgammafn(k + 1) - 
-                                   log_gamma_l1_plus_1 - log_gamma_r - 
-                                   log_gamma_a - log_gamma_l1_plus_a;
-            
-            double h1, h2, h3, h4;
-            if (a_is_int && mpoly >= 0) {
-                // Todas aquí son 2F1(1, -m; mm; z)
-                h1 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, bmi);
-                h2 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, bmj);
-                h3 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, r2br);
-                h4 = hyp2F1_trunc_recur_1(1.0, mpoly, (double)mm, r2brj);
-            } else {
-                h1 = hypergeo(1.0, ff, mm, bmi);
-                h2 = hypergeo(1.0, ff, mm, bmj);
-                h3 = hypergeo(1.0, ff, mm, r2br);
-                h4 = hypergeo(1.0, ff, mm, r2brj);
-            }
-            
-            if (!R_finite(h1) || !R_finite(h2) || !R_finite(h3) || !R_finite(h4)) break;
-            
-            const double aa1_bb1 = exp(log_aa1 + bb1_log);
-            
-            const double term1 = aa1_bb1 * h1 * h2 * inv_beta_ij_auxij;
-            const double term2 = aa1_bb1 * h3 * h2 * inv_fij;
-            const double term3 = aa1_bb1 * h1 * h4 * inv_fji;
-            
-            if (fabs(term1) < term_threshold || fabs(term2) < term_threshold || 
-                fabs(term3) < term_threshold) break;
-            
-            local_sum1 += term1;
-            local_sum2 += term2 + term3;
-        }
-        
-        sum  += local_sum;
-        sum1 += local_sum1;
-        sum2 += local_sum2;
-        
-        // Controllo convergenza ottimizzato
-        if (fabs(sum1 - prev_sum1) < convergence_threshold && 
-            fabs(sum2 - prev_sum2) < convergence_threshold) break;
-        
-        prev_sum1 = sum1;
-        prev_sum2 = sum2;
-    }
-    
-    const double prr = -sum1 + sum2 + sum;
-    return (prr < 1e-320) ? 1e-320 : prr;
-}
-
-double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    const double rho2 = corr * corr;
-    const double beta_i = a / mean_i;
-    const double beta_j = a / mean_j;
-    const double auxi = 1.0 / (1.0 + beta_i);
-    const double auxj = 1.0 / (1.0 + beta_j);
-    const double auxij = auxi * auxj;
-    const double brho = beta_i - rho2;
-
-    const int n = r - t;
-    const double an = a + n;
-    const double rb = -rho2 / (1.0 + brho);
-    const double ib = -1.0 / beta_j;
-
-    const double beta_i_pow_a = R_pow(beta_i, a);
-    const double auxi_pow_na  = R_pow(auxi, n + a);
-    const double aux1 = beta_i_pow_a * auxi_pow_na *
-                        exp(lgammafn(n + a) - lgammafn(n + 1) - lgammafn(a));
-
-    double sum1 = 0.0;
-    const int iter1 = 700;
-    const int iter2 = 500;
-
-    const int a_is_int = is_integer(a);
-    const int a_int    = a_is_int ? (int)llround(a) : 0;
-
-    for (int l = 0; l < iter1; l++) {
-        const int q  = l + 1;
-        const int nq = n + q;
-
-        for (int l1 = 0; l1 < iter2; l1++) {
-            const int ii  = l + l1;
-            const double l1a = l1 + a;
-            const int cc  = ii + (int)a;
-
-            const double beta_i_l1a   = R_pow(beta_i, l1a);
-            const double beta_j_l1a_1 = R_pow(beta_j, l1a - 1.0);
-            const double rho2_pow_ii  = R_pow(rho2, ii);
-            const double auxij_pow_cc = R_pow(auxij, cc);
-
-            const double aa = beta_i_l1a * beta_j_l1a_1 * rho2_pow_ii *
-                              pow1p(-rho2, an) * auxij_pow_cc * pow1p(brho, -n);
-
-            const double bb = lgammafn(n + cc) + lgammafn(cc + 1) -
-                              lgammafn(nq) - lgammafn(q + 1) -
-                              lgammafn(l1 + 1) - lgammafn(a) - lgammafn(l1a);
-
-            double hg1, hg2;
-            if (a_is_int) {
-                // b = 1 - l1a = -m  -> m = l1 + a - 1
-                const int m = l1 + a_int - 1;
-                if (m < 0) continue;
-
-                // Ambas 2F1 son truncadas (2F1 estándar)
-                // hg1: 2F1(n, 1-l1a; nq; rb) = 2F1(n, -m; nq; rb)
-                hg1 = hyp2F1_trunc_recur_1((double)n, m, (double)nq, rb);
-                // hg2: 2F1(1, 1-l1a; q+1; ib) = 2F1(1, -m; q+1; ib)
-                hg2 = hyp2F1_trunc_recur_1(1.0,       m, (double)(q + 1), ib);
-            } else {
-                // Caso general: usa hypergeo estándar
-                hg1 = hypergeo((double)n, 1.0 - l1a, (double)nq, rb);
-                hg2 = hypergeo(1.0,        1.0 - l1a, (double)(q + 1), ib);
-            }
-
-            const double term1 = aa * hg1 * hg2 * exp(bb);
-            if (fabs(term1) < 1e-30 || !R_finite(term1))
-                break;
-
-            sum1 += term1;
-        }
-    }
-
-    double pr0 = aux1 - sum1;
-    if (pr0 < 1e-320) pr0 = 1e-320;
-    return pr0;
-}
-
-double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    // Pre-calcolo delle costanti (invarianti)
-    const double rho2 = corr * corr;  // Sostituito R_pow(corr, 2)
-    const double beta_i = a / mean_i;
-    const double beta_j = a / mean_j;
-    const double brho = beta_i - rho2;
-    const double auxi = 1.0 / (beta_i + 1.0);
-    const double auxj = 1.0 / (beta_j + 1.0);
-    const double auxij = auxi * auxj;
-    const double rtrho = -rho2 / (1.0 + brho);
-    const double mbj = -1.0 / beta_j;
-    
-    // Costanti derivate
-    const int n = r - t;
-    const int s = n + 1;
-    const int tna = t + n + a;
-    const double neg_rho2 = -rho2;
-    
-    // Pre-calcolo delle potenze costanti
-    const double pow_neg_rho2_tna = pow(1.0 + neg_rho2, tna);
-    const double pow_brho_neg_n = pow(1.0 + brho, -n);
-    const double pow_brho_neg_s = pow(1.0 + brho, -s);
-    
-    // Pre-calcolo logaritmi delle costanti
-    const double log_gamma_t = lgamma(t);
-    const double log_gamma_a = lgamma(a);
-    
-    // Tabelle di lookup per potenze frequenti
-    double *pow_rho2_table = (double*)malloc(1500 * sizeof(double));
-    double *pow_beta_i_table = (double*)malloc(1000 * sizeof(double));
-    double *pow_auxij_table = (double*)malloc(2000 * sizeof(double));
-    
-    // Inizializzazione tabelle
-    pow_rho2_table[0] = 1.0;
-    for (int i = 1; i < 1500; i++) {
-        pow_rho2_table[i] = pow_rho2_table[i-1] * rho2;
-    }
-    
-    pow_beta_i_table[0] = 1.0;
-    for (int i = 1; i < 1000; i++) {
-        pow_beta_i_table[i] = pow_beta_i_table[i-1] * beta_i;
-    }
-    
-    pow_auxij_table[0] = 1.0;
-    for (int i = 1; i < 2000; i++) {
-        pow_auxij_table[i] = pow_auxij_table[i-1] * auxij;
-    }
-    
-    double sum1 = 0.0, sum2 = 0.0;
-    
-    // Convergenza adattiva più aggressiva
-    const double term_threshold = 1e-28;
-    const double relative_threshold = 1e-12;
-    
-    // Iterazioni dinamiche basate sui parametri
-    int max_iter1 = (int)(200 + 50 * log(1.0 + fabs(corr)));
-    int max_iter2 = (int)(150 + 30 * log(1.0 + a));
-    int max_iter3 = (int)(100 + 20 * log(1.0 + mean_i + mean_j));
-    
-    for (int l = 0; l < max_iter1; l++) {
-        const int tl = t + l;
-        const int u = tl;
-        const int u1 = u + 1;
-        const int us = u + s;
-        const int f = l + 1;
-        
-        // Cache per logaritmi
-        const double log_gamma_tl = lgamma(tl);
-        const double log_gamma_f = lgamma(f);
-        
-        double local_sum1 = 0.0, local_sum2 = 0.0;
-        double prev_local_sum1 = 0.0, prev_local_sum2 = 0.0;
-        
-        for (int l1 = 0; l1 < max_iter2; l1++) {
-            const double jj = l1 + a;
-            const double jj1 = 1.0 - jj;
-            const int mm = u + jj;
-            const int ll1 = l + l1;
-            const int d = l1 + 1;
-            
-            // Uso delle tabelle pre-calcolate
-            const int jj_int = (int)jj;
-            const double pow_beta_i_jj = (jj_int < 1000) ? pow_beta_i_table[jj_int] : pow(beta_i, jj);
-            const double pow_beta_j_jj_minus_1 = pow(beta_j, jj - 1.0);
-            const double pow_beta_j_neg_jj1 = pow(beta_j, -jj1);
-            const double pow_rho2_ll1 = (ll1 < 1500) ? pow_rho2_table[ll1] : pow(rho2, ll1);
-            
-            const double log_gamma_d = lgamma(d);
-            const double log_gamma_jj = lgamma(jj);
-            
-            // Calcolo sum1 con early termination
-            double inner_sum1 = 0.0;
-            for (int k = 0; k < max_iter3; k++) {
-                const int cc = u + k;
-                const int ii = cc + n;
-                const int cc_jj = cc + jj;
-                
-                const double pow_rho2_k = (k < 1500) ? pow_rho2_table[k] : pow(rho2, k);
-                const double pow_rho2_k_ll1 = pow_rho2_ll1 * pow_rho2_k;
-                const int auxij_index = cc_jj;
-                const double pow_auxij_cc_jj = (auxij_index < 2000) ? pow_auxij_table[auxij_index] : pow(auxij, auxij_index);
-                
-                const double aa = pow_beta_i_jj * pow_beta_j_jj_minus_1 *
-                                pow_rho2_k_ll1 * pow_neg_rho2_tna *
-                                pow_auxij_cc_jj * pow_brho_neg_n;
-                
-                const double bb = log_gamma_tl + lgamma(ii + jj) + lgamma(cc + jj + 1) -
-                                lgamma(ii + 1) - lgamma(cc + 2) - log_gamma_d -
-                                log_gamma_f - log_gamma_t - log_gamma_a - log_gamma_jj;
-                
-                // Controllo overflow prima del calcolo
-                if (bb > 700.0) break;
-                
-                const double hyp1 = hypergeo(n, jj1, ii + 1, rtrho);
-                const double hyp2 = hypergeo(1, jj1, cc + 2, mbj);
-                
-                const double term1 = aa * hyp1 * hyp2 * exp(bb);
-                
-                // Early termination più aggressiva
-                if (fabs(term1) < term_threshold || !isfinite(term1)) break;
-                if (k > 20 && fabs(term1) < fabs(inner_sum1) * relative_threshold) break;
-                
-                inner_sum1 += term1;
-            }
-            local_sum1 += inner_sum1;
-            
-            // Calcolo sum2
-            const int mm_minus_1 = mm - 1;
-            const double pow_auxij_mm_minus_1 = (mm_minus_1 < 2000) ? pow_auxij_table[mm_minus_1] : pow(auxij, mm_minus_1);
-            
-            const double aa1 = pow_beta_i_jj * pow_beta_j_neg_jj1 *
-                             pow_rho2_ll1 * pow_neg_rho2_tna *
-                             pow_auxij_mm_minus_1 * pow_brho_neg_s;
-            
-            const double bb1 = log_gamma_tl + lgamma(n + mm) + lgamma(mm) -
-                             lgamma(us) - lgamma(u1) - log_gamma_d -
-                             log_gamma_f - log_gamma_t - log_gamma_a - log_gamma_jj;
-            
-            if (bb1 <= 700.0) {  // Controllo overflow
-                const double hyp3 = hypergeo(s, jj1, us, rtrho);
-                const double hyp4 = hypergeo(1, jj1, u1, mbj);
-                
-                const double term2 = aa1 * hyp3 * hyp4 * exp(bb1);
-                
-                if (isfinite(term2) && fabs(term2) >= term_threshold) {
-                    local_sum2 += term2;
-                }
-            }
-            
-            // Controllo convergenza del loop interno
-            if (l1 > 50 && 
-                fabs(local_sum1 - prev_local_sum1) < fabs(local_sum1) * relative_threshold &&
-                fabs(local_sum2 - prev_local_sum2) < fabs(local_sum2) * relative_threshold) {
-                break;
-            }
-            prev_local_sum1 = local_sum1;
-            prev_local_sum2 = local_sum2;
-        }
-        
-        sum1 += local_sum1;
-        sum2 += local_sum2;
-        
-        // Controllo convergenza del loop esterno
-        if (l > 20 && 
-            fabs(local_sum1) < fabs(sum1) * relative_threshold &&
-            fabs(local_sum2) < fabs(sum2) * relative_threshold) {
-            break;
-        }
-    }
-    
-    // Cleanup
-    free(pow_rho2_table);
-    free(pow_beta_i_table);
-    free(pow_auxij_table);
-    
-    double prt = sum2 - sum1;
-    return (prt < 1e-320) ? 1e-320 : prt;
-}
-
-double biv_PoissonGamma(double corr, int r, int t, double mean_i, double mean_j, double a) {
-    // Controllo per correlazione quasi nulla - caso indipendente
-    if (fabs(corr) <= 1e-120) {
-        const double beta_i = a / mean_i;
-        const double beta_j = a / mean_j;
-        const double beta_i_plus_1 = beta_i + 1.0;
-        const double beta_j_plus_1 = beta_j + 1.0;
-        const double log_gamma_a = lgammafn(a);
-        const double log_1_over_beta_i_plus_1 = log(1.0 / beta_i_plus_1);
-        const double log_1_over_beta_j_plus_1 = log(1.0 / beta_j_plus_1);
-        const double log_beta_i_over_beta_i_plus_1 = log(beta_i / beta_i_plus_1);
-        const double log_beta_j_over_beta_j_plus_1 = log(beta_j / beta_j_plus_1);
-        const double dens1 = r * log_1_over_beta_i_plus_1 + 
-                            a * log_beta_i_over_beta_i_plus_1 + 
-                            lgammafn(a + r) - lgammafn(r + 1) - log_gamma_a;
-        
-        const double dens2 = t * log_1_over_beta_j_plus_1 + 
-                            a * log_beta_j_over_beta_j_plus_1 + 
-                            lgammafn(a + t) - lgammafn(t + 1) - log_gamma_a;
-        
-        return exp(dens1 + dens2);
-    }
-    
-    
-    if (r == t) {
-        return (r == 0) ? PG00(corr, r, r, mean_i, mean_j, a) 
-                        : PGrr(corr, r, r, mean_i, mean_j, a);
-    }
-    if (r == 0) {
-        return PGr0(corr, t, r, mean_j, mean_i, a);
-    }
-    if (t == 0) {
-        return PGr0(corr, r, t, mean_i, mean_j, a);
-    }
-    return (r > t) ? PGrt(corr, r, t, mean_i, mean_j, a) 
-                   : PGrt(corr, t, r, mean_j, mean_i, a);
-}
-
-
-
-
-
-double biv_PoissonGammaZIP(double corr,int r, int t, double mean_i, double mean_j,double mup,double nugget1,double nugget2,double shape)
+static R_INLINE int pg_shape_is_integer(double a)
 {
-double dens=0.0,p,p00,p10,p01,p11;
-p=pnorm(mup,0,1,1,0);
-p00=pbnorm22(mup,mup,(1-nugget2)*corr);
-p01=p-p00;
-p10=p01;
-p11=1-2*p+p00;
+    if (!R_FINITE(a)) return 0;
+    return fabs(a - nearbyint(a)) <= 1e-12 * fmax2(1.0, fabs(a));
+}
+
+static R_INLINE double pg_log_poch(double base, double order)
+{
+    if (base <= 0.0 || base + order <= 0.0) return R_NaN;
+    return lgammafn(base + order) - lgammafn(base);
+}
+
+static R_INLINE double pg_hyp_bparam(double a1, double bpar, double c,
+                                     double z, int mpoly)
+{
+    if (mpoly >= 0)
+        return hyp2F1_trunc_recur_1(a1, mpoly, c, z);
+    return hypergeo(a1, bpar, c, z);
+}
+
+/*
+ * Sequential evaluator for F(a1, 1-shape-l1; c; z).
+ *
+ * For moderately sized negative z, neighboring values in l1 are related by
+ * the exact Gauss contiguous relation
+ *
+ *   (c-b) F(a,b-1;c;z)
+ * + {2b-c+(a-b)z} F(a,b;c;z)
+ * + b(z-1) F(a,b+1;c;z) = 0.
+ *
+ * We re-anchor every PG_HREC_BLOCK values with two calls to the unchanged
+ * anchor path.  For integer shape these anchors are terminating 2F1
+ * polynomials and are used throughout the audited negative-z range.  For
+ * non-integer shape and sufficiently negative z, the first two values are
+ * instead obtained from the positive Euler integral above, after which the
+ * same exact contiguous recurrence is used through the row.  If a generated
+ * value is non-finite, the current and following value are re-anchored by the
+ * corresponding unchanged/direct or positive-integral path.
+ */
+#define PG_HREC_BLOCK 8
+#define PG_HREC_ZMAX_NONINT 0.49
+/*
+ * Integer-shape rows use terminating 2F1 polynomials as exact periodic
+ * anchors.  High-precision audits show that the same short 8-value
+ * re-anchored contiguous blocks remain stable well beyond |z|=1.
+ * Keep a conservative finite cap: outside it we preserve the previous
+ * direct-polynomial path.  No special-function implementation is changed.
+ */
+#define PG_HREC_ZMAX_INT 50.0
+
+typedef struct {
+    double a1, shape, c, z;
+    int a_int;
+    int enabled;
+    int use_integral_seeds;
+    int force_direct_next;
+    int last_l1;
+    double fm2, fm1;
+} PGHypBSeq;
+
+/*
+ * Robust positive-integral evaluator used only to seed the l1-contiguous
+ * recurrence when the Gauss argument is too negative for the direct
+ * hypergeo() call to be reliable for non-integer shape.  This does not
+ * modify hypergeo() (or igam()) in any way.
+ *
+ * For A>0, C-A>0 and z<0, Euler's integral gives
+ *
+ *   2F1(A,B;C;z) = Gamma(C)/(Gamma(A)Gamma(C-A))
+ *       integral_0^1 t^(A-1) (1-t)^(C-A-1) (1-z t)^(-B) dt.
+ *
+ * In PGrt, A and C-A are positive integers.  The integrand is therefore
+ * positive and smooth on [0,1].  We integrate a mode-scaled version with
+ * R's QUADPACK wrapper Rdqags, then restore the normalization in log scale.
+ * Only the first two l1 values of a dangerous row are integrated; all
+ * subsequent values are generated by the exact contiguous recurrence.
+ */
+#define PG_H1_QUAD_LIMIT 100
+
+typedef struct {
+    double A, N, B, z, shift;
+} PGH1QuadCtx;
+
+static R_INLINE double pg_h1_logkernel(double t, const PGH1QuadCtx *q)
+{
+    double out = 0.0;
+    if (t <= 0.0) {
+        if (q->A > 1.0) return R_NegInf;
+    } else {
+        out += (q->A - 1.0) * log(t);
+    }
+    if (t >= 1.0) {
+        if (q->N > 1.0) return R_NegInf;
+    } else {
+        out += (q->N - 1.0) * log1p(-t);
+    }
+    out += (-q->B) * log1p(-q->z * t);
+    return out;
+}
+
+static void pg_h1_quad_integrand(double *xx, int n, void *ex)
+{
+    PGH1QuadCtx *q = (PGH1QuadCtx *)ex;
+    for (int i = 0; i < n; ++i) {
+        const double lk = pg_h1_logkernel(xx[i], q);
+        if (lk == R_NegInf) xx[i] = 0.0;
+        else if (!R_FINITE(lk)) xx[i] = R_NaN;
+        else {
+            const double d = lk - q->shift;
+            xx[i] = (d < -745.0) ? 0.0 : exp(d);
+        }
+    }
+}
+
+static double pg_hyp_integral_seed(double A, double B, double C, double z)
+{
+    const double N = C - A;
+    if (!(A > 0.0) || !(N > 0.0) || !(z < 0.0) ||
+        !R_FINITE(A) || !R_FINITE(B) || !R_FINITE(C) || !R_FINITE(z))
+        return R_NaN;
+
+    PGH1QuadCtx q;
+    q.A = A; q.N = N; q.B = B; q.z = z; q.shift = R_NegInf;
+
+    /* The derivative of the log-kernel has a quadratic numerator. */
+    {
+        const double aa = A - 1.0;
+        const double nn = N - 1.0;
+        const double mm = -B;
+        const double qq = -z;
+        const double a0 = aa;
+        const double a1 = aa * (qq - 1.0) - nn + mm * qq;
+        const double a2 = -qq * (aa + nn + mm);
+        double cand[4];
+        int nc = 0;
+        if (aa == 0.0) cand[nc++] = 0.0;
+        if (nn == 0.0) cand[nc++] = 1.0;
+        if (fabs(a2) <= 1e-15 * fmax2(1.0, fabs(a1))) {
+            if (a1 != 0.0) {
+                const double r = -a0 / a1;
+                if (r > 0.0 && r < 1.0) cand[nc++] = r;
+            }
+        } else {
+            const double disc = a1*a1 - 4.0*a2*a0;
+            if (disc >= 0.0 && R_FINITE(disc)) {
+                const double sd = sqrt(disc);
+                const double r1 = (-a1 + sd) / (2.0*a2);
+                const double r2 = (-a1 - sd) / (2.0*a2);
+                if (r1 > 0.0 && r1 < 1.0) cand[nc++] = r1;
+                if (r2 > 0.0 && r2 < 1.0 && nc < 4) cand[nc++] = r2;
+            }
+        }
+        /* Always include a safe interior point in case of roundoff in roots. */
+        if (nc < 4) cand[nc++] = A / C;
+        for (int i = 0; i < nc; ++i) {
+            const double lk = pg_h1_logkernel(cand[i], &q);
+            if (R_FINITE(lk) && (q.shift == R_NegInf || lk > q.shift)) q.shift = lk;
+        }
+    }
+    if (!R_FINITE(q.shift)) return R_NaN;
+
+    double lower = 0.0, upper = 1.0;
+    double epsabs = 1e-13, epsrel = 2e-12;
+    double result = 0.0, abserr = 0.0;
+    int neval = 0, ier = 0, limit = PG_H1_QUAD_LIMIT, lenw = 4*PG_H1_QUAD_LIMIT, last = 0;
+    int iwork[PG_H1_QUAD_LIMIT];
+    double work[4*PG_H1_QUAD_LIMIT];
+    Rdqags(pg_h1_quad_integrand, &q, &lower, &upper,
+           &epsabs, &epsrel, &result, &abserr, &neval, &ier,
+           &limit, &lenw, &last, iwork, work);
+    if (ier > 1 || !(result > 0.0) || !R_FINITE(result)) return R_NaN;
+
+    {
+        const double logF = lgammafn(C) - lgammafn(A) - lgammafn(N) +
+                            q.shift + log(result);
+        if (!R_FINITE(logF) || logF > 700.0) return R_NaN;
+        if (logF < -745.0) return 0.0;
+        return exp(logF);
+    }
+}
+
+static R_INLINE double pg_hyp_bseq_anchor(PGHypBSeq *st, int l1)
+{
+    const double bpar = 1.0 - (double)l1 - st->shape;
+    const int mpoly = st->a_int ? (l1 + st->a_int - 1) : -1;
+    if (st->use_integral_seeds)
+        return pg_hyp_integral_seed(st->a1, bpar, st->c, st->z);
+    return pg_hyp_bparam(st->a1, bpar, st->c, st->z, mpoly);
+}
+
+static R_INLINE void pg_hyp_bseq_init(PGHypBSeq *st, double a1, double shape,
+                                      double c, double z, int a_int)
+{
+    st->a1 = a1;
+    st->shape = shape;
+    st->c = c;
+    st->z = z;
+    st->a_int = a_int;
+    st->use_integral_seeds = (!a_int && R_FINITE(z) && z < -PG_HREC_ZMAX_NONINT);
+    {
+        const double zmax = a_int ? PG_HREC_ZMAX_INT : PG_HREC_ZMAX_NONINT;
+        st->enabled = st->use_integral_seeds ||
+                      (R_FINITE(z) && z <= 0.0 && fabs(z) <= zmax);
+    }
+    st->force_direct_next = 0;
+    st->last_l1 = -1;
+    st->fm2 = st->fm1 = R_NaN;
+}
+
+static R_INLINE double pg_hyp_bseq_get(PGHypBSeq *st, int l1)
+{
+    double val;
+
+    /* The PGrt loops call this strictly in increasing l1 order. */
+    if (!st->enabled || l1 != st->last_l1 + 1) {
+        val = pg_hyp_bseq_anchor(st, l1);
+        st->fm2 = st->fm1;
+        st->fm1 = val;
+        st->last_l1 = l1;
+        return val;
+    }
+
+    if ((st->use_integral_seeds ? (l1 < 2) : ((l1 % PG_HREC_BLOCK) < 2)) ||
+        st->force_direct_next || l1 < 2) {
+        val = pg_hyp_bseq_anchor(st, l1);
+        if (st->force_direct_next) st->force_direct_next = 0;
+    } else {
+        /* Current b is the parameter of F at l1-1. */
+        const double bcur = 1.0 - (double)(l1 - 1) - st->shape;
+        const double den = st->c - bcur;
+        val = -((2.0*bcur - st->c + (st->a1 - bcur)*st->z) * st->fm1
+                + bcur*(st->z - 1.0) * st->fm2) / den;
+        if (!R_FINITE(val)) {
+            val = pg_hyp_bseq_anchor(st, l1);
+            st->force_direct_next = 1;
+        }
+    }
+
+    st->fm2 = st->fm1;
+    st->fm1 = val;
+    st->last_l1 = l1;
+    return val;
+}
+
+/*
+ * Exact H2 elimination for PGrt.
+ *
+ * For p>0, q>0, w=1/(1+y),
+ *
+ *   2F1~(1,1-q;p+1;-1/y)
+ *     = (1-w)^(1-q) w^(-p) B_w(p,q) / Gamma(p),
+ *
+ * and B_w(p,q)=B(p,q) I_w(p,q).  In the PGrt coefficients this
+ * cancels the second regularizing Gamma factor and one of the two
+ * Pochhammer factors exactly.  Only the regularized incomplete beta
+ * I_w(p,q) remains.  Along l1, q=a+l1 and
+ *
+ *   I_w(p,q+1) = I_w(p,q) + Delta_q,
+ *   Delta_{q+1}/Delta_q = (1-w)(p+q)/(q+1).
+ *
+ * We keep I and Delta in log scale.  Thus each row needs one pbeta()
+ * seed and all following l1 values use only elementary operations.
+ */
+/* Beta recurrences and log-space helpers are defined with the PEM correlation
+ * helpers above and reused here. */
+
+/*
+ * Positive Gauss factor in log scale for the A=1 PEM kernels.
+ *
+ * For p=C-1>0, q=shape+l1>0, z=-1/y<0 and w=1/(1+y),
+ *
+ *   2F1(1,1-q;p+1;-1/y)
+ *     = p (1-w)^(1-q) w^(-p) B_w(p,q).
+ *
+ * With B_w=B*I_w and I_w supplied by PGBetaBSeq this gives a
+ * completely positive log-scale representation.  It is used by PGrr to
+ * avoid overflow of the individual hypergeometric factors before their
+ * cancellation with the series coefficient.
+ */
+static R_INLINE double pg_log_hyp1_beta(PGBetaBSeq *st, int l1)
+{
+    const double q = st->shape + (double)l1;
+    const double logI = pg_beta_bseq_get(st, l1);
+    if (!(st->p > 0.0) || !(q > 0.0) || ISNAN(logI)) return R_NaN;
+    if (logI == R_NegInf) return R_NegInf;
+    return log(st->p) + (1.0 - q) * st->log1mw - st->p * st->logw +
+           st->logBeta + logI;
+}
 
 
-if(r==0&&t==0)
-dens=p00  + p01* R_pow(shape/(mean_i+ shape ),shape) + p10*R_pow(shape/(mean_j+ shape ),shape)+p11*biv_PoissonGamma((1-nugget1)*corr,0, 0, mean_i, mean_j,shape);
-if(r==0&&t>0)
-dens=      p01*   dnbinom(0, shape,   mean_j /(mean_j+ shape ),0)  + p11*biv_PoissonGamma((1-nugget1)*corr,0, t, mean_i, mean_j,shape);
-if(r>0&&t==0)
-dens=      p10*   dnbinom(0, shape,   mean_i /(mean_i+ shape ),0)  + p11*biv_PoissonGamma((1-nugget1)*corr,r, 0, mean_i, mean_j,shape);
-if(r>0&&t>0)
-dens=      p11*biv_PoissonGamma((1-nugget1)*corr,r, t, mean_i, mean_j,shape);
-return(dens);
+static R_INLINE double pg_term_h1_logbeta(double logcoef, double h1,
+                                           double logI)
+{
+    if (!R_FINITE(logcoef) || !R_FINITE(h1) || ISNAN(logI)) return R_NaN;
+    if (h1 == 0.0 || logI == R_NegInf) return 0.0;
+    const double la = logcoef + log(fabs(h1)) + logI;
+    if (ISNAN(la)) return R_NaN;
+    if (la < -745.0) return 0.0;
+    if (la > 700.0 || la == R_PosInf) return R_NaN;
+    return (h1 < 0.0 ? -1.0 : 1.0) * exp(la);
+}
 
+static R_INLINE double pg_finish_prob(double p)
+{
+    if (!R_FINITE(p)) return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+    if (p < -PG_PROB_TOL || p > 1.0 + PG_PROB_TOL)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+    if (p < 0.0) p = 0.0;
+    if (p > 1.0) p = 1.0;
+    return p;
+}
+
+
+static R_INLINE double pg_exp_logprob(double lp);
+
+/* ================================================================== */
+/* Positive PEM bivariate probabilities.                              */
+/*                                                                    */
+/* These kernels implement the cancellation-free representations used */
+/* in Theorem 5.3 of the PEM manuscript:                              */
+/*   - p00: positive double series in regularized incomplete beta;    */
+/*   - pnn: positive double series, with the finite inner sum updated  */
+/*          recursively in O(1) work per h;                           */
+/*   - pnm: one positive double series for every n != m, including    */
+/*          zero/nonzero pairs.                                       */
+/*                                                                    */
+/* The legacy kernels below are intentionally retained as an internal  */
+/* numerical reference and are exposed only through a diagnostic       */
+/* native entry point.                                                 */
+/* ================================================================== */
+
+#ifndef PG_POS_MAX_OUTER
+#define PG_POS_MAX_OUTER 3000
+#endif
+#ifndef PG_POS_MAX_INNER
+#define PG_POS_MAX_INNER 5000
+#endif
+#ifndef PG_POS_HYP_MAX
+#define PG_POS_HYP_MAX 20000
+#endif
+#ifndef PG_POS_QUIET
+#define PG_POS_QUIET 8
+#endif
+
+static R_INLINE int pg_pos_logterm_small(double logterm, double logsum)
+{
+    if (logsum == R_NegInf || ISNAN(logsum) || ISNAN(logterm)) return 0;
+    if (logterm == R_NegInf) return 1;
+    if (!R_FINITE(logsum) || !R_FINITE(logterm)) return 0;
+    return logterm <= logsum + log(PG_SUM_TOL);
+}
+
+/* Direct positive-series evaluation of the regularized Gauss function
+ *
+ *   2F1~(aa,bb;cc;z)
+ *     = sum_{j>=0} (aa)_j (bb)_j z^j / {Gamma(cc+j) j!}.
+ *
+ * The ordinary hypergeo() path is used when it is finite; otherwise the
+ * positive series is accumulated in log scale.  This avoids overflow of the
+ * ordinary 2F1 for large counts while preserving a fast path in routine
+ * cases. */
+static double pg_log_hyp2f1_reg_positive(double aa, double bb, double cc,
+                                          double z, int *ok)
+{
+    if (ok) *ok = 0;
+    if (!(aa > 0.0) || !(bb > 0.0) || !(cc > 0.0) ||
+        !(z >= 0.0 && z < 1.0) ||
+        !R_FINITE(aa) || !R_FINITE(bb) || !R_FINITE(cc) || !R_FINITE(z))
+        return R_NaN;
+
+    if (z == 0.0) {
+        if (ok) *ok = 1;
+        return -lgammafn(cc);
+    }
+
+    {
+        const double direct = hypergeo(aa, bb, cc, z);
+        if (direct > 0.0 && R_FINITE(direct)) {
+            const double ans = log(direct) - lgammafn(cc);
+            if (R_FINITE(ans)) {
+                if (ok) *ok = 1;
+                return ans;
+            }
+        }
+    }
+
+    const double logz = log(z);
+    double logterm = -lgammafn(cc);
+    double logsum = logterm;
+    int quiet = 0;
+
+    for (int j = 0; j < PG_POS_HYP_MAX; ++j) {
+        logterm += log(aa + (double)j) + log(bb + (double)j) -
+                   log(cc + (double)j) - log((double)j + 1.0) + logz;
+        logsum = pg_logspace_add_pos(logsum, logterm);
+        if (ISNAN(logsum)) return R_NaN;
+
+        if (j > 10 && pg_pos_logterm_small(logterm, logsum)) {
+            if (++quiet >= PG_POS_QUIET) {
+                if (ok) *ok = 1;
+                return logsum;
+            }
+        } else quiet = 0;
+    }
+
+    return R_NaN;
+}
+
+/* Positive p00 representation.  All summands are probabilities, so the
+ * final double sum is accumulated in ordinary scale with compensated
+ * summation.  The incomplete-beta sequence itself remains in log scale to
+ * retain stability when z is small. */
+static double PG00_positive(double corr, double mean_i, double mean_j,
+                            double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    const double q = corr * corr;
+    const double delta = 1.0 - q;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double zi = nu_i / (1.0 + nu_i);
+    const double zj = nu_j / (1.0 + nu_j);
+    if (!(q > 0.0 && q < 1.0) || !(nu_i > 0.0) || !(nu_j > 0.0) ||
+        !(zi > 0.0 && zi < 1.0) || !(zj > 0.0 && zj < 1.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double logq = log(q);
+    const double logzi = log(zi);
+    const double logzj = log(zj);
+    const double logpref = (a + 1.0) * log(delta);
+    const int stationary =
+        fabs(zi - zj) <= 1e-14 * fmax2(1.0, fmax2(zi, zj));
+
+    KahanSum total;
+    kahan_init(&total);
+    double logellw = 0.0; /* q^ell (a)_ell / ell! */
+    int quiet_ell = 0;
+    int outer_converged = 0;
+
+    for (int ell = 0; ell < PG_POS_MAX_OUTER; ++ell) {
+        const double cshape = a + (double)ell;
+        PGBetaBSeq bi, bj;
+        const double li0 = cshape * logzi;
+        const double lj0 = stationary ? li0 : cshape * logzj;
+        const double lbeta0 = -log(cshape); /* B(cshape,1) */
+
+        if (!pg_beta_bseq_init_seeded(&bi, cshape, 1.0, zi, li0, lbeta0) ||
+            (!stationary &&
+             !pg_beta_bseq_init_seeded(&bj, cshape, 1.0, zj, lj0, lbeta0)))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_k = 0;
+        int row_converged = 0;
+        const double rowbase = logpref + logellw;
+
+        for (int k = 0; k < PG_POS_MAX_INNER; ++k) {
+            const double li = pg_beta_bseq_get(&bi, k);
+            const double lj = stationary ? li : pg_beta_bseq_get(&bj, k);
+            if (ISNAN(li) || ISNAN(lj))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+            const double logterm =
+                (li == R_NegInf || lj == R_NegInf) ? R_NegInf :
+                rowbase + (double)k * logq + li + lj;
+            const double term = pg_exp_log_signed(logterm, +1);
+            if (!R_FINITE(term))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
+
+            if (k > 10) {
+                const double scale = fmax2(1e-300, row.sum);
+                if (term <= PG_SUM_TOL * scale) {
+                    if (++quiet_k >= PG_POS_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else quiet_k = 0;
+            }
+        }
+        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
+
+        kahan_add(&total, row.sum);
+        if (ell > 10) {
+            const double scale = fmax2(1e-300, total.sum);
+            if (row.sum <= PG_SUM_TOL * scale) {
+                if (++quiet_ell >= PG_POS_QUIET) {
+                    outer_converged = 1;
+                    break;
+                }
+            } else quiet_ell = 0;
+        }
+
+        if (ell + 1 < PG_POS_MAX_OUTER) {
+            logellw += logq + log(a + (double)ell) - log((double)ell + 1.0);
+        }
+    }
+
+    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
+    return pg_finish_prob(total.sum);
+}
+
+/* Positive diagonal representation.  For fixed ell define
+ *
+ *   S_h = sum_{k=0}^h (n)_k/k! Delta_i(k,h,ell) Delta_j(k,h,ell).
+ *
+ * When h increases by one, every Delta receives the same new NB mass.
+ * Maintaining S_h together with the two weighted one-dimensional sums and
+ * W_h=sum_{k=0}^h (n)_k/k! eliminates the explicit finite k loop.
+ *
+ * The recurrence itself is kept in log scale because W_h can be very large.
+ * The final positive h- and ell-sums are accumulated in ordinary scale with
+ * compensated summation. */
+static double PGrr_positive(double corr, int n, double mean_i, double mean_j,
+                            double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    const double q = corr * corr;
+    const double delta = 1.0 - q;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    const double zi = nu_i / (1.0 + nu_i);
+    const double zj = nu_j / (1.0 + nu_j);
+    if (n < 1 || !(q > 0.0 && q < 1.0) ||
+        !(zi > 0.0 && zi < 1.0) || !(zj > 0.0 && zj < 1.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double logq = log(q);
+    const double log1mzi = log1p(-zi);
+    const double log1mzj = log1p(-zj);
+    const double logpref = ((double)n + a + 1.0) * log(delta);
+    const int stationary =
+        fabs(zi - zj) <= 1e-14 * fmax2(1.0, fmax2(zi, zj));
+
+    KahanSum total;
+    kahan_init(&total);
+    double logellw = 0.0; /* q^ell (a)_ell / ell! */
+    int quiet_ell = 0;
+    int outer_converged = 0;
+
+    for (int ell = 0; ell < PG_POS_MAX_OUTER; ++ell) {
+        const double cshape = a + (double)ell;
+        double logpi = dnbinom((double)n, cshape, zi, 1);
+        double logpj = stationary ? logpi : dnbinom((double)n, cshape, zj, 1);
+        if (ISNAN(logpi) || ISNAN(logpj))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        double logw = 0.0;  /* (n)_0/0! */
+        double logW = 0.0;  /* sum_{k=0}^0 */
+        double logAi = logpi;
+        double logAj = stationary ? logAi : logpj;
+        double logS = logpi + logpj;
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_h = 0;
+        int row_converged = 0;
+        const double rowbase = logpref + logellw;
+
+        for (int h = 0; h < PG_POS_MAX_INNER; ++h) {
+            const double logterm =
+                logS == R_NegInf ? R_NegInf :
+                rowbase + (double)h * logq + logS;
+            const double term = pg_exp_log_signed(logterm, +1);
+            if (!R_FINITE(term))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
+
+            if (h > 10) {
+                const double scale = fmax2(1e-300, row.sum);
+                if (term <= PG_SUM_TOL * scale) {
+                    if (++quiet_h >= PG_POS_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else quiet_h = 0;
+            }
+
+            if (h + 1 < PG_POS_MAX_INNER) {
+                const double u = (double)n + (double)h;
+                const double oldAi = logAi;
+                const double oldAj = logAj;
+
+                logpi += log(cshape + u) - log(u + 1.0) + log1mzi;
+                if (stationary) logpj = logpi;
+                else logpj += log(cshape + u) - log(u + 1.0) + log1mzj;
+
+                logw += log((double)n + (double)h) - log((double)h + 1.0);
+                const double logWnew = pg_logspace_add_pos(logW, logw);
+
+                if (stationary) {
+                    double inc = logpi + oldAi + M_LN2;
+                    inc = pg_logspace_add_pos(inc,
+                                              2.0 * logpi + logWnew);
+                    logS = pg_logspace_add_pos(logS, inc);
+                    logAi = pg_logspace_add_pos(oldAi, logpi + logWnew);
+                    logAj = logAi;
+                } else {
+                    double inc = pg_logspace_add_pos(logpi + oldAj,
+                                                      logpj + oldAi);
+                    inc = pg_logspace_add_pos(inc, logpi + logpj + logWnew);
+                    logS = pg_logspace_add_pos(logS, inc);
+                    logAi = pg_logspace_add_pos(oldAi, logpi + logWnew);
+                    logAj = pg_logspace_add_pos(oldAj, logpj + logWnew);
+                }
+                logW = logWnew;
+
+                if (ISNAN(logS) || ISNAN(logAi) || ISNAN(logAj) || ISNAN(logW))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            }
+        }
+        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
+
+        kahan_add(&total, row.sum);
+        if (ell > 10) {
+            const double scale = fmax2(1e-300, total.sum);
+            if (row.sum <= PG_SUM_TOL * scale) {
+                if (++quiet_ell >= PG_POS_QUIET) {
+                    outer_converged = 1;
+                    break;
+                }
+            } else quiet_ell = 0;
+        }
+
+        if (ell + 1 < PG_POS_MAX_OUTER) {
+            logellw += logq + log(a + (double)ell) - log((double)ell + 1.0);
+        }
+    }
+
+    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
+    return pg_finish_prob(total.sum);
+}
+
+/* Positive off-diagonal representation, valid for n > m >= 0.
+ *
+ * The manuscript formula contains
+ *
+ *   2F1~(A, n+k+ell+a; n+k+1; z),  0<z<1.
+ *
+ * A Pfaff transformation gives
+ *
+ *   (1-z)^(-A) / Gamma(n+k+1)
+ *   2F1(A, 1-ell-a; n+k+1; z/(z-1)).
+ *
+ * For fixed k, only the second hypergeometric parameter changes with ell.
+ * We therefore make k the outer index and reuse the existing contiguous
+ * PGHypBSeq recurrence.  This avoids a fresh hypergeo() call at every
+ * (k,ell) pair and is substantially faster for the off-diagonal cases. */
+static double PGrt_positive(double corr, int n, int m,
+                            double mean_i, double mean_j, double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    const double q = corr * corr;
+    const double delta = 1.0 - q;
+    const double nu_i = a / mean_i;
+    const double nu_j = a / mean_j;
+    if (n <= m || m < 0 || !(q > 0.0 && q < 1.0) ||
+        !(nu_i > 0.0) || !(nu_j > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double logq = log(q);
+    const double logxy = log(nu_i) + log(nu_j);
+    const double log1px = log1p(nu_i);
+    const double log1py = log1p(nu_j);
+    const double bx = 1.0 + nu_i - q;
+    if (!(bx > 0.0)) return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double z = q / (1.0 + nu_i);
+    const double z1 = -q / bx; /* z/(z-1) */
+    const double A = (double)(n - m + 1);
+    const int a_int = pg_shape_is_integer(a) ? (int)llround(a) : 0;
+
+    /* Include the global prefactor and the Pfaff factor in every term.
+       Because the series is positive and sums to a probability, individual
+       terms are safely accumulated in ordinary scale. */
+    const double logglobal =
+        ((double)n + a) * log(delta) -
+        lgammafn((double)m + 1.0) - lgammafn(a) -
+        A * log1p(-z);
+
+    double logcoef_k0 = logglobal +
+        a * logxy +
+        lgammafn((double)m + a) + lgammafn((double)n + a) -
+        lgammafn(a) - lgammafn((double)n + 1.0) -
+        ((double)n + a) * log1px -
+        ((double)m + a) * log1py;
+    if (!R_FINITE(logcoef_k0))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    KahanSum total;
+    kahan_init(&total);
+    int quiet_k = 0;
+    int outer_converged = 0;
+
+    for (int k = 0; k < PG_POS_MAX_OUTER; ++k) {
+        const double C = (double)n + (double)k + 1.0;
+        const int exact_ca = (m == 0 && k == 0);
+        const int use_positive_seeds =
+            (!a_int && fabs(z1) > PG_HREC_ZMAX_NONINT && !exact_ca);
+        PGHypBSeq hseq;
+        if (!use_positive_seeds && !exact_ca)
+            pg_hyp_bseq_init(&hseq, A, a, C, z1, a_int);
+
+        /* For large negative Pfaff arguments and half-integer shape, the
+           legacy sequence uses two numerical quadratures per k-row.  Here
+           the first two values are instead seeded from the original
+           positive-z regularized series, then the same exact contiguous
+           recurrence is used for all following ell. */
+        double hm2 = R_NaN, hm1 = R_NaN;
+        const double log_gamma_C = lgammafn(C);
+        const double log_pfaff_back = A * log1p(-z);
+
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_ell = 0;
+        int row_converged = 0;
+        double logcoef = logcoef_k0;
+
+        for (int ell = 0; ell < PG_POS_MAX_INNER; ++ell) {
+            double logh;
+
+            if (exact_ca) {
+                const double B = 1.0 - (double)ell - a;
+                logh = -B * log1p(-z1);
+            } else if (use_positive_seeds) {
+                double h1;
+                if (ell < 2) {
+                    int seed_ok = 0;
+                    const double Borig = C + (double)ell + a - 1.0;
+                    const double logreg = pg_log_hyp2f1_reg_positive(
+                        A, Borig, C, z, &seed_ok);
+                    if (!seed_ok || ISNAN(logreg))
+                        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                    logh = logreg + log_gamma_C + log_pfaff_back;
+                    if (!R_FINITE(logh) || logh > 700.0)
+                        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                    h1 = logh < -745.0 ? 0.0 : exp(logh);
+                } else {
+                    const double bcur = 1.0 - (double)(ell - 1) - a;
+                    const double den = C - bcur;
+                    h1 = -((2.0*bcur - C + (A - bcur)*z1) * hm1 +
+                           bcur*(z1 - 1.0) * hm2) / den;
+                    if (!(h1 > 0.0) || !R_FINITE(h1)) {
+                        int seed_ok = 0;
+                        const double Borig = C + (double)ell + a - 1.0;
+                        const double logreg = pg_log_hyp2f1_reg_positive(
+                            A, Borig, C, z, &seed_ok);
+                        if (!seed_ok || ISNAN(logreg))
+                            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                        logh = logreg + log_gamma_C + log_pfaff_back;
+                        if (!R_FINITE(logh) || logh > 700.0)
+                            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                        h1 = logh < -745.0 ? 0.0 : exp(logh);
+                    }
+                }
+                if (!(h1 > 0.0) || !R_FINITE(h1))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                logh = log(h1);
+                hm2 = hm1;
+                hm1 = h1;
+            } else {
+                double h1 = pg_hyp_bseq_get(&hseq, ell);
+                if (!(h1 > 0.0) || !R_FINITE(h1)) {
+                    const double B = 1.0 - (double)ell - a;
+                    h1 = hypergeo(A, B, C, z1);
+                }
+                if (!(h1 > 0.0) || !R_FINITE(h1))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                logh = log(h1);
+            }
+
+            const double logterm = logcoef + logh;
+            const double term = pg_exp_log_signed(logterm, +1);
+            if (!R_FINITE(term))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
+
+            if (ell > 10) {
+                const double scale = fmax2(1e-300, row.sum);
+                if (term <= PG_SUM_TOL * scale) {
+                    if (++quiet_ell >= PG_POS_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else quiet_ell = 0;
+            }
+
+            if (ell + 1 < PG_POS_MAX_INNER) {
+                const double ee = (double)ell;
+                logcoef += logq + logxy +
+                    log((double)m + (double)k + ee + a) +
+                    log((double)n + (double)k + ee + a) -
+                    log(ee + 1.0) - log(ee + a) -
+                    log1px - log1py;
+            }
+        }
+        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
+
+        kahan_add(&total, row.sum);
+        if (k > 10) {
+            const double scale = fmax2(1e-300, total.sum);
+            if (row.sum <= PG_SUM_TOL * scale) {
+                if (++quiet_k >= PG_POS_QUIET) {
+                    outer_converged = 1;
+                    break;
+                }
+            } else quiet_k = 0;
+        }
+
+        if (k + 1 < PG_POS_MAX_OUTER) {
+            const double kk = (double)k;
+            logcoef_k0 += logq +
+                log((double)m + kk + a) +
+                log((double)n + kk + a) -
+                log(kk + 1.0) - log((double)n + kk + 1.0) -
+                log1px - log1py;
+        }
+    }
+
+    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
+    return pg_finish_prob(total.sum);
+}
+
+/* ------------------------------------------------------------------ */
+/* Case n = m = 0: equation (10).                                    */
+/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/* Case n = m = 0: equation (10).                                    */
+/* ------------------------------------------------------------------ */
+double PG00(double corr, int r, int t, double mean_i, double mean_j, double a)
+{
+    (void)r; (void)t;
+    pg_set_status(PG_STATUS_OK);
+    const double rho2 = corr * corr;
+    const double x = a / mean_i;
+    const double y = a / mean_j;
+    if (!(rho2 > 0.0 && rho2 < 1.0) || !(x > 0.0) || !(y > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    /* After transforming both regularized Gauss factors to incomplete beta,
+       all large Gamma and scale factors cancel exactly:
+
+       S00=(1-rho2)^(a+1) sum_{k,l>=0} rho2^(k+l)
+             (a)_l/l! I_{wi}(k+1,a+l) I_{wj}(k+1,a+l). */
+    const double wi = 1.0 / (1.0 + x);
+    const double wj = 1.0 / (1.0 + y);
+    const double log_rho2 = log(rho2);
+    const double log1mr2 = log1p(-rho2);
+    const int stationary =
+        fabs(x - y) <= 1e-14 * fmax2(1.0, fmax2(x, y));
+
+    PGBetaPSeq pseq_i, pseq_j;
+    if (!pg_beta_pseq_init(&pseq_i, 1.0, a, wi) ||
+        (!stationary && !pg_beta_pseq_init(&pseq_j, 1.0, a, wj)))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    KahanSum total;
+    kahan_init(&total);
+    int quiet_k = 0;
+    int outer_converged = 0;
+    double logcoef_k0 = (a + 1.0) * log1mr2;
+
+    for (int k = 0; k < PG_MAX_OUTER; ++k) {
+        PGBetaBSeq bi, bj;
+        if (!pg_beta_bseq_from_pseq(&bi, &pseq_i) ||
+            (!stationary && !pg_beta_bseq_from_pseq(&bj, &pseq_j)))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_l = 0;
+        int row_converged = 0;
+        double logcoef = logcoef_k0;
+
+        for (int l = 0; l < PG_MAX_INNER; ++l) {
+            const double li = pg_beta_bseq_get(&bi, l);
+            const double lj = stationary ? li : pg_beta_bseq_get(&bj, l);
+            if (ISNAN(li) || ISNAN(lj))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+            const double logterm = (li == R_NegInf || lj == R_NegInf)
+                ? R_NegInf : logcoef + li + lj;
+            const double term = pg_exp_log_signed(logterm, +1);
+            if (!R_FINITE(term))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
+
+            if (l > 10) {
+                const double scale = fmax2(1e-300, fabs(row.sum));
+                if (fabs(term) <= PG_SUM_TOL * scale) {
+                    if (++quiet_l >= PG_MIN_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else quiet_l = 0;
+            }
+
+            if (l + 1 < PG_MAX_INNER)
+                logcoef += log_rho2 + log(a + (double)l) -
+                           log((double)l + 1.0);
+        }
+        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
+
+        kahan_add(&total, row.sum);
+        if (k > 12) {
+            const double scale = fmax2(1e-300, fabs(total.sum));
+            if (fabs(row.sum) <= PG_SUM_TOL * scale) {
+                if (++quiet_k >= PG_MIN_QUIET) {
+                    outer_converged = 1;
+                    break;
+                }
+            } else quiet_k = 0;
+        }
+
+        if (k + 1 < PG_MAX_OUTER) {
+            logcoef_k0 += log_rho2;
+            if (!pg_beta_pseq_advance(&pseq_i) ||
+                (!stationary && !pg_beta_pseq_advance(&pseq_j)))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        }
+    }
+    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
+
+    const double logp0i = a * (log(x) - log1p(x));
+    const double logp0j = a * (log(y) - log1p(y));
+    KahanSum probability;
+    kahan_init(&probability);
+    kahan_add(&probability, -1.0);
+    kahan_add(&probability, exp(logp0i));
+    kahan_add(&probability, exp(logp0j));
+    kahan_add(&probability, total.sum);
+    return pg_finish_prob(probability.sum);
+}
+
+/* ------------------------------------------------------------------ */
+/* Case n >= 1, m = 0: equation (11).                                */
+/* ------------------------------------------------------------------ */
+double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a)
+{
+    (void)t;
+    pg_set_status(PG_STATUS_OK);
+    const int b = r;
+    const double rho2 = corr * corr;
+    const double x = a / mean_i;
+    const double y = a / mean_j;
+    const double bx = 1.0 + x - rho2;
+    if (b < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
+        !(x > 0.0) || !(y > 0.0) || !(bx > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double log_rho2 = log(rho2);
+    const double log_x = log(x);
+    const double log1px = log1p(x);
+    const double z1 = -rho2 / bx;
+    const double w = 1.0 / (1.0 + y);
+    const int a_int = pg_shape_is_integer(a) ? (int)llround(a) : 0;
+
+    const double log_marg = pg_log_poch(a, (double)b) + a * log_x -
+                            lgammafn((double)b + 1.0) -
+                            ((double)b + a) * log1px;
+    const double log_pref = (a + (double)b) * log1p(-rho2) -
+                            (double)b * log(bx) - lgammafn(a) +
+                            a * (log_x - log1px);
+    if (!R_FINITE(log_marg) || !R_FINITE(log_pref))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    const double log_inner_base = log_x + log_rho2 - log1px;
+    const double log_outer_base = log_rho2 - log1px;
+    double logcoef_l0 = lgammafn(a + (double)b) -
+                        lgammafn((double)b + 1.0);
+    if (!R_FINITE(logcoef_l0))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    PGBetaPSeq pseq;
+    if (!pg_beta_pseq_init(&pseq, 1.0, a, w))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    KahanSum total;
+    kahan_init(&total);
+    int quiet_l = 0;
+    int outer_converged = 0;
+
+    for (int l = 0; l < PG_MAX_OUTER; ++l) {
+        const double c1 = (double)l + (double)b + 1.0;
+        PGHypBSeq hseq;
+        PGBetaBSeq bseq;
+        pg_hyp_bseq_init(&hseq, (double)b, a, c1, z1, a_int);
+        if (!pg_beta_bseq_from_pseq(&bseq, &pseq))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        KahanSum row;
+        kahan_init(&row);
+        int quiet_l1 = 0;
+        int row_converged = 0;
+        double logcoef = logcoef_l0;
+
+        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
+            double h1 = pg_hyp_bseq_get(&hseq, l1);
+            const double logI = pg_beta_bseq_get(&bseq, l1);
+            if (!(h1 > 0.0) || !R_FINITE(h1)) {
+                const double bpar = 1.0 - (double)l1 - a;
+                h1 = pg_hyp_integral_seed((double)b, bpar, c1, z1);
+            }
+            if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+            const double term = pg_term_h1_logbeta(logcoef, h1, logI);
+            if (!R_FINITE(term))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+            kahan_add(&row, term);
+
+            if (l1 > 10) {
+                const double scale = fmax2(1e-300, fabs(row.sum));
+                if (fabs(term) <= PG_SUM_TOL * scale) {
+                    if (++quiet_l1 >= PG_MIN_QUIET) {
+                        row_converged = 1;
+                        break;
+                    }
+                } else quiet_l1 = 0;
+            }
+
+            if (l1 + 1 < PG_MAX_INNER) {
+                logcoef += log_inner_base +
+                           log((double)l1 + a + (double)l + (double)b) -
+                           log((double)l1 + 1.0);
+            }
+        }
+        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
+
+        kahan_add(&total, row.sum);
+        if (l > 12) {
+            const double scale = fmax2(1e-300, fabs(total.sum));
+            if (fabs(row.sum) <= PG_SUM_TOL * scale) {
+                if (++quiet_l >= PG_MIN_QUIET) {
+                    outer_converged = 1;
+                    break;
+                }
+            } else quiet_l = 0;
+        }
+
+        if (l + 1 < PG_MAX_OUTER) {
+            logcoef_l0 += log_outer_base +
+                          log(a + (double)b + (double)l) -
+                          log((double)b + (double)l + 1.0);
+            if (!pg_beta_pseq_advance(&pseq))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        }
+    }
+    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
+    if (total.sum < -PG_PROB_TOL)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+
+    const double log_second = total.sum <= 0.0
+        ? R_NegInf : log_pref + log(total.sum);
+    return pg_finish_prob(pg_signed_logdiff(log_marg, log_second));
+}
+
+/* ------------------------------------------------------------------ */
+/* Case n = m >= 1: corrected equation (12), fused double series.    */
+/* ------------------------------------------------------------------ */
+double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a)
+{
+    (void)t;
+    pg_set_status(PG_STATUS_OK);
+    const int n = r;
+    const double rho2 = corr * corr;
+    const double x = a / mean_i;
+    const double y = a / mean_j;
+    const double xy = x * y;
+    const double D = (1.0 + x) * (1.0 + y);
+    const double bxi = 1.0 + x - rho2;
+    const double byj = 1.0 + y - rho2;
+    if (n < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
+        !(x > 0.0) || !(y > 0.0) || !(bxi > 0.0) || !(byj > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double log_rho2 = log(rho2);
+    const double log_xy = log(xy);
+    const double log_D = log(D);
+    const double log1mr2 = log1p(-rho2);
+    const double wi0 = 1.0 / (1.0 + x);
+    const double wj0 = 1.0 / (1.0 + y);
+    const double wir = rho2 / (1.0 + x);
+    const double wjr = rho2 / (1.0 + y);
+    const int stationary =
+        fabs(x - y) <= 1e-14 * fmax2(1.0, fmax2(x, y));
+
+    /* The first row k and the second row s=k-1 have the same beta p and
+       the same inner coefficient ratio.  Evaluate them in one pass. */
+    PGBetaPSeq psi0, psj0, psir, psjr;
+    if (!pg_beta_pseq_init(&psi0, (double)n, a, wi0) ||
+        !pg_beta_pseq_init(&psir, (double)n, a, wir) ||
+        (!stationary &&
+         (!pg_beta_pseq_init(&psj0, (double)n, a, wj0) ||
+          !pg_beta_pseq_init(&psjr, (double)n, a, wjr))))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    double logcoef1_row =
+        ((double)n + a) * log1mr2 + a * log_xy -
+        ((double)n + a) * log_D +
+        2.0 * (lgammafn(a + (double)n) - lgammafn(a)) -
+        2.0 * lgammafn((double)n + 1.0);
+    double logcoef2_row =
+        ((double)n + a + 1.0) * log1mr2 + (a - 1.0) * log_xy -
+        ((double)n + a) * log_D +
+        2.0 * (lgammafn(a + (double)n + 1.0) - lgammafn(a)) -
+        2.0 * lgammafn((double)n + 2.0);
+    if (!R_FINITE(logcoef1_row) || !R_FINITE(logcoef2_row))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    KahanSum first, second;
+    kahan_init(&first);
+    kahan_init(&second);
+    int quiet_first = 0, quiet_second = 0;
+    int active_first = 1, active_second = 1;
+    int converged_first = 0, converged_second = 0;
+
+    for (int qrow = 0; qrow <= PG_MAX_OUTER &&
+                         (active_first || active_second); ++qrow) {
+        const int do_first = active_first && qrow < PG_MAX_OUTER;
+        const int do_second = active_second && qrow >= 1 &&
+                              qrow <= PG_MAX_OUTER;
+        if (!do_first && !do_second) break;
+
+        PGBetaBSeq bi0, bj0, bir, bjr;
+        if (!pg_beta_bseq_from_pseq(&bi0, &psi0) ||
+            (!stationary && !pg_beta_bseq_from_pseq(&bj0, &psj0)))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        if (do_first &&
+            (!pg_beta_bseq_from_pseq(&bir, &psir) ||
+             (!stationary && !pg_beta_bseq_from_pseq(&bjr, &psjr))))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        KahanSum row1, row2;
+        kahan_init(&row1);
+        kahan_init(&row2);
+        int quiet_l1_1 = 0, quiet_l1_2 = 0;
+        int row1_done = !do_first, row2_done = !do_second;
+        double lc1 = logcoef1_row;
+        double lc2 = logcoef2_row;
+
+        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
+            const double lhi0 = pg_log_hyp1_beta(&bi0, l1);
+            const double lhj0 = stationary ? lhi0 :
+                pg_log_hyp1_beta(&bj0, l1);
+            if (ISNAN(lhi0) || ISNAN(lhj0))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+            if (do_first && !row1_done) {
+                const double lhir = pg_log_hyp1_beta(&bir, l1);
+                const double lhjr = stationary ? lhir :
+                    pg_log_hyp1_beta(&bjr, l1);
+                if (ISNAN(lhir) || ISNAN(lhjr))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+                const double logneg = lc1 + log(D / xy) + lhi0 + lhj0;
+                const double logpos1 = lc1 + log(D / (bxi * y)) + lhir + lhj0;
+                const double logpos2 = lc1 + log(D / (x * byj)) + lhi0 + lhjr;
+                const double term = pg_signed_logdiff(
+                    pg_logspace_add_pos(logpos1, logpos2), logneg);
+                if (!R_FINITE(term))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                kahan_add(&row1, term);
+                if (l1 > 10) {
+                    const double scale = fmax2(1e-300, fabs(row1.sum));
+                    if (fabs(term) <= PG_SUM_TOL * scale) {
+                        if (++quiet_l1_1 >= PG_MIN_QUIET) row1_done = 1;
+                    } else quiet_l1_1 = 0;
+                }
+            }
+
+            if (do_second && !row2_done) {
+                const double term = pg_exp_log_signed(lc2 + lhi0 + lhj0, +1);
+                if (!R_FINITE(term))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                kahan_add(&row2, term);
+                if (l1 > 10) {
+                    const double scale = fmax2(1e-300, fabs(row2.sum));
+                    if (fabs(term) <= PG_SUM_TOL * scale) {
+                        if (++quiet_l1_2 >= PG_MIN_QUIET) row2_done = 1;
+                    } else quiet_l1_2 = 0;
+                }
+            }
+
+            if (row1_done && row2_done) break;
+            if (l1 + 1 < PG_MAX_INNER) {
+                const double u = (double)l1;
+                const double inc = log_xy + log_rho2 - log_D +
+                    2.0 * log(a + (double)n + (double)qrow + u) -
+                    log(a + u) - log(u + 1.0);
+                lc1 += inc;
+                lc2 += inc;
+            }
+        }
+        if (!row1_done || !row2_done) return pg_fail(PG_STATUS_MAXITER);
+
+        if (do_first) {
+            kahan_add(&first, row1.sum);
+            if (qrow > 12) {
+                const double scale = fmax2(1e-300, fabs(first.sum));
+                if (fabs(row1.sum) <= PG_SUM_TOL * scale) {
+                    if (++quiet_first >= PG_MIN_QUIET) {
+                        active_first = 0;
+                        converged_first = 1;
+                    }
+                } else quiet_first = 0;
+            }
+        }
+        if (do_second) {
+            const int ss = qrow - 1;
+            kahan_add(&second, row2.sum);
+            if (ss > 12) {
+                const double scale = fmax2(1e-300, fabs(second.sum));
+                if (fabs(row2.sum) <= PG_SUM_TOL * scale) {
+                    if (++quiet_second >= PG_MIN_QUIET) {
+                        active_second = 0;
+                        converged_second = 1;
+                    }
+                } else quiet_second = 0;
+            }
+        }
+
+        if (qrow < PG_MAX_OUTER) {
+            if (qrow + 1 < PG_MAX_OUTER) {
+                const double k = (double)qrow;
+                logcoef1_row += log_rho2 - log_D +
+                    log((double)n + k) - log(k + 1.0) +
+                    2.0 * log(a + (double)n + k) -
+                    2.0 * log((double)n + k + 1.0);
+            }
+            if (qrow >= 1 && qrow < PG_MAX_OUTER) {
+                const double ss = (double)(qrow - 1);
+                logcoef2_row += log_rho2 - log_D +
+                    log((double)n + 1.0 + ss) - log(ss + 1.0) +
+                    2.0 * log(a + (double)n + ss + 1.0) -
+                    2.0 * log((double)n + ss + 2.0);
+            }
+            if (!pg_beta_pseq_advance(&psi0) ||
+                !pg_beta_pseq_advance(&psir) ||
+                (!stationary &&
+                 (!pg_beta_pseq_advance(&psj0) ||
+                  !pg_beta_pseq_advance(&psjr))))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        }
+    }
+
+    if (!converged_first || !converged_second)
+        return pg_fail(PG_STATUS_MAXITER);
+    return pg_finish_prob(first.sum + second.sum);
+}
+
+/* ------------------------------------------------------------------ */
+/* Case b > c >= 1: corrected equation (13), fused double series.    */
+/* ------------------------------------------------------------------ */
+static double PGrt_h2beta_core(double corr, int r, int t,
+                               double mean_i, double mean_j, double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    const int b = r, c = t;
+    const double rho2 = corr * corr;
+    const double x = a / mean_i;
+    const double y = a / mean_j;
+    const double bx = 1.0 + x - rho2;
+    if (b <= c || c < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
+        !(x > 0.0) || !(y > 0.0) || !(bx > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const double log_rho2 = log(rho2);
+    const double log_x = log(x);
+    const double log1px = log1p(x);
+    const double log1mr2 = log1p(-rho2);
+    const double z1 = -rho2 / bx;
+    const double w = 1.0 / (1.0 + y);
+    const int a_int = pg_shape_is_integer(a) ? (int)llround(a) : 0;
+
+    const double log_pref1 = ((double)b + a) * log1mr2 + a * log_x -
+                             ((double)b - (double)c + 1.0) * log(bx);
+    const double log_pref2 = ((double)b + a) * log1mr2 + a * log_x -
+                             ((double)b - (double)c) * log(bx);
+    double logcoef_l0 = pg_log_poch(a, (double)b) -
+                        ((double)c + a - 1.0) * log1px -
+                        lgammafn((double)b + 1.0);
+    double logcoef_s0 = pg_log_poch(a, (double)b) -
+                        ((double)c + a) * log1px -
+                        lgammafn((double)b + 1.0);
+    if (!R_FINITE(log_pref1) || !R_FINITE(log_pref2) ||
+        !R_FINITE(logcoef_l0) || !R_FINITE(logcoef_s0))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    PGBetaPSeq pseq;
+    if (!pg_beta_pseq_init(&pseq, (double)c, a, w))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    KahanSum sum1, sum2;
+    kahan_init(&sum1);
+    kahan_init(&sum2);
+    int quiet_l = 0, quiet_s = 0;
+    int active_l = 1, active_s = 1;
+    int converged_l = 0, converged_s = 0;
+
+    for (int outer = 0; outer <= PG_PGRT_MAX_OUTER &&
+                            (active_l || active_s); ++outer) {
+        const int do_l = active_l && outer < PG_PGRT_MAX_OUTER;
+        const int do_s = active_s && outer >= 1 && outer <= PG_PGRT_MAX_OUTER;
+        if (!do_l && !do_s) break;
+
+        PGBetaBSeq bseq_l, bseq_s;
+        if (do_l && !pg_beta_bseq_from_pseq(&bseq_l, &pseq))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        if (do_s && !pg_beta_bseq_from_pseq(&bseq_s, &pseq))
+            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+        PGHypBSeq hseq_l, hseq_s;
+        if (do_l)
+            pg_hyp_bseq_init(&hseq_l, (double)(b - c + 1), a,
+                             (double)outer + (double)b + 1.0, z1, a_int);
+        if (do_s)
+            pg_hyp_bseq_init(&hseq_s, (double)(b - c), a,
+                             (double)outer + (double)b, z1, a_int);
+
+        KahanSum row_l, row_s;
+        kahan_init(&row_l);
+        kahan_init(&row_s);
+        int ql = 0, qs = 0;
+        int done_l = !do_l, done_s = !do_s;
+        double lc_l = logcoef_l0, lc_s = logcoef_s0;
+
+        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
+            if (do_l && !done_l) {
+                double h1 = pg_hyp_bseq_get(&hseq_l, l1);
+                const double logI = pg_beta_bseq_get(&bseq_l, l1);
+                if (!(h1 > 0.0) || !R_FINITE(h1)) {
+                    h1 = pg_hyp_integral_seed((double)(b - c + 1),
+                        1.0 - (double)l1 - a,
+                        (double)outer + (double)b + 1.0, z1);
+                }
+                if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                const double term = pg_term_h1_logbeta(lc_l, h1, logI);
+                if (!R_FINITE(term))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                kahan_add(&row_l, term);
+                if (l1 > 10) {
+                    const double scale = fmax2(1e-300, fabs(row_l.sum));
+                    if (fabs(term) <= PG_SUM_TOL * scale) {
+                        if (++ql >= PG_MIN_QUIET) done_l = 1;
+                    } else ql = 0;
+                }
+            }
+
+            if (do_s && !done_s) {
+                double h1 = pg_hyp_bseq_get(&hseq_s, l1);
+                const double logI = pg_beta_bseq_get(&bseq_s, l1);
+                if (!(h1 > 0.0) || !R_FINITE(h1)) {
+                    h1 = pg_hyp_integral_seed((double)(b - c),
+                        1.0 - (double)l1 - a,
+                        (double)outer + (double)b, z1);
+                }
+                if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                const double term = pg_term_h1_logbeta(lc_s, h1, logI);
+                if (!R_FINITE(term))
+                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+                kahan_add(&row_s, term);
+                if (l1 > 10) {
+                    const double scale = fmax2(1e-300, fabs(row_s.sum));
+                    if (fabs(term) <= PG_SUM_TOL * scale) {
+                        if (++qs >= PG_MIN_QUIET) done_s = 1;
+                    } else qs = 0;
+                }
+            }
+
+            if (done_l && done_s) break;
+            if (l1 + 1 < PG_MAX_INNER) {
+                const double u = (double)l1;
+                lc_l += log_x + log_rho2 - log1px +
+                        log(a + (double)b + (double)outer + u) -
+                        log(u + 1.0);
+                lc_s += log_x + log_rho2 - log1px +
+                        log(a + (double)b + (double)outer - 1.0 + u) -
+                        log(u + 1.0);
+            }
+        }
+        if (!done_l || !done_s) return pg_fail(PG_STATUS_MAXITER);
+
+        if (do_l) {
+            kahan_add(&sum1, row_l.sum);
+            if (outer > 12) {
+                const double scale = fmax2(1e-300, fabs(sum1.sum));
+                if (fabs(row_l.sum) <= PG_SUM_TOL * scale) {
+                    if (++quiet_l >= PG_MIN_QUIET) {
+                        active_l = 0;
+                        converged_l = 1;
+                    }
+                } else quiet_l = 0;
+            }
+        }
+        if (do_s) {
+            const int ss = outer - 1;
+            kahan_add(&sum2, row_s.sum);
+            if (ss > 12) {
+                const double scale = fmax2(1e-300, fabs(sum2.sum));
+                if (fabs(row_s.sum) <= PG_SUM_TOL * scale) {
+                    if (++quiet_s >= PG_MIN_QUIET) {
+                        active_s = 0;
+                        converged_s = 1;
+                    }
+                } else quiet_s = 0;
+            }
+        }
+
+        if (outer < PG_PGRT_MAX_OUTER) {
+            if (outer + 1 < PG_PGRT_MAX_OUTER) {
+                const double u = (double)outer;
+                logcoef_l0 += log_rho2 - log1px +
+                    log((double)c + u) - log(u + 1.0) +
+                    log(a + (double)b + u) -
+                    log((double)b + u + 1.0);
+            }
+            if (outer >= 1 && outer < PG_PGRT_MAX_OUTER) {
+                const double u = (double)(outer - 1);
+                logcoef_s0 += log_rho2 - log1px +
+                    log((double)c + 1.0 + u) - log(u + 1.0) +
+                    log(a + (double)b + u) -
+                    log((double)b + u + 1.0);
+            }
+            if (!pg_beta_pseq_advance(&pseq))
+                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        }
+    }
+
+    if (!converged_l || !converged_s)
+        return pg_fail(PG_STATUS_MAXITER);
+    if (sum1.sum < -PG_PROB_TOL || sum2.sum < -PG_PROB_TOL)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+    const double pos1 = fmax2(0.0, sum1.sum);
+    const double pos2 = fmax2(0.0, sum2.sum);
+    const double logA = pos1 == 0.0 ? R_NegInf :
+                        log_pref1 + log(pos1);
+    const double logB = pos2 == 0.0 ? R_NegInf :
+                        log_pref2 + log(pos2);
+    return pg_finish_prob(pg_signed_logdiff(logA, logB));
+}
+
+double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a)
+{
+    return PGrt_h2beta_core(corr, r, t, mean_i, mean_j, a);
+}
+
+
+static R_INLINE double pg_nb_logpmf(int z, double mean, double shape)
+{
+    if (z < 0 || !(mean > 0.0) || !(shape > 0.0) ||
+        !R_FINITE(mean) || !R_FINITE(shape)) return R_NaN;
+    const double den = shape + mean;
+    return lgammafn(shape + (double)z) - lgammafn(shape) -
+           lgammafn((double)z + 1.0) +
+           shape * (log(shape) - log(den)) +
+           (double)z * (log(mean) - log(den));
+}
+
+static R_INLINE double pg_exp_logprob(double lp)
+{
+    if (lp == R_NegInf) return 0.0;
+    if (!R_FINITE(lp) || lp > PG_PROB_TOL)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+    if (lp < -745.0) return 0.0;
+    return pg_finish_prob(exp(lp));
+}
+
+double biv_PoissonGamma(double corr, int r, int t,
+                        double mean_i, double mean_j, double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(a) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        r < 0 || t < 0 || !(mean_i > 0.0) || !(mean_j > 0.0) || !(a > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const int equal_means =
+        fabs(mean_i - mean_j) <=
+        1e-12 * fmax2(1.0, fmax2(mean_i, mean_j));
+    if (fabs(corr) >= 1.0 - PG_RHO_EPS) {
+        if (equal_means) {
+            if (r != t) return 0.0;
+            return pg_exp_logprob(pg_nb_logpmf(r, 0.5 * (mean_i + mean_j), a));
+        }
+        corr = copysign(1.0 - PG_RHO_EPS, corr);
+    }
+
+    if (fabs(corr) <= PG_INDEP_TOL)
+        return pg_exp_logprob(pg_nb_logpmf(r, mean_i, a) +
+                              pg_nb_logpmf(t, mean_j, a));
+
+    if (fmax2(mean_i, mean_j) / a <= PG_POISSON_REL_TOL) {
+        const double lp = biv_Poisson(corr, r, t, mean_i, mean_j);
+        if (lp == R_NegInf) return 0.0;
+        if (!R_FINITE(lp)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        return pg_exp_logprob(lp);
+    }
+
+    if (r == t) {
+        if (r == 0) return PG00_positive(corr, mean_i, mean_j, a);
+        return PGrr_positive(corr, r, mean_i, mean_j, a);
+    }
+    return r > t ? PGrt_positive(corr, r, t, mean_i, mean_j, a)
+                 : PGrt_positive(corr, t, r, mean_j, mean_i, a);
+}
+
+
+/* Legacy PEM bivariate evaluator retained for regression tests and timing
+ * comparisons.  It is not used by the public PoissonGamma likelihood path. */
+static double biv_PoissonGamma_legacy(double corr, int r, int t,
+                                      double mean_i, double mean_j, double a)
+{
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(a) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        r < 0 || t < 0 || !(mean_i > 0.0) || !(mean_j > 0.0) || !(a > 0.0))
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    const int equal_means =
+        fabs(mean_i - mean_j) <=
+        1e-12 * fmax2(1.0, fmax2(mean_i, mean_j));
+    if (fabs(corr) >= 1.0 - PG_RHO_EPS) {
+        if (equal_means) {
+            if (r != t) return 0.0;
+            return pg_exp_logprob(pg_nb_logpmf(r, 0.5 * (mean_i + mean_j), a));
+        }
+        corr = copysign(1.0 - PG_RHO_EPS, corr);
+    }
+
+    if (fabs(corr) <= PG_INDEP_TOL)
+        return pg_exp_logprob(pg_nb_logpmf(r, mean_i, a) +
+                              pg_nb_logpmf(t, mean_j, a));
+
+    if (fmax2(mean_i, mean_j) / a <= PG_POISSON_REL_TOL) {
+        const double lp = biv_Poisson(corr, r, t, mean_i, mean_j);
+        if (lp == R_NegInf) return 0.0;
+        if (!R_FINITE(lp)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+        return pg_exp_logprob(lp);
+    }
+
+    if (r == t) {
+        if (r == 0) return PG00(corr, r, t, mean_i, mean_j, a);
+        return PGrr(corr, r, t, mean_i, mean_j, a);
+    }
+    if (r == 0) return PGr0(corr, t, r, mean_j, mean_i, a);
+    if (t == 0) return PGr0(corr, r, t, mean_i, mean_j, a);
+    return r > t ? PGrt(corr, r, t, mean_i, mean_j, a)
+                 : PGrt(corr, t, r, mean_j, mean_i, a);
+}
+
+double biv_PoissonGammaZIP(double corr, int r, int t,
+                           double mean_i, double mean_j, double mup,
+                           double nugget1, double nugget2, double shape)
+{
+    pg_set_status(PG_STATUS_OK);
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(mup) || !R_FINITE(nugget1) || !R_FINITE(nugget2) ||
+        !R_FINITE(shape) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        r < 0 || t < 0 || !(mean_i > 0.0) || !(mean_j > 0.0) ||
+        !(shape > 0.0) || nugget1 < 0.0 || nugget1 >= 1.0 ||
+        nugget2 < 0.0 || nugget2 >= 1.0)
+        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
+
+    double rho_z = (1.0 - nugget2) * corr;
+    if (rho_z >= 1.0) rho_z = 1.0 - PG_RHO_EPS;
+    if (rho_z <= -1.0) rho_z = -1.0 + PG_RHO_EPS;
+    const double p = pnorm(mup, 0.0, 1.0, 1, 0);
+    const double p00raw = pbnorm22(mup, mup, rho_z);
+    if (!R_FINITE(p) || !R_FINITE(p00raw))
+        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
+
+    double p00 = p00raw;
+    double p01 = p - p00;
+    double p10 = p01;
+    double p11 = 1.0 - 2.0 * p + p00;
+    if (p00 < 0.0 && p00 > -PG_PROB_TOL) p00 = 0.0;
+    if (p01 < 0.0 && p01 > -PG_PROB_TOL) p01 = 0.0;
+    if (p10 < 0.0 && p10 > -PG_PROB_TOL) p10 = 0.0;
+    if (p11 < 0.0 && p11 > -PG_PROB_TOL) p11 = 0.0;
+    if (p00 < 0.0 || p01 < 0.0 || p10 < 0.0 || p11 < 0.0)
+        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
+
+    double rho_count = (1.0 - nugget1) * corr;
+    if (rho_count >= 1.0) rho_count = 1.0 - PG_RHO_EPS;
+    if (rho_count <= -1.0) rho_count = -1.0 + PG_RHO_EPS;
+    const double probi = shape / (shape + mean_i);
+    const double probj = shape / (shape + mean_j);
+
+    KahanSum dens;
+    kahan_init(&dens);
+    if (r == 0 && t == 0) {
+        kahan_add(&dens, p00);
+        kahan_add(&dens, p01 * exp(shape * log(probi)));
+        kahan_add(&dens, p10 * exp(shape * log(probj)));
+        const double joint = biv_PoissonGamma(rho_count, 0, 0,
+                                               mean_i, mean_j, shape);
+        if (!R_FINITE(joint)) return joint;
+        kahan_add(&dens, p11 * joint);
+    } else if (r == 0) {
+        kahan_add(&dens, p01 * dnbinom((double)t, shape, probj, 0));
+        const double joint = biv_PoissonGamma(rho_count, 0, t,
+                                               mean_i, mean_j, shape);
+        if (!R_FINITE(joint)) return joint;
+        kahan_add(&dens, p11 * joint);
+    } else if (t == 0) {
+        kahan_add(&dens, p10 * dnbinom((double)r, shape, probi, 0));
+        const double joint = biv_PoissonGamma(rho_count, r, 0,
+                                               mean_i, mean_j, shape);
+        if (!R_FINITE(joint)) return joint;
+        kahan_add(&dens, p11 * joint);
+    } else {
+        const double joint = biv_PoissonGamma(rho_count, r, t,
+                                               mean_i, mean_j, shape);
+        if (!R_FINITE(joint)) return joint;
+        kahan_add(&dens, p11 * joint);
+    }
+    return pg_finish_prob(dens.sum);
+}
+
+int GeoPGPreparePair(double data_i, double data_j,
+                     double eta_i, double eta_j,
+                     int *r, int *t, double *mean_i, double *mean_j)
+{
+    if (!r || !t || !mean_i || !mean_j) return -1;
+    if (ISNAN(data_i) || ISNAN(data_j)) return 0;
+    if (!R_FINITE(data_i) || !R_FINITE(data_j) ||
+        !R_FINITE(eta_i) || !R_FINITE(eta_j) ||
+        eta_i > 700.0 || eta_j > 700.0) return -1;
+    const double ri = nearbyint(data_i), tj = nearbyint(data_j);
+    if (ri < 0.0 || tj < 0.0 || ri > INT_MAX || tj > INT_MAX ||
+        fabs(data_i - ri) > 1e-10 || fabs(data_j - tj) > 1e-10)
+        return -1;
+    *mean_i = exp(eta_i);
+    *mean_j = exp(eta_j);
+    if (!R_FINITE(*mean_i) || !R_FINITE(*mean_j) ||
+        !(*mean_i > 0.0) || !(*mean_j > 0.0)) return -1;
+    *r = (int)ri;
+    *t = (int)tj;
+    return 1;
+}
+
+int GeoPGPreparePairAt(int index, double data_i, double data_j,
+                       double eta_i, double eta_j,
+                       int *r, int *t, double *mean_i, double *mean_j)
+{
+    if (pg_count_n && pg_count1 && pg_count2 && index >= 0 &&
+        index < pg_count_n[0]) {
+        if (pg_count1[index] == INT_MIN || pg_count2[index] == INT_MIN)
+            return 0;
+        if (!R_FINITE(eta_i) || !R_FINITE(eta_j) ||
+            eta_i > 700.0 || eta_j > 700.0) return -1;
+        *mean_i = exp(eta_i);
+        *mean_j = exp(eta_j);
+        if (!R_FINITE(*mean_i) || !R_FINITE(*mean_j) ||
+            !(*mean_i > 0.0) || !(*mean_j > 0.0)) return -1;
+        *r = pg_count1[index];
+        *t = pg_count2[index];
+        return 1;
+    }
+    return GeoPGPreparePair(data_i, data_j, eta_i, eta_j,
+                            r, t, mean_i, mean_j);
+}
+
+double GeoPGLogJoint(double corr, int r, int t,
+                     double mean_i, double mean_j, double shape)
+{
+    const double p = biv_PoissonGamma(corr, r, t, mean_i, mean_j, shape);
+    if (!R_FINITE(p) || p < 0.0 || p > 1.0 + PG_PROB_TOL) return R_NaN;
+    return log(fmax2(p, PG_PROB_MIN));
+}
+
+double GeoPGLogMarginal(int z, double mean, double shape)
+{
+    return pg_nb_logpmf(z, mean, shape);
+}
+
+double GeoPGLogConditional(double corr, int r, int t,
+                           double mean_i, double mean_j, double shape)
+{
+    const double lj = GeoPGLogJoint(corr, r, t, mean_i, mean_j, shape);
+    const double lm = GeoPGLogMarginal(t, mean_j, shape);
+    return (R_FINITE(lj) && R_FINITE(lm)) ? lj - lm : R_NaN;
+}
+
+double GeoPGZIPLogJoint(double corr, int r, int t,
+                        double mean_i, double mean_j, double mup,
+                        double nugget1, double nugget2, double shape)
+{
+    const double p = biv_PoissonGammaZIP(corr, r, t, mean_i, mean_j,
+                                          mup, nugget1, nugget2, shape);
+    if (!R_FINITE(p) || p < 0.0 || p > 1.0 + PG_PROB_TOL) return R_NaN;
+    return log(fmax2(p, PG_PROB_MIN));
+}
+
+double GeoPGZIPLogMarginal(int z, double mean, double mup, double shape)
+{
+    if (z < 0 || !R_FINITE(mup)) return R_NaN;
+    const double pzero = pnorm(mup, 0.0, 1.0, 1, 0);
+    const double lnb = pg_nb_logpmf(z, mean, shape);
+    if (!R_FINITE(pzero) || !R_FINITE(lnb)) return R_NaN;
+    if (z == 0)
+        return pg_logspace_add_pos(log(pzero), log1p(-pzero) + lnb);
+    return log1p(-pzero) + lnb;
+}
+
+double GeoPGZIPLogConditional(double corr, int r, int t,
+                              double mean_i, double mean_j, double mup,
+                              double nugget1, double nugget2, double shape)
+{
+    const double lj = GeoPGZIPLogJoint(corr, r, t, mean_i, mean_j, mup,
+                                       nugget1, nugget2, shape);
+    const double lm = GeoPGZIPLogMarginal(t, mean_j, mup, shape);
+    return (R_FINITE(lj) && R_FINITE(lm)) ? lj - lm : R_NaN;
+}
+
+double GeoPGGaussLogJoint(double corr, double data_i, double data_j,
+                          double mean_i, double mean_j, double shape)
+{
+    if (!R_FINITE(data_i) || !R_FINITE(data_j) ||
+        !(mean_i > 0.0) || !(mean_j > 0.0) || !(shape > 0.0))
+        return R_NaN;
+    const double vi = mean_i * (1.0 + mean_i / shape);
+    const double vj = mean_j * (1.0 + mean_j / shape);
+    double rr = corr_pois_gen(corr, mean_i, mean_j, shape);
+    if (!R_FINITE(vi) || !R_FINITE(vj) || !(vi > 0.0) || !(vj > 0.0) ||
+        !R_FINITE(rr)) return R_NaN;
+    rr = fmax2(-1.0 + PG_RHO_EPS, fmin2(1.0 - PG_RHO_EPS, rr));
+    const double zi = (data_i - mean_i) / sqrt(vi);
+    const double zj = (data_j - mean_j) / sqrt(vj);
+    const double omr2 = 1.0 - rr * rr;
+    return -log(2.0 * M_PI) - 0.5 * (log(vi) + log(vj) + log(omr2)) -
+           0.5 * (zi * zi - 2.0 * rr * zi * zj + zj * zj) / omr2;
+}
+
+double GeoPGGaussLogConditional(double corr, double data_i, double data_j,
+                                double mean_i, double mean_j, double shape)
+{
+    const double lj = GeoPGGaussLogJoint(corr, data_i, data_j,
+                                          mean_i, mean_j, shape);
+    const double vj = mean_j * (1.0 + mean_j / shape);
+    const double lm = dnorm(data_j, mean_j, sqrt(vj), 1);
+    return (R_FINITE(lj) && R_FINITE(lm)) ? lj - lm : R_NaN;
+}
+
+/* Small diagnostics used by the external regression script. */
+void GeoPEMCorrEval(double *corr, double *mean_i, double *mean_j,
+                    double *shape, double *out)
+{
+    if (out) out[0] = corr_pois_gen(corr[0], mean_i[0], mean_j[0], shape[0]);
+}
+
+void GeoPEMPGrtBetaEval(double *corr, int *r, int *t,
+                        double *mean_i, double *mean_j,
+                        double *shape, double *out)
+{
+    if (out) out[0] = biv_PoissonGamma(corr[0], r[0], t[0],
+                                       mean_i[0], mean_j[0], shape[0]);
+}
+
+
+void GeoPEMPGrtLegacyEval(double *corr, int *r, int *t,
+                          double *mean_i, double *mean_j, double *shape,
+                          double *out)
+{
+    if (out) out[0] = biv_PoissonGamma_legacy(corr[0], r[0], t[0],
+                                              mean_i[0], mean_j[0], shape[0]);
+}
+
+void GeoPEMZIPEval(double *corr, int *r, int *t,
+                   double *mean_i, double *mean_j, double *mup,
+                   double *nugget1, double *nugget2,
+                   double *shape, double *out)
+{
+    if (out) out[0] = biv_PoissonGammaZIP(corr[0], r[0], t[0],
+        mean_i[0], mean_j[0], mup[0], nugget1[0], nugget2[0], shape[0]);
 }
 
 /*####*/
@@ -4932,8 +6187,7 @@ if (eta!=1.0&&gam==1.0){
   /**+*********************/
   if ((eta!=1.0)&&(gam!=1.0)){
    
-       double *param;;
-       param=(double *) R_Calloc(4,double);
+       double param[4] = {0.0, 0.0, 0.0, 0.0};
        param[0]=eta;param[1]=gam;  //mu,alpha //beta
        
  
@@ -4975,49 +6229,319 @@ for(i=0;i<=*n;i++)  res[i]=corr_kuma(rho[i],eta[0],gam[0]);
 
  /*********************/
 
+/*
+ * Fast Gaussian-copula kernel.  The copula density has the closed form
+ *
+ *   log c(u,v;r) = -1/2 log(1-r^2)
+ *                  - [r^2(x^2+y^2)-2rxy] / [2(1-r^2)],
+ *
+ * with x=Phi^{-1}(u), y=Phi^{-1}(v).  This avoids constructing three
+ * Gaussian densities and then taking their ratio.  Pairwise likelihoods
+ * revisit the same marginal uniforms many times, so the exact p -> qnorm(p)
+ * map is also cached.  Cache keys are compared bit-for-bit; a hash collision
+ * only causes a recomputation.
+ */
+#define GEO_GAUSSCOP_QCACHE_SIZE 65536u
+typedef struct {
+    uint64_t p_bits;
+    double quantile;
+} GeoGaussCopQCacheEntry;
+
+static GeoGaussCopQCacheEntry geo_gausscop_qcache[GEO_GAUSSCOP_QCACHE_SIZE];
+
+static R_INLINE double geo_gausscop_qnorm_cached(double p)
+{
+    uint64_t pb;
+    memcpy(&pb, &p, sizeof(pb));
+    uint64_t h = pb;
+    h ^= h >> 30;
+    h *= UINT64_C(0xbf58476d1ce4e5b9);
+    h ^= h >> 27;
+    h *= UINT64_C(0x94d049bb133111eb);
+    h ^= h >> 31;
+
+    GeoGaussCopQCacheEntry *e =
+        &geo_gausscop_qcache[h & (GEO_GAUSSCOP_QCACHE_SIZE - 1u)];
+    if (e->p_bits == pb) return e->quantile;
+
+    const double q = qnorm(p, 0.0, 1.0, 1, 0);
+    if (R_FINITE(q)) {
+        e->p_bits = pb;
+        e->quantile = q;
+    }
+    return q;
+}
+
+static R_INLINE double geo_gausscop_log_from_scores(double x, double y, double rho)
+{
+    rho = clamp_corr(rho);
+    if (!R_FINITE(rho) || !R_FINITE(x) || !R_FINITE(y)) return R_NaN;
+    const double r2 = rho * rho;
+    const double den = 1.0 - r2;
+    if (!(den > 0.0)) return R_NaN;
+    return -0.5 * log1p(-r2)
+           - 0.5 * (r2 * (x*x + y*y) - 2.0*rho*x*y) / den;
+}
+
+static R_INLINE double geo_gausscop_log(double dat1, double dat2, double rho)
+{
+    const double eps = 1e-12;
+    dat1 = fmin(1.0-eps, fmax(eps, dat1));
+    dat2 = fmin(1.0-eps, fmax(eps, dat2));
+    const double a1 = geo_gausscop_qnorm_cached(dat1);
+    const double a2 = geo_gausscop_qnorm_cached(dat2);
+    return geo_gausscop_log_from_scores(a1, a2, rho);
+}
+
 void biv_unif_CopulaGauss_call(double *x,double *y,double *rho, double *res)
 {
     *res = biv_unif_CopulaGauss(*x,*y,*rho);
 }
 
-// bivariatte density  gaussian copula
+// bivariate density Gaussian copula
 double biv_unif_CopulaGauss(double dat1, double dat2, double rho)
 {
-    if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
-    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.998;
-
-    // Calcola i quantili
-    double a1 = qnorm(dat1, 0, 1, 1, 0);
-    double a2 = qnorm(dat2, 0, 1, 1, 0);
-
-    // Calcola le densità normali
-    double g1 = dnorm(a1, 0, 1, 0);
-    double g2 = dnorm(a2, 0, 1, 0);
-
-    // Calcola e restituisci il risultato
-    return biv_Norm(rho, a1, a2, 0, 0, 1, 1, 0) / (g1 * g2);
+    const double logc = geo_gausscop_log(dat1, dat2, rho);
+    if (!R_FINITE(logc)) return R_NaN;
+    return exp(logc);
 }
-// bivariatte density  skewgaussian copula
+/*
+ * Pairwise skew-Gaussian copula fits revisit the same site-specific uniforms
+ * many times within one objective evaluation.  The inverse skew-normal CDF
+ * qsn() is substantially more expensive than the joint density itself, so
+ * cache the exact (p, alpha) -> (quantile, density) map.  The cache is only
+ * an execution optimization: keys are compared bit-for-bit and a collision
+ * merely causes a recomputation.
+ */
+#define GEO_SKEWCOP_QCACHE_SIZE 65536u
+typedef struct {
+    uint64_t p_bits;
+    uint64_t alpha_bits;
+    double quantile;
+    double density;
+} GeoSkewCopQCacheEntry;
+
+static GeoSkewCopQCacheEntry geo_skewcop_qcache[GEO_SKEWCOP_QCACHE_SIZE];
+
+static inline uint64_t geo_double_bits(double x)
+{
+    uint64_t out;
+    memcpy(&out, &x, sizeof(out));
+    return out;
+}
+
+static inline uint64_t geo_skewcop_mix64(uint64_t x)
+{
+    x ^= x >> 30;
+    x *= UINT64_C(0xbf58476d1ce4e5b9);
+    x ^= x >> 27;
+    x *= UINT64_C(0x94d049bb133111eb);
+    x ^= x >> 31;
+    return x;
+}
+
+static inline int geo_skewcop_quant_density(double p, double alpha,
+                                            double *quantile, double *density)
+{
+    const double small = 1e-8;
+    const double omega = sqrt(alpha * alpha + 1.0);
+
+    /* eta = 0 is exactly the Gaussian copula. */
+    if (alpha == 0.0) {
+        const double q = qnorm(p, 0.0, 1.0, 1, 0);
+        const double d = dnorm(q, 0.0, 1.0, 0);
+        *quantile = q;
+        *density = d;
+        return R_FINITE(q) && R_FINITE(d) && d > 0.0;
+    }
+
+    const uint64_t pb = geo_double_bits(p);
+    const uint64_t ab = geo_double_bits(alpha);
+    const uint64_t h = geo_skewcop_mix64(pb ^ (geo_skewcop_mix64(ab) + UINT64_C(0x9e3779b97f4a7c15)));
+    GeoSkewCopQCacheEntry *e = &geo_skewcop_qcache[h & (GEO_SKEWCOP_QCACHE_SIZE - 1u)];
+
+    if (e->p_bits == pb && e->alpha_bits == ab) {
+        *quantile = e->quantile;
+        *density = e->density;
+        return R_FINITE(*quantile) && R_FINITE(*density) && *density > 0.0;
+    }
+
+    const double q = qsn(p, omega, alpha, 0.0, small);
+    const double d = dsn(q, omega, alpha, 0.0);
+    if (R_FINITE(q) && R_FINITE(d) && d > 0.0) {
+        e->p_bits = pb;
+        e->alpha_bits = ab;
+        e->quantile = q;
+        e->density = d;
+    }
+    *quantile = q;
+    *density = d;
+    return R_FINITE(q) && R_FINITE(d) && d > 0.0;
+}
+
+// bivariate density skew-Gaussian copula
 double biv_unif_CopulaSkewGauss(double dat1, double dat2, double rho, double alpha)
 {
-     // reparametrization
+    const double eps = 1e-12;
+    dat1 = fmin(1.0-eps, fmax(eps, dat1));
+    dat2 = fmin(1.0-eps, fmax(eps, dat2));
 
-    if (fabs(dat1 - 1) < 0.0001) dat1 = 0.999;
-    if (fabs(dat2 - 1) < 0.0001) dat2 = 0.999;
-    
-    const double small = 1e-8;
-    const double omega = sqrt(alpha * alpha + 1);
-    
-    // Calcola i quantili in una sola riga
-    double a1 = qsn(dat1, omega, alpha, 0, small);
-    double a2 = qsn(dat2, omega, alpha, 0, small);
+    /* Preserve the exact Gaussian special case and avoid skew inversion work. */
+    if (alpha == 0.0) return biv_unif_CopulaGauss(dat1, dat2, rho);
 
-    // Calcola le densità dei quantili
-    double g1 = dsn(a1, omega, alpha, 0);
-    double g2 = dsn(a2, omega, alpha, 0);
+    double a1, a2, g1, g2;
+    if (!geo_skewcop_quant_density(dat1, alpha, &a1, &g1) ||
+        !geo_skewcop_quant_density(dat2, alpha, &a2, &g2))
+        return R_NaN;
 
-    // Calcola e restituisci il risultato
-    return biv_skew(rho, a1, a2, 0, 0, 1, alpha, 0) / (g1 * g2);
+    const double joint = biv_skew(rho, a1, a2, 0, 0, 1, alpha, 0);
+    if (!R_FINITE(joint) || joint <= 0.0) return R_NaN;
+    return joint / (g1 * g2);
+}
+
+
+/*
+ * Rectangle probability for the skew-Gaussian copula.
+ *
+ * Discrete copula likelihoods need
+ *   P(u0 < U1 <= u1, v0 < U2 <= v1)
+ * rather than the continuous copula density.  For the GeoModels
+ * skew-Gaussian RF construction the copula density is available in closed
+ * form, while its bivariate CDF is not.  We therefore integrate the copula
+ * density directly on the bounded probability rectangle using tensor-product
+ * Gauss-Legendre quadrature.  The marginal skew-normal quantiles are computed
+ * only once per quadrature node (not once per tensor cell), which is critical
+ * inside the pairwise likelihood optimizer.
+ *
+ * eta=0 is exactly the Gaussian copula and is evaluated by the existing
+ * bivariate-normal rectangle formula.  rho=0 is exactly independence.
+ */
+static const double geo_gl10_x[10] = {
+    -0.97390652851717172008, -0.86506336668898451073,
+    -0.67940956829902440623, -0.43339539412924719080,
+    -0.14887433898163121088,  0.14887433898163121088,
+     0.43339539412924719080,  0.67940956829902440623,
+     0.86506336668898451073,  0.97390652851717172008
+};
+static const double geo_gl10_w[10] = {
+    0.06667134430868813759, 0.14945134915058059315,
+    0.21908636251598204399, 0.26926671930999635509,
+    0.29552422471475287017, 0.29552422471475287017,
+    0.26926671930999635509, 0.21908636251598204399,
+    0.14945134915058059315, 0.06667134430868813759
+};
+static const double geo_gl16_x[16] = {
+    -0.98940093499164993260, -0.94457502307323257608,
+    -0.86563120238783174388, -0.75540440835500303390,
+    -0.61787624440264374845, -0.45801677765722738634,
+    -0.28160355077925891323, -0.09501250983763744019,
+     0.09501250983763744019,  0.28160355077925891323,
+     0.45801677765722738634,  0.61787624440264374845,
+     0.75540440835500303390,  0.86563120238783174388,
+     0.94457502307323257608,  0.98940093499164993260
+};
+static const double geo_gl16_w[16] = {
+    0.02715245941175409485, 0.06225352393864789286,
+    0.09515851168249278481, 0.12462897125553387205,
+    0.14959598881657673208, 0.16915651939500253819,
+    0.18260341504492358887, 0.18945061045506849629,
+    0.18945061045506849629, 0.18260341504492358887,
+    0.16915651939500253819, 0.14959598881657673208,
+    0.12462897125553387205, 0.09515851168249278481,
+    0.06225352393864789286, 0.02715245941175409485
+};
+
+static double geo_skewcop_rect_rule(double ulo, double uhi,
+                                    double vlo, double vhi,
+                                    double rho, double alpha,
+                                    const double *gx, const double *gw,
+                                    int nq)
+{
+    const double hu = 0.5 * (uhi - ulo), cu = 0.5 * (uhi + ulo);
+    const double hv = 0.5 * (vhi - vlo), cv = 0.5 * (vhi + vlo);
+    double qu[16], du[16], qv[16], dv[16];
+
+    if (!(hu > 0.0) || !(hv > 0.0)) return 0.0;
+    for (int i = 0; i < nq; ++i) {
+        const double u = cu + hu * gx[i];
+        const double v = cv + hv * gx[i];
+        if (!geo_skewcop_quant_density(u, alpha, &qu[i], &du[i]) ||
+            !geo_skewcop_quant_density(v, alpha, &qv[i], &dv[i]))
+            return R_NaN;
+    }
+
+    double acc = 0.0;
+    for (int i = 0; i < nq; ++i) {
+        for (int j = 0; j < nq; ++j) {
+            const double joint = biv_skew(rho, qu[i], qv[j], 0, 0, 1, alpha, 0);
+            if (!R_FINITE(joint) || joint < 0.0) return R_NaN;
+            const double copdens = joint / (du[i] * dv[j]);
+            if (!R_FINITE(copdens) || copdens < 0.0) return R_NaN;
+            acc += gw[i] * gw[j] * copdens;
+        }
+    }
+    return hu * hv * acc;
+}
+
+static double geo_skewcop_rect_prob(double ulo, double uhi,
+                                    double vlo, double vhi,
+                                    double rho, double alpha)
+{
+    if (!R_FINITE(ulo) || !R_FINITE(uhi) ||
+        !R_FINITE(vlo) || !R_FINITE(vhi) ||
+        !R_FINITE(rho) || !R_FINITE(alpha)) return R_NaN;
+
+    ulo = fmin(1.0, fmax(0.0, ulo));
+    uhi = fmin(1.0, fmax(0.0, uhi));
+    vlo = fmin(1.0, fmax(0.0, vlo));
+    vhi = fmin(1.0, fmax(0.0, vhi));
+    if (uhi <= ulo || vhi <= vlo) return 0.0;
+
+    rho = clamp_corr(rho);
+    if (fabs(rho) < 1e-14)
+        return (uhi - ulo) * (vhi - vlo);
+
+    if (fabs(alpha) < 1e-14) {
+        const double xh = qnorm(uhi, 0.0, 1.0, 1, 0);
+        const double xl = qnorm(ulo, 0.0, 1.0, 1, 0);
+        const double yh = qnorm(vhi, 0.0, 1.0, 1, 0);
+        const double yl = qnorm(vlo, 0.0, 1.0, 1, 0);
+        double p = safe_pbnorm22(xh, yh, rho) - safe_pbnorm22(xl, yh, rho)
+                 - safe_pbnorm22(xh, yl, rho) + safe_pbnorm22(xl, yl, rho);
+        return fmax(0.0, p);
+    }
+
+    double p = geo_skewcop_rect_rule(ulo, uhi, vlo, vhi, rho, alpha,
+                                     geo_gl10_x, geo_gl10_w, 10);
+    const double maxp = fmin(uhi - ulo, vhi - vlo);
+    const double eta_abs = fabs(alpha) / sqrt(1.0 + alpha * alpha);
+    const double edge = fmin(fmin(ulo, 1.0-uhi), fmin(vlo, 1.0-vhi));
+
+    /* Strong dependence/skewness and extreme-tail rectangles are the cases
+       where the density varies most within a cell.  Refine only there, or if
+       the low-order result violates elementary probability bounds. */
+    if (!R_FINITE(p) || p < 0.0 || p > maxp * (1.0 + 1e-7) ||
+        fabs(rho) > 0.85 || eta_abs > 0.85 || edge < 1e-6) {
+        p = geo_skewcop_rect_rule(ulo, uhi, vlo, vhi, rho, alpha,
+                                  geo_gl16_x, geo_gl16_w, 16);
+    }
+    if (!R_FINITE(p)) return R_NaN;
+    if (p < 0.0 && p > -1e-12) p = 0.0;
+    if (p > maxp && p < maxp + 1e-10) p = maxp;
+    return p;
+}
+
+void biv_unif_CopulaSkewGauss_rect_call(double *ulo, double *uhi,
+                                        double *vlo, double *vhi,
+                                        double *rho, double *nu, double *res)
+{
+    if (!R_FINITE(*nu) || fabs(*nu) >= 1.0) {
+        *res = R_NaN;
+        return;
+    }
+    const double alpha = (*nu) / sqrt(1.0 - (*nu) * (*nu));
+    *res = geo_skewcop_rect_prob(*ulo, *uhi, *vlo, *vhi,
+                                 clamp_corr(*rho), alpha);
 }
 
  /*********************/
@@ -5026,9 +6550,123 @@ void biv_unif_CopulaClayton_call(double *x,double *y,double *rho, double *nu, do
     *res = biv_unif_CopulaClayton(*x,*y,*rho,*nu);
 }
 
+/*
+ * Fast log-Appell F4 evaluator for the constructive Clayton-like copula.
+ *
+ * In this caller the parameters always satisfy
+ *   a = b = c + 1, d = 1,
+ * with c = nu/2 > 0 and x,y >= 0.  Euler transformation of the inner
+ * Gauss function gives
+ *
+ * F4(c+1,c+1;c,1;x,y)
+ *   = sum_{k>=0} C_k P_{k+1}(x),
+ * P_n(x) = 2F1(-n,-n;c;x),
+ * C_0 = (1-x)^(-c-2),
+ * C_{k+1}/C_k = y ((c+1+k)/(k+1))^2 / (1-x)^2.
+ *
+ * The polynomial sequence P_n is advanced with the three-term Jacobi
+ * recurrence after the exact identity
+ *   P_n(x)=(1-x)^n n!/(c)_n P_n^{(c-1,0)}((1+x)/(1-x)).
+ * Thus the Clayton pair density no longer calls the generic hypergeo()
+ * routine once per outer F4 term.  All F4 terms are positive in the
+ * Clayton domain, so accumulation in log scale is cancellation-free.
+ */
+static R_INLINE double geo_clay_logaddexp(double a, double b)
+{
+    if (a == R_NegInf) return b;
+    if (b == R_NegInf) return a;
+    if (a < b) { const double t = a; a = b; b = t; }
+    return a + log1p(exp(b - a));
+}
+
+static double geo_clayton_logf4_fast(double c, double x, double y, int *iters)
+{
+    const int MAX_ITER = 2000;
+    const int MIN_K = 10;
+    const int QUIET_NEED = 4;
+    const double F4_LOG_TOL = -34.538776394910684; /* log(1e-15) */
+    const double LOG_SCALE = 345.38776394910684; /* log(1e150) */
+
+    if (iters) *iters = 0;
+    if (!R_FINITE(c) || !R_FINITE(x) || !R_FINITE(y) ||
+        c <= 0.0 || x < 0.0 || y < 0.0 || x >= 1.0 || y >= 1.0)
+        return R_NaN;
+
+    const double log1mx = log1p(-x);
+    const double logy = (y > 0.0) ? log(y) : R_NegInf;
+
+    /* P_0 and P_1, stored with a common dynamic scale. */
+    double pnm1 = 1.0;
+    double pn = 1.0 + x / c;
+    double p_log_scale = 0.0;
+
+    double logC = -(c + 2.0) * log1mx;
+    double logsum = R_NegInf;
+    int quiet = 0;
+
+    for (int k = 0; k < MAX_ITER; ++k) {
+        if (!(R_FINITE(pn) && pn > 0.0)) return R_NaN;
+
+        const double logP = log(pn) + p_log_scale;
+        const double logterm = logC + logP;
+        const double newsum = geo_clay_logaddexp(logsum, logterm);
+
+        if (k > MIN_K && logterm - newsum < F4_LOG_TOL) {
+            if (++quiet >= QUIET_NEED) {
+                if (iters) *iters = k + 1;
+                return newsum;
+            }
+        } else {
+            quiet = 0;
+        }
+        logsum = newsum;
+
+        if (y == 0.0) {
+            if (iters) *iters = k + 1;
+            return logsum;
+        }
+
+        logC += logy +
+                2.0 * (log(c + 1.0 + (double)k) - log((double)k + 1.0)) -
+                2.0 * log1mx;
+
+        /* Advance P_n -> P_{n+1}; here n=k+1 >= 1. */
+        const double n = (double)k + 1.0;
+        const double cn = c + n;
+        const double den = cn * cn * (c + 2.0*n - 1.0);
+        const double numer = c * (c - 1.0 + 2.0*n) + 2.0*n*n +
+                             x * (2.0*n*cn + c - 1.0);
+        const double A = (c + 2.0*n) * numer / den;
+        const double B = n*n * (1.0-x)*(1.0-x) * (c + 2.0*n + 1.0) / den;
+        double pnext = A * pn - B * pnm1;
+        if (!(R_FINITE(pnext) && pnext > 0.0)) return R_NaN;
+
+        const double mx = fmax(fabs(pn), fabs(pnext));
+        if (mx > 1e150) {
+            pn *= 1e-150;
+            pnext *= 1e-150;
+            p_log_scale += LOG_SCALE;
+        } else if (mx > 0.0 && mx < 1e-150) {
+            pn *= 1e150;
+            pnext *= 1e150;
+            p_log_scale -= LOG_SCALE;
+        }
+        pnm1 = pn;
+        pn = pnext;
+    }
+
+    if (iters) *iters = MAX_ITER;
+    return logsum;
+}
+
 // bivariate density clayton copula
 double biv_unif_CopulaClayton(double dat1, double dat2, double rho, double nu)
 {
+    const double eps = 1e-12;
+    dat1 = fmin(1.0-eps, fmax(eps, dat1));
+    dat2 = fmin(1.0-eps, fmax(eps, dat2));
+    if(!R_FINITE(nu) || nu <= 0.0 ||
+       fabs(nu-nearbyint(nu)) > sqrt(DBL_EPSILON)) return R_NegInf;
 
     double nu2 = nu / 2;
     double rho2 = rho * rho;
@@ -5038,8 +6676,20 @@ double biv_unif_CopulaClayton(double dat1, double dat2, double rho, double nu)
     double a1 = R_pow(dat1, 1 / nu2);
     double a2 = R_pow(dat2, 1 / nu2);
 
-    // Calcola e restituisce il risultato
-    return a * log1p(-rho2) + log(appellF4(a, a, nu2, 1, rho2 * a1 * a2, rho2 * (1 - a1) * (1 - a2)));
+    // GeoModels' Clayton-like copula density from the RF construction.
+    const double xx = rho2 * a1 * a2;
+    const double yy = rho2 * (1.0 - a1) * (1.0 - a2);
+    if (rho2 >= 1.0) return R_NegInf;
+
+    double logf4 = geo_clayton_logf4_fast(nu2, xx, yy, NULL);
+    if (!R_FINITE(logf4)) {
+        /* Conservative fallback: preserve the historical generic evaluator
+           outside the numerically validated fast recurrence path. */
+        const double f4 = appellF4(a, a, nu2, 1, xx, yy);
+        if (!R_FINITE(f4) || f4 <= 0.0) return R_NegInf;
+        logf4 = log(f4);
+    }
+    return a * log1p(-rho2) + logf4;
 }
 
 
@@ -5052,24 +6702,193 @@ double res=(a*b)* R_pow(y,a-1)*R_pow(1-R_pow(y,a),b-1);
 return(res);
 }
 
+/*
+ * Exact site-level marginal cache for continuous copula likelihoods.
+ *
+ * In a pairwise composite likelihood the same site appears in several pairs.
+ * Its marginal PIT and density therefore get recomputed repeatedly even within
+ * a single objective evaluation.  Cache the exact endpoint map
+ *
+ *   (model, z, mu, marginal nuisance parameters) -> (CDF, PDF, score)
+ *
+ * for the continuous copula margins.  Nugget and copula parameters are
+ * deliberately excluded from the key because they do not enter the marginal
+ * distribution.  All key components are compared bit-for-bit; a hash
+ * collision only causes a miss and a recomputation, never reuse of a wrong
+ * value.  This is therefore an execution-only optimization.
+ */
+#define GEO_MARGIN_CACHE_SIZE 65536u
+#define GEO_MARGIN_MAX_KEYPAR 4
+
+typedef struct {
+    int model;
+    unsigned char npar;
+    uint64_t key[2 + GEO_MARGIN_MAX_KEYPAR];
+    double cdf;
+    double pdf;
+    double score;
+} GeoMarginCacheEntry;
+
+static GeoMarginCacheEntry geo_margin_cache[GEO_MARGIN_CACHE_SIZE];
+
+static R_INLINE int geo_margin_keypars(int model, const double *nuis,
+                                       uint64_t out[GEO_MARGIN_MAX_KEYPAR])
+{
+    int n = 0;
+    switch(model) {
+    case 1:   /* Gaussian: sill */
+    case 22:  /* LogGaussian: sill */
+    case 25:  /* Logistic: sill */
+        out[n++] = geo_double_bits(nuis[1]);
+        break;
+    case 12:  /* StudentT: df, sill */
+        out[n++] = geo_double_bits(nuis[0]);
+        out[n++] = geo_double_bits(nuis[2]);
+        break;
+    case 21:  /* Gamma: shape */
+    case 26:  /* Weibull: shape */
+        out[n++] = geo_double_bits(nuis[2]);
+        break;
+    case 59:  /* SkewLaplace: sill, skew */
+        out[n++] = geo_double_bits(nuis[1]);
+        out[n++] = geo_double_bits(nuis[2]);
+        break;
+    case 28:  /* Beta: shape1, shape2, min, max */
+    case 33:  /* Kumaraswamy: shape1, shape2, min, max */
+        out[n++] = geo_double_bits(nuis[2]);
+        out[n++] = geo_double_bits(nuis[3]);
+        out[n++] = geo_double_bits(nuis[4]);
+        out[n++] = geo_double_bits(nuis[5]);
+        break;
+    case 50:  /* Beta2 regression: shape, min, max */
+    case 42:  /* Kumaraswamy2 regression: shape, min, max */
+        out[n++] = geo_double_bits(nuis[2]);
+        out[n++] = geo_double_bits(nuis[3]);
+        out[n++] = geo_double_bits(nuis[4]);
+        break;
+    default:
+        return 0;
+    }
+    return n;
+}
+
+static R_INLINE uint64_t geo_margin_hash(int model,
+                                         const uint64_t *key, int nkey)
+{
+    uint64_t h = geo_skewcop_mix64((uint64_t)(unsigned int)model +
+                                   UINT64_C(0x9e3779b97f4a7c15));
+    for (int i = 0; i < nkey; ++i)
+        h = geo_skewcop_mix64(h ^ (geo_skewcop_mix64(key[i]) +
+                                   UINT64_C(0x9e3779b97f4a7c15)));
+    return h;
+}
+
+static R_INLINE int geo_margin_make_key(int model, double z, double mu,
+                                        const double *nuis,
+                                        uint64_t key[2 + GEO_MARGIN_MAX_KEYPAR],
+                                        int *nkey)
+{
+    key[0] = geo_double_bits(z);
+    key[1] = geo_double_bits(mu);
+    const int np = geo_margin_keypars(model, nuis, key + 2);
+    if (np <= 0) return 0;
+    *nkey = 2 + np;
+    return np;
+}
+
+static R_INLINE int geo_margin_cache_lookup(int model, double z, double mu,
+                                            const double *nuis,
+                                            double *cdf, double *pdf,
+                                            double *score)
+{
+    uint64_t key[2 + GEO_MARGIN_MAX_KEYPAR];
+    int nkey = 0;
+    const int np = geo_margin_make_key(model, z, mu, nuis, key, &nkey);
+    if (np <= 0) return 0;
+
+    const uint64_t h = geo_margin_hash(model, key, nkey);
+    GeoMarginCacheEntry *e = &geo_margin_cache[h & (GEO_MARGIN_CACHE_SIZE - 1u)];
+    if (e->model != model || e->npar != (unsigned char)np) return 0;
+    for (int i = 0; i < nkey; ++i)
+        if (e->key[i] != key[i]) return 0;
+
+    *cdf = e->cdf;
+    *pdf = e->pdf;
+    *score = e->score;
+    return 1;
+}
+
+static R_INLINE void geo_margin_cache_store(int model, double z, double mu,
+                                            const double *nuis,
+                                            double cdf, double pdf,
+                                            double score)
+{
+    uint64_t key[2 + GEO_MARGIN_MAX_KEYPAR];
+    int nkey = 0;
+    const int np = geo_margin_make_key(model, z, mu, nuis, key, &nkey);
+    if (np <= 0) return;
+    if (!R_FINITE(cdf) || !R_FINITE(pdf) || !R_FINITE(score)) return;
+
+    const uint64_t h = geo_margin_hash(model, key, nkey);
+    GeoMarginCacheEntry *e = &geo_margin_cache[h & (GEO_MARGIN_CACHE_SIZE - 1u)];
+    e->model = model;
+    e->npar = (unsigned char)np;
+    for (int i = 0; i < nkey; ++i) e->key[i] = key[i];
+    e->cdf = cdf;
+    e->pdf = pdf;
+    e->score = score;
+}
+
 /*********************************************************************/
 /*********************************************************************/
 double biv_cop(double rho,int type_cop,int cond,
              double z1,double z2,double mu1,double mu2,double *nuis,int model, int NN1,int NN2)
              {
 double dens=0.0,rho1=0.0,nu=0.0;
-double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1,b2=0.0;
-rho1=(1-nuis[0])*rho;
+double g1=0.0,g2=0.0,a1=0.0,a2=0.0,b1=0.0,b2=0.0;
+const double margin_mu1 = mu1;
+const double margin_mu2 = mu2;
+
+/*
+ * The nuisance vector follows NuisParam2() after removal of the mean
+ * coefficients.  StudentT is the only copula margin among the supported
+ * models for which the nugget is not the first nuisance parameter:
+ *   StudentT: df, nugget, sill, [nu]
+ * All other supported copula margins start with nugget, sill, ... .
+ */
+double nugget_cop = (model == 12) ? nuis[1] : nuis[0];
+if (!R_FINITE(rho) || !R_FINITE(nugget_cop) || nugget_cop < 0.0 || nugget_cop >= 1.0)
+    return LOW;
+rho1 = clamp_corr((1.0 - nugget_cop) * rho);
+
+/* Gaussian/Gaussian has its own direct joint-density shortcut and must still
+ * compute the standardized scores below.  Otherwise, if both endpoints are
+ * already cached, the whole marginal switch can be skipped. */
+const int gaussian_direct = (type_cop == 1 && model == 1);
+int margin_hit1 = 0, margin_hit2 = 0;
+if (!gaussian_direct) {
+    margin_hit1 = geo_margin_cache_lookup(model, z1, margin_mu1, nuis,
+                                          &a1, &g1, &b1);
+    margin_hit2 = geo_margin_cache_lookup(model, z2, margin_mu2, nuis,
+                                          &a2, &g2, &b2);
+}
+
+if (!(margin_hit1 && margin_hit2))
 switch(model) // Correlation functions are in alphabetical order
     {
 
 /******* models on the real line ****************/
     case 1: // gaussian
-    
+      if(!R_FINITE(nuis[1]) || nuis[1] <= 0.0) return LOW;
       b1=(z1-mu1)/sqrt(nuis[1]);b2=(z2-mu2)/sqrt(nuis[1]);
-      a1=pnorm(b1,0,1,1,0);  a2=pnorm(b2,0,1,1,0); 
-      g1=dnorm(b1,0,1,0)/sqrt(nuis[1]); //marginal 1
-      g2=dnorm(b2,0,1,0)/sqrt(nuis[1]); //marginal 2
+      /* Gaussian margin + Gaussian copula is exactly bivariate Gaussian.
+       * Delay PIT/pdf work in that case and evaluate the joint log-density
+       * directly below. */
+      if(type_cop != 1) {
+          a1=pnorm(b1,0,1,1,0);  a2=pnorm(b2,0,1,1,0);
+          g1=dnorm(b1,0,1,0)/sqrt(nuis[1]);
+          g2=dnorm(b2,0,1,0)/sqrt(nuis[1]);
+      }
     break;
  case 34:  // Tukeyh
   
@@ -5081,7 +6900,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=1;
    break;
     case 25:  // Logistic
-
+      if(!R_FINITE(nuis[1]) || nuis[1] <= 0.0) return LOW;
       b1=1;b2=1;
       a1=plogis(z1, mu1, sqrt(nuis[1]),1,0);
       a2=plogis(z2, mu2, sqrt(nuis[1]),1,0);
@@ -5089,8 +6908,8 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dlogis(z2, mu2, sqrt(nuis[1]),0);
    break;
    case 12: // t student
-    //Rprintf("%f %f \n",1/nuis[0],nuis[1]);
-  
+      if(!R_FINITE(nuis[0]) || nuis[0] <= 0.0 ||
+         !R_FINITE(nuis[2]) || nuis[2] <= 0.0) return LOW;
       b1=(z1-mu1)/sqrt(nuis[2]);b2=(z2-mu2)/sqrt(nuis[2]);
       a1=pt(b1,1/nuis[0],1,0);  a2=pt(b2,1/nuis[0],1,0);
       g1=dt(b1,1/nuis[0],0)/sqrt(nuis[2]); //marginal 1
@@ -5098,7 +6917,7 @@ switch(model) // Correlation functions are in alphabetical order
    break;
 /******* models on the  positive real line ****************/
      case 22: // lognormal
-
+      if(!R_FINITE(nuis[1]) || nuis[1] <= 0.0 || z1 <= 0.0 || z2 <= 0.0) return LOW;
       b1=mu1-nuis[1]/2; b2=mu2-nuis[1]/2;
       a1=plnorm(z1,b1, sqrt(nuis[1]),1,0);
       a2=plnorm(z2,b2, sqrt(nuis[1]),1,0);
@@ -5106,7 +6925,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dlnorm(z2,b2, sqrt(nuis[1]),0);
   break;
    case 21: // gamma
-
+      if(!R_FINITE(nuis[2]) || nuis[2] <= 0.0 || z1 <= 0.0 || z2 <= 0.0) return LOW;
       b1=1;
       b2=1;
       a1=pgamma(z1,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu1)),-1),1,0);  
@@ -5115,7 +6934,7 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dgamma(z2,nuis[2]/2,R_pow(nuis[2]/(2*exp(mu2)),-1),0); 
    break;
      case 26: // weibull
-     
+      if(!R_FINITE(nuis[2]) || nuis[2] <= 0.0 || z1 < 0.0 || z2 < 0.0) return LOW;
       b1=1;
       b2=1;
       a1=pweibull(z1,nuis[2],exp(mu1)/(gammafn(1+1/nuis[2])),1,0);
@@ -5124,7 +6943,8 @@ switch(model) // Correlation functions are in alphabetical order
       g2=dweibull(z2,nuis[2],exp(mu2)/(gammafn(1+1/nuis[2])),0);
    break;
      case 59: // skewlaplace
-      
+      if(!R_FINITE(nuis[1]) || nuis[1] <= 0.0 ||
+         !R_FINITE(nuis[2]) || nuis[2] <= 0.0 || nuis[2] >= 1.0) return LOW;
       b1=1;
       b2=1;
       a1=pSkewLaplace(z1,nuis[2],mu1,nuis[1]);
@@ -5134,15 +6954,19 @@ switch(model) // Correlation functions are in alphabetical order
       //Rprintf("%f %f %f %f ",a1,a2,g1,g2);
    break;
 /******* models on the a bounded support ****************/
-   case 28: //Beta
-    
+   case 28: // Beta
+      if(!R_FINITE(nuis[2]) || !R_FINITE(nuis[3]) || nuis[2] <= 0.0 || nuis[3] <= 0.0 ||
+         !R_FINITE(nuis[4]) || !R_FINITE(nuis[5]) || nuis[4] >= nuis[5] ||
+         z1 < nuis[4] || z1 > nuis[5] || z2 < nuis[4] || z2 > nuis[5]) return LOW;
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]); b2=(z2- nuis[4])/(nuis[5]-nuis[4]);
       a1=pbeta(b1,nuis[2],nuis[3],1,0); a2=pbeta(b2,nuis[2],nuis[3],1,0);
       g1=dbeta(b1,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 1
       g2=dbeta(b2,nuis[2],nuis[3],0)/(nuis[5]-nuis[4]);//marginal 2
    break;   
    case 50:  // Beta regression
-
+      if(!R_FINITE(nuis[2]) || nuis[2] <= 0.0 ||
+         !R_FINITE(nuis[3]) || !R_FINITE(nuis[4]) || nuis[3] >= nuis[4] ||
+         z1 < nuis[3] || z1 > nuis[4] || z2 < nuis[3] || z2 > nuis[4]) return LOW;
       mu1=1/(1+exp(-mu1));
       mu2=1/(1+exp(-mu2));
     //  Rprintf("%f %f %f %f %f \n",mu1,rho,nuis[2],nuis[4],nuis[3]);
@@ -5152,8 +6976,10 @@ switch(model) // Correlation functions are in alphabetical order
       g1=dbeta(b1, nuis[2]*mu1,(1-mu1)*nuis[2],0)/(nuis[4]-nuis[3]); //marginal 1
       g2=dbeta(b2, nuis[2]*mu2,(1-mu2)*nuis[2],0)/(nuis[4]-nuis[3]); //marginal 2
    break;
-   case 33:  // kuma
- 
+   case 33:  // Kumaraswamy
+      if(!R_FINITE(nuis[2]) || !R_FINITE(nuis[3]) || nuis[2] <= 0.0 || nuis[3] <= 0.0 ||
+         !R_FINITE(nuis[4]) || !R_FINITE(nuis[5]) || nuis[4] >= nuis[5] ||
+         z1 < nuis[4] || z1 > nuis[5] || z2 < nuis[4] || z2 > nuis[5]) return LOW;
       b1=(z1- nuis[4])/(nuis[5]-nuis[4]);
       b2=(z2- nuis[4])/(nuis[5]-nuis[4]);
       a1= cdf_kuma(b1,nuis[2],nuis[3]);
@@ -5161,8 +6987,10 @@ switch(model) // Correlation functions are in alphabetical order
       g1= pdf_kuma(b1,nuis[2],nuis[3])/(nuis[5]-nuis[4]);
       g2= pdf_kuma(b2,nuis[2],nuis[3])/(nuis[5]-nuis[4]);
    break;
-   case 42:  // kuma regression
-   
+   case 42:  // Kumaraswamy regression
+      if(!R_FINITE(nuis[2]) || nuis[2] <= 0.0 ||
+         !R_FINITE(nuis[3]) || !R_FINITE(nuis[4]) || nuis[3] >= nuis[4] ||
+         z1 < nuis[3] || z1 > nuis[4] || z2 < nuis[3] || z2 > nuis[4]) return LOW;
       mu1=1/(1+exp(-mu1));mu2=1/(1+exp(-mu2));
       b1=(z1- nuis[3])/(nuis[4]-nuis[3]);
       b2=(z2- nuis[3])/(nuis[4]-nuis[3]);
@@ -5229,13 +7057,31 @@ case 30: // Poisson
       if(z2==0) {g2=-99;}
    break;
        }
+
+if (!(margin_hit1 && margin_hit2) && !gaussian_direct) {
+    geo_margin_cache_store(model, z1, margin_mu1, nuis, a1, g1, b1);
+    geo_margin_cache_store(model, z2, margin_mu2, nuis, a2, g2, b2);
+}
+
 /*********************** end cases ***************/
 /******************copula gaussiana*************************/
-if(type_cop==1)  { 
-   if(!(model==16 || model==11 || model==30)) {   // continui
-
-       dens = log(biv_unif_CopulaGauss(a1, a2, rho1)) 
-            + log(g1) + log(g2);
+if(type_cop==1)  {
+   if(!(model==16 || model==11 || model==30)) {   // continuous
+       if(model == 1) {
+           /* Exact shortcut: Gaussian margins under a Gaussian copula are
+            * a bivariate Gaussian law on the observed scale. */
+           const double r2 = rho1 * rho1;
+           const double den = 1.0 - r2;
+           if (!(den > 0.0) || !R_FINITE(b1) || !R_FINITE(b2)) return LOW;
+           dens = -log(2.0*M_PI) - log(nuis[1]) - 0.5*log1p(-r2)
+                  - 0.5*(b1*b1 - 2.0*rho1*b1*b2 + b2*b2)/den;
+       } else {
+           if(!R_FINITE(g1) || !R_FINITE(g2) || g1 <= 0.0 || g2 <= 0.0)
+               return LOW;
+           const double logcop = geo_gausscop_log(a1, a2, rho1);
+           if(!R_FINITE(logcop)) return LOW;
+           dens = logcop + log(g1) + log(g2);
+       }
    } else {                                      // discreti
        double prob = safe_pbnorm22(a1, g1, rho1) - safe_pbnorm22(a2, g1, rho1) - safe_pbnorm22(a1, g2, rho1) + safe_pbnorm22(a2, g2, rho1);
        prob = fmax(DBL_MIN, prob);
@@ -5244,36 +7090,76 @@ if(type_cop==1)  {
 }
 
 /******************copula clayton and skew *************************/             
-if(type_cop==2) 
+if(type_cop==2)
 {
-    if(!(model==16||model==11||model==30)) { // continous  models
-    if(model==50||model==42) nu=nuis[5];   // for beta2 regression
-    if(model==21||model==22||model==26||model==12) nu=nuis[3];   // gammma weibull t  
-    if(model==24||model==1||model==25||model==16||model==11||model==30)   nu=nuis[2]; // loggaussian gaussian logistic pois binom binomneg 
-    dens= biv_unif_CopulaClayton (a1,a2,rho1,nu)+ log(g1)+log(g2);
-               }
-     else { Rf_error("not implemented."); } // discrete   models
+    if(!(model==16||model==11||model==30)) { // continuous models
+        /* Copula parameter positions after removal of mean coefficients. */
+        if(model==1 || model==22 || model==25) nu=nuis[2];
+        if(model==12 || model==21 || model==26 || model==59) nu=nuis[3];
+        if(model==50 || model==42) nu=nuis[5];
+        if(model==28 || model==33) nu=nuis[6];
 
+        /* GeoModels' Clayton-like RF construction uses positive integer nu. */
+        if(!R_FINITE(nu) || nu <= 0.0 || fabs(nu-nearbyint(nu)) > sqrt(DBL_EPSILON))
+            return LOW;
+        if(!R_FINITE(g1) || !R_FINITE(g2) || g1 <= 0.0 || g2 <= 0.0)
+            return LOW;
+
+        double logcop = biv_unif_CopulaClayton(a1,a2,rho1,nu);
+        if(!R_FINITE(logcop)) return LOW;
+        dens = logcop + log(g1) + log(g2);
+    } else {
+        return LOW; /* discrete Clayton-like copula likelihood not implemented */
+    }
 }
-/******************copula skew gaussian *************************/ 
-if(type_cop==3) 
+/******************copula skew gaussian *************************/
+if(type_cop==3)
 {
-       if(!(model==16||model==11||model==30)) { // continous  models 
-    if(model==50||model==42) nu=nuis[5];   // for beta2 regression
-    if(model==21||model==22||model==26||model==12) nu=nuis[3];   // gammma weibull t  
-    if(model==24||model==1||model==25||model==16||model==11||model==30)  
-                   nu=nuis[2];    // loggaussian gaussian logistic pois binom binomneg 
-               //nu=nuis[2] / R_pow(1 - nuis[2]*nuis[2],0.5);
-                    
-    dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu/(sqrt(1-nu*nu))))+ log(g1)+log(g2);
-     //  dens= log(biv_unif_CopulaSkewGauss(a1,a2,rho1,nu))+ log(g1)+log(g2);
-     }
-     else { Rf_error("not implemented."); } //   discrete   models
+    if(!(model==16||model==11||model==30)) { // continuous models
+        /* nu is the bounded eta parameter in the skew-Gaussian paper. */
+        if(model==1 || model==22 || model==25) nu=nuis[2];
+        if(model==12 || model==21 || model==26 || model==59) nu=nuis[3];
+        if(model==50 || model==42) nu=nuis[5];
+        if(model==28 || model==33) nu=nuis[6];
+
+        if(!R_FINITE(nu) || fabs(nu) >= 1.0)
+            return LOW;
+        if(!R_FINITE(g1) || !R_FINITE(g2) || g1 <= 0.0 || g2 <= 0.0)
+            return LOW;
+
+        const double copdens = biv_unif_CopulaSkewGauss(a1,a2,rho1,nu/sqrt(1-nu*nu));
+        if(!R_FINITE(copdens) || copdens <= 0.0) return LOW;
+        dens=log(copdens)+log(g1)+log(g2);
+    } else {
+        /* Poisson/Binomial/BinomialNeg.  Their switch entries above store
+           Gaussian-score versions of the marginal CDF endpoints because the
+           Gaussian copula uses them directly.  Transform back to the exact
+           marginal uniforms and integrate the skew-Gaussian copula density
+           over that probability rectangle. */
+        nu=nuis[2];
+        if(!R_FINITE(nu) || fabs(nu) >= 1.0) return LOW;
+        const double uhi = pnorm(a1,0,1,1,0);
+        const double ulo = pnorm(a2,0,1,1,0);
+        const double vhi = pnorm(g1,0,1,1,0);
+        const double vlo = pnorm(g2,0,1,1,0);
+        const double alpha = nu/sqrt(1.0-nu*nu);
+        double prob = geo_skewcop_rect_prob(ulo,uhi,vlo,vhi,rho1,alpha);
+        if(!R_FINITE(prob) || prob <= 0.0) return LOW;
+        prob = fmin(fmin(uhi-ulo, vhi-vlo), fmax(DBL_MIN, prob));
+        dens=log(prob);
+    }
 }
 
 if(cond) {
    if(!(model==16 || model==11 || model==30)) {   // continui
-       dens = dens - log(fmax(DBL_MIN, g2));
+       if(type_cop == 1 && model == 1) {
+           /* log marginal Gaussian density at site 2, evaluated without
+            * materializing dnorm(). */
+           const double logg2 = -0.5*log(2.0*M_PI*nuis[1]) - 0.5*b2*b2;
+           dens -= logg2;
+       } else {
+           dens = dens - log(fmax(DBL_MIN, g2));
+       }
    } else {                                      // discreti
        dens = dens - log(fmax(DBL_MIN, b2));
    }
@@ -5281,6 +7167,7 @@ if(cond) {
 
 
 
+if(!R_FINITE(dens)) return LOW;
 return(dens);
 }
 
@@ -5373,29 +7260,6 @@ double owens_t_optimized(double h, double a) {
     return half_a * sum * INV_2PI;
 }
 
-/* PSN ottimizzata */
-double psn_optimized(double x, double omega, double alpha, double tau) {
-    // Controllo parametri
-    if (omega <= 0.0) return NAN; // omega deve essere positivo
-    
-    const double z = x / omega;
-    
-    // Casi limite per migliorare performance
-    if (alpha == 0.0) {
-        return pnorm(z, 0.0, 1.0, 1, 0); // Distribuzione normale standard
-    }
-    
-    // Per |z| molto grande, Owen's T diventa trascurabile
-    if (fabs(z) > 8.0) {
-        if (z > 0) return 1.0;
-        else return 0.0;
-    }
-    
-    const double phi_z = pnorm(z, 0.0, 1.0, 1, 0);
-    const double owens = owens_t_optimized(z, alpha);
-    
-    return phi_z - 2.0 * owens;
-}
 
 /* Versione corretta senza simmetrie problematiche */
 double psn(double x, double omega, double alpha, double tau) {
@@ -5527,16 +7391,14 @@ double one_log_SkewLaplace(double z, double mu, double sill, double skew) {
 }
 double one_log_tukeyh(double z, double m, double sill, double tail)
 {
+    if (!isfinite(z) || !isfinite(m) || !isfinite(sill) || !isfinite(tail) ||
+        sill <= 0.0 || tail < 0.0) return NAN;
     const double sqrt_sill = sqrt(sill);
     const double q = (z - m) / sqrt_sill;
-    const double q2 = q * q;
-    const double x = inverse_lamb(q, tail);  // assume questa è indipendente da extra
-    const double W = LambertW(tail * q2);
-    const double log_extra = -log(1.0 + W);
-    const double log_dnorm = -0.5 * M_LN_2PI - 0.5 * x * x;
-    const double log_density = log_dnorm + log(fabs(x)) + log_extra - log(fabs(q)) - log(sqrt_sill);
-
-    return log_density;
+    const double x = inv_tukey_h(q, tail);
+    const double jac = jac_tukey_h(q, tail);
+    if (!isfinite(x) || !isfinite(jac) || jac <= 0.0) return NAN;
+    return dnorm(x, 0.0, 1.0, 1) + log(jac) - log(sqrt_sill);
 }
 
 
@@ -5752,28 +7614,6 @@ double one_log_PoisZIP(int z,double lambda, double mup)
   return(res);
 }
 
-double one_log_PoisgammaZIP(int z,double lambda, double mup,double shape)
-{
-  double  res=0.0;
-  double  p=pnorm(mup,0,1,1,0);
-  double pp=lambda/(lambda+shape);
- if(z==0){
-    res=log(p+(1-p)*dnbinom(0, shape, pp,0));
-          }
-  if(z>0){
-    res=log1p(-p)+dnbinom(z, shape, pp,1);
-         }
-  return(res);
-}
-
-double one_log_dpoisgamma(int z,double lambda, double a)
-{
-  double  res;
-  double beta= a/lambda;
-   res= z*log(1/(1+beta))+a*log(beta/(1+beta))+lgammafn(a+z)-lgammafn(z+1)-lgammafn(a);
-  return(res);
-}
-
 
 double one_log_negbinom_marg(int u, int N, double p)
 {
@@ -5803,92 +7643,9 @@ double one_log_logistic(double z,double m, double sill)
   return(res);
 }
 
-/*#########################################################################################*/
-/*#####################   bivariate gaussian probabilities      ###########################*/
-/*#########################################################################################*/
-
-// Costanti per controllo numerico - IDENTICHE al tuo codice
-#define MIN_LOG_VALUE -700.0  
-#define MAX_LOG_VALUE 700.0   
-#define TOLERANCE 1e-140      
-#define MIN_PROB 1e-15        
-
-#define ZERO 0.0
-#define ONE 1.0
-#define HALF 0.5
-#define TWOPI 6.283185307179586
-#define SQRT_TWOPI 2.506628274631001
-#define MIN_CORR_THRESHOLD 0.925
-#define MAX_HK_THRESHOLD -160.0
-#define PRECISION_THRESHOLD 1e-15
-#define OVERFLOW_THRESHOLD -700.0
-
-// Soglia per l'algoritmo ibrido - abbassata ulteriormente per usare meno spesso D-W
-#define HYBRID_THRESHOLD 0.1
-
-// Implementazione precisa di Drezner-Wesolowsky 
-double bvn_drezner_wesolowsky(double h, double k, double r) {
-    // Tabelle come sopra...
-    static const double x[] = {
-        -0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188,
-        -0.7463319064601508, -0.6360536807265150, -0.5108670019508271, -0.3737060887154196,
-        -0.2277858511416451, -0.07652652113349733, 0.07652652113349733, 0.2277858511416451,
-        0.3737060887154196, 0.5108670019508271, 0.6360536807265150, 0.7463319064601508,
-        0.8391169718222188, 0.9122344282513259, 0.9639719272779138, 0.9931285991850949
-    };
-    static const double w[] = {
-        0.01761400713915212, 0.04060142980038694, 0.06267204833410906, 0.08327674157670475,
-        0.1019301198172404, 0.1181945319615184, 0.1316886384491766, 0.1420961093183821,
-        0.1491729864726037, 0.1527533871307259, 0.1527533871307259, 0.1491729864726037,
-        0.1420961093183821, 0.1316886384491766, 0.1181945319615184, 0.1019301198172404,
-        0.08327674157670475, 0.06267204833410906, 0.04060142980038694, 0.01761400713915212
-    };
-    
-    const double hk = h * k;
-    const double hs = (h * h + k * k) * 0.5;
-    const double asr = asin(r);
-    const double asr_half = asr * 0.5;
-    
-    static const double inv_2pi = 1.0 / (2.0 * TWOPI);
-    const double abs_r = fabs(r);
-    
-    // Selezione adattiva del numero di punti di quadratura
-    int start_idx, end_idx;
-    
-    if (abs_r < 0.05) {
-        // Correlazione molto bassa: 8 punti centrali sufficienti
-        start_idx = 6;
-        end_idx = 14;
-    } else if (abs_r < 0.2) {
-        // Correlazione bassa: 12 punti
-        start_idx = 4;
-        end_idx = 16;
-    } else {
-        // Correlazione più alta: tutti i 20 punti
-        start_idx = 0;
-        end_idx = 20;
-    }
-    
-    double bvn = 0.0;
-    for (int i = start_idx; i < end_idx; i++) {
-        double theta = asr_half * (x[i] + 1.0);
-        double sn = sin(theta);
-        double sn2 = sn * sn;
-        
-        if (sn2 < 0.9999999) {
-            double exponent = (sn * hk - hs) / (1.0 - sn2);
-            if (exponent > -700.0) {
-                bvn += w[i] * exp(exponent);
-            }
-        }
-    }
-    
-    bvn = bvn * asr * inv_2pi + pnorm(-h, 0.0, 1.0, 1, 0) * pnorm(-k, 0.0, 1.0, 1, 0);
-    
-    return bvn;
-}
 // gentz
 double bvu(double sh, double sk, double r) {
+    const double two_pi = 6.28318530717958647693;
     double bvn = 0.0;
     double h = sh, k = sk;
     double hk = h * k;
@@ -5936,8 +7693,8 @@ double bvu(double sh, double sk, double r) {
         hs = (h * h + k * k) / 2.0;
         asr = asin(r);
         
-        // Loop IDENTICO - solo pre-computazione di 2.0 * TWOPI
-        double inv_4pi = 1.0 / (2.0 * TWOPI);
+        // Loop IDENTICO - solo pre-computazione di 2.0 * two_pi
+        double inv_4pi = 1.0 / (2.0 * two_pi);
         
         for (i = 0; i < lg; ++i) {
             sn = sin(asr * (X[i][ng] + 1.0) / 2.0);
@@ -5972,7 +7729,7 @@ double bvu(double sh, double sk, double r) {
 
             if (hk > -160.0) {
                 b = sqrt(bs);
-                bvn -= exp(-hk / 2.0) * sqrt(TWOPI) * pnorm(-b / a, 0.0, 1.0, 1, 0) * b * 
+                bvn -= exp(-hk / 2.0) * sqrt(two_pi) * pnorm(-b / a, 0.0, 1.0, 1, 0) * b * 
                        (1.0 - c * bs * (1.0 - d * bs_over_5) / 3.0);
             }
 
@@ -5992,7 +7749,7 @@ double bvu(double sh, double sk, double r) {
                     (exp(-hk * (1.0 - rs) / (2.0 * (1.0 + rs))) / rs -
                      (1.0 + c * xs * (1.0 + d * xs)));
             }
-            bvn = -bvn / TWOPI;
+            bvn = -bvn / two_pi;
         }
 
         if (r > 0.0)
@@ -6072,18 +7829,7 @@ double pbnorm22(double lim1,double lim2,double corr){
     //Rprintf("%f = %f %f %f  \n",res,lim1,lim2,corr);
     return res;
 }
-// compute the bivariate normal cdf for the bernoulli RF:
-double pbnorm(int *cormod, double h, double u, double mean1, double mean2, 
-  double nugget, double var,double *par, double thr)
-{
-  double res=0;
-  double lim_inf[2]={0,0};//lower bound for the integration
-  double lim_sup[2]={mean1,mean2};
-  int infin[2]={0,0};//set the bounds for the integration
-  double corr={(1-nugget)*CorFct(cormod,h,u,par,0,0)};
-    res=bvnmvn(lim_inf,lim_sup,infin,corr);
-  return(res);
-}
+
 // CDF of a bivariate Gaussian distribution using bvnmvn
 double cdf_norm(double lim1, double lim2, double a11, double a12) {
     double res = 0.0;

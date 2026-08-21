@@ -2,582 +2,577 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                   optimizer = NULL, lower = NULL, upper = NULL,
                   n.fold = 0.05, local = FALSE, neighb = NULL, maxdist = NULL,
                   maxtime = NULL, sparse = FALSE, type_krig = "Simple",
-                  which = 1, parallel = TRUE, ncores = NULL,
+                  which = 1, parallel = FALSE, ncores = 6,
                   progress = TRUE, seed = NULL) {
+  .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
+  on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
 
   ## ---------- sanity checks ----------
   if (!inherits(fit, "GeoFit"))
-    stop("fit must be an object of class 'GeoFit'")
-  if (n.fold > 0.99 || n.fold < 0.01)
-    stop("n.fold must be between 0.01 and 0.99")
-  if (!is.logical(parallel))
-    stop("parallel must be TRUE or FALSE")
-  if (!is.logical(progress))
-    stop("progress must be TRUE or FALSE")
+    stop("fit must be an object of class 'GeoFit'", call. = FALSE)
+  if (!is.numeric(n.fold) || length(n.fold) != 1L || !is.finite(n.fold) ||
+      n.fold < 0.01 || n.fold > 0.99)
+    stop("n.fold must be between 0.01 and 0.99", call. = FALSE)
+  if (!is.logical(estimation) || length(estimation) != 1L || is.na(estimation))
+    stop("estimation must be TRUE or FALSE", call. = FALSE)
+  if (!is.logical(local) || length(local) != 1L || is.na(local))
+    stop("local must be TRUE or FALSE", call. = FALSE)
+  if (!is.logical(parallel) || length(parallel) != 1L || is.na(parallel))
+    stop("parallel must be TRUE or FALSE", call. = FALSE)
+  if (!is.logical(progress) || length(progress) != 1L || is.na(progress))
+    stop("progress must be TRUE or FALSE", call. = FALSE)
+  if (!is.logical(sparse) || length(sparse) != 1L || is.na(sparse))
+    stop("sparse must be TRUE or FALSE", call. = FALSE)
+
+  fit_copula_phase1 <- if (is.null(fit$copula)) NULL else as.character(fit$copula)[1L]
+  fit_model_code_phase1 <- suppressWarnings(as.integer(CkModel(fit$model)))
+  phase1_count_copula <- !is.null(fit_copula_phase1) &&
+    fit_copula_phase1 %in% c("Clayton", "SkewGaussian") &&
+    fit_model_code_phase1 %in% .GeoGaussianCopulaDiscreteModels
+  if (isTRUE(phase1_count_copula) && isTRUE(local))
+    stop("GeoCV: Clayton/SkewGaussian copula with Poisson/Binomial/BinomialNeg is currently implemented for global GeoKrig (local=FALSE) only.", call. = FALSE)
+  if (identical(fit_copula_phase1, "Clayton") &&
+      fit_model_code_phase1 %in% .GeoGaussianCopulaDiscreteModels &&
+      isTRUE(estimation))
+    stop("GeoCV: fold refitting for discrete Clayton models still requires the Clayton phase-2 GeoFit likelihood. Use estimation=FALSE.", call. = FALSE)
+
+  type_key <- tolower(gsub("[[:blank:]]", "", type_krig))
+  if (!(type_key %in% c("simple", "universal")))
+    stop("type_krig must be 'Simple' or 'Universal'", call. = FALSE)
+  type_krig <- if (identical(type_key, "universal")) "Universal" else "Simple"
+
+  tol_int <- sqrt(.Machine$double.eps)
+  if (!is.numeric(K) || length(K) != 1L || !is.finite(K) || K < 2 ||
+      abs(K - round(K)) > tol_int)
+    stop("K must be an integer >= 2", call. = FALSE)
+  K <- as.integer(K)
+  if (K > 1000L) stop("K is too large", call. = FALSE)
+
+  ncores <- .GeoValidateNcores(ncores)
 
   if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
+        abs(seed - round(seed)) > tol_int || abs(seed) > .Machine$integer.max)
+      stop("seed must be a finite integer scalar", call. = FALSE)
+    seed <- as.integer(seed)
     old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
       get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
     } else {
       NULL
     }
-
     on.exit({
       if (is.null(old_seed)) {
-        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
           rm(".Random.seed", envir = .GlobalEnv)
-        }
       } else {
         assign(".Random.seed", old_seed, envir = .GlobalEnv)
       }
     }, add = TRUE)
-
-    set.seed(as.integer(seed))
+    set.seed(seed)
   }
 
-  if (parallel) {
-    if (!requireNamespace("future", quietly = TRUE) ||
-        !requireNamespace("future.apply", quietly = TRUE)) {
-      warning(
-        "Parallel execution requested but future/future.apply is unavailable; using sequential execution.",
-        call. = FALSE
-      )
-      parallel <- FALSE
-    }
+  if (parallel &&
+      (!requireNamespace("future", quietly = TRUE) ||
+       !requireNamespace("future.apply", quietly = TRUE))) {
+    warning(
+      "Parallel execution requested but future/future.apply is unavailable; using sequential execution.",
+      call. = FALSE
+    )
+    parallel <- FALSE
   }
 
-  ## Se l'utente non ha progressr installato, disattiviamo il progresso
   has_progressr <- requireNamespace("progressr", quietly = TRUE)
   if (parallel && progress && !has_progressr) {
-    warning("Package 'progressr' is required for progress bars in parallel mode; disabling progress")
+    warning(
+      "Package 'progressr' is required for progress bars in parallel mode; disabling progress.",
+      call. = FALSE
+    )
     progress <- FALSE
   }
 
   message("Cross-validation kriging can be time consuming ...")
 
-  ## ---------- utilities ----------
-  choose_cores <- function(nc) {
-    coremax <- parallel::detectCores()
-    if (is.na(coremax) || coremax == 1) return(1L)
-    if (is.null(nc)) return(max(1L, coremax - 1L))
-    if (is.numeric(nc) && nc >= 1 && nc <= coremax) return(as.integer(nc))
-    stop("ncores not valid")
-  }
+  ## ---------- model classification ----------
+  corr_code <- CkCorrModel(fit$corrmodel)
+  spacetime <- CheckST(corr_code)
+  bivariate <- CheckBiv(corr_code)
+  space <- !spacetime && !bivariate
 
-  ## ---------- setup ----------
-  if (is.null(fit$X)) {
-    X <- Xloc <- NULL
-    tempX <- NULL
-  }
-  # Inizializzazione di tutte le metriche
-  mae <- rmse <- lscore <- crps <- mad <- brie <- pit <- intscore <- coverage <- NULL
-  space_dyn <- FALSE
-  if (is.null(optimizer)) {
-    optimizer <- fit$optimizer
-    lower     <- fit$lower
-    upper     <- fit$upper
-  }
-
-  if (is.list(fit$data)) space_dyn <- TRUE
-  spacetime <- CheckST(CkCorrModel(fit$corrmodel))
-  bivariate <- CheckBiv(CkCorrModel(fit$corrmodel))
-  K <- round(K)
-  if (K < 2) stop("K must be >= 2")
-  if (K > 1000) stop("K is too large")
-  if (bivariate && !(which == 1 || which == 2)) stop("which must be 1 or 2")
+  if (bivariate && !(which %in% c(1, 2)))
+    stop("which must be 1 or 2", call. = FALSE)
   if (local && is.null(maxdist) && is.null(neighb))
-    stop("maxdist or neighb required for local kriging")
+    stop("maxdist or neighb is required for local kriging", call. = FALSE)
 
-  model1 <- fit$model
-  if (fit$missp) {
-    model1 <- switch(
-      fit$model,
-      StudentT     = "Gaussian_misp_StudentT",
-      Poisson      = "Gaussian_misp_Poisson",
-      PoissonZIP   = "Gaussian_misp_PoissonZIP",
-      SkewStudentT = "Gaussian_misp_SkewStudentT",
-      Tukeygh      = "Gaussian_misp_Tukeygh"
+  fixed_base <- if (is.null(fit$fixed)) {
+    list()
+  } else if (is.list(fit$fixed)) {
+    fit$fixed
+  } else {
+    as.list(fit$fixed)
+  }
+  target_mean_name <- if (bivariate) paste0("mean_", which) else "mean"
+  target_external_mean <- fixed_base[[target_mean_name]]
+  target_external_mean <- !is.null(target_external_mean) &&
+    length(target_external_mean) > 1L
+  if (identical(type_krig, "Universal") && target_external_mean) {
+    warning(
+      "The target mean is supplied externally and is treated as known; ",
+      "GeoCV uses Simple kriging for these folds.",
+      call. = FALSE
+    )
+    type_krig <- "Simple"
+  }
+  mean_pattern <- if (bivariate) "^mean_[12][0-9]*$" else "^mean[0-9]*$"
+  estimated_mean_names <- if (is.null(names(fit$param))) character(0) else
+    grep(mean_pattern, names(fit$param), value = TRUE)
+  if (identical(type_krig, "Universal") && !length(estimated_mean_names)) {
+    warning(
+      "No mean coefficients are estimated in fit; Universal and Simple kriging coincide. ",
+      "GeoCV uses Simple kriging.",
+      call. = FALSE
+    )
+    type_krig <- "Simple"
+  }
+
+  full_likelihood <- identical(fit$likelihood, "Full")
+  if (identical(type_krig, "Universal") && isTRUE(estimation) && !full_likelihood) {
+    stop(
+      "Universal cross-validation with estimation=TRUE is not available for composite-likelihood refits, because each fold would require its own Godambe covariance matrix. Use type_krig='Simple', set estimation=FALSE with a fit already updated by GeoVarest(), or compute fold-specific Godambe matrices outside GeoCV.",
+      call. = FALSE
+    )
+  }
+  if (identical(type_krig, "Universal") && !isTRUE(estimation) && is.null(fit$varcov)) {
+    stop(
+      "Universal cross-validation with estimation=FALSE requires fit$varcov. For a composite-likelihood fit, update the fitted object with GeoVarest() first.",
+      call. = FALSE
     )
   }
 
-  space <- !spacetime && !bivariate
+  ## Keep the data-generating model (fit$model) distinct from the criterion
+  ## used for refitting.  Current GeoFit objects store estimation_model
+  ## explicitly; the fallback is only for older misspecified fits.
+  model1 <- fit$estimation_model
+  if (is.null(model1) || length(model1) != 1L || is.na(model1) || !nzchar(model1)) {
+    model1 <- as.character(fit$model)[1L]
+    if (isTRUE(fit$missp)) {
+      fallback <- c(
+        StudentT = "Gaussian_misp_StudentT",
+        Poisson = "Gaussian_misp_Poisson",
+        PoissonZIP = "Gaussian_misp_PoissonZIP",
+        PoissonGamma = "Gaussian_misp_PoissonGamma",
+        Binomial = "Gaussian_misp_Binomial",
+        SkewStudentT = "Gaussian_misp_SkewStudentT",
+        Tukeygh = "Gaussian_misp_Tukeygh"
+      )
+      if (identical(model1, "BinomialNeg")) {
+        stop(
+          "GeoCV: this older misspecified BinomialNeg fit does not record the working likelihood. Refit it with the current GeoFit implementation before cross-validation.",
+          call. = FALSE
+        )
+      }
+      if (!(model1 %in% names(fallback))) {
+        stop(
+          "GeoCV: cannot recover the misspecified estimation model from this older GeoFit object. Refit it with the current GeoFit implementation.",
+          call. = FALSE
+        )
+      }
+      model1 <- unname(fallback[[model1]])
+    }
+  } else {
+    model1 <- as.character(model1)[1L]
+  }
 
-  ################################################################
-  ### Spatial case  ##############################################
-  ################################################################
+  ## Exact probability scores below use a Gaussian predictive distribution.
+  gaussian_scores <- identical(gsub("[[:blank:]]", "", fit$model), "Gaussian")
+  if (!gaussian_scores) {
+    warning(
+      "For non-Gaussian fitted models GeoCV reports RMSE, MAE and MAD only; ",
+      "Gaussian probability scores (log-score, Brier, CRPS, PIT, interval score and coverage) are returned as NA.",
+      call. = FALSE
+    )
+  }
+
+  if (is.null(optimizer)) optimizer <- fit$optimizer
+  if (is.null(lower)) lower <- fit$lower
+  if (is.null(upper)) upper <- fit$upper
+
+  fit_method <- "cholesky"
+  if (!is.null(fit$method)) {
+    fit_method <- fit$method
+  } else if (!is.null(fit$call)) {
+    method_expr <- as.list(fit$call)$method
+    if (!is.null(method_expr)) {
+      method_value <- tryCatch(
+        eval(method_expr, envir = parent.frame()),
+        error = function(e) NULL
+      )
+      if (is.character(method_value) && length(method_value) == 1L)
+        fit_method <- method_value
+    }
+  }
+  fit_method <- tolower(gsub("[[:blank:]]", "", fit_method))
+  if (!(fit_method %in% c("cholesky", "svd"))) fit_method <- "cholesky"
+
+  refit_varest <- identical(type_krig, "Universal") && full_likelihood
+  maxtime_use <- if (is.null(maxtime)) fit$maxtime else maxtime
+
+  ## angle/ratio are represented once through anisopars.  GeoFit will append
+  ## them to the estimated/fixed parameter blocks according to est.aniso.
+  refit_start <- fit$param
+  refit_fixed_base <- fixed_base
+  if (!is.null(fit$anisopars)) {
+    anames <- intersect(c("angle", "ratio"), names(unlist(fit$anisopars, use.names = TRUE)))
+    if (length(anames)) {
+      if (!is.null(refit_start)) refit_start[intersect(names(refit_start), anames)] <- NULL
+      if (!is.null(refit_fixed_base)) refit_fixed_base[intersect(names(refit_fixed_base), anames)] <- NULL
+      if (!is.null(lower) && !is.null(names(lower))) lower[intersect(names(lower), anames)] <- NULL
+      if (!is.null(upper) && !is.null(names(upper))) upper[intersect(names(upper), anames)] <- NULL
+    }
+  }
+
+  ## Normalize count-size information once; the remaining fold utilities are
+  ## shared in CVUtils.R rather than recreated inside every GeoCV call.
+  n_cv <- .GeoCVNormalizeCountSize(fit$n, fit$model)
+
+  ## ---------- spatial case ----------
+  results <- NULL
   if (space) {
-    N      <- length(fit$data)
-    coords <- cbind(fit$coordx, fit$coordy, fit$coordz)
-    data   <- fit$data
-    if (length(fit$fixed$mean) > 1) tempM <- fit$fixed$mean
-    if (!is.null(fit$X)) tempX <- fit$X
-
-    # Pre-genera tutti i sample una volta sola
-    sel_list <- replicate(K, sample(1:N, round(N * (1 - n.fold))), simplify = FALSE)
+    coords <- .GeoCVExplicitCoordinates(fit, "GeoCV spatial coordinates")
+    N <- nrow(coords)
+    data <- .GeoKrigNormalizeData(
+      fit$data, nspace = N, coordt = NULL, grid = isTRUE(fit$grid),
+      context = "GeoCV spatial data"
+    )
+    Xfull <- .GeoCVFlattenDesign(fit$X, N, "GeoCV spatial")
+    Mfull <- .GeoCVVaryingFixedMean(fixed_base, "mean", N)
+    nfull <- .GeoCVFlattenObservationVector(n_cv, N, "fit$n")
+    test_samples <- .GeoCVMakeTestSamples(N, K, n.fold)
 
     cv_iteration <- function(i) {
-      sel_data <- sel_list[[i]]
-      X <- Xloc <- Mloc <- NULL
+      test_idx <- test_samples[[i]]
+      train_idx <- setdiff(seq_len(N), test_idx)
 
-      # Prepara covariate
-      if (!is.null(fit$X)) {
-        X    <- tempX[sel_data, , drop = FALSE]
-        Xloc <- tempX[-sel_data, , drop = FALSE]
-      }
+      data_est <- data[train_idx]
+      data_pred <- data[test_idx]
+      coords_est <- coords[train_idx, , drop = FALSE]
+      coords_pred <- coords[test_idx, , drop = FALSE]
+      X_est <- if (!is.null(Xfull)) Xfull[train_idx, , drop = FALSE] else NULL
+      X_pred <- if (!is.null(Xfull)) Xfull[test_idx, , drop = FALSE] else NULL
+      M_pred <- if (!is.null(Mfull)) Mfull[test_idx] else NULL
+      n_est <- .GeoCVSubsetObservationVector(nfull, train_idx)
+      n_pred <- .GeoCVSubsetObservationVector(nfull, test_idx)
 
-      # Prepara medie fisse
-      if (length(fit$fixed$mean) > 1) {
-        Mloc <- tempM[-sel_data]
-      }
-
-      data_to_pred <- data[-sel_data]
-      data_to_est  <- data[sel_data]
-      coords_est   <- coords[sel_data, , drop = FALSE]
-      coords_pred  <- coords[-sel_data, , drop = FALSE]
-
-      param <- c(fit$param, fit$fixed)
+      fixed_for_est <- refit_fixed_base
+      if (!is.null(Mfull)) fixed_for_est$mean <- Mfull[train_idx]
 
       if (estimation) {
-        fixed_for_est <- fit$fixed
-        if (length(fit$fixed$mean) > 1) {
-          fixed_for_est$mean <- tempM[sel_data]
-        }
-
-        fit_s <- suppressWarnings(
-          GeoFit(
-            data = data_to_est, coordx = coords_est, corrmodel = fit$corrmodel,
-            X = X, likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
-            copula = fit$copula, anisopars = fit$anisopars, est.aniso = fit$est.aniso,
-            model = model1, radius = fit$radius,
-            n = if (length(fit$n) > 1) fit$n[sel_data] else fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
-            distance = fit$distance,
-            optimizer = optimizer, lower = lower, upper = upper,
-            start = fit$param, fixed = fixed_for_est
-          )
+        fit_s <- .GeoCVRefit(
+          fit = fit, data = data_est, X = X_est, n = n_est,
+          fixed = fixed_for_est, start = refit_start, model = model1,
+          optimizer = optimizer, lower = lower, upper = upper,
+          sparse = sparse, method = fit_method, varest = refit_varest,
+          coordx = coords_est,
+          universal = identical(type_krig, "Universal")
         )
-        param <- c(fit_s$param, fit_s$fixed)
       } else {
         fit_s <- fit
-        fit_s$data <- data_to_est
-        fit_s$coordx <- coords_est[, 1]
-        if (!is.null(fit$coordy)) fit_s$coordy <- coords_est[, 2]
-        if (!is.null(fit$coordz)) fit_s$coordz <- coords_est[, 3]
-        if (!is.null(X)) fit_s$X <- X
-        if (length(fit$fixed$mean) > 1) fit_s$fixed$mean <- tempM[sel_data]
-        if (length(fit$n) > 1) fit_s$n <- fit$n[sel_data]
+        fit_s$data <- data_est
+        fit_s$coordx <- coords_est[, 1L]
+        fit_s$coordy <- coords_est[, 2L]
+        fit_s$coordz <- if (ncol(coords_est) == 3L) coords_est[, 3L] else NULL
+        fit_s$coordx_dyn <- NULL
+        fit_s$grid <- FALSE
+        fit_s$ns <- length(train_idx)
+        fit_s$X <- X_est
+        fit_s$n <- n_est
+        fit_s$fixed <- fixed_for_est
       }
 
-      pr <- if (!local) {
-        GeoKrig(fit_s, loc = coords_pred, mse = TRUE,
-                param = param, Xloc = Xloc, Mloc = Mloc)
-      } else {
-        GeoKrigloc(fit_s, loc = coords_pred, mse = TRUE,
-                   param = param, Xloc = Xloc, Mloc = Mloc,
-                   neighb = neighb, maxdist = maxdist, progress = FALSE)
-      }
+      pr <- .GeoCVPredict(
+        fit_s, loc = coords_pred, Xloc = X_pred, Mloc = M_pred, nloc = n_pred,
+        local = local, neighb = neighb, maxdist = maxdist, maxtime = maxtime_use,
+        type_krig = type_krig, sparse = sparse, method = fit_method
+      )
 
-      pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
-                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
-        mean(pp$pit), pp$intscore, pp$coverage)
+      .GeoCVSummarizeScores(data_pred, pr$pred, pr$mse, gaussian_scores)
     }
 
-    ## ---- esecuzione effettiva ---------------------------------
-    if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
-      if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
-      if (isTRUE(progress)) {
-        pb <- txtProgressBar(min = 0, max = K, style = 3)
-        on.exit(close(pb), add = TRUE)
-      }
-      for (i in 1:K) {
-        res <- cv_iteration(i)
-        rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
-        lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
-        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
-        if (isTRUE(progress)) setTxtProgressBar(pb, i)
-      }
-    } else {
-      n.cores <- choose_cores(ncores)
-      old_plan <- future::plan()
-      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
-      future::plan(future::multisession, workers = n.cores)
-
-      # BUG FIX #2: progressr::with_progress() necessario per attivare il handler
-      if (isTRUE(progress)) {
-        progressr::with_progress({
-          p <- progressr::progressor(along = 1:K)
-          res <- future.apply::future_lapply(
-            1:K,
-            function(i) { out <- cv_iteration(i); p(); out },
-            future.seed = TRUE,
-            future.stdout = FALSE,
-            future.conditions = "none"
-          )
-        })
-      } else {
-        res <- future.apply::future_lapply(
-          1:K, cv_iteration,
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
-        )
-      }
-      res <- do.call(rbind, res)
-      rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
-      lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
-      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
-    }
+    results <- .GeoCVRunIterations(cv_iteration, K, parallel, ncores, progress)
   }
 
-  ################################################################
-  ### Spatio-temporal case  ######################################
-  ################################################################
+  ## ---------- space-time case ----------
   if (spacetime) {
-    coords <- cbind(fit$coordx, fit$coordy, fit$coordz)
-    ns     <- fit$ns
-    coordt <- fit$coordt
-    T      <- length(coordt)
-    NT     <- sum(ns)
+    coordt <- as.numeric(fit$coordt)
+    if (!length(coordt) || any(!is.finite(coordt)))
+      stop("fit$coordt is invalid", call. = FALSE)
+    T <- length(coordt)
 
-    X <- if (!is.null(fit$X)) fit$X else NULL
-    NS <- cumsum(ns)
-    NS <- c(0, NS[-length(NS)])
-
-    datos <- if (is.list(fit$data)) do.call(c, fit$data) else fit$data
-
-    if (!space_dyn) {
-      data_tot <- NULL
-      for (k in 1:T) {
-        data_tot <- rbind(data_tot, cbind(rep(coordt[k], ns[k]), coords, datos[k, ]))
+    if (!is.null(fit$coordx_dyn)) {
+      coord_blocks <- .GeoNormalizeDynamicCoordinates(
+        fit$coordx_dyn, coordt = coordt, context = "GeoCV space-time"
+      )
+      ns <- vapply(coord_blocks, nrow, integer(1))
+      if (is.list(fit$data)) {
+        if (length(fit$data) != T)
+          stop("GeoCV: fit$data is not aligned with fit$coordt.", call. = FALSE)
+        data_blocks <- lapply(seq_len(T), function(k) {
+          z <- as.numeric(fit$data[[k]])
+          if (length(z) != ns[k] || any(!is.finite(z)))
+            stop("GeoCV: dynamic data block ", k, " is invalid.", call. = FALSE)
+          z
+        })
+      } else {
+        data_flat0 <- as.numeric(fit$data)
+        if (length(data_flat0) != sum(ns) || any(!is.finite(data_flat0)))
+          stop("GeoCV: dynamic data are not aligned with coordx_dyn.", call. = FALSE)
+        data_blocks <- split(data_flat0, rep(seq_len(T), ns))
       }
-      if (!is.null(X)) data_tot <- cbind(data_tot, X)
     } else {
-      ct        <- rep(coordt, times = ns)
-      data_tot  <- cbind(ct, fit$coordx, fit$coordy, fit$coordz, datos)
-      if (!is.null(X)) data_tot <- cbind(data_tot, do.call(rbind, X))
+      coords_fixed <- .GeoCVExplicitCoordinates(fit, "GeoCV fixed space-time coordinates")
+      ns <- rep(nrow(coords_fixed), T)
+      data_flat0 <- .GeoKrigNormalizeData(
+        fit$data, nspace = nrow(coords_fixed), coordt = coordt,
+        grid = isTRUE(fit$grid), context = "GeoCV fixed space-time data"
+      )
+      data_blocks <- split(data_flat0, rep(seq_len(T), ns))
+      coord_blocks <- lapply(seq_len(T), function(k) coords_fixed)
     }
 
-    MM <- length(fit$fixed$mean) > 1
-    if (MM && !is.null(X)) stop("covariates and fixed varying mean are not compatible")
-    if (MM) {
-      tempM <- if (!space_dyn) fit$fixed$mean else do.call(rbind, fit$fixed$mean)
-      data_tot <- cbind(data_tot, tempM)
-    }
-
-    # BUG FIX #1: determina la colonna dei dati in base alla presenza di coordz
-    # Layout di data_tot: [t, x, y, (z), data, ...]
-    data_col <- ifelse(!is.null(fit$coordz), 5L, 4L)
-
-    # Pre-genera i fold una volta sola
-    folds <- split(sample(1:NT), rep(1:K, length.out = NT))
+    NT <- sum(ns)
+    time_group <- rep(seq_len(T), ns)
+    coords_flat <- do.call(rbind, coord_blocks)
+    data_flat <- as.numeric(unlist(data_blocks, use.names = FALSE))
+    Xflat <- .GeoCVFlattenDesign(fit$X, ns, "GeoCV space-time")
+    Mflat <- .GeoCVVaryingFixedMean(fixed_base, "mean", NT)
+    if (!is.null(Mflat) && !is.null(Xflat))
+      stop("GeoCV: covariates and a fixed varying mean are not compatible.", call. = FALSE)
+    nflat <- .GeoCVFlattenObservationVector(n_cv, ns, "fit$n")
+    test_samples <- .GeoCVMakeTestSamples(NT, K, n.fold, groups = time_group)
 
     cv_iteration_st <- function(i) {
-      test_idx  <- folds[[i]]
-      train_idx <- setdiff(1:NT, test_idx)
-      data_sel  <- as.matrix(data_tot[train_idx, , drop = FALSE])
-      data_pred <- as.matrix(data_tot[test_idx, , drop = FALSE])
+      test_idx <- test_samples[[i]]
+      train_idx <- setdiff(seq_len(NT), test_idx)
 
-      data_sel_ord  <- data_sel[order(data_sel[, 1]), ]
-      data_pred_ord <- data_pred[order(data_pred[, 1]), ]
+      train_by_time <- lapply(seq_len(T), function(k)
+        train_idx[time_group[train_idx] == k])
+      test_by_time <- lapply(seq_len(T), function(k)
+        test_idx[time_group[test_idx] == k])
 
-      DD <- ncol(data_sel_ord)
+      coord_train <- lapply(train_by_time, function(idx)
+        coords_flat[idx, , drop = FALSE])
+      data_train <- lapply(train_by_time, function(idx) data_flat[idx])
+      X_train <- if (!is.null(Xflat)) {
+        lapply(train_by_time, function(idx) Xflat[idx, , drop = FALSE])
+      } else NULL
+      M_train <- if (!is.null(Mflat)) Mflat[unlist(train_by_time)] else NULL
+      n_train <- .GeoCVSubsetObservationVector(nflat, unlist(train_by_time))
 
-      utt   <- unique(data_sel_ord[, 1])
-      utt_1 <- unique(data_pred_ord[, 1])
+      fixed_for_est <- refit_fixed_base
+      if (!is.null(Mflat)) fixed_for_est$mean <- M_train
 
-      coordx_dynnew     <- Xnew <- datanew <- list()
-      coordx_dynnew_loc <- Xnew_loc <- Mnew_loc <- list()
-
-      for (k in seq_along(utt_1)) {
-        ll <- data_pred_ord[data_pred_ord[, 1] == utt_1[k], , drop = FALSE]
-        if (!is.null(fit$coordz)) {
-          coordx_dynnew_loc[[k]] <- matrix(ll[, 2:4], ncol = 3)
-          if (!MM && !is.null(X)) Xnew_loc[[k]] <- matrix(ll[, 6:DD], ncol = DD - 5)
-          if (MM) Mnew_loc[[k]] <- ll[, 6]
-        } else {
-          coordx_dynnew_loc[[k]] <- matrix(ll[, 2:3], ncol = 2)
-          if (!MM && !is.null(X)) Xnew_loc[[k]] <- matrix(ll[, 5:DD], ncol = DD - 4)
-          if (MM) Mnew_loc[[k]] <- ll[, 5 + !is.null(X)]
-        }
-      }
-
-      Mnew <- NULL
-      for (k in seq_along(utt)) {
-        ss <- data_sel_ord[data_sel_ord[, 1] == utt[k], , drop = FALSE]
-        if (!is.null(fit$coordz)) {
-          coordx_dynnew[[k]] <- matrix(ss[, 2:4], ncol = 3)
-          datanew[[k]]       <- as.vector(ss[, 5])
-          if (!is.null(X)) Xnew[[k]] <- matrix(ss[, 6:DD], ncol = DD - 5)
-          if (MM) Mnew <- c(Mnew, ss[, 6])
-        } else {
-          coordx_dynnew[[k]] <- matrix(ss[, 2:3], ncol = 2)
-          datanew[[k]]       <- as.vector(ss[, 4])
-          if (!is.null(X)) Xnew[[k]] <- matrix(ss[, 5:DD], ncol = DD - 4)
-          if (MM) Mnew <- c(Mnew, ss[, 5])
-        }
-      }
-
-      param <- c(fit$param, fit$fixed)
       if (estimation) {
-        fixed_for_est <- fit$fixed
-        if (MM) fixed_for_est$mean <- Mnew
-
-        fit_s <- suppressWarnings(
-          GeoFit(
-            data = datanew, coordx_dyn = coordx_dynnew, coordt = utt,
-            corrmodel = fit$corrmodel, X = Xnew, likelihood = fit$likelihood,
-            type = fit$type, grid = fit$grid, copula = fit$copula,
-            anisopars = fit$anisopars, est.aniso = fit$est.aniso,
-            model = model1, radius = fit$radius, n = fit$n,
-            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
-            maxtime = fit$maxtime,
-            distance = fit$distance, optimizer = optimizer,
-            lower = lower, upper = upper,
-            start = fit$param, fixed = fixed_for_est
-          )
+        fit_s <- .GeoCVRefit(
+          fit = fit, data = data_train, X = X_train, n = n_train,
+          fixed = fixed_for_est, start = refit_start, model = model1,
+          optimizer = optimizer, lower = lower, upper = upper,
+          sparse = sparse, method = fit_method, varest = refit_varest,
+          coordx_dyn = coord_train, coordt = coordt,
+          universal = identical(type_krig, "Universal")
         )
-        param <- c(fit_s$param, fit_s$fixed)
       } else {
         fit_s <- fit
-        fit_s$data <- datanew
-        fit_s$coordx_dyn <- coordx_dynnew
-        fit_s$coordt <- utt
-        if (!is.null(X)) fit_s$X <- Xnew
-        if (MM) fit_s$fixed$mean <- Mnew
+        fit_s$data <- data_train
+        fit_s$coordx_dyn <- coord_train
+        fit_s$coordt <- coordt
+        fit_s$coordx <- unlist(lapply(coord_train, function(z) z[, 1L]))
+        fit_s$coordy <- unlist(lapply(coord_train, function(z) z[, 2L]))
+        fit_s$coordz <- if (ncol(coords_flat) == 3L) {
+          unlist(lapply(coord_train, function(z) z[, 3L]))
+        } else NULL
+        fit_s$grid <- FALSE
+        fit_s$ns <- vapply(coord_train, nrow, integer(1))
+        fit_s$X <- X_train
+        fit_s$n <- n_train
+        fit_s$fixed <- fixed_for_est
       }
 
-      pr_st  <- list()
-      pr_mse <- list()
-      for (j in seq_along(utt_1)) {
-        pr <- if (!local) {
-          GeoKrig(fit_s, loc = coordx_dynnew_loc[[j]], time = utt_1[j], mse = TRUE,
-                  param = param, Xloc = Xnew_loc[[j]], Mloc = Mnew_loc[[j]])
-        } else {
-          GeoKrigloc(fit_s, loc = coordx_dynnew_loc[[j]], time = utt_1[j], mse = TRUE,
-                     param = param, Xloc = Xnew_loc[[j]], Mloc = Mnew_loc[[j]],
-                     neighb = neighb, maxdist = maxdist, maxtime = maxtime, progress = FALSE)
-        }
-        pr_st[[j]]  <- pr$pred
-        pr_mse[[j]] <- pr$mse
-      }
+      pred_values <- pred_mse <- obs_values <- list()
+      out_pos <- 0L
+      for (k in seq_len(T)) {
+        idx <- test_by_time[[k]]
+        if (!length(idx)) next
+        out_pos <- out_pos + 1L
+        loc_k <- coords_flat[idx, , drop = FALSE]
+        Xloc_k <- if (!is.null(Xflat)) Xflat[idx, , drop = FALSE] else NULL
+        Mloc_k <- if (!is.null(Mflat)) Mflat[idx] else NULL
+        nloc_k <- .GeoCVSubsetObservationVector(nflat, idx)
 
-      # BUG FIX #1: usa data_col invece del valore fisso 4
-      pp <- GeoScores(data_pred[, data_col], pred = unlist(pr_st), mse = unlist(pr_mse),
-                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
-        mean(pp$pit), pp$intscore, pp$coverage)
-    }
-
-    ## ---- esecuzione effettiva ---------------------------------
-    if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
-      if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
-      if (isTRUE(progress)) {
-        pb <- txtProgressBar(min = 0, max = K, style = 3)
-        on.exit(close(pb), add = TRUE)
-      }
-      for (i in 1:K) {
-        res <- cv_iteration_st(i)
-        rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
-        lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
-        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
-        if (isTRUE(progress)) setTxtProgressBar(pb, i)
-      }
-    } else {
-      n.cores <- choose_cores(ncores)
-      old_plan <- future::plan()
-      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
-      future::plan(future::multisession, workers = n.cores)
-
-      #
-      if (isTRUE(progress)) {
-        progressr::with_progress({
-          p <- progressr::progressor(along = 1:K)
-          res <- future.apply::future_lapply(
-            1:K,
-            function(i) { out <- cv_iteration_st(i); p(); out },
-            future.seed = TRUE,
-            future.stdout = FALSE,
-            future.conditions = "none"
-          )
-        })
-      } else {
-        res <- future.apply::future_lapply(
-          1:K, cv_iteration_st,
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
+        pr <- .GeoCVPredict(
+          fit_s, loc = loc_k, Xloc = Xloc_k, Mloc = Mloc_k, nloc = nloc_k,
+          local = local, neighb = neighb, maxdist = maxdist, maxtime = maxtime_use,
+          type_krig = type_krig, sparse = sparse, method = fit_method,
+          time = coordt[k]
         )
+        pred_values[[out_pos]] <- pr$pred
+        pred_mse[[out_pos]] <- if (is.null(pr$mse)) {
+          rep(NA_real_, length(pr$pred))
+        } else pr$mse
+        obs_values[[out_pos]] <- data_flat[idx]
       }
-      res <- do.call(rbind, res)
-      rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
-      lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
-      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
+
+      .GeoCVSummarizeScores(
+        unlist(obs_values, use.names = FALSE),
+        unlist(pred_values, use.names = FALSE),
+        unlist(pred_mse, use.names = FALSE),
+        gaussian_scores
+      )
     }
+
+    results <- .GeoCVRunIterations(cv_iteration_st, K, parallel, ncores, progress)
   }
 
-  ################################################################
-  ### Bivariate case  ############################################
-  ################################################################
+  ## ---------- bivariate case ----------
   if (bivariate) {
-    fixmeans <- length(fit$fixed$mean_1) > 1 && length(fit$fixed$mean_2) > 1
-    if (fixmeans) {
-      tempM1 <- fit$fixed$mean_1
-      tempM2 <- fit$fixed$mean_2
-    }
+    ns <- as.integer(fit$ns)
+    if (length(ns) != 2L || any(!is.finite(ns)) || any(ns < 1L))
+      stop("GeoCV: invalid bivariate block sizes.", call. = FALSE)
+    if (ns[which] < 2L)
+      stop("GeoCV requires at least two observations in the target bivariate component.", call. = FALSE)
 
-    ns <- fit$ns
-    if (space_dyn) {
-      data1  <- fit$data[[1]]; data2  <- fit$data[[2]]
-      coords1 <- fit$coordx_dyn[[1]]; coords2 <- fit$coordx_dyn[[2]]
+    if (!is.null(fit$coordx_dyn)) {
+      if (length(fit$coordx_dyn) != 2L)
+        stop("GeoCV: bivariate coordx_dyn must contain two coordinate matrices.", call. = FALSE)
+      coords1 <- as.matrix(fit$coordx_dyn[[1L]])
+      coords2 <- as.matrix(fit$coordx_dyn[[2L]])
     } else {
-      data1  <- fit$data[1, ]; data2  <- fit$data[2, ]
-      coords <- cbind(fit$coordx, fit$coordy, fit$coordz)
-      coords1 <- coords2 <- coords
+      coords_common <- .GeoCVExplicitCoordinates(fit, "GeoCV bivariate coordinates")
+      coords1 <- coords2 <- coords_common
+    }
+    if (nrow(coords1) != ns[1L] || nrow(coords2) != ns[2L])
+      stop("GeoCV: bivariate coordinates are not aligned with fit$ns.", call. = FALSE)
+
+    biv_data <- .GeoBivariateDataVector(
+      fit$data, ns, context = "GeoCV bivariate"
+    )
+    data1 <- biv_data[seq_len(ns[1L])]
+    data2 <- biv_data[ns[1L] + seq_len(ns[2L])]
+
+    Xflat <- if (!is.null(fit$X)) {
+      .GeoBivariateDesign(fit$X, ns, context = "GeoCV bivariate")
+    } else NULL
+    X1 <- if (!is.null(Xflat)) Xflat[seq_len(ns[1L]), , drop = FALSE] else NULL
+    X2 <- if (!is.null(Xflat)) Xflat[ns[1L] + seq_len(ns[2L]), , drop = FALSE] else NULL
+
+    M1 <- .GeoCVVaryingFixedMean(fixed_base, "mean_1", ns[1L])
+    M2 <- .GeoCVVaryingFixedMean(fixed_base, "mean_2", ns[2L])
+    if ((!is.null(M1) || !is.null(M2)) && !is.null(Xflat))
+      stop("GeoCV: bivariate covariates and fixed varying means are not compatible.", call. = FALSE)
+
+    ## GeoKrig's bivariate path uses coefficient-based observed means.  Legacy
+    ## fitted objects may nevertheless contain site-specific mean_1 and/or
+    ## mean_2 vectors.  Handle each component independently by centering that
+    ## component and fixing its coefficient mean to zero; Mloc adds the known
+    ## target mean back at prediction sites.
+    data1_model <- if (!is.null(M1)) data1 - M1 else data1
+    data2_model <- if (!is.null(M2)) data2 - M2 else data2
+    fixed_biv <- refit_fixed_base
+    start_biv <- refit_start
+    if (!is.null(M1)) {
+      fixed_biv$mean_1 <- 0
+      start_biv <- .GeoCVDropMeanParameters(start_biv, "mean_1")
+    }
+    if (!is.null(M2)) {
+      fixed_biv$mean_2 <- 0
+      start_biv <- .GeoCVDropMeanParameters(start_biv, "mean_2")
     }
 
-    X1 <- X2 <- NULL
-    if (!is.null(fit$X)) {
-      if (!space_dyn && !is.list(fit$X)) {
-        X1 <- fit$X[1:ns[1], , drop = FALSE]
-        X2 <- fit$X[(ns[1] + 1):(ns[1] + ns[2]), , drop = FALSE]
-      } else if (space_dyn && is.list(fit$X)) {
-        X1 <- fit$X[[1]]; X2 <- fit$X[[2]]
-      }
-    }
+    nflat <- .GeoCVFlattenObservationVector(n_cv, ns, "fit$n")
+    n1 <- if (length(nflat) == 1L) nflat else nflat[seq_len(ns[1L])]
+    n2 <- if (length(nflat) == 1L) nflat else nflat[ns[1L] + seq_len(ns[2L])]
 
-    # Pre-genera tutti i sample
-    samples <- lapply(1:K, function(i) {
-      if (which == 1) sample(1:ns[1], round(ns[1] * (1 - n.fold)))
-      else sample(1:ns[2], round(ns[2] * (1 - n.fold)))
-    })
+    target_n <- ns[which]
+    test_samples <- .GeoCVMakeTestSamples(target_n, K, n.fold)
 
     cv_iteration_biv <- function(i) {
-      sel_data <- samples[[i]]
-      if (which == 1) {
-        data_to_est <- list(data1[sel_data], data2)
-        data_to_pred <- data1[-sel_data]
-        coords_est   <- list(coords1[sel_data, , drop = FALSE], coords2)
-        coords_pred  <- coords1[-sel_data, , drop = FALSE]
-        X_use   <- if (!is.null(X1)) rbind(X1[sel_data, , drop = FALSE], X2) else NULL
-        Xloc_use <- if (!is.null(X1)) rbind(X1[-sel_data, , drop = FALSE], X2) else NULL
-        if (fixmeans) {
-          current_fixed <- fit$fixed
-          current_fixed$mean_1 <- tempM1[sel_data]
-          Mloc <- list(tempM1[-sel_data], tempM2)
-        } else {
-          current_fixed <- fit$fixed
-          Mloc <- NULL
-        }
+      test_idx <- test_samples[[i]]
+      train_idx <- setdiff(seq_len(target_n), test_idx)
+      current_fixed <- fixed_biv
+
+      if (which == 1L) {
+        data_est <- list(data1_model[train_idx], data2_model)
+        data_pred <- data1[test_idx]
+        coords_est <- list(coords1[train_idx, , drop = FALSE], coords2)
+        coords_pred <- coords1[test_idx, , drop = FALSE]
+        X_est <- if (!is.null(Xflat)) {
+          rbind(X1[train_idx, , drop = FALSE], X2)
+        } else NULL
+        X_pred <- if (!is.null(X1)) X1[test_idx, , drop = FALSE] else NULL
+        M_pred <- if (!is.null(M1)) M1[test_idx] else NULL
+        n_est <- if (length(nflat) == 1L) nflat else c(n1[train_idx], n2)
+        n_pred <- if (length(nflat) == 1L) nflat else n1[test_idx]
       } else {
-        data_to_est <- list(data1, data2[sel_data])
-        data_to_pred <- data2[-sel_data]
-        coords_est   <- list(coords1, coords2[sel_data, , drop = FALSE])
-        coords_pred  <- coords2[-sel_data, , drop = FALSE]
-        X_use   <- if (!is.null(X2)) rbind(X1, X2[sel_data, , drop = FALSE]) else NULL
-        Xloc_use <- if (!is.null(X2)) rbind(X1, X2[-sel_data, , drop = FALSE]) else NULL
-        if (fixmeans) {
-          current_fixed <- fit$fixed
-          current_fixed$mean_2 <- tempM2[sel_data]
-          Mloc <- list(tempM1, tempM2[-sel_data])
-        } else {
-          current_fixed <- fit$fixed
-          Mloc <- NULL
-        }
+        data_est <- list(data1_model, data2_model[train_idx])
+        data_pred <- data2[test_idx]
+        coords_est <- list(coords1, coords2[train_idx, , drop = FALSE])
+        coords_pred <- coords2[test_idx, , drop = FALSE]
+        X_est <- if (!is.null(Xflat)) {
+          rbind(X1, X2[train_idx, , drop = FALSE])
+        } else NULL
+        X_pred <- if (!is.null(X2)) X2[test_idx, , drop = FALSE] else NULL
+        M_pred <- if (!is.null(M2)) M2[test_idx] else NULL
+        n_est <- if (length(nflat) == 1L) nflat else c(n1, n2[train_idx])
+        n_pred <- if (length(nflat) == 1L) nflat else n2[test_idx]
       }
 
       if (estimation) {
-        fit_s <- suppressWarnings(
-          GeoFit(
-            data = data_to_est, coordx = NULL, coordx_dyn = coords_est,
-            corrmodel = fit$corrmodel, X = X_use,
-            likelihood = fit$likelihood, type = fit$type, grid = fit$grid,
-            model = "Gaussian", radius = fit$radius, n = fit$n,
-            copula = fit$copula,
-            maxdist = fit$maxdist, neighb = fit$neighb, p_neighb = fit$p_neighb,
-            distance = fit$distance,
-            optimizer = optimizer, lower = lower, upper = upper,
-            start = fit$param, fixed = current_fixed
-          )
+        fit_s <- .GeoCVRefit(
+          fit = fit, data = data_est, X = X_est, n = n_est,
+          fixed = current_fixed, start = start_biv, model = model1,
+          optimizer = optimizer, lower = lower, upper = upper,
+          sparse = sparse, method = fit_method, varest = refit_varest,
+          coordx_dyn = coords_est,
+          universal = identical(type_krig, "Universal")
         )
-        param <- append(fit_s$param, fit_s$fixed)
       } else {
         fit_s <- fit
-        fit_s$data <- data_to_est
+        fit_s$data <- data_est
         fit_s$coordx_dyn <- coords_est
-        if (!is.null(X_use)) fit_s$X <- X_use
+        fit_s$coordx <- fit_s$coordy <- fit_s$coordz <- NULL
+        fit_s$grid <- FALSE
+        fit_s$ns <- vapply(coords_est, nrow, integer(1))
+        fit_s$X <- X_est
+        fit_s$n <- n_est
         fit_s$fixed <- current_fixed
-        param <- append(fit$param, current_fixed)
       }
 
-      pr <- if (!local) {
-        GeoKrig(fit_s, loc = coords_pred, mse = TRUE,
-                param = param, Xloc = Xloc_use, Mloc = Mloc, which = which)
-      } else {
-        GeoKrigloc(fit_s, loc = coords_pred, mse = TRUE,
-                   neighb = neighb, maxdist = maxdist,
-                   param = param, Xloc = Xloc_use, Mloc = Mloc, which = which,
-                   progress = FALSE)
-      }
+      pr <- .GeoCVPredict(
+        fit_s, loc = coords_pred, Xloc = X_pred, Mloc = M_pred, nloc = n_pred,
+        local = local, neighb = neighb, maxdist = maxdist, maxtime = maxtime_use,
+        type_krig = type_krig, sparse = sparse, method = fit_method,
+        which = which
+      )
 
-      pp <- GeoScores(data_to_pred, pred = pr$pred, mse = pr$mse,
-                      score = c("brie", "crps", "lscore", "pit", "pe", "intscore", "coverage"))
-      c(pp$rmse, pp$mae, pp$mad, pp$lscore, pp$brie, pp$crps,
-        mean(pp$pit), pp$intscore, pp$coverage)
+      .GeoCVSummarizeScores(data_pred, pr$pred, pr$mse, gaussian_scores)
     }
 
-    ## ---- esecuzione effettiva ---------------------------------
-    if (!parallel) {
-      rmse <- crps <- mae <- mad <- lscore <- brie <- pit <- intscore <- coverage <- double(K)
-      if (isTRUE(progress)) cat("Performing", K, "cross-validations...\n")
-      if (isTRUE(progress)) {
-        pb <- txtProgressBar(min = 0, max = K, style = 3)
-        on.exit(close(pb), add = TRUE)
-      }
-      for (i in 1:K) {
-        res <- cv_iteration_biv(i)
-        rmse[i] <- res[1]; mae[i] <- res[2]; mad[i] <- res[3]
-        lscore[i] <- res[4]; brie[i] <- res[5]; crps[i] <- res[6]
-        pit[i] <- res[7]; intscore[i] <- res[8]; coverage[i] <- res[9]
-        if (isTRUE(progress)) setTxtProgressBar(pb, i)
-      }
-    } else {
-      n.cores <- choose_cores(ncores)
-      old_plan <- future::plan()
-      on.exit(try(future::plan(old_plan), silent = TRUE), add = TRUE)
-      future::plan(future::multisession, workers = n.cores)
-
-      # 
-      if (isTRUE(progress)) {
-        progressr::with_progress({
-          p <- progressr::progressor(along = 1:K)
-          res <- future.apply::future_lapply(
-            1:K,
-            function(i) { out <- cv_iteration_biv(i); p(); out },
-            future.seed = TRUE,
-            future.stdout = FALSE,
-            future.conditions = "none"
-          )
-        })
-      } else {
-        res <- future.apply::future_lapply(
-          1:K, cv_iteration_biv,
-          future.seed = TRUE,
-          future.stdout = FALSE,
-          future.conditions = "none"
-        )
-      }
-      res <- do.call(rbind, res)
-      rmse <- res[, 1]; mae <- res[, 2]; mad <- res[, 3]
-      lscore <- res[, 4]; brie <- res[, 5]; crps <- res[, 6]
-      pit <- res[, 7]; intscore <- res[, 8]; coverage <- res[, 9]
-    }
+    results <- .GeoCVRunIterations(cv_iteration_biv, K, parallel, ncores, progress)
   }
 
-  # Output esteso con tutte le metriche
-  list(rmse = rmse, mae = mae, mad = mad, brie = brie, crps = crps,
-       lscore = lscore, pit = pit, intscore = intscore, coverage = coverage,
-       seed = seed)
+  if (is.null(results))
+    stop("Unsupported GeoFit configuration for GeoCV.", call. = FALSE)
+
+  list(
+    rmse = results[, "rmse"],
+    mae = results[, "mae"],
+    mad = results[, "mad"],
+    brie = results[, "brie"],
+    crps = results[, "crps"],
+    lscore = results[, "lscore"],
+    pit_mean = results[, "pit_mean"],
+    pit = results[, "pit_mean"],
+    intscore = results[, "intscore"],
+    coverage = results[, "coverage"],
+    seed = seed,
+    estimation_model = model1
+  )
 }

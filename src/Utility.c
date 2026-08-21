@@ -1,9 +1,6 @@
 #include "header.h"
 
 
-
-
-
 double clamp_corr(double x)
 {
     const double eps = 1e-10;
@@ -95,35 +92,6 @@ void lubksb(double **a, int n, int *indx, double *b)
 
 
 
-
-void Matrix_prod_vec(double **a,double *b,double *c,int n)
-{
-    int i,j,k;double sum=0;
-    for(i=0; i<n; i++){
-        for(j=0; j<n; j++){
-            for(k=0; k<n; k++) {sum=sum+ a[i][k]*b[k];}
-            c[j]=sum;sum=0;
-    }}
-}
-
-
-
-void Matrix_prod(double **a,double **b,double **c,int n)
-{
-    int i,j,k;double sum=0;
-    for(i=0; i<n; i++){
-        for(j=0; j<n; j++){
-            for(k=0; k<n; k++) {sum=sum+ a[i][k]*b[k][j];}
-            c[i][j]=sum;sum=0;
-    }}
-}
-/*compute the trace of  square matrix*/
-double Trace(double **A,int n)
-{
-    int i;double x = 0;
-    for(i=0;i<n;i++) x=x+A[i][i];
-    return(x);
-}
 /*compute the quadratic form given a simmetric square matrix*/
 double QFORM(double **A,double *x,double *y,int n)
 {
@@ -134,26 +102,7 @@ double QFORM(double **A,double *x,double *y,int n)
     return(qf);
 }
 
-/*compute the quadratic form given a simmetric square matrix*/
-double QFORM2(double **A,double *x,double *y,int n, int m)
-{
-    int i,j;double qf = 0;
-    for(i=0;i<n;i++){
-        for(j=0;j<m;j++){
-            qf=qf + x[i]*A[i][j]*y[j];}}
-    return(qf);
-}
 
-/*Transpose matrix of a square matrix*/
-void Transpose(double **a,int n,double k)
-{
-    int i,j;double tmp;
-    for (i=1;i<n;i++) {
-        for (j=0;j<i;j++) {
-            tmp = a[i][j]/k;
-            a[i][j] = a[j][i]/k;
-            a[j][i] = tmp;}}
-}
 /*************************************************************************************/
 /*************************************************************************************/
 /*************************************************************************************/
@@ -275,20 +224,6 @@ return;
 }
 
 
-void Maxima_Minima_time(double *res,double *coordt,int *nsize)
-{
-  double res1=0.0,res2=-LOW,lagt=0.0;
-  int i=0,j=0;
-    for(i=0; i<(*nsize-1);i++){
-        for(j=(i+1); j<*nsize;j++){
-          lagt=fabs(coordt[i]-coordt[j]);
-          res1 = fmax(res1, lagt);
-          res2 = fmin(res2, lagt);
-}}
-res[0]=res2;res[1]=res1;
-return;
-}
-
 
 
 
@@ -300,46 +235,6 @@ return;
 }*/
 
 
-double aux_euv_binomneg (int N, double p1,double p2,double p11)
-{
-
- int i=0;
- double a=0.0,b=0.0,kk1=0.0,kk2=0.0,kk3=0.0,kk4=0.0,kk5=0.0,kk6=0.0,kk7=0.0,euv1=0.0,euv2=0.0,euv3=0.0;
-
- double p00=1+p11-(p1+p2);
- double p10=p1-p11;double p01=p2-p11;
- double P=1-p00;
-
-for(i=1;i<=fmin(N-1,2*N-3);i++){
-kk1=exp(lgammafn(2*N-i-3+1)-(lgammafn(N-i)+lgammafn(N-i)+lgammafn(i)));
-a=(R_pow(N,2)*p00+2*R_pow(N,2)-2*i*N-i-1)*p00 + (N-2*i-2)*N + R_pow(i,2) + 2*i+1;
-b=R_pow(p01/P,N-i)*pow(p10/P,N-i)*R_pow(p11/P,i);
-
-kk2=a*p1-(N*p00-i-1)*p00 + N-i-1;
-kk3=P*p1*p10;
-euv1+=kk1*(kk2/kk3)*b;
-                     
-
-kk4=a*p2-(N*p00-i-1)*p00 + N-i-1;
-kk5=P*p2*p01;
-euv2+=kk1*(kk4/kk5)*b;
-                      
-kk6=p11*a;
-kk7=P*p01*p10;
-euv3+=kk1*(kk6/kk7)*b;
-} 
-
-
- return(euv1+euv2+euv3);
-}
-
-
-double corr_binomneg (int N, double p1,double p2,double p11)
-{
-double corr=0.0;
- corr=(p1*p2*aux_euv_binomneg(N,p1,p2,p11)-R_pow(N,2)*(1-p1)*(1-p2))/(N*R_pow((1-p1),1/2)*R_pow((1-p2),1/2));
- return(corr);
-}
 /*************************************************************************************/
 /*************************************************************************************/
 /*************************************************************************************/
@@ -638,45 +533,7 @@ int is_equal(double val1, double val2)
 }
 
 
-double Maxima_i(int *x, int size)
-{
-  int res=0;
-  int i=0;
 
-  res = x[0];
-
-  for(i = 1; i < size; i++)
-    res = imax2(res, x[i]);
-
-  return res;
-}
-
-
-double Maxima(double *x, int *size)
-{
-  double res=0.0;
-  int i=0;
-
-  res = x[0];
-
-  for(i = 1; i < *size; i++)
-    res = fmax2(res, x[i]);
-
-  return res;
-}
-
-double Minima(double *x, int *size)
-{
-  double res=0.0;
-  int i=0;
-
-  res = x[0];
-
-  for(i = 1; i < *size; i++)
-    res = fmin2(res, x[i]);
-
-  return res;
-}
 
 
 //return x*(x-1)*...j  j<x
@@ -693,198 +550,18 @@ int fmin_int(int u,int v)
 }
 
 // sterling approx
-double stirling(double x)
-{
-    return (x*log(x)-x);
-}
-
-
-/*******  stirling appro***************************************/
-double logfac(int n)
-{
-    int i;
-    double factorial = 1.0;
-    if(n<=170)
-    {
-    for(i=1; i<=n; i++) factorial *= i; 
-    return(log(factorial));
-    }
-    else 
-      {
-  
-        return(stirling(n));}
-}
 
 
 
 /**********************************************/
-double fac(int n,int j)
-{
-    int i;
-    double factorial = 1.0;
-    for(i=j; i<=n; ++i) factorial *= i;              
-    return(factorial);
-}
 /**********************************************/
-void Range(double *x, double *ran, int *size)
-{
-  int i=0;
-
-  ran[0] = x[0];
-  ran[1] = x[0];
-
-  for(i = 1; i < *size; i++)
-    {
-      ran[0] = fmin(ran[0], x[i]);
-      ran[1] = fmax(ran[1], x[i]);
-    }
-
-  return;
-}
-// define a sequence of points from x[0] to x[1] of length 'len'
-void Seq(double *x, int len, double *res)
-{
-  double delta=0.0;
-  int i=0;
-
-  res[0] = x[0];
-  delta = (x[1] - x[0]) / (len - 1);
-
-  for(i = 1; i < len; i++)
-    res[i] = res[i - 1] + delta;
-
-  return;
-}
-// define a sequence of 'len' points of of 'delta' steps from the starting point x[0]
-void SeqStep(double *x, int len, double step, double *res)
-{
-  int i=0;
-  res[0]=x[0];
-  for(i=0;i<len;i++) res[i+1]=res[i]+step;
-  return;
-}
-
-
-// Determine (for the sub-sampling procedure) the sub-coordinates and
-// the sub-data given spatial data, coordinates and an interval:
-void SetSampling(double *coordx, double *coordy, double *data, int n, int *npts, int nbetas,
-		 double *scoordx, double *scoordy, double *sdata, double xmax,
-		 double xmin, double ymax, double ymin, double **sX,double **X)
-{
-  int i=0, j=0,k=0;
-
-  for(i=0;i<ncoord[0];i++){
-    
-    if((xmin<coordx[i]||is_equal(xmin,coordx[i]))&&
-       (xmax>coordx[i]||is_equal(xmax,coordx[i]))&&
-       (ymin<coordy[i]||is_equal(ymin,coordy[i]))&&
-       (ymax>coordy[i]||is_equal(ymax,coordy[i])))
-  {
-	scoordx[j]=coordx[i];
-	scoordy[j]=coordy[i];
-
-  sdata[j]=data[i];
-  
-  for(k=0;k<nbetas;k++)  {sX[j][k]=X[i][k];}
-	
-  j=j+1;
-  }}
-  *npts = j;
-  return;
-}
 
 
 
-// subsampling in space
-void SetSampling_s(double *coordx, double *coordy, double *data, int *npts, int nbetas,
-                   double *scoordx, double *scoordy, double *sdata, double xmax,
-                   double xmin, double ymax, double ymin,double **sX,double **X,int *ns,int *NS, int *NS_sub, double *res_sub, double *coordt,int *ns_sub)
-{
-    int i=0, j=0, f=0,k=0;
-    int NTOT=(NS[ntime[0]-1]+ns[ntime[0]-1]);
-        for(i=0;i<NTOT;i++)
-        {
-            if((xmin<coordx[i]||is_equal(xmin,coordx[i]))&&
-               (xmax>coordx[i]||is_equal(xmax,coordx[i]))&&
-               (ymin<coordy[i]||is_equal(ymin,coordy[i]))&&
-               (ymax>coordy[i]||is_equal(ymax,coordy[i])))
-            {
-                scoordx[j]=coordx[i];
-                scoordy[j]=coordy[i];
-                sdata[j] = data[i];
-                
-                for(f=0;f<ntime[0];f++)
-                {
-                    if(res_sub[i]==coordt[f]){ns_sub[f]++;}
-                }
-          for(k=0;k<nbetas;k++) {sX[j][k]=X[i][k];}
-                j++;   
-            }
-        }
-        cumvec(ns_sub,NS_sub,ntime[0]);
-        *npts = j;
-    return;
-}
 
 
-// Determine (for the sub-sampling procedure) the sub-coordinates and
-// the sub-data given spatial data, coordinates and an interval:
-void SetSampling_st(double *data,double *sdata,int *ncoordss,int *ntime, int nbetas,
-        int wint,int k, double **sX,double **X)
-{
-  int i=0,j=0,p=0,f=0;
-  for(i=0;i<(*ncoordss);i++){
-    for(j=(k+(ntime[0]*i));j<(k+wint+(ntime[0]*i));j++) {
-        sdata[p]=data[j];
-       for(f=0;f<nbetas;f++) sX[p][f]=X[j][f];
-
-        p++;
 
 
-    }}
-  return;
-}  
-
-void SetSampling_t(double *data,double *sdata, int nbetas,int npts,
-                   int nt,int wint,int k,double **sX,double **X,int *ns_sub,int *NS_sub,int nsub_t, int *ntimeS, double *s2cx, double *s2cy, double *scoordx, double *scoordy)
-{
-    int i=0,j=0,p=0,f=0;
-    for(j=(k*wint);j<(k*wint+wint);j++)
-    {
-        for(i=NS_sub[j];i<NS_sub[j]+ns_sub[j];i++)
-        {
-            sdata[p]=data[i];
-            s2cx[p] = scoordx[i];
-            s2cy[p] = scoordy[i];
-            for(f=0;f<nbetas;f++) {sX[p][f]=X[i][f];}
-            p++;
-        }
-    }
-    *ntimeS = p;
-    return;
-}
-
-// Determine (for the sub-sampling procedure) the sub-coordinates and
-// the sub-data given spatial  bivariate data, coordinates and an interval:
-void SetSampling_biv(double *coordx, double *coordy, double *data, int n, int *npts,
-                 double *scoordx, double *scoordy, double *sdata, double xmax,
-                 double xmin, double ymax, double ymin)
-{
-    int i=0, j=0,f=0;
-    for(i=0;i<ncoord[0];i++){
-        if((xmin<coordx[i]||is_equal(xmin,coordx[i]))&&
-           (xmax>coordx[i]||is_equal(xmax,coordx[i]))&&
-           (ymin<coordy[i]||is_equal(ymin,coordy[i]))&&
-           (ymax>coordy[i]||is_equal(ymax,coordy[i]))){
-            scoordx[j]=coordx[i];scoordy[j]=coordy[i];
-            sdata[f]=data[n     + *ntime*i];
-            f++;
-            sdata[f]=data[n+ 1 + *ntime*i];
-            f++;
-            j++; }}
-    *npts = j;
-    return;
-}
 
 // Set the global variables for the spatial and spatial-temporal fitting:
 
@@ -1122,6 +799,19 @@ if(isbiv[0]) {
   if(!ismal[0]) return;
  } //end spatio temporal case or bivariate case
 
+  /* Bohman weights are fixed by pair geometry and support cutoffs.
+     Cache them once rather than recomputing them at every optimizer step. */
+  if (pairweights) { R_Free(pairweights); pairweights = NULL; }
+  if (weighted && weighted[0] && npairs && npairs[0] > 0) {
+      pairweights = (double *)R_Calloc(npairs[0], double);
+      if (!pairweights) { *ismal = 0; return; }
+      for (int ii = 0; ii < npairs[0]; ++ii) {
+          const double hh = isbiv[0] ? lags_1[ii] : lags[ii];
+          double ww = CorFunBohman(hh, maxdist[0]);
+          if (isst[0]) ww *= CorFunBohman(lagt[ii], maxtime[0]);
+          pairweights[ii] = (R_FINITE(ww) && ww > 0.0) ? ww : 0.0;
+      }
+  }
 
   npair[0]=npairs[0];
       
@@ -1146,6 +836,10 @@ void DeleteGlobalVar(void)
            if(isst[0])    {R_Free(lagt);}
            if(isbiv[0])   {R_Free(first);R_Free(second);}
   }
+  if (pairweights) { R_Free(pairweights); pairweights = NULL; }
+  if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
+  if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
+  if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
   R_Free(isbiv); R_Free(istap);
   R_Free(isst);R_Free(ismem);
   R_Free(cdyn);
@@ -1172,9 +866,12 @@ void SetGlobalVar2(int *nsite, int *times,          // 2
         return;
     }
     
-    // Clean up any previously allocated global variables if needed
-    // DeleteGlobalVar2(); // uncomment if you want auto-cleanup
-    
+    /* Reinitialization is allowed; release a previous pair cache first. */
+    if (ncoord || ntime || maxdist || maxtime || npairs || isbiv || isst ||
+        lags || lags_1 || lagt || pairweights || pg_count1 || pg_count2 ||
+        pg_count_n)
+        DeleteGlobalVar2();
+
     // Allocate basic global variables
     ncoord = (int *)R_Calloc(1, int);
     if (!ncoord) {
@@ -1306,97 +1003,119 @@ void SetGlobalVar2(int *nsite, int *times,          // 2
             second_1[i] = two[i];
         }
     }
-    
+
+    /* Pair weights are initialized lazily by GeoPGCachedWeight().
+       This avoids allocating an additional O(npairs) vector for unweighted
+       fits while still computing every fixed Bohman weight only once. */
+    pairweights = NULL;
+
     return;
 }
 
 /*#######################################################################*/
-/* Versione migliorata di DeleteGlobalVar2 con controlli di sicurezza */
+/* Release the pair cache.  Free every pointer independently so this is */
+/* also safe after a partial allocation failure.                         */
 /*#######################################################################*/
 void DeleteGlobalVar2(void)
 {
-    // Free basic global variables (sempre allocate)
+    /* Pair-geometry arrays. */
+    if (lags) { R_Free(lags); lags = NULL; }
+    if (lagt) { R_Free(lagt); lagt = NULL; }
+    if (lags_1) { R_Free(lags_1); lags_1 = NULL; }
+    if (first_1) { R_Free(first_1); first_1 = NULL; }
+    if (second_1) { R_Free(second_1); second_1 = NULL; }
+
+    /* Derived caches. */
+    if (pairweights) { R_Free(pairweights); pairweights = NULL; }
+    if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
+    if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
+    if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
+
+    /* Scalars and flags. */
     if (ncoord) { R_Free(ncoord); ncoord = NULL; }
     if (ntime) { R_Free(ntime); ntime = NULL; }
     if (maxdist) { R_Free(maxdist); maxdist = NULL; }
     if (maxtime) { R_Free(maxtime); maxtime = NULL; }
     if (npairs) { R_Free(npairs); npairs = NULL; }
-    
-    // Free model-specific arrays based on flags
-    if (isbiv && isst) {
-        if (!isst[0] && !isbiv[0]) { 
-            // Pure spatial case
-            if (lags) { R_Free(lags); lags = NULL; }
-        }
-        else if (isst[0]) {
-            // Spatio-temporal case
-            if (lags) { R_Free(lags); lags = NULL; }
-            if (lagt) { R_Free(lagt); lagt = NULL; }
-        }
-        else if (isbiv[0]) {
-            // Bivariate case
-            if (lags_1) { R_Free(lags_1); lags_1 = NULL; }
-            if (first_1) { R_Free(first_1); first_1 = NULL; }
-            if (second_1) { R_Free(second_1); second_1 = NULL; }
-        }
-    }
-    
-    // Free flags last
     if (isbiv) { R_Free(isbiv); isbiv = NULL; }
     if (isst) { R_Free(isst); isst = NULL; }
-    
+}
+
+void SetPGPairCounts(double *data1, double *data2, int *n, int *ok)
+{
+    if (ok) ok[0] = 0;
+    if (!data1 || !data2 || !n || n[0] < 0) return;
+
+    if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
+    if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
+    if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
+
+    pg_count_n = (int *)R_Calloc(1, int);
+    if (!pg_count_n) return;
+    pg_count_n[0] = n[0];
+    if (n[0] == 0) {
+        if (ok) ok[0] = 1;
+        return;
+    }
+
+    pg_count1 = (int *)R_Calloc(n[0], int);
+    pg_count2 = (int *)R_Calloc(n[0], int);
+    if (!pg_count1 || !pg_count2) goto fail;
+
+    for (int i = 0; i < n[0]; ++i) {
+        if (ISNAN(data1[i]) || ISNAN(data2[i])) {
+            pg_count1[i] = INT_MIN;
+            pg_count2[i] = INT_MIN;
+            continue;
+        }
+        if (!R_FINITE(data1[i]) || !R_FINITE(data2[i])) goto fail;
+        const double r1 = nearbyint(data1[i]);
+        const double r2 = nearbyint(data2[i]);
+        if (r1 < 0.0 || r2 < 0.0 || r1 > INT_MAX || r2 > INT_MAX ||
+            fabs(data1[i] - r1) > 1e-10 ||
+            fabs(data2[i] - r2) > 1e-10)
+            goto fail;
+        pg_count1[i] = (int)r1;
+        pg_count2[i] = (int)r2;
+    }
+    if (ok) ok[0] = 1;
     return;
+
+fail:
+    if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
+    if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
+    if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
+}
+
+double GeoPGCachedWeight(int index, int weighted, int spacetime)
+{
+    if (!weighted) return 1.0;
+    if (index < 0 || !npairs || index >= npairs[0] || npairs[0] <= 0)
+        return R_NaN;
+
+    if (!pairweights) {
+        const int use_st = spacetime || (isst && isst[0]);
+        const double *hvec = (isbiv && isbiv[0]) ? lags_1 : lags;
+        if (!hvec || !maxdist || maxdist[0] <= 0.0 ||
+            (use_st && (!lagt || !maxtime || maxtime[0] <= 0.0)))
+            return R_NaN;
+
+        pairweights = (double *)R_Calloc(npairs[0], double);
+        if (!pairweights) return R_NaN;
+        for (int i = 0; i < npairs[0]; ++i) {
+            double out = CorFunBohman(hvec[i], maxdist[0]);
+            if (use_st) out *= CorFunBohman(lagt[i], maxtime[0]);
+            pairweights[i] = (R_FINITE(out) && out > 0.0) ? out : 0.0;
+        }
+    }
+    return pairweights[index];
 }
 
 /*#######################################################################*/
 /* Funzione helper per controllo stato delle variabili globali */
 /*#######################################################################*/
-int CheckGlobalVarsInitialized(void)
-{
-    return (ncoord != NULL && ntime != NULL && maxdist != NULL && 
-            maxtime != NULL && npairs != NULL && isbiv != NULL && isst != NULL);
-}
-
-/*#######################################################################*/
-/* Funzione helper per ottenere info sullo stato corrente */
-/*#######################################################################*/
-void GetGlobalVarsInfo(int *n_coords, int *n_times, int *n_pairs, 
-                       int *is_spatiotemporal, int *is_bivariate)
-{
-    if (!CheckGlobalVarsInitialized()) {
-        *n_coords = *n_times = *n_pairs = *is_spatiotemporal = *is_bivariate = -1;
-        return;
-    }
-    
-    *n_coords = ncoord[0];
-    *n_times = ntime[0];
-    *n_pairs = npairs[0];
-    *is_spatiotemporal = isst[0];
-    *is_bivariate = isbiv[0];
-}
 
 
-void Rep(double *coordt,int *ns, double *res)
-{
-    int i, j,ppb=0;
-    for(i =0;i<ntime[0];i++)
-    {for(j =0;j<ns[i];j++){
-            res[ppb] = coordt[i];
-            ppb++;}}
-}
-
-
-void cumvec(int *ns,int *res,int len)
-{
-    int i=0;
-    res[0] =0;
-    int sum=0;
-    for(i =1;i<len;i++)
-    {
-        sum += ns[i-1];
-        res[i] = sum;
-    }
-}
 
 
 

@@ -7,16 +7,13 @@
 
 print.GeoWLS <- function(x, digits = max(3, getOption("digits") - 3), ...)
   {
-    if(x$model=='Gaussian'||x$model=='Gauss'){process <- x$model
-                                              model <- x$model}
     if(x$weighted)
       method <- 'Weighted Least Squares'
     else
-      method <- method <- 'Least Squares'
+      method <- 'Least Squares'
 
     cat('\n##############################################################')
-    cat('\nResults:', method,'Fitting of', process, 'Random Fields.\n')
-    cat('\nModel used from the', method, ':', model, '\n')
+    cat('\nResults:', method,'Fitting of Gaussian Random Fields.\n')
     cat('\nCovariance model:', x$corrmodel, '\n')
     cat('Number of spatial coordinates:', x$numcoord, '\n')
     cat('Number of dependent temporal realisations:', x$numtime, '\n')
@@ -40,9 +37,37 @@ print.GeoWLS <- function(x, digits = max(3, getOption("digits") - 3), ...)
 WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed, grid,
                     likelihood, maxdist, neighb,maxtime, model, n, param, 
                     parscale, paramrange, radius, start, taper, tapsep, type, varest, 
-                    weighted, copula,X,memdist,nosym,p_neighb,thin_method)
+                    weighted, copula,X,memdist,nosym,p_neighb = 1, thin_method = "bernoulli")
   {
-  
+    if (!isTRUE(memdist)) {
+      warning(
+        "'memdist = FALSE' is deprecated and ignored; WlsStart now always precomputes the selected pair structure for GeoFit.",
+        call. = FALSE
+      )
+    }
+    memdist <- TRUE
+
+    fit_context <- getOption("GeoModels.fit_context_cache", NULL)
+    if (is.environment(fit_context) &&
+        exists("wls_initparam", envir = fit_context, inherits = FALSE)) {
+      initparam <- get("wls_initparam", envir = fit_context, inherits = FALSE)
+
+      ## Reproduce the data layout prepared by StartParam on the first call.
+      ## Only values change between bootstrap replications; dimensions and
+      ## ordering remain fixed.  This preserves the exact input seen by the
+      ## likelihood while avoiding the repeated static setup.
+      data_template <- initparam$data
+      if (!is.list(data_template)) {
+        data <- as.vector(data)
+        if (!is.null(dim(data_template)) &&
+            length(data) == length(data_template)) {
+          dim(data) <- dim(data_template)
+        }
+      }
+      initparam$data <- data
+      return(initparam)
+    }
+
     # Determines the range of the parameters for a given correlation
     SetRangeParam <- function(namesparam, numparam)
     {
@@ -52,43 +77,20 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
         upper <- NULL
         # Check for the param set:
         for(i in 1:numparam){ 
-            if(namesparam[i]=='mean'||namesparam[i]=='mean_1'||namesparam[i]=='mean_2'){
+            if (grepl("^mean[0-9]*$", namesparam[i]) ||
+                grepl("^mean_[12][0-9]*$", namesparam[i])) {
                 lower <- c(lower, -big)
-                upper <- c(upper, big)}
-              if(namesparam[i]==paste('mean',1,sep="")||
-                 namesparam[i]==paste('mean',2,sep="")||
-                 namesparam[i]==paste('mean',3,sep="")||
-                 namesparam[i]==paste('mean',4,sep="")||
-                 namesparam[i]==paste('mean',5,sep="")||
-                 namesparam[i]==paste('mean',6,sep="")||
-                 namesparam[i]==paste('mean',7,sep="")||
-                 namesparam[i]==paste('mean',8,sep="")||
-                 namesparam[i]==paste('mean',9,sep="")||
-                 namesparam[i]==paste('mean',10,sep="")||
-                 namesparam[i]==paste('mean',11,sep="")||
-                 namesparam[i]==paste('mean',12,sep="")||
-                 namesparam[i]==paste('mean',13,sep="")||
-                 namesparam[i]==paste('mean',14,sep="")||
-                 namesparam[i]==paste('mean',15,sep="")||
-                 namesparam[i]==paste('mean',16,sep="")||
-                 namesparam[i]==paste('mean',17,sep="")||
-                 namesparam[i]==paste('mean',18,sep="")||
-                 namesparam[i]==paste('mean',19,sep="")||
-                 namesparam[i]==paste('mean',20,sep="")||
-                 namesparam[i]==paste('mean',21,sep="")||
-                 namesparam[i]==paste('mean',22,sep="")||
-                 namesparam[i]==paste('mean',23,sep="")||
-                 namesparam[i]==paste('mean',24,sep="")||
-                 namesparam[i]==paste('mean',25,sep=""))
-              {
-                lower <- c(lower, -big)
-                upper <- c(upper, big)}   
+                upper <- c(upper, big)
+            }
             if(namesparam[i]=='skew'){
                 lower <- c(lower, -big)
                 upper <- c(upper, big)}
             if(namesparam[i]=='tail'){
                 lower <- c(lower, low)
-                upper <- c(upper, big)}
+                upper <- c(upper, if (model %in% c('Tukeyh','tukeyh')) 0.5 - sqrt(.Machine$double.eps) else big)}
+            if(namesparam[i] %in% c('tail1','tail2')){
+                lower <- c(lower, low)
+                upper <- c(upper, 0.5 - sqrt(.Machine$double.eps))}
            if(namesparam[i]=='df'){
                 lower <- c(lower, 0)
                 upper <- c(upper, big)}
@@ -150,7 +152,8 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
     initparam <- StartParam(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance, fcall, fixed,
                            grid, likelihood, maxdist,neighb, maxtime, model, n, 
                            param, parscale, paramrange, radius,  start, taper, tapsep,
-                           "GeoWLS", type,  weighted,copula, X, memdist, nosym, p_neighb,thin_method)
+                           "GeoWLS", type,  weighted,copula, X, memdist, nosym,
+                           p_neighb, thin_method)
   
 
     
@@ -174,128 +177,178 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
     ### Set the initial type of likelihood objects:
     initparam$type <- CkType(type)
    # if(substr(model,1,6)=='Binary'||substr(model,1,8)=='Binomial'||substr(model,1,11)=='BinomialNeg'||substr(model,1,4)=='Geom'||substr(model,1,4)=='Pois') return(initparam)
-    if(is.null(start)) start <- NA else start <- unlist(start)
-    if(is.null(fixed)) fixed <- NA else fixed <- unlist(fixed)
-    ### Checks if all the starting values have been passed by the user:
- #print(initparam$numstart);print(initparam$numparam)
+    start_user <- if(is.null(start)) numeric(0) else unlist(start)
+    fixed_user <- if(is.null(fixed)) numeric(0) else unlist(fixed)
 
-if(initparam$numstart==initparam$numparam)       ### checking if numparam = numstart
-{        
-###### continuos and discrete models   
-        if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','SkewLaplace','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
+    .reconcile_mean_parameters <- function(initparam, expected,
+                                           start_values, fixed_values) {
+      start_names <- names(start_values)
+      fixed_names <- names(fixed_values)
+      if(is.null(start_names)) start_names <- character(0)
+      if(is.null(fixed_names)) fixed_names <- character(0)
+
+      overlap <- intersect(expected, intersect(start_names, fixed_names))
+      if(length(overlap)) {
+        stop("Mean coefficient(s) cannot be supplied in both start and fixed: ",
+             paste(overlap, collapse=", "), call.=FALSE)
+      }
+
+      ## StartParam supplies data-driven defaults for the mean coefficients.
+      ## They are placeholders only: explicit fixed values have precedence,
+      ## followed by explicit starting values.  Missing coefficients remain
+      ## estimated and use the StartParam defaults as their initial values.
+      defaults <- c(initparam$param, initparam$fixed)
+      par_now <- initparam$param
+      fix_now <- initparam$fixed
+      if(is.null(par_now)) par_now <- numeric(0)
+      if(is.null(fix_now)) fix_now <- numeric(0)
+
+      for(nm in expected) {
+        par_now <- par_now[names(par_now) != nm]
+        fix_now <- fix_now[names(fix_now) != nm]
+
+        if(nm %in% fixed_names) {
+          value <- as.numeric(fixed_values[[nm]])
+          if(length(value) != 1L || !is.finite(value))
+            stop("Fixed mean coefficient '", nm, "' must be a finite scalar.",
+                 call.=FALSE)
+          fix_now[nm] <- value
+          initparam$flagnuis[nm] <- 0
+        } else {
+          if(nm %in% start_names) {
+            value <- as.numeric(start_values[[nm]])
+          } else if(nm %in% names(defaults)) {
+            value <- as.numeric(defaults[[nm]])
+          } else {
+            value <- 0
+          }
+          if(length(value) != 1L || !is.finite(value))
+            stop("Starting value for mean coefficient '", nm,
+                 "' must be a finite scalar.", call.=FALSE)
+          par_now[nm] <- value
+          initparam$flagnuis[nm] <- 1
+        }
+      }
+
+      if(length(par_now)) par_now <- par_now[sort(names(par_now))]
+      initparam$param <- par_now
+      initparam$fixed <- if(length(fix_now)) fix_now else NULL
+      initparam$namesparam <- names(initparam$param)
+      initparam$numparam <- length(initparam$param)
+      initparam$namesfixed <- names(initparam$fixed)
+      initparam$numfixed <- length(initparam$fixed)
+      initparam
+    }
+
+    ### Parameters omitted from start use the conservative defaults created by
+    ### StartParam().  Repair defaults that would otherwise lie on an invalid
+    ### or numerically dangerous boundary.  Explicit user starts are never
+    ### changed here.
+    expected_mean <- if(!bivariate) {
+      .GeoMean_names(num_betas)
+    } else {
+      c(.GeoMean_names(num_betas[1], "mean_1"),
+        .GeoMean_names(num_betas[2], "mean_2"))
+    }
+    start_names_user <- names(start_user)
+    if(is.null(start_names_user)) start_names_user <- character(0)
+
+    .repair_automatic_starts <- function(initparam, start_names, mean_names,
+                                         model_name, data_values) {
+      par_now <- initparam$param
+      if(is.null(par_now) || !length(par_now)) return(initparam)
+
+      auto_names <- setdiff(names(par_now), c(start_names, mean_names))
+      zz <- suppressWarnings(as.numeric(unlist(data_values, use.names = FALSE)))
+      zz <- zz[is.finite(zz)]
+      vv <- if(length(zz) > 1L) stats::var(zz) else NA_real_
+      if(!is.finite(vv) || vv <= 0) vv <- 1
+      rr <- if(length(zz)) range(zz) else c(0, 1)
+      span <- diff(rr)
+      if(!is.finite(span) || span <= 0) span <- max(1, abs(rr[1L]))
+      pad <- max(sqrt(.Machine$double.eps), 0.01 * span)
+
+      for(nm in auto_names) {
+        cur <- suppressWarnings(as.numeric(par_now[[nm]]))
+        if(length(cur) != 1L || !is.finite(cur)) cur <- NA_real_
+
+        if(grepl("^nugget($|_)", nm)) cur <- 0.05
+        else if(grepl("^sill($|_)", nm)) cur <- vv
+        else if(grepl("^scale($|_|[st]$)", nm) || grepl("^scale_[0-9]", nm)) {
+          if(!is.finite(cur) || cur <= 0) cur <- 1
+        }
+        else if(grepl("^smooth($|_)", nm)) cur <- 0.5
+        else if(grepl("^power($|_)", nm) || grepl("^power[12]($|_)", nm)) cur <- 1
+        else if(nm == "sep") cur <- 0.5
+        else if(nm == "pcol") cur <- 0
+        else if(grepl("^shape($|[12]$|_)", nm)) cur <- 1
+        else if(grepl("^df($|_)", nm)) cur <- 0.2
+        else if(grepl("^tail($|[12]$|_)", nm)) cur <- 0.05
+        else if(grepl("^skew($|_)", nm)) {
+          cur <- if(model_name == "SkewLaplace") 0.5 else 0
+        }
+        else if(nm == "pmu") cur <- 0
+        else if(nm == "min") cur <- rr[1L] - pad
+        else if(nm == "max") cur <- rr[2L] + pad
+        else if(!is.finite(cur)) cur <- 1
+
+        par_now[[nm]] <- cur
+      }
+
+      ## Ensure an automatically estimated bounded-support interval has
+      ## strictly positive width even for constant observations.
+      if(all(c("min", "max") %in% names(par_now)) &&
+         !any(c("min", "max") %in% start_names)) {
+        if(!is.finite(par_now[["min"]]) || !is.finite(par_now[["max"]]) ||
+           par_now[["min"]] >= par_now[["max"]]) {
+          par_now[["min"]] <- rr[1L] - pad
+          par_now[["max"]] <- rr[2L] + pad
+        }
+      }
+
+      initparam$param <- par_now
+      initparam$namesparam <- names(par_now)
+      initparam$numparam <- length(par_now)
+      initparam
+    }
+
+    initparam <- .repair_automatic_starts(
+      initparam, start_names_user, expected_mean, model, data
+    )
+
+    ###### continuous and discrete models
+    if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','SkewLaplace','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
           'Tukeygh','Tukeyh','Tukeyh2','Kumaraswamy','Kumaraswamy2','Weibull','SkewGaussian','SkewGauss','SinhAsinh','StudentT','SkewStudentT',
           "Gaussian_misp_StudentT","Gaussian_misp_Poisson","Gaussian_misp_Tukeygh",
           "Binomial","Geometric","PoisBin","BinomialNeg","Binary_misp_BinomialNeg","Binomial2","PoisBinNeg","Poisson","BinomialNegZINB","BinomialLogistic","Gaussian_misp_Binomial",
           "Gaussian_misp_BinomialNeg","PoissonZIP1","BinomialNegZINB1",
           "Gaussian_misp_SkewStudentT","PoissonGamma","PoissonWeibull","Gaussian_misp_PoissonGamma","PoissonGammaZIP1",
-          "TwoPieceStudentT",'Wrapped',"TwoPieceGaussian","TwoPieceGauss","TwoPieceTukeyh","TwoPieceBimodal")) & 
-          (type %in% c('Standard','Pairwise','Tapering','Tapering1','Independence')))
-        {
+          "TwoPieceStudentT",'Wrapped',"TwoPieceGaussian","TwoPieceGauss","TwoPieceTukeyh","TwoPieceBimodal")) &
+          (type %in% c('Standard','Pairwise','Tapering','Tapering1','Independence'))) {
 
-if(!initparam$bivariate)   ###spatial or temporal univariate case
-{  
-  if(is.na(fixed["mean"])&is.na(fixed["mean2"]))
-          {
-              if(is.na(start["mean"])) {initparam$param <- c(initparam$fixed["mean"], initparam$param)}
-              else {initparam$param <- c(start["mean"], initparam$param)}
-              initparam$namesparam <- sort(names(initparam$param))
-              initparam$param <- initparam$param[initparam$namesparam]
-              initparam$numparam <- initparam$numparam+1
-              initparam$flagnuis['mean'] <- 1
-              initparam$numfixed <- initparam$numfixed-1
-              if(initparam$numfixed > 0) {initparam$fixed <- fixed}
-              else {initparam$fixed <- NULL}
-          }
-   else {initparam$fixed['mean'] <- fixed["mean"]} 
-         ###################################
-   if(num_betas>1)
-        {
-          for(i in 1:(num_betas-1))
-         { if(is.na(fixed[paste("mean",i,sep="")]))
-                {
-              if(is.na(start[paste("mean",i,sep="")])) {initparam$param <- c(initparam$fixed[paste("mean",i,sep="")], initparam$param)}
-              else {initparam$param <- c(start[paste("mean",i,sep="")], initparam$param)}
-              initparam$namesparam <- sort(names(initparam$param))
-              initparam$param <- initparam$param[initparam$namesparam]
-              initparam$numparam <- initparam$numparam+1
-              initparam$flagnuis[paste("mean",i,sep="")] <- 1
-              initparam$numfixed <- initparam$numfixed-1}
-            else {initparam$fixed[paste("mean",i,sep="")] <- fixed[paste("mean",i,sep="")]} 
-         }
-        if(initparam$numfixed > 0) {initparam$fixed <- fixed}
-        else {initparam$fixed <- NULL}
-        }    
-}     ## end univariate case
-
-  ###################################
-     if(initparam$bivariate)    ## bivariate case
-     {           ###bivariate case
-                    if(is.na(fixed["mean_1"])){
-              if(is.na(start["mean_1"])) {initparam$param <- c(initparam$fixed["mean_1"], initparam$param)}
-              else {initparam$param <- c(start["mean_1"], initparam$param)}
-              initparam$namesparam <- sort(names(initparam$param))
-              initparam$param <- initparam$param[initparam$namesparam]
-              initparam$numparam <- initparam$numparam+1
-              initparam$flagnuis['mean_1'] <- 1
-              initparam$numfixed <- initparam$numfixed-1
-              if(initparam$numfixed > 0) {initparam$fixed <- fixed}
-              else {initparam$fixed <- NULL}}
-              else { initparam$fixed['mean_1'] <- fixed["mean_1"] }
-              if(is.na(fixed["mean_2"])){
-              initparam$namesparam<-names(initparam$namesparam)
-              if(is.na(start["mean_2"])) {initparam$param <- c(initparam$fixed["mean_2"], initparam$param)}
-              else {initparam$param <- c(start["mean_2"], initparam$param)}
-              initparam$namesparam <- sort(names(initparam$param))
-              initparam$param <- initparam$param[initparam$namesparam]
-              initparam$numparam <- initparam$numparam+1
-              initparam$flagnuis['mean_2'] <- 1
-              initparam$numfixed <- initparam$numfixed-1
-              if(initparam$numfixed > 0) {initparam$fixed <- fixed}
-              else {initparam$fixed <- NULL}}
-              else {initparam$fixed['mean_2'] <- fixed["mean_2"]}  
-         if(num_betas[1]>1){
-          for(i in 1:(num_betas[1]-1)) {
-            if(is.na(fixed[paste("mean_1",i,sep="")]))
-          {
-              if(is.na(start[paste("mean_1",i,sep="")])) {initparam$param <- c(initparam$fixed[paste("mean_1",i,sep="")], initparam$param)}
-              else {initparam$param <- c(start[paste("mean_1",i,sep="")], initparam$param)}
-            initparam$namesparam <- sort(names(initparam$param))
-            initparam$param <- initparam$param[initparam$namesparam]
-            initparam$numparam <- initparam$numparam+1
-            initparam$flagnuis[paste("mean_1",i,sep="")] <- 1
-            initparam$numfixed <- initparam$numfixed-1}
-            else {initparam$fixed[paste("mean_1",i,sep="")] <- fixed[paste("mean_1",i,sep="")]} 
-         }
+      if(!initparam$bivariate) {
+        mean_names <- .GeoMean_names(num_betas)
+        initparam <- .reconcile_mean_parameters(
+          initparam, mean_names, start_user, fixed_user
+        )
+      } else {
+        mean_names <- c(.GeoMean_names(num_betas[1], "mean_1"),
+                        .GeoMean_names(num_betas[2], "mean_2"))
+        initparam <- .reconcile_mean_parameters(
+          initparam, mean_names, start_user, fixed_user
+        )
       }
-           if(num_betas[2]>1){
-          for(i in 1:(num_betas[2]-1)) {
-            if(is.na(fixed[paste("mean_2",i,sep="")]))
-          {
-              if(is.na(start[paste("mean_2",i,sep="")])) {initparam$param <- c(initparam$fixed[paste("mean_2",i,sep="")], initparam$param)}
-              else {initparam$param <- c(start[paste("mean_2",i,sep="")], initparam$param)}
-            initparam$namesparam <- sort(names(initparam$param))
-            initparam$param <- initparam$param[initparam$namesparam]
-            initparam$numparam <- initparam$numparam+1
-            initparam$flagnuis[paste("mean_2",i,sep="")] <- 1
-            initparam$numfixed <- initparam$numfixed-1}
-            else {initparam$fixed[paste("mean_2",i,sep="")] <- fixed[paste("mean_2",i,sep="")]} 
-         }}
-     } ## end bivariate case
-###########################
-}   #### end continuos model
-        paramrange=TRUE
-        if(paramrange) paramrange <- SetRangeParam(names(initparam$param), length(initparam$param))
-        else  paramrange <- list(lower=NULL, upper=NULL)
-        initparam$lower<-paramrange$lower
-        initparam$upper<-paramrange$upper
 
-        return(initparam)
+    }
 
-}### end checking if numparam = numstart 
+    paramrange <- SetRangeParam(names(initparam$param), length(initparam$param))
+    initparam$lower <- paramrange$lower
+    initparam$upper <- paramrange$upper
 
-
-        initparam$error="Some starting and/or fixed parameters are missing. (All the covariance and nuisance  parameters must be included) "
-        return(initparam)
+    if (is.environment(fit_context)) {
+      assign("wls_initparam", initparam, envir = fit_context)
+    }
+    return(initparam)
   }
 
 ####################################################################################################################
@@ -303,14 +356,38 @@ if(!initparam$bivariate)   ###spatial or temporal univariate case
 ####################################################################################################################
 ####################################################################################################################
 GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_dyn=NULL, corrmodel, distance="Eucl",
-                         fixed=NULL,grid=FALSE, maxdist=NULL, neighb=NULL,maxtime=NULL, model='Gaussian',
+                         fixed=NULL,grid=FALSE, maxdist=NULL, neighb=NULL,maxtime=NULL,
                          optimizer='Nelder-Mead', numbins=NULL, radius=1,  start=NULL,
-                         weighted=FALSE,optimization=TRUE)
+                         weighted=FALSE,optimization=TRUE,numbins_t=NULL)
   {
-    ### Check first if the model is not binary:
-    #if(substr(model,1,6)=='Binary'||substr(model,1,6)=='Binomial') stop("The weighted least squares method can not be used with binary data")
-
     call <- match.call()
+    grid_requested <- isTRUE(grid)
+
+    ## GeoWLS is a Gaussian-only variogram least-squares procedure.  Keep the
+    ## model label internal because shared setup code and GeoCovariogram use it,
+    ## but do not expose a public `model` argument.
+    model <- 'Gaussian'
+
+    if (grid_requested) {
+      if (!is.null(coordx_dyn)) stop("grid=TRUE cannot be combined with coordx_dyn")
+      is_biv_wls <- isTRUE(CheckBiv(CkCorrModel(corrmodel)))
+      gg <- .GeoVariogram_normalize_grid(
+        data=data, coordx=coordx, coordy=coordy, coordz=coordz,
+        coordt=coordt, bivariate=is_biv_wls
+      )
+      data <- gg$data
+      coordx <- gg$coordx
+      coordy <- gg$coordy
+      coordz <- gg$coordz
+      grid <- FALSE
+    }
+
+    if (!is.null(maxdist)) {
+      if (!is.numeric(maxdist) || any(!is.finite(maxdist)) || any(maxdist <= 0))
+        stop("maxdist must contain positive finite numeric values")
+    }
+    .GeoVariogram_validate_data(data, context="GeoWLS")
+
     ### Check the parameters given in input:
     checkinput <- CkInput(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, distance,"Fitting", fixed, grid, 'None',
                               maxdist, maxtime,  model,NULL,  optimizer, NULL, radius, start, NULL,
@@ -319,13 +396,19 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
 
     if(!is.null(checkinput$error))
       stop(checkinput$error)
-    # check the number of bins:
-    if(!is.null(numbins) & !is.integer(numbins))
-      if(numbins < 0)
-        stop('insert a positive integer value for the number of bins\n')
-    # set the default number of spatial bins:
-    if(is.null(numbins))
-      numbins <- 13
+    # Check the number of spatial breakpoints (legacy GeoModels meaning:
+    # numbins breakpoints define numbins - 1 empirical spatial bins).
+    if(is.null(numbins)) numbins <- 13L
+    if(!is.numeric(numbins) || length(numbins)!=1L || !is.finite(numbins) ||
+       numbins < 2 || numbins %% 1 != 0)
+      stop('numbins must be an integer >= 2\n')
+    numbins <- as.integer(numbins)
+    if(!is.null(numbins_t)) {
+      if(!is.numeric(numbins_t) || length(numbins_t)!=1L || !is.finite(numbins_t) ||
+         numbins_t < 1 || numbins_t %% 1 != 0)
+        stop('numbins_t must be a positive integer\n')
+      numbins_t <- as.integer(numbins_t)
+    }
     ### Define the object function for the weighted least squares method:
     WLsquare <- function(param,bins, bint, corrmodel, fixed, fun, lenbins, moments,
                          namescorr, namesnuis, numbins, numbint)
@@ -334,16 +417,16 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
         paramcorr <- param[namescorr]#set the correlation parameters:
         nuisance <- param[namesnuis]#set the nuisance parameters:
 
-     if(fun=='GeoWLS_G')
-        result <- .C('GeoWLS_G', as.double(bins), as.double(bint), as.integer(corrmodel),
+     if(fun=='WLeastSquare_G')
+        result <- .C('WLeastSquare_G', as.double(bins), as.double(bint), as.integer(corrmodel),
                      as.double(lenbins), as.double(moments), as.integer(numbins),
                      as.integer(numbint), as.double(nuisance), as.double(paramcorr),
-                     res=double(1), PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)$res
+                     res=double(1), PACKAGE='GeoModels', NAOK=TRUE)$res
      if(fun=='LeastSquare_G')
         result <- .C('LeastSquare_G', as.double(bins), as.double(bint), as.integer(corrmodel),
                      as.double(lenbins), as.double(moments), as.integer(numbins),
                      as.integer(numbint), as.double(nuisance), as.double(paramcorr),
-                     res=double(1), PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)$res
+                     res=double(1), PACKAGE='GeoModels', NAOK=TRUE)$res
        return(result)
       }
     ### Initializes global variables:
@@ -355,7 +438,8 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
     parscale <- NULL
     initparam <- StartParam(coordx, coordy, coordz,coordt, coordx_dyn,corrmodel, data, distance, "Fitting", fixed, grid,
     'None', maxdist, neighb,maxtime,  model, NULL,  NULL,parscale, TRUE, radius, start,NULL,  NULL,
-                           'GeoWLS', 'GeoWLS', FALSE, NULL,NULL, FALSE,FALSE,"bernoulli")
+                           'GeoWLS', 'GeoWLS', FALSE, NULL, NULL, FALSE, FALSE,
+                           1, "bernoulli")
 
 
     if(!is.null(initparam$error))
@@ -363,6 +447,13 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
      coordx=initparam$coordx
      coordy=initparam$coordy
      coordz=initparam$coordz
+     coordt=initparam$coordt
+     on.exit({
+       try(.C('DeleteGlobalVar', PACKAGE='GeoModels', NAOK=TRUE), silent=TRUE)
+     }, add=TRUE)
+     ## Native variogram routines always index the third coordinate.  Use an
+     ## explicit zero vector in 2D instead of passing NULL or a scalar zero.
+     if(is.null(coordz)) coordz <- rep(0, length(coordx))
     ###### ----------- START Estimation of the empirical variogram ---------- #####
     numvario <- numbins-1
     bins <- double(numbins) # vector of spatial bins
@@ -373,112 +464,109 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
 
 
     if(initparam$spacetime){### Computes the spatial-temporal variogram:
-      spacetime_dyn=FALSE
-      if(!is.null(coordx_dyn)) spacetime_dyn=TRUE
-      ns=initparam$ns
-      NS=cumsum(ns)
-      numbint <- initparam$numtime-1 # number of temporal bins
-      bint <- double(numbint)        # vector temporal bins
-      momentt <- double(numbint)     # vector of temporal moments
-      lenbint <- integer(numbint)    # vector of temporal bin sizes
-      numbinst <- numvario*numbint    # number of spatial-temporal bins
-      binst <- double(numbinst)      # spatial-temporal bins
-      momentst <- double(numbinst)   # vector of spatial-temporal moments
-      lenbinst <- integer(numbinst)  # vector of spatial-temporal bin sizes
-      if(!spacetime_dyn){
-                                  data=c(t(data))
-                                  coordx=rep(coordx,length(coordt))
-                                  coordy=rep(coordy,length(coordt))
-                                   coordz=rep(coordz,length(coordz))
-                         }
-      if(spacetime_dyn) data=unlist(data)
-         NS=c(0,NS)[-(length(ns)+1)]
-      fname <- 'Binned_Variogram_st';fname <- paste(fname,"2",sep="") 
-      if(is.null(coordz)) coordz=0
-      # Compute the spatial-temporal moments:
-      EV=.C("Binned_Variogram_st2", bins=bins, bint=bint, as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(initparam$data),
-           lenbins=lenbins,lenbinst=lenbinst,lenbint=lenbint,moments= moments, momentst=momentst, momentt=momentt, as.integer(numbins), as.integer(numbint),
-           as.integer(ns),as.integer(NS), PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
-      bins=EV$bins
-      bint=EV$bint
-      lenbins=EV$lenbins
-      lenbint=EV$lenbint
-      lenbinst=EV$lenbinst
-      moments=EV$moments
-      momentst=EV$momentst
-      momentt=EV$momentt
-      indbin <- lenbins>0
-      centers <- bins[1:numvario]+diff(bins)/2
-      bins <- bins[indbin]
-      centers <- centers[indbin]
-      moments <- moments[indbin]
-      lenbins <- lenbins[indbin]
-      # Computes the spatial marginal variogram:
-      variograms <- moments/lenbins
-      numbins <- sum(indbin)
-      indbint <- lenbint>0
-      bint <- bint[indbint]
-      momentt <- momentt[indbint]
-      lenbint <- lenbint[indbint]
-      numbint <- sum(indbint)
-      # Computes the temporal marginal variogram:
-      variogramt <- momentt/lenbint
-      indbinst <- lenbinst>0
-      momentst <- momentst[indbinst]
-      lenbinst <- lenbinst[indbinst]
-      numbinst <- sum(indbinst)
-      # Computes the spatial-temporal variogram:
-      variogramst <- momentst/lenbinst
-      # Set the moment vectors and their sizes:
-      moment <- matrix(momentst,nrow=numbins,ncol=numbint,byrow=TRUE)
-      lenbin <- matrix(lenbinst,nrow=numbins,ncol=numbint,byrow=TRUE)
-      moment <- rbind(momentt, moment)
-      moment <- cbind(c(0,moments),moment)
-      lenbin <- rbind(lenbint, lenbin)
-      lenbin <- cbind(c(1,lenbins),lenbin)
-      moments <- moment
-      lenbins <- lenbin
-      bins <- c(-bins[1],bins)
-      bint <- c(0,bint)
-      numbins <- numbins+1
-      numbint <- numbint+1}
-      # Set an initial value for the scale parameter:
-    #if(!is.null(initparam$param['scale_s']))
-          #initparam$param['scale_s'] <- bins[max(variograms)==variograms]}
+      spacetime_dyn <- !is.null(coordx_dyn)
+      ns <- as.integer(initparam$ns)
+      NS <- as.integer(c(0L, cumsum(ns))[-(length(ns) + 1L)])
+
+      ti <- .GeoVariogram_time_bins(
+        coordt, maxtime,
+        numbins_t = if (is.null(numbins_t)) numbins - 1L else numbins_t
+      )
+      time_breaks <- ti$breaks
+      temporal_centers <- ti$centers
+      ntbin <- length(time_breaks) - 1L
+
+      bint_native <- as.double(time_breaks)
+      momentt <- double(ntbin)
+      lenbint_native <- integer(ntbin)
+      momentst <- double(numvario * ntbin)
+      lenbinst_native <- integer(numvario * ntbin)
+
+      ## The native routines expect observations in time-block order,
+      ## consistently with the coordinates expanded by StartParam().
+      if(!spacetime_dyn) data_native <- c(t(data))
+      else data_native <- unlist(data, use.names = FALSE)
+
+      if(spacetime_dyn) {
+        EV=.C("Binned_Variogram_st2_dyn", bins=bins, bint=bint_native,
+             as.double(coordx),as.double(coordy),as.double(coordz),
+             as.double(coordt),as.double(data_native),
+             lenbins=lenbins,lenbinst=lenbinst_native,lenbint=lenbint_native,
+             moments=moments, momentst=momentst, momentt=momentt,
+             as.integer(numbins), as.integer(length(time_breaks)),
+             as.integer(ns),as.integer(NS), PACKAGE='GeoModels', NAOK=TRUE)
+      } else {
+        EV=.C("Binned_Variogram_st2", bins=bins, bint=bint_native,
+             as.double(coordx),as.double(coordy),as.double(coordz),
+             as.double(coordt),as.double(data_native),
+             lenbins=lenbins,lenbinst=lenbinst_native,lenbint=lenbint_native,
+             moments=moments, momentst=momentst, momentt=momentt,
+             as.integer(numbins), as.integer(length(time_breaks)),
+             as.integer(ns),as.integer(NS), PACKAGE='GeoModels', NAOK=TRUE)
+      }
+
+      bins_native <- EV$bins
+      spatial_count <- EV$lenbins
+      spatial_sum <- EV$moments
+      temporal_count <- EV$lenbint
+      temporal_sum <- EV$momentt
+      st_count <- matrix(EV$lenbinst, nrow=numvario, ncol=ntbin, byrow=TRUE)
+      st_sum <- matrix(EV$momentst, nrow=numvario, ncol=ntbin, byrow=TRUE)
+
+      centers <- bins_native[-length(bins_native)] + diff(bins_native)/2
+      variograms <- rep(NA_real_, numvario)
+      ii <- spatial_count > 0L
+      variograms[ii] <- spatial_sum[ii] / spatial_count[ii]
+
+      variogramt <- rep(NA_real_, ntbin)
+      ii <- temporal_count > 0L
+      variogramt[ii] <- temporal_sum[ii] / temporal_count[ii]
+
+      st_mean <- matrix(NA_real_, nrow=numvario, ncol=ntbin)
+      ii <- st_count > 0L
+      st_mean[ii] <- st_sum[ii] / st_count[ii]
+      variogramst <- as.numeric(as.vector(t(st_mean)))
+
+      ## Build the rectangular WLS system without dropping empty cells.  The
+      ## C objective now skips zero-count cells, preserving the lag geometry.
+      moment_full <- rbind(temporal_sum, st_sum)
+      moment_full <- cbind(c(0, spatial_sum), moment_full)
+      count_full <- rbind(temporal_count, st_count)
+      count_full <- cbind(c(1L, spatial_count), count_full)
+
+      bins <- c(-bins_native[1L], bins_native)
+      bint <- c(0, temporal_centers)
+      moments <- moment_full
+      lenbins <- count_full
+      numbins <- length(bins)
+      numbint <- length(bint)
+    }
     else{### Computes the spatial variogram:
-      numbint <- 1 # number of temporal bins
-      bint <- double(numbint) # vector temporal bins
-      momentt <- double(1) # vector of temporal moments
-      momentst <- double(1)   # vector of spatial-temporal moments
-      lenbint <- integer(1) # vector of temporal bin sizes
-      lenbinst <- integer(1)  # vector of spatial-temporal bin sizes
-      fname <- paste(fname,"2",sep="")
-      EV=.C("Binned_Variogram2", bins=bins, as.double(coordx),as.double(coordy),as.double(coordz),as.double(coordt),as.double(initparam$data), lenbins=lenbins,
-         moments=moments, as.integer(numbins),PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)
-      bins=EV$bins
-      lenbins=EV$lenbins
-      moments=EV$moments
-     
-      indbin <- lenbins>0
-      centers <- bins[1:numvario]+diff(bins)/2
-      bins <- bins[indbin]
-      centers <- centers[indbin]
-      moments <- moments[indbin]
-      lenbins <- lenbins[indbin]
-      numbins <- sum(indbin)
-      variograms <- moments/lenbins
- 
-      #plot(centers,variograms)
-      # Set an initial value for the scale parameter:
-      if(!is.null(initparam$param['scale']))
-        initparam$param['scale'] <- bins[max(variograms)==variograms]}
+      numbint <- 1L
+      bint <- 0
+      EV=.C("Binned_Variogram2", bins=bins, as.double(coordx),as.double(coordy),
+         as.double(coordz),as.double(coordt),as.double(initparam$data), lenbins=lenbins,
+         moments=moments, as.integer(numbins),PACKAGE='GeoModels', NAOK=TRUE)
+      bins <- EV$bins
+      lenbins <- EV$lenbins
+      moments <- EV$moments
+
+      centers <- bins[-length(bins)] + diff(bins)/2
+      variograms <- rep(NA_real_, length(lenbins))
+      ii <- lenbins > 0L
+      variograms[ii] <- moments[ii] / lenbins[ii]
+
+      if(!is.null(initparam$param['scale']) && any(is.finite(variograms))) {
+        initparam$param['scale'] <- centers[which.max(replace(variograms, !is.finite(variograms), -Inf))]
+      }
+    }
     ###### ----------- END Estimation of the empirical variogram ---------- #####
 
 
 
     ###### ---------- START model fitting by weighted least squares method ----------######
     #if(model=='Gaussian'||model=='Gauss') # Gaussian random field:
-      if(weighted) fname <- 'GeoWLS_G'
+      if(weighted) fname <- 'WLeastSquare_G'
       else fname <- 'LeastSquare_G'
 
 
@@ -507,12 +595,34 @@ if(optimization){
 
 
     ###### ---------- END model fitting by weighted least squares method ----------######
-    ### Removes the global variobales:
-     .C('DeleteGlobalVar', PACKAGE='GeoModels', DUP = TRUE, NAOK=TRUE)  
     ### Set the output:
+    ## Keep the structural metadata required by downstream methods such as
+    ## GeoCovariogram().  These fields describe the fitted Gaussian field;
+    ## they do not re-introduce a user-selectable model argument.
+    ##
+    ## StartParam() represents the default intercept-only design by the scalar
+    ## value 1.  Preserve the same meaning but store an explicit n x 1 matrix
+    ## in GeoWLS objects.  Mean utilities intentionally reject ambiguous
+    ## vectors, so this canonical representation is important for downstream
+    ## methods (notably GeoCovariogram).
+    X_out <- initparam$X
+    if(!initparam$bivariate) {
+      nobs_out <- length(unlist(initparam$data, use.names=FALSE))
+      if(is.null(X_out) ||
+         (is.atomic(X_out) && is.null(dim(X_out)) && length(X_out)==1L &&
+          length(initparam$num_betas)==1L && initparam$num_betas==1L)) {
+        X_out <- matrix(1, nrow=nobs_out, ncol=1L)
+      } else {
+        X_out <- .GeoMean_design(X_out, n=nobs_out, p=initparam$num_betas,
+                                 name="GeoWLS$X")
+      }
+    }
+
     GeoWLS <- list(      bins=bins,
                          bint=bint,
                          centers=centers,
+                         bivariate=initparam$bivariate,
+                         spacetime=initparam$spacetime,
                          coordx = initparam$coordx,
                          coordy = initparam$coordy,
                          coordz = initparam$coordz,
@@ -520,17 +630,28 @@ if(optimization){
                          coordx_dyn=coordx_dyn,
                          convergence = fitted$convergence,
                          corrmodel = corrmodel,
+                         copula=NULL,
                          data = initparam$data,
+                         distance=initparam$distance,
                          fixed = initparam$fixed,
-                         grid = grid,
+                         grid = grid_requested,
                          iterations = fitted$counts,
                          maxdist =maxdist,
                          maxtime = maxtime,
+                         numbins_t = numbins_t,
                          message = fitted$message,
                          model=model,
+                         ## `n` is irrelevant for continuous Gaussian fields,
+                         ## but shared covariance utilities pass it to the native
+                         ## correlation engine.  Use the same harmless scalar
+                         ## default as GeoCorrFct() instead of returning NULL.
+                         n=1L,
+                         numbetas=initparam$num_betas,
                          numcoord=initparam$numcoord,
                          numtime=initparam$numtime,
                          param = fitted$par,
+                         radius=initparam$radius,
+                         X=X_out,
                          variograms = variograms,
                          variogramt = variogramt,
                          variogramst = variogramst,

@@ -16,18 +16,24 @@ coordx_dyn=NULL, grid=FALSE, X=NULL, setting="spatial")}
  spatial coordinates; Optional argument, the default is \code{NULL}.}
  \item{coordz}{A numeric vector giving 1-dimension of
  spatial coordinates; Optional argument, the default is \code{NULL}.}
- \item{coordt}{A numeric vector giving 1-dimension of
- temporal coordinates; the default is \code{NULL}
- then a spatial random field is expected.}
- \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d x 2})-matrices
- containing dynamical (in time) spatial coordinates. Optional argument, the default is \code{NULL} }
+ \item{coordt}{A numeric vector giving one dimension of temporal coordinates; the default is \code{NULL}, in which case a spatial random field is expected. Temporal coordinates may be irregularly spaced and their supplied numeric values are preserved.}
+ \item{coordx_dyn}{For dynamic locations, a list with one two- or three-column coordinate matrix per time.  It must be aligned with the list \code{data}; missing responses remove the corresponding rows from both objects.}
  \item{grid}{Logical; if \code{FALSE} (the default) the data 
  are interpreted as spatial or spatio-temporal realisations on a set
  of non-equispaced spatial sites (irregular grid).}
- \item{X}{Numeric; Matrix of spatio(temporal) covariates in the linear mean specification.}
+ \item{X}{Covariates aligned with \code{data}.  For fixed-coordinate space-time data, use an \eqn{TN \times p}{TN x p} matrix ordered as \code{c(t(data))}.  For dynamic data, \code{X} must be a list with \code{X[[t]]} having one row per element of \code{data[[t]]} and per row of \code{coordx_dyn[[t]]}.}
  \item{setting}{String; are data spatial, spatio-temporal or spatial bivariate
  (respectively \code{spatial}, \code{spacetime}, \code{bivariate}) }
 
+}
+
+\section{Spatio-temporal ordering}{
+For fixed sites, \code{data} has times in rows and sites in columns; rows of
+\code{X} follow time-major order.  Removing a site removes the corresponding
+column of \code{data}, coordinate row, and its row from every temporal block
+of \code{X}.  For dynamic sites, \code{data}, \code{coordx_dyn}, and
+\code{X} are aligned lists and missing values are removed independently
+within each temporal block.  See \code{\link{GeoModels-spacetime-ordering}}.
 }
 
 \value{
@@ -39,7 +45,7 @@ coordx_dyn=NULL, grid=FALSE, X=NULL, setting="spatial")}
  \item{grid}{\code{TRUE} if the spatial data are observed in a regular grid, otherwise \code{FALSE};}
  \item{perc}{The percentage of NA values.}
  \item{setting}{Are data of spatial or spatio-temporal or spatial bivariate type}
- \item{X}{Covariates matrix } 
+ \item{X}{The covariate matrix after deleting the rows corresponding to removed observations. For fixed-coordinate spatio-temporal data, deleting a site removes its row from every temporal block.} 
 }
 
 

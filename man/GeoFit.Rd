@@ -18,7 +18,7 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  sensitivity=FALSE, sparse=FALSE, start=NULL,
  thin_method="bernoulli", type="Pairwise", upper=NULL, 
  varest=FALSE, weighted=FALSE,
- X=NULL, spobj=NULL, spdata=NULL)
+ X=NULL, spobj=NULL, spdata=NULL, check.duplicates=FALSE)
 }
 
 \arguments{
@@ -34,31 +34,29 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 
  \item{coordz}{A numeric vector giving 1-dimension of spatial coordinates; optional argument, default is \code{NULL}.}
 
- \item{coordt}{A numeric vector assigning 1-dimension of temporal coordinates. Optional argument, default is \code{NULL}:
- if \code{NULL} then a spatial random field is expected.}
+ \item{coordt}{A numeric vector assigning one dimension of the observation-time coordinates. Optional argument, default is \code{NULL}; if \code{NULL}, a spatial random field is expected. Temporal coordinates may be irregularly spaced; temporal lags are computed from the supplied coordinate values.}
 
- \item{coordx_dyn}{A list of \eqn{m} numeric (\eqn{d_t \times 2}{d_t x 2})-matrices containing dynamical (in time) spatial coordinates.
- Optional argument, default is \code{NULL}.}
+ \item{coordx_dyn}{For dynamic locations, a list with one numeric coordinate matrix per temporal instant.  If \eqn{T} is \code{length(coordt)}, the list must have length \eqn{T}; \code{coordx_dyn[[t]]} must have \eqn{N_t} rows and two or three columns.  Its row order must match \code{data[[t]]} and, when supplied as a list, \code{X[[t]]}.  See \code{\link{GeoModels-spacetime-ordering}}.}
 
- \item{copula}{String; the type of copula. It can be \code{"Clayton"} or \code{"Gaussian"}.}
+ \item{copula}{String; the copula used by pairwise copula likelihoods. Supported values are \code{"Gaussian"}, \code{"Clayton"} (the constructive Clayton-like spatial copula), and \code{"SkewGaussian"}.}
 
  \item{corrmodel}{String; the name of a correlation model; see \code{\link{GeoCovmatrix}} for the list of implemented correlation models.}
 
  \item{distance}{String; the name of the spatial distance. Default is \code{"Eucl"} (Euclidean distance). See Details for the accepted options.}
 
- \item{fixed}{An optional named list giving the values of the parameters that will be considered as known values.
+ \item{fixed}{An optional named list giving the values of the parameters that will be considered as known values. Parameter names must match exactly the nuisance/marginal or correlation parameters supported by the selected model and correlation model; invalid names are reported explicitly.
  The listed parameters for a given model/correlation function will not be estimated.}
 
- \item{anisopars}{A list of two elements: \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively.}
+ \item{anisopars}{A list of two elements: \code{"angle"} and \code{"ratio"}, i.e. the anisotropy angle and the anisotropy ratio, respectively. Geometric anisotropy is available only with \code{distance="Eucl"}.}
 
  \item{est.aniso}{A bivariate logical vector providing which anisotropy parameters must be estimated.}
 
- \item{grid}{Logical; if \code{FALSE} (default) the data are interpreted as spatial or spatio-temporal realisations on a set of non-equispaced spatial sites (irregular grid).}
+ \item{grid}{Logical; if \code{FALSE} (default) the data are interpreted as spatial or spatio-temporal realisations on a set of non-equispaced spatial sites. If \code{TRUE}, \code{coordx}, \code{coordy} (and optionally \code{coordz}) are interpreted as grid axes and the data dimensions must match those axes; grid inputs are internally converted to the canonical explicit-coordinate layout before fitting.}
 
  \item{likelihood}{String; the configuration of the composite likelihood. \code{"Marginal"} is the default; see Details for the accepted options.}
 
  \item{lower}{An optional named list giving lower bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
- Names must match those in \code{start}.}
+ Names must match parameters that are being estimated.}
 
  \item{maxdist}{Numeric; an optional positive value indicating the maximum spatial distance considered in the composite computation.
  See Details for more information.}
@@ -66,20 +64,18 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{neighb}{Numeric; an optional positive integer indicating the order of neighborhood in the composite likelihood computation.
  See Details for more information.}
 
- \item{p_neighb}{Numeric; a value in \eqn{(0,1]} specifying the expected fraction of nearest-neighbor pairs retained through stochastic thinning.
- If \code{1} (default), no thinning is applied and all nearest-neighbor pairs are used. If \code{<1}, pairs are randomly retained (Bernoulli sampling).}
+ \item{p_neighb}{Numeric scalar in \eqn{(0,1]}. If \code{1} (default), no thinning is applied. For \code{thin_method="bernoulli"}, it is the candidate-pair inclusion probability in the constant-weight design and controls the retained size in expectation. For \code{thin_method="FixedBudget"}, it defines the exact global retained-pair budget \eqn{K=\mathrm{round}(p_{neighb}d)}, where \eqn{d} is the candidate-pair count.}
 
- \item{maxtime}{Numeric; an optional positive integer indicating the order of temporal neighborhood in the composite likelihood computation.}
+ \item{maxtime}{Numeric; an optional non-negative maximum temporal-distance threshold, expressed in the same units as \code{coordt}, used to select pairwise composite-likelihood contributions.}
 
- \item{memdist}{Logical; if \code{TRUE} then all distances useful in the composite likelihood estimation are computed before the optimization.
- \code{FALSE} is deprecated.}
+ \item{memdist}{Deprecated logical argument retained for backward compatibility. The selected pair structure is always precomputed and reused during composite-likelihood optimization. Supplying \code{FALSE} produces a warning and is treated as \code{TRUE}.}
 
  \item{method}{String; the type of matrix decomposition/linear algebra backend used in likelihood computations.
  Default is \code{"cholesky"}. Another possible choice is \code{"svd"} (when available).}
 
  \item{model}{String; the type of random field (and associated density) used in the likelihood objects. Default is \code{"Gaussian"}; see Details for the accepted options.}
 
- \item{n}{Numeric; number of trials in a binomial random field; number of successes in a negative binomial random field.}
+ \item{n}{Positive integer size parameter. For direct Binomial models it may be scalar or contain one value per observation. For direct Negative-Binomial models it is the common number \eqn{r} of successes and must be scalar; Geometric corresponds to \eqn{r=1}. Non-integer or non-positive values are rejected.}
 
  \item{onlyvar}{Logical; if \code{TRUE} (and \code{varest=TRUE}) only the variance-covariance matrix is computed without optimizing.
  Default is \code{FALSE}.}
@@ -98,37 +94,89 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{sparse}{Logical; if \code{TRUE} then maximum likelihood / composite likelihood may exploit sparse-matrix algorithms (e.g., \pkg{spam}).
  Typically used with compactly supported covariance models. Default is \code{FALSE}.}
 
- \item{start}{An optional named list with initial values for parameters to be estimated. Default is \code{NULL} (see Details).}
+ \item{start}{An optional named list with initial values for parameters to be estimated. Default is \code{NULL}. Parameter names must match exactly the nuisance/marginal or correlation parameters supported by the selected model and correlation model; invalid names are reported explicitly. Parameters omitted from \code{start} receive conservative internal initial values; explicitly supplied values are preserved (see Details).}
 
  \item{thin_method}{String; thinning scheme in stochastic weighted pairwise
  likelihood (used when \code{p_neighb < 1}). Default is \code{"bernoulli"}
  (independent Bernoulli thinning). An alternative thinning scheme is
- \code{"FixedBudget"}.}
+ \code{"FixedBudget"}. The legacy name \code{"TargetBalanced"} is accepted as an alias for \code{"FixedBudget"}.}
 
  \item{type}{String; the type of likelihood objects. If \code{"Pairwise"} (default) the composite likelihood is formed by pairwise components (see Details).}
 
  \item{upper}{An optional named list giving upper bounds for parameters when the optimizer is \code{L-BFGS-B}, \code{nlminb}, \code{bobyqa} or \code{optimize}.
- Names must match those in \code{start}.}
+ Names must match parameters that are being estimated.}
 
  \item{varest}{Logical; if \code{TRUE} the estimates variances and standard errors are returned. For composite likelihood estimation it is deprecated.
  Use \code{sensitivity=TRUE} and update the object using \code{GeoVarest}. Default is \code{FALSE}.}
 
  \item{weighted}{Logical; if \code{TRUE} the likelihood objects are weighted; see Details for the accepted options. Default is \code{FALSE}.}
 
- \item{X}{Numeric; matrix of spatio(temporal) covariates in the linear mean specification.}
+ \item{X}{Numeric design matrix for the linear mean \eqn{X\beta}.  Its columns correspond in order to \code{mean}, \code{mean1}, \ldots.  For fixed-location space-time data, rows follow \code{c(t(data))}: all sites at the first time, then all sites at the second time, and so on.  For dynamic locations, use either a stacked matrix in time-wise order or a list with \code{X[[t]]} aligned with \code{coordx_dyn[[t]]}.  See \code{\link{GeoModels-spacetime-ordering}}.}
 
- \item{spobj}{An object of class \code{sp} or \code{spacetime}.}
+ \item{spobj}{An object of class \code{sp} or \code{spacetime}. For space-time objects, the current \code{sp2Geo()} conversion uses sequential temporal indices and does not preserve irregular original time spacing; to retain irregular temporal distances, use the explicit-coordinate interface with numeric \code{coordt}.}
 
  \item{spdata}{Character; the name of the data component in the \code{sp} or \code{spacetime} object.}
+\item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
 \details{
+
+For a univariate model the mean is specified as
+\deqn{\mu = X\beta.}
+The entries of \eqn{\beta} are represented by the parameters \code{mean},
+\code{mean1}, and so on.  The columns of \code{X} correspond to these
+coefficients in exactly this order.  When \code{X=NULL}, an intercept-only model is used, which is
+equivalent to a one-column matrix of ones and the single coefficient
+\code{mean}.  Missing starting values for regression coefficients and other
+estimated parameters are initialized internally. Explicit entries in \code{start}
+always define starting values for parameters that remain estimated, including
+\code{likelihood="Full", type="Standard"}; they are never converted to fixed
+mean coefficients. A coefficient is fixed only when it is supplied in \code{fixed}.
+Supplied coefficient names must be compatible with \code{ncol(X)}. For difficult
+non-Gaussian models, user-supplied starting values can still improve numerical
+optimization.
+
+A site-specific known mean can instead be supplied as a vector in
+\code{fixed$mean}, with one value per observation.  This external mean is
+mutually exclusive with \code{X} and with estimated mean coefficients in
+\code{start}.  A scalar \code{fixed$mean} is not an external vector: it is the
+fixed intercept coefficient.
+
  \code{GeoFit} provides weighted and stochastic weighted composite-likelihood
  estimation based on pairs for Gaussian and non-Gaussian random fields,
  including nearest-neighbor and stochastic nearest-neighbor pairwise likelihoods;
  see Caamaño-Carrillo et al. (2024) and Bevilacqua et al. (2026).
- It also provides independence composite-likelihood estimation. Specifically,
- marginal and conditional pairwise likelihoods are available for each type of
- random field.
+ It also provides independence composite-likelihood estimation. The accepted
+likelihood/type combinations are checked explicitly: \code{likelihood="Full"}
+uses the full-likelihood types (including \code{"Standard"}).  Full-likelihood
+objectives are currently implemented for Gaussian, SinhAsinh, LogGaussian,
+Tukeyh, Tukeyh2, and the internally supported misspecified-Gaussian full
+likelihoods. Other margins, including Gamma and Weibull, are rejected before
+optimization with an explicit capability message;
+\code{likelihood="Marginal"} is used with \code{"Pairwise"} or
+\code{"Independence"}; and \code{likelihood="Conditional"} is used with
+\code{"Pairwise"}. The historical Difference composite likelihood is no longer
+supported. For space-time pairwise fitting, GeoFit checks that a registered
+space-time native kernel exists for the requested marginal model and stops
+before optimization when it does not. Bivariate pairwise fitting is currently
+implemented only for the Gaussian model with marginal pairwise likelihood.
+
+For pairwise copula fitting, the current implementation is univariate and purely
+spatial.  Continuous margins supported with the Gaussian, Clayton-like, and
+skew-Gaussian copulas are \code{"Gaussian"}, \code{"StudentT"},
+\code{"LogGaussian"}, \code{"Gamma"}, \code{"Weibull"},
+\code{"Beta"}, \code{"Beta2"}, \code{"Kumaraswamy"},
+\code{"Kumaraswamy2"}, \code{"Logistic"}, and \code{"SkewLaplace"}.
+The Gaussian and skew-Gaussian copulas additionally support the discrete margins
+\code{"Poisson"}, \code{"Binomial"}, and \code{"BinomialNeg"}. For the
+skew-Gaussian copula these probabilities are evaluated as copula-rectangle
+probabilities; when \code{nu=0} the calculation reduces exactly to the Gaussian
+copula likelihood.
+For \code{copula="Clayton"}, \code{nu} is the positive-integer parameter of
+the constructive Clayton-like random field and must be supplied in
+\code{fixed}; it is not a continuously estimable copula parameter.  For
+\code{copula="SkewGaussian"}, \code{nu} is the bounded asymmetry parameter
+\eqn{\eta\in(-1,1)} and invalid optimizer proposals are rejected by the
+objective function.
 
  The optimization method is specified using \code{optimizer}. The default method is \code{Nelder-Mead}; other available methods are
  \code{nlm}, \code{BFGS}, \code{SANN}, \code{L-BFGS-B}, \code{bobyqa}, and \code{nlminb}. In the last three cases,
@@ -173,9 +221,27 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item \code{Standard}, standard likelihood.
  }
 
- Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
+ Observation coordinates are checked for exact duplicates before fitting. For space-time data, the full space-time point must be unique; the same spatial site observed at different times is allowed. The check is hash-based and is performed once at the user-facing fit, not during bootstrap/refit iterations that reuse an already validated design. If stochastic thinning retains no pairwise contributions, fitting stops with an explicit error rather than optimizing an empty criterion.
+
+For \code{model="PoissonGamma"} and \code{model="PoissonGammaZIP"}, pairwise fitting accepts every finite \code{shape>0}. This is the continuous Kibble--Gamma pairwise extension used by the marginal moments, correlation function, and bivariate probabilities. The constructive random-field simulation based on a finite sum of squared Gaussian fields is more restrictive and requires \eqn{2\,shape} to be a positive integer; \code{GeoSim} enforces that simulation constraint explicitly.
+
+Stochastic thinning of nearest-neighbor pairs can be enabled via \code{p_neighb<1}. The argument \code{thin_method}
  controls the thinning scheme (default \code{"bernoulli"}).
 }
+\section{Spatio-temporal ordering}{
+For fixed spatial locations, \code{data} is a \eqn{T \times N}{T x N}
+matrix: row \eqn{t} corresponds to \code{coordt[t]} and column \eqn{i} to
+row \eqn{i} of \code{coordx}.  Observation-level quantities are ordered as
+\code{c(t(data))}, hence \code{X} and a vector \code{fixed$mean} use the
+order time then site.
+
+For dynamic locations, \code{coordx_dyn}, \code{data}, and optionally a
+list-valued \code{X} have one aligned element per time.  Element \eqn{t}
+contains the coordinates, responses, and covariate rows observed at
+\code{coordt[t]}; internal concatenation is by increasing list index.
+See \code{\link{GeoModels-spacetime-ordering}} for the complete convention.
+}
+
 \value{
  Returns an object of class \code{GeoFit}.
  An object of class \code{GeoFit} is a list containing at most the following components:
@@ -196,11 +262,15 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{likelihood}{The configuration of the composite likelihood.}
  \item{logCompLik}{The value of the log composite-likelihood at the maximum.}
  \item{maxdist}{The maximum spatial distance used in the weighted composite likelihood (or \code{NULL}).}
- \item{maxtime}{The order of temporal neighborhood in the composite likelihood computation.}
+ \item{maxtime}{The maximum temporal-distance threshold used in the composite likelihood, expressed in the same units as \code{coordt}.}
  \item{message}{Extra message passed from the numerical routines.}
  \item{model}{The density associated to the likelihood objects.}
+ \item{estimation_model}{The inferential model/working likelihood supplied to
+ \code{GeoFit}. For misspecified fits this differs from \code{model}, which
+ records the data-generating response model used by simulation, diagnostics,
+ and prediction routines.}
  \item{missp}{\code{TRUE} if a misspecified Gaussian model is used in the composite likelihood.}
- \item{n}{The number of trials/successes for (negative) binomial models.}
+ \item{n}{The Binomial number of trials, or the common Negative-Binomial number \eqn{r} of successes.}
  \item{neighb}{The order of spatial neighborhood in the composite likelihood computation.}
  \item{ns}{The number of (different) location sites in the bivariate case.}
  \item{numcoord}{The number of spatial coordinates.}

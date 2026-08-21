@@ -17,19 +17,67 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
 
     names(param) <- namesparam
     param <- c(param, fixed)
+
+    ## Guard copula and marginal parameter domains at every objective
+    ## evaluation. This is essential for unconstrained optimizers such as
+    ## Nelder-Mead, especially for the skew-Gaussian eta parameter.
+    if (type_cop > 0L) {
+        bad <- FALSE
+        get1 <- function(nm) {
+            if (!(nm %in% names(param))) return(NA_real_)
+            suppressWarnings(as.numeric(param[[nm]]))
+        }
+
+        nug <- get1("nugget")
+        if (!is.finite(nug) || nug < 0 || nug >= 1) bad <- TRUE
+
+        if ("sill" %in% names(param)) {
+            sv <- get1("sill")
+            if (!is.finite(sv) || sv <= 0) bad <- TRUE
+        }
+        if (model == 12L) {
+            dfv <- get1("df")
+            if (!is.finite(dfv) || dfv <= 0) bad <- TRUE
+        }
+        if (model %in% c(21L, 26L, 50L, 42L)) {
+            sh <- get1("shape")
+            if (!is.finite(sh) || sh <= 0) bad <- TRUE
+        }
+        if (model %in% c(28L, 33L)) {
+            sh1 <- get1("shape1"); sh2 <- get1("shape2")
+            if (!is.finite(sh1) || !is.finite(sh2) || sh1 <= 0 || sh2 <= 0) bad <- TRUE
+        }
+        if (model %in% c(28L, 33L, 50L, 42L)) {
+            lo <- get1("min"); hi <- get1("max")
+            if (!is.finite(lo) || !is.finite(hi) || lo >= hi) bad <- TRUE
+        }
+        if (model == 59L) {
+            sk <- get1("skew")
+            if (!is.finite(sk) || sk <= 0 || sk >= 1) bad <- TRUE
+        }
+
+        if (type_cop == 2L) {
+            nu_cop <- get1("nu")
+            if (!is.finite(nu_cop) || nu_cop <= 0 ||
+                abs(nu_cop - round(nu_cop)) > sqrt(.Machine$double.eps)) bad <- TRUE
+        }
+        if (type_cop == 3L) {
+            eta_cop <- get1("nu")
+            if (!is.finite(eta_cop) || abs(eta_cop) >= 1) bad <- TRUE
+        }
+
+        if (bad) return(1e20)
+    }
+
     paramcorr <- param[namescorr]
     nuisance <- param[namesnuis]
-    sel <- startsWith(names(nuisance), "mean")
+    sel <- sel_mean
 
     if (is.null(MM)) {
-        mm <- nuisance[sel]
-        if (ncol(X) > 10) {
-            Mean <- as.vector(tcrossprod(mm, X))
-        } else {
-            Mean <- as.vector(X %*% mm)
-        }
+        beta <- .GeoMean_beta(nuisance, ncol(X))
+        Mean <- as.numeric(X %*% beta)
     } else {
-        Mean <- MM
+        Mean <- as.numeric(MM)
     }
     other_nuis <- nuisance[!sel]
 
@@ -44,7 +92,7 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
                          "integer", "integer", "double", "integer", "double",
                          "double", "double", "double", "integer", "integer"),
             corrmodel, c1, c2, data1, data2,
-            n[colidx], n[rowidx], paramcorr, weigthed,
+            n_col, n_row, paramcorr, weigthed,
             res = dotCall64::vector_dc("double", 1),
             Mean[colidx], Mean[rowidx], other_nuis, type_cop, cond_pair,
             INTENT = c(rep("r", 9), "w", rep("r", 5)),
@@ -60,7 +108,7 @@ comploglik2 <- function(param, colidx, rowidx, corrmodel, coords, data1, data2, 
                          "double", "integer", "double", "double", "double",
                          "double", "integer", "integer"),
             corrmodel, data1, data2,
-            n[colidx], n[rowidx], paramcorr, weigthed,
+            n_col, n_row, paramcorr, weigthed,
             res = dotCall64::vector_dc("double", 1),
             Mean[colidx], Mean[rowidx], other_nuis, type_cop, cond_pair,
             INTENT = c(rep("r", 7), "w", rep("r", 5)),
@@ -121,8 +169,6 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(is.null(dim(X))){X=as.matrix(rep(1,dimat))}
 
     fname <- NULL; hessian <- FALSE
-    if(all(model==1,likelihood==4,type==2)) fname <- 'Comp_Diff_Gauss'
-
     namesaniso=c("angle","ratio")
 
     if(length(n)==1) n=rep(n,dimat)
@@ -145,12 +191,9 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==34,likelihood==1,type==2)) fname <- 'Comp_Cond_Tukeyh'
     if(all(model==40,likelihood==1,type==2)) fname <- 'Comp_Cond_Tukeyhh'
     if(all(model==35,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss_misp_T'
-    if(all(model==27,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECET'
     if(all(model==39,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECEBIMODAL'
-    if(all(model==29,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECEGauss'
     if(all(model==31,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomTWOPIECEGauss'
     if(all(model==32,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegTWOPIECEGauss'
-    if(all(model==38,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECETukeyh'
     if(all(model==30,likelihood==1,type==2)) fname <- 'Comp_Cond_Pois'
     if(all(model==46,likelihood==1,type==2)) fname <- 'Comp_Cond_PoisGamma'
     if(all(model==36,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss_misp_Pois'
@@ -163,10 +206,6 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     if(all(model==14,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegGauss'
     if(all(model==16,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegGauss'
     if(all(model==54,likelihood==1,type==2)) fname <- 'Comp_Cond_BinomnegBinary'
-    if(all(model==27,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECET'
-    if(all(model==39,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECEBIMODAL'
-    if(all(model==29,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECEGauss'
-    if(all(model==38,likelihood==1,type==2)) fname <- 'Comp_Cond_TWOPIECETukeyh'
     if(all(model==43,likelihood==1,type==2)) fname <- 'Comp_Cond_PoisZIP'
     if(all(model==57,likelihood==1,type==2)) fname <- 'Comp_Cond_PoisGammaZIP'
     if(all(model==44,likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss_misp_PoisZIP'
@@ -260,12 +299,32 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
    if(is.null(neighb)) {colidx=colidx+1; rowidx=rowidx+1}
    data1=data[colidx]; data2=data[rowidx]
 
+   ## Count observations do not change during optimization.  Validate and
+   ## convert them once, then reuse the integer cache in every Poisson-Gamma
+   ## pairwise likelihood evaluation (base, ZIP, and Gaussian-misspecified).
+   if(!bivariate && model %in% c(46L,47L,57L)) {
+     pg_cache <- .C("SetPGPairCounts",
+       as.double(data1),as.double(data2),as.integer(length(data1)),
+       ok=integer(1),PACKAGE="GeoModels",NAOK=TRUE)$ok
+     if(pg_cache[1L] != 1L)
+       stop("Poisson-Gamma data must be non-negative integer counts or NA")
+   }
+
    ## Constant scaling of the objective.  The optimizer and numerical score
    ## use the average pairwise objective, while CompLikelihood$value is
    ## converted back to the total composite log-likelihood below.
    obj_scale <- max(1, length(data1))
 
    if((model==11||model==49||model==51)&&length(n)>1) {n1=n[colidx];n2=n[rowidx];n=c(n1,n2)}
+
+   ## Quantities below are invariant across objective evaluations.
+   ## Cache them once in the CompLik2 frame; comploglik2 accesses them
+   ## through lexical scoping without changing its call signature.
+   if(!bivariate) {
+     sel_mean <- namesnuis %in% .GeoMean_names(ncol(X))
+     n_col <- n[colidx]
+     n_row <- n[rowidx]
+   }
 
 ##################
 lname="comploglik2"
@@ -285,11 +344,13 @@ if(!onlyvar){
    if(!bivariate)           {
     if(length(param)==1) {
          optimizer="optimize"
-     CompLikelihood <- optimize(f=eval(as.name(lname)), colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords,
-                              data1=data1,data2=data2, fixed=fixed, fan=fname,  lower=lower, n=n,
-                              namescorr=namescorr, namesnuis=namesnuis,namesparam=namesparam,namesaniso=namesaniso,
-                               maximum = FALSE,
-                              upper=upper,weigthed=weigthed,X=X, MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
+     CompLikelihood <- .GeoModels_optimize_1d(
+                              f=eval(as.name(lname)), param=param, lower=lower, upper=upper,
+                              namesparam=namesparam,
+                              colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords,
+                              data1=data1,data2=data2, fixed=fixed, fan=fname, n=n,
+                              namescorr=namescorr, namesnuis=namesnuis,namesaniso=namesaniso,
+                              weigthed=weigthed,X=X, MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
    if(length(param)>1) {
 
     if(optimizer=='L-BFGS-B')
@@ -350,10 +411,13 @@ if(!onlyvar){
      if(length(param)==1)
         {
          optimizer="optimize"
-       CompLikelihood <- optimize(f=comploglik_biv2,  colidx=colidx,rowidx=rowidx,corrmodel=corrmodel,  coords=coords,
-                              data1=data1,data2=data2, fixed=fixed,fan=fname,  lower=lower,n=n,
-                              namescorr=namescorr, namesnuis=namesnuis, namesparam=namesparam,namesaniso=namesaniso,maximum = FALSE,
-                              upper=upper,weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
+       CompLikelihood <- .GeoModels_optimize_1d(
+                              f=comploglik_biv2, param=param, lower=lower, upper=upper,
+                              namesparam=namesparam,
+                              colidx=colidx,rowidx=rowidx,corrmodel=corrmodel, coords=coords,
+                              data1=data1,data2=data2, fixed=fixed,fan=fname,n=n,
+                              namescorr=namescorr, namesnuis=namesnuis,namesaniso=namesaniso,
+                              weigthed=weigthed,X=X,MM=MM,aniso=aniso,type_cop=type_cop,cond_pair=cond_pair)}
       if(length(param)>1) {
     if(optimizer=='L-BFGS-B'){
       CompLikelihood <- optim(param,comploglik_biv2, control=list(factr=opt_factr, pgtol=opt_pgtol, maxit=opt_maxit),
@@ -585,6 +649,12 @@ if (sensitivity || varest)
   ## rescaling, recompute the Hessian in the scaled parameterization, and
   ## finally transform it back to the original parameter scale.  In exact
   ## arithmetic this gives the same Hessian; the change is only numerical.
+  ##
+  ## The scaled Hessian is the primary operational estimate.  When its
+  ## unit-free diagnostics indicate weak curvature or poor conditioning, a
+  ## second Richardson evaluation with a different step is computed in the
+  ## same scaled parameterization.  This second matrix is diagnostic only:
+  ## it never replaces or regularizes the primary sensitivity matrix.
 
   theta_hat <- as.numeric(CompLikelihood$par)
   names(theta_hat) <- namesparam
@@ -642,6 +712,15 @@ if (sensitivity || varest)
     }
   }
 
+  symmetrize_hessian <- function(HH) {
+    (HH + t(HH)) / 2
+  }
+
+  relative_matrix_difference <- function(A, B) {
+    denom <- max(1, max(abs(A)), max(abs(B)))
+    max(abs(A - B)) / denom
+  }
+
   ## Preliminary Hessian of the average negative composite
   ## log-likelihood.  It is used only to select numerically appropriate
   ## perturbation scales.  Multiplying by obj_scale here would make every
@@ -651,8 +730,14 @@ if (sensitivity || varest)
     x = theta_hat,
     method = "Richardson"
   )
+  H0_average <- symmetrize_hessian(H0_average)
 
-  H0_average <- (H0_average + t(H0_average)) / 2
+  if (any(!is.finite(H0_average))) {
+    stop(
+      "The preliminary numerical sensitivity matrix contains non-finite values.",
+      call. = FALSE
+    )
+  }
 
   ## Local diagonal rescaling.  Use the estimated curvature whenever it is
   ## finite and positive.  A parameter-based fallback is used only for
@@ -681,42 +766,198 @@ if (sensitivity || varest)
     objective_theta(theta)
   }
 
-  ## Hessian with respect to eta, where theta = theta_hat + A eta.
-  ## numDeriv still differentiates the average objective; restore the scale
-  ## of the total negative composite log-likelihood only after the stable
-  ## numerical differentiation has been completed.
-  H_scaled_average <- numDeriv::hessian(
-    func = objective_scaled,
-    x = rep(0, ntheta),
-    method = "Richardson"
-  )
+  compute_scaled_hessian_average <- function(method_args = NULL) {
+    hessian_args <- list(
+      func = objective_scaled,
+      x = rep(0, ntheta),
+      method = "Richardson"
+    )
+    if (!is.null(method_args)) hessian_args$method.args <- method_args
 
-  H_scaled_average <- (H_scaled_average + t(H_scaled_average)) / 2
+    HH <- do.call(numDeriv::hessian, hessian_args)
+    HH <- symmetrize_hessian(HH)
+
+    if (any(!is.finite(HH))) {
+      stop(
+        "The numerical sensitivity matrix contains non-finite values.",
+        call. = FALSE
+      )
+    }
+    HH
+  }
+
+  ## Primary Hessian with respect to eta, where
+  ## theta = theta_hat + A eta.  Restore the total composite-likelihood
+  ## scale only after numerical differentiation.
+  H_scaled_average <- compute_scaled_hessian_average()
   H_scaled <- obj_scale * H_scaled_average
+  H_scaled <- symmetrize_hessian(H_scaled)
 
   ## Since H_eta = A H_theta A, transform back as
   ## H_theta = A^{-1} H_eta A^{-1}.
   Ainv <- diag(1 / scale_vec, nrow = ntheta, ncol = ntheta)
   CompLikelihood$hessian <- Ainv %*% H_scaled %*% Ainv
-  CompLikelihood$hessian <-
-    (CompLikelihood$hessian + t(CompLikelihood$hessian)) / 2
+  CompLikelihood$hessian <- symmetrize_hessian(CompLikelihood$hessian)
 
   rownames(CompLikelihood$hessian) <- namesparam
   colnames(CompLikelihood$hessian) <- namesparam
 
-  ## Store numerical diagnostics as attributes of sensmat/hessian.
   names(scale_vec) <- namesparam
+  rownames(H_scaled_average) <- namesparam
+  colnames(H_scaled_average) <- namesparam
   rownames(H_scaled) <- namesparam
   colnames(H_scaled) <- namesparam
 
+  eig_primary <- eigen(
+    H_scaled,
+    symmetric = TRUE,
+    only.values = TRUE
+  )$values
+  cond_primary <- tryCatch(
+    kappa(H_scaled),
+    error = function(e) Inf
+  )
+
+  max_abs_eig <- max(abs(eig_primary))
+  eigen_ratio_primary <- if (is.finite(max_abs_eig) && max_abs_eig > 0) {
+    min(eig_primary) / max_abs_eig
+  } else {
+    NA_real_
+  }
+
+  ## Adaptive diagnostic check.  Thresholds determine only whether a second
+  ## numerical evaluation is useful; they never alter the returned Hessian.
+  hessian_condition_threshold <- 1000
+  hessian_eigenratio_threshold <- 1e-3
+  hessian_relative_tolerance <- 1e-2
+  hessian_check_d <- 0.05
+
+  needs_stability_check <-
+    !is.finite(cond_primary) ||
+    cond_primary > hessian_condition_threshold ||
+    !is.finite(eigen_ratio_primary) ||
+    eigen_ratio_primary <= 0 ||
+    abs(eigen_ratio_primary) < hessian_eigenratio_threshold
+
+  hessian_check_performed <- FALSE
+  hessian_stable <- TRUE
+  hessian_check_error <- NULL
+  H_check_scaled_average <- NULL
+  H_check_scaled <- NULL
+  eig_check <- rep(NA_real_, ntheta)
+  cond_check <- NA_real_
+  relative_difference_check <- NA_real_
+  smallest_eigenvalue_sign_change <- NA
+
+  if (isTRUE(needs_stability_check)) {
+    hessian_check_performed <- TRUE
+
+    H_check_result <- tryCatch(
+      compute_scaled_hessian_average(
+        method_args = list(d = hessian_check_d)
+      ),
+      error = function(e) e
+    )
+
+    if (inherits(H_check_result, "error")) {
+      hessian_stable <- FALSE
+      hessian_check_error <- conditionMessage(H_check_result)
+      warning(
+        paste0(
+          "The adaptive sensitivity-matrix check failed: ",
+          hessian_check_error,
+          ". The primary scaled Richardson Hessian has been retained."
+        ),
+        call. = FALSE
+      )
+    } else {
+      H_check_scaled_average <- H_check_result
+      H_check_scaled <- obj_scale * H_check_scaled_average
+      H_check_scaled <- symmetrize_hessian(H_check_scaled)
+
+      eig_check <- eigen(
+        H_check_scaled,
+        symmetric = TRUE,
+        only.values = TRUE
+      )$values
+      cond_check <- tryCatch(
+        kappa(H_check_scaled),
+        error = function(e) Inf
+      )
+
+      relative_difference_check <- relative_matrix_difference(
+        H_scaled_average,
+        H_check_scaled_average
+      )
+      smallest_eigenvalue_sign_change <-
+        sign(min(eig_primary)) != sign(min(eig_check))
+
+      hessian_stable <-
+        is.finite(relative_difference_check) &&
+        relative_difference_check <= hessian_relative_tolerance &&
+        !isTRUE(smallest_eigenvalue_sign_change)
+
+      rownames(H_check_scaled_average) <- namesparam
+      colnames(H_check_scaled_average) <- namesparam
+      rownames(H_check_scaled) <- namesparam
+      colnames(H_check_scaled) <- namesparam
+
+      if (!isTRUE(hessian_stable)) {
+        warning(
+          paste0(
+            "The numerical sensitivity matrix is unstable across ",
+            "Richardson step sizes. The primary scaled Hessian has been ",
+            "retained; standard errors and composite-likelihood information ",
+            "criteria should be interpreted with caution."
+          ),
+          call. = FALSE
+        )
+      } else if (min(eig_primary) <= 0 || min(eig_check) <= 0) {
+        warning(
+          paste0(
+            "The sensitivity matrix is reproducibly non-positive-definite ",
+            "under the adaptive Richardson check. The primary scaled ",
+            "Hessian has been retained."
+          ),
+          call. = FALSE
+        )
+      }
+    }
+  }
+
+  ## Backward-compatible attributes plus adaptive stability diagnostics.
   attr(CompLikelihood$hessian, "parameter_scaling") <- scale_vec
   attr(CompLikelihood$hessian, "scaled_hessian") <- H_scaled
   attr(CompLikelihood$hessian, "scaled_hessian_average") <- H_scaled_average
-  attr(CompLikelihood$hessian, "scaled_condition") <- kappa(H_scaled)
-  attr(CompLikelihood$hessian, "scaled_eigenvalues") <-
-    eigen(H_scaled, symmetric = TRUE, only.values = TRUE)$values
+  attr(CompLikelihood$hessian, "scaled_condition") <- cond_primary
+  attr(CompLikelihood$hessian, "scaled_eigenvalues") <- eig_primary
+  attr(CompLikelihood$hessian, "hessian_method") <-
+    "scaled_parameterization_Richardson_with_adaptive_check"
+  attr(CompLikelihood$hessian, "objective_scale") <- obj_scale
+  attr(CompLikelihood$hessian, "hessian_check_performed") <-
+    hessian_check_performed
+  attr(CompLikelihood$hessian, "hessian_stable") <- hessian_stable
+  attr(CompLikelihood$hessian, "hessian_positive_definite") <-
+    all(is.finite(eig_primary)) && min(eig_primary) > 0
+  attr(CompLikelihood$hessian, "hessian_stability") <- list(
+    condition_threshold = hessian_condition_threshold,
+    eigenratio_threshold = hessian_eigenratio_threshold,
+    relative_tolerance = hessian_relative_tolerance,
+    check_d = hessian_check_d,
+    primary_condition = cond_primary,
+    primary_eigenvalues = eig_primary,
+    primary_min_eigen_ratio = eigen_ratio_primary,
+    check_performed = hessian_check_performed,
+    check_error = hessian_check_error,
+    check_condition = cond_check,
+    check_eigenvalues = eig_check,
+    relative_scaled_difference = relative_difference_check,
+    smallest_eigenvalue_sign_change = smallest_eigenvalue_sign_change,
+    stable = hessian_stable,
+    check_scaled_hessian_average = H_check_scaled_average,
+    check_scaled_hessian = H_check_scaled
+  )
 }
-
 CompLikelihood$score=NULL
 if(score)
 {
