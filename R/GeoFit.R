@@ -569,6 +569,18 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       coordz <- unname(coordz)
     }
 
+    .fit_context <- getOption("GeoModels.fit_context_cache", NULL)
+    .fit_success <- FALSE
+    .fit_uses_globals <- !(likelihood == "Marginal" && type == "Independence")
+    on.exit({
+      if (.fit_uses_globals && (!.fit_success || !is.environment(.fit_context))) {
+        .C("DeleteGlobalVar2", PACKAGE = "GeoModels", NAOK = TRUE)
+        if (is.environment(.fit_context) &&
+            exists("wls_initparam", envir = .fit_context, inherits = FALSE))
+          rm("wls_initparam", envir = .fit_context)
+      }
+    }, add = TRUE)
+
     initparam <- WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
                           distance, "Fitting", fixed, grid, likelihood, maxdist, neighb,
                           maxtime, model, n, NULL, parscale, optimizer == "L-BFGS-B",
@@ -913,13 +925,8 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     if (initparam$bivariate) numtime <- 2
     dimat <- initparam$numcoord
 
-    keep_fit_context <- is.environment(
-      getOption("GeoModels.fit_context_cache", NULL)
-    )
-    if (!(likelihood == "Marginal" && type == "Independence") &&
-        !keep_fit_context) {
-      .C("DeleteGlobalVar2", PACKAGE = "GeoModels", NAOK = TRUE)
-    }
+    ## Native context cleanup is registered before initialization and runs
+    ## on normal return, errors and user interrupts.
 
     ff <- as.list(initparam$fixed)
     if (!is.null(MM)) ff$mean <- MM
@@ -1042,7 +1049,9 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       X = X
     )
 
-    structure(c(GeoFit, call = call), class = c("GeoFit"))
+    .fit_result <- structure(c(GeoFit, call = call), class = c("GeoFit"))
+    .fit_success <- TRUE
+    .fit_result
   })
 }
 

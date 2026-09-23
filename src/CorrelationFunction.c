@@ -1,4 +1,5 @@
 #include "header.h"
+#include "matern_kernel.h"
 
 /* Small process/thread-local caches for constants that depend only on the
    current correlation parameters. Correlations and lags are never cached. */
@@ -2006,13 +2007,10 @@ static inline const MaternKernelContext *get_matern_context(double smooth)
     MaternKernelContext *ctx = &matern_corr_ctx[matern_corr_next_ctx];
     matern_corr_next_ctx = (matern_corr_next_ctx + 1U) & 3U;
 
-    double k_real = smooth - 0.5;
-    double k_round = round(k_real);
-
     ctx->valid = 1;
     ctx->smooth = smooth;
-    ctx->is_half_integer = fabs(k_real - k_round) < 1e-10;
-    ctx->k = (int)k_round;
+    ctx->k = geo_matern_half_order(smooth);
+    ctx->is_half_integer = ctx->k >= 0;
     ctx->log_den = (smooth - 1.0) * log(2.0) + lgammafn(smooth);
     return ctx;
 }
@@ -2020,38 +2018,53 @@ static inline const MaternKernelContext *get_matern_context(double smooth)
 // Whittle–Matérn correlation function (ibrida)
 
 
+/* Small-lag evaluation of the normalized Bessel K, not K itself.
+ * For 0 < nu < .99 and a <= 1e-10, the two leading small-a terms have
+ * absolute truncation error below 1e-18.  expm1 avoids cancellation as nu
+ * approaches zero.  For nu >= .99, monotonicity in nu and
+ * 1-exp(-z) <= z^.98 bound 1-M_nu(a) by less than 1e-18 in this regime.
+ * log_a is retained when the positive lag/scale ratio underflows.
+ */
+static double geo_matern_small_lag(double log_a, double nu)
+{
+    double log_ratio;
+    if (nu >= 0.99) return 1.0;
+    if (nu < 0.001) {
+        const double n2 = nu * nu;
+        /* log Gamma(1-nu) - log Gamma(1+nu), through nu^7. */
+        log_ratio = 2.0 * nu * (0.57721566490153286061 +
+            n2 * (0.40068563438653142847 +
+            n2 * (0.20738555102867398527 +
+            n2 * 0.14404989676884611812)));
+    } else {
+        log_ratio = lgammafn(1.0 - nu) - lgammafn(1.0 + nu);
+    }
+    return -expm1(log_ratio + 2.0 * nu * (log_a - log(2.0)));
+}
+
 double CorFunWitMat(double lag, double scale, double smooth)
 {
-    if (scale <= 0.0 || smooth <= 0.0)
+    if (!isfinite(scale) || !isfinite(smooth) ||
+        scale <= 0.0 || smooth <= 0.0 || isnan(lag) || lag < 0.0)
         return NAN;
+    if (lag == 0.0) return 1.0;
 
-    if (lag <= 0.0)
-        return 1.0;
+    const double a = lag / scale;
+    if (isinf(a)) return 0.0;
+    const int k = geo_matern_half_order(smooth);
+    if (k >= 0) return geo_matern_half_corr(a, k);
 
-    double a = lag / scale;
-
-    if (a < 1e-12)
-        return 1.0;
-
-    const MaternKernelContext *ctx = get_matern_context(smooth);
-
-    if (ctx->is_half_integer)
-    {
-        if (ctx->k == 0)
-            return exp(-a);
-        if (ctx->k == 1)
-            return exp(-a) * (1.0 + a);
-        if (ctx->k == 2)
-            return exp(-a) * (1.0 + a + (a * a) / 3.0);
-        if (ctx->k == 3)
-            return exp(-a) * (1.0 + a + 0.4 * a * a + (a * a * a) / 15.0);
+    if (a <= 1.0e-10) {
+        const double log_a = a > 0.0 ? log(a) : log(lag) - log(scale);
+        return geo_matern_small_lag(log_a, smooth);
     }
 
-    // General case: only the lag-dependent Bessel term remains in the pair loop.
-    double log_besselk = log(bessel_k(a, smooth, 2));  // scaled: e^a Kν(a)
-    double log_num = smooth * log(a) + log_besselk - a;
-
-    return exp(log_num - ctx->log_den);
+    const MaternKernelContext *ctx = get_matern_context(smooth);
+    const double bk = bessel_k(a, smooth, 2.0); /* exp(a) K_nu(a) */
+    if (!(bk > 0.0) || !isfinite(bk)) return NAN;
+    const double log_corr = smooth * log(a) + log(bk) - a - ctx->log_den;
+    /* A valid Matérn is <= 1; suppress only positive round-off in log space. */
+    return exp(fmin(0.0, log_corr));
 }
 
 
@@ -2320,9 +2333,10 @@ typedef struct {
     double norm;
 } KummerKernelContext;
 
-static CORRFCT_TLS KummerKernelContext kummer_corr_ctx[4];
-static CORRFCT_TLS unsigned int kummer_corr_next_ctx = 0U;
+//static CORRFCT_TLS KummerKernelContext kummer_corr_ctx[4];
+//static CORRFCT_TLS unsigned int kummer_corr_next_ctx = 0U;
 
+/*
 static inline double get_kummer_normalizer(double power, double smooth)
 {
     for (int i = 0; i < 4; ++i) {
@@ -2339,7 +2353,7 @@ static inline double get_kummer_normalizer(double power, double smooth)
     ctx->smooth = smooth;
     ctx->norm = exp(lgammafn(smooth + power) - lgammafn(smooth));
     return ctx->norm;
-}
+}*/
 
 /* Optimized Wendland correlation function */
 /* generalized wendland function*/
@@ -2468,17 +2482,23 @@ double CorFunW_gen(double lag, double R_power1, double smooth, double scale)
 */
 
 /* kummer function*/
-double CorKummer(double lag,double R_power,double smooth,double scale)  // mu alpha beta
+extern double kummer_ch(double alpha, double nu, double z);
+double CorKummer(double lag, double R_power, double smooth, double scale)
 {
-    double x = lag / scale;
-    if (x < 1e-32)
+    if (!R_FINITE(lag) || !R_FINITE(R_power) ||
+        !R_FINITE(smooth) || !R_FINITE(scale) ||
+        lag < 0.0 || R_power <= 0.0 || smooth <= 0.0 || scale <= 0.0)
+        return R_NaN;
+
+    if (lag == 0.0)
         return 1.0;
+    const double scaled_lag = 0.70710678118654752440 * (lag / scale);
+    const double z = scaled_lag * scaled_lag;
+    if (!R_FINITE(z))
+        return R_NaN;
 
-    return get_kummer_normalizer(R_power, smooth) *
-           kummer(R_power, 1.0 - smooth, 0.5 * x * x);
+    return kummer_ch(R_power, smooth, z);
 }
-
-
 
 static double CorFunWitMathole_baseline(double lag, double scale, double smooth, double R_power1)
 {

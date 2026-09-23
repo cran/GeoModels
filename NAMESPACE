@@ -28,9 +28,4 @@ importFrom(future,multisession)
 importFrom(future,plan)
 importFrom(future,sequential)
 importFrom(progressr,handlers,progressor)
-
-
-
-
-
-
+export(GeoOMP)

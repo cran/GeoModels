@@ -695,10 +695,7 @@ parallel_inner <- use_inner   # read by the simu_approx() calls inside do_one_si
 if (use_outer) {
 
          cat("Performing", nrep, "simulation using",method ," method"," ...\n")
-  # Sopprimi i warning
-  old_warn <- getOption("warn")
-  options(warn = -1)
-  on.exit(options(warn = old_warn), add = TRUE)
+  # Preserve the caller's warning policy; future relays worker warnings.
 
   old_plan_outer <- future::plan()
   on.exit(try(future::plan(old_plan_outer), silent = TRUE), add = TRUE)

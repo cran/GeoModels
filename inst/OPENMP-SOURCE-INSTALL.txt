@@ -1,0 +1,33 @@
+GeoModels OpenMP source installation
+=====================================
+
+GeoModels always remains installable with a serial fallback. OpenMP is active
+only when R's source-compilation configuration supplies a non-empty
+SHLIB_OPENMP_CFLAGS and the compiler consequently defines _OPENMP.
+
+Before installation, check:
+
+    R CMD config SHLIB_OPENMP_CFLAGS
+
+During R CMD INSTALL, verify that the C compilation and final link commands
+contain an OpenMP flag (commonly -fopenmp, or a platform-specific equivalent).
+After installation, run:
+
+    library(GeoModels)
+    GeoOMP()
+
+The field `compiled` must be TRUE for native OpenMP acceleration. If it is
+FALSE, installation was successful and GeoModels is using its serial fallback.
+
+On macOS, Apple clang has no native OpenMP support. To compile the OpenMP path
+from source, configure an OpenMP-capable compiler and SHLIB_OPENMP_CFLAGS in a
+user or site Makevars file (for example ~/.R/Makevars). The package Makevars
+intentionally contains no Homebrew-specific paths or compiler flags, because
+such paths are not portable and are rejected by CRAN checks.
+
+The native parallel path supports the Gaussian Matern pairwise marginal and
+conditional likelihood for any positive smoothness. Exact half-integers use
+closed-form kernels; general smoothness uses a package-local allocation-free
+Bessel-K recurrence, so worker threads do not call Rmath warning/error or
+allocation paths. Native registration and the serial installation fallback
+remain unchanged.

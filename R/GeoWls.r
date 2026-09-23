@@ -316,6 +316,50 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
       initparam, start_names_user, expected_mean, model, data
     )
 
+    ## Wrapped Gaussian: use circular rather than Euclidean automatic starts.
+    ## If the user did not provide them explicitly, initialize the intercept
+    ## from the sample mean direction and the latent variance from the
+    ## resultant length R, since for a wrapped normal R = exp(-sill/2).
+    if(identical(model, "Wrapped") && !bivariate) {
+      theta <- suppressWarnings(as.numeric(unlist(data, use.names = FALSE)))
+      theta <- theta[is.finite(theta)]
+      if(length(theta)) {
+        Cbar <- mean(cos(theta))
+        Sbar <- mean(sin(theta))
+        mean_dir <- atan2(Sbar, Cbar) %% (2*pi)
+        Rbar <- sqrt(Cbar^2 + Sbar^2)
+        Rbar <- min(1 - sqrt(.Machine$double.eps),
+                    max(sqrt(.Machine$double.eps), Rbar))
+        eta0 <- tan((mean_dir - pi)/2)
+        if(!is.finite(eta0)) eta0 <- if(mean_dir < pi) -100 else 100
+        eta0 <- max(-100, min(100, eta0))
+        sill0 <- -2 * log(Rbar)
+
+        ## StartParam can temporarily store automatically generated mean
+        ## coefficients in either `param` or `fixed`; WlsStart later reconciles
+        ## those placeholders.  Replace the placeholder wherever it lives, but
+        ## never overwrite a value explicitly supplied by the user.
+        if(!("mean" %in% start_names_user) &&
+           !("mean" %in% names(fixed_user))) {
+          if("mean" %in% names(initparam$param)) initparam$param[["mean"]] <- eta0
+          if("mean" %in% names(initparam$fixed)) initparam$fixed[["mean"]] <- eta0
+        }
+
+        slope_names <- setdiff(expected_mean, "mean")
+        for(nm in slope_names) {
+          if(!(nm %in% start_names_user) && !(nm %in% names(fixed_user))) {
+            if(nm %in% names(initparam$param)) initparam$param[[nm]] <- 0
+            if(nm %in% names(initparam$fixed)) initparam$fixed[[nm]] <- 0
+          }
+        }
+
+        if("sill" %in% names(initparam$param) &&
+           !("sill" %in% start_names_user) &&
+           !("sill" %in% names(fixed_user)))
+          initparam$param[["sill"]] <- sill0
+      }
+    }
+
     ###### continuous and discrete models
     if((model %in% c('Gaussian','Gauss','Chisq','LogLogistic','Logistic','SkewLaplace','Gamma','Gamma2','Beta','Beta2','LogGaussian','LogGauss','Binomial_TwoPieceGaussian','Binomial_TwoPieceGauss',
           'Tukeygh','Tukeyh','Tukeyh2','Kumaraswamy','Kumaraswamy2','Weibull','SkewGaussian','SkewGauss','SinhAsinh','StudentT','SkewStudentT',

@@ -1,245 +1,269 @@
 #include "header.h"
+#include <limits.h>
+#include <stdlib.h>
+#include "correlation_param_count.h"
+
+typedef struct { uint64_t key; double rho; } GeoPairEntry;
 
 typedef struct {
-    uint64_t key;
-    double rho;
-} GeoPairEntry;
+    SEXP neighborhoods, coords, times, cormod, par, type, radius;
+    uint64_t *keys, *next_keys;
+    double *values, *next_values;
+    GeoPairEntry *entries;
+    size_t capacity;
+    double budget, peak;
+} GeoPairBuildContext;
 
 static size_t geo_pair_hash(uint64_t x)
 {
+    x ^= x >> 33; x *= UINT64_C(0xff51afd7ed558ccd);
+    x ^= x >> 33; x *= UINT64_C(0xc4ceb9fe1a85ec53);
     x ^= x >> 33;
-    x *= UINT64_C(0xff51afd7ed558ccd);
-    x ^= x >> 33;
-    x *= UINT64_C(0xc4ceb9fe1a85ec53);
-    x ^= x >> 33;
-    return (size_t) x;
+    return (size_t)x;
 }
 
 static size_t geo_next_pow2(size_t x)
 {
     size_t p = 1;
-    while (p < x && p <= (SIZE_MAX >> 1)) p <<= 1;
+    while (p < x) {
+        if (p > (SIZE_MAX >> 1)) return 0;
+        p <<= 1;
+    }
     return p;
 }
 
 static int geo_pair_compare(const void *aa, const void *bb)
 {
-    const GeoPairEntry *a = (const GeoPairEntry *) aa;
-    const GeoPairEntry *b = (const GeoPairEntry *) bb;
-    if (a->key < b->key) return -1;
-    if (a->key > b->key) return 1;
-    return 0;
+    const GeoPairEntry *a = (const GeoPairEntry *)aa, *b = (const GeoPairEntry *)bb;
+    return (a->key > b->key) - (a->key < b->key);
 }
 
-static void geo_pair_rehash(uint64_t **keys, double **values,
-                            size_t *capacity)
+static void geo_pair_cleanup(void *data)
 {
-    size_t old_capacity = *capacity;
-    size_t new_capacity = old_capacity << 1;
-    uint64_t *old_keys = *keys;
-    double *old_values = *values;
-    uint64_t *new_keys;
-    double *new_values;
-    size_t s;
+    GeoPairBuildContext *ctx = (GeoPairBuildContext *)data;
+    free(ctx->keys); free(ctx->values); free(ctx->entries);
+    free(ctx->next_keys); free(ctx->next_values);
+    ctx->keys = ctx->next_keys = NULL;
+    ctx->values = ctx->next_values = NULL;
+    ctx->entries = NULL;
+}
 
-    if (new_capacity <= old_capacity)
-        error("GeoModels pair cache exceeded addressable size");
+/* Budget covers the native workspace and the returned CSR arrays, including
+ * simultaneous buffers during rehash. Inputs and other R objects are excluded.
+ * Reserve 64 KiB for small objects and allocator bookkeeping.
+ */
+static int geo_pair_budget_ok(GeoPairBuildContext *ctx, double bytes)
+{
+    bytes += 65536.0;
+    if (!R_FINITE(bytes) || bytes > ctx->budget) return 0;
+    if (bytes > ctx->peak) ctx->peak = bytes;
+    return 1;
+}
 
-    new_keys = (uint64_t *) R_Calloc(new_capacity, uint64_t);
-    new_values = (double *) R_Calloc(new_capacity, double);
-
-    for (s = 0; s < old_capacity; ++s) {
-        uint64_t key = old_keys[s];
-        if (key != 0) {
-            size_t pos = geo_pair_hash(key) & (new_capacity - 1);
-            while (new_keys[pos] != 0)
-                pos = (pos + 1) & (new_capacity - 1);
-            new_keys[pos] = key;
-            new_values[pos] = old_values[s];
+static int geo_pair_rehash(GeoPairBuildContext *ctx)
+{
+    const size_t old = ctx->capacity;
+    if (old > SIZE_MAX / 2) return 0;
+    const size_t cap = 2 * old;
+    if (cap > SIZE_MAX / sizeof(uint64_t) || cap > SIZE_MAX / sizeof(double) ||
+        !geo_pair_budget_ok(ctx, (double)(sizeof(uint64_t) + sizeof(double)) *
+                                  ((double)old + (double)cap))) return 0;
+    ctx->next_keys = (uint64_t *)calloc(cap, sizeof(uint64_t));
+    ctx->next_values = (double *)calloc(cap, sizeof(double));
+    if (!ctx->next_keys || !ctx->next_values) return 0;
+    for (size_t s = 0; s < old; ++s) {
+        if ((s & 65535u) == 0) R_CheckUserInterrupt();
+        uint64_t key = ctx->keys[s];
+        if (key) {
+            size_t pos = geo_pair_hash(key) & (cap - 1);
+            while (ctx->next_keys[pos]) pos = (pos + 1) & (cap - 1);
+            ctx->next_keys[pos] = key;
+            ctx->next_values[pos] = ctx->values[s];
         }
     }
-
-    R_Free(old_keys);
-    R_Free(old_values);
-    *keys = new_keys;
-    *values = new_values;
-    *capacity = new_capacity;
+    free(ctx->keys); free(ctx->values);
+    ctx->keys = ctx->next_keys; ctx->values = ctx->next_values;
+    ctx->next_keys = NULL; ctx->next_values = NULL;
+    ctx->capacity = cap;
+    return 1;
 }
 
 static int geo_index_at(SEXP x, R_xlen_t i)
 {
-    if (TYPEOF(x) == INTSXP) return INTEGER(x)[i];
-    if (TYPEOF(x) == REALSXP) return (int) REAL(x)[i];
-    error("GeoModels pair cache requires numeric neighborhood indices");
+    if (TYPEOF(x) == INTSXP) {
+        int v = INTEGER(x)[i];
+        if (v != NA_INTEGER && v >= 1) return v;
+    } else if (TYPEOF(x) == REALSXP) {
+        double v = REAL(x)[i];
+        if (R_FINITE(v) && v >= 1.0 && v <= INT_MAX && v == floor(v)) return (int)v;
+    }
+    error("GeoModels pair cache requires finite positive integer indices");
     return 0;
 }
 
-/* Shared builder for spatial and space-time local caches.  When times_s is
-   NULL the temporal lag is zero.  Otherwise coords and times are flattened
-   in the same global observation order used by neighborhood indices. */
-static SEXP geo_build_pair_cache(SEXP neighborhoods, SEXP coords, SEXP times_s,
-                                 SEXP cormod_s, SEXP par_s,
-                                 SEXP type_s, SEXP radius_s)
+static SEXP geo_build_pair_cache_body(void *data)
 {
-    SEXP coords_r = R_NilValue, times_r = R_NilValue, par_r = R_NilValue;
-    SEXP dim, row_ptr, col_idx, rho_out, ans, names;
-    int nobs, ndim, cormod, type, use_time;
-    double radius;
-    const double *cc, *ttimes = NULL, *par;
-    R_xlen_t ntask, tt;
-    double total_occ = 0.0;
-    size_t capacity, used = 0, estimate, slot;
-    uint64_t *keys;
-    double *values;
-    GeoPairEntry *entries;
-    R_xlen_t e;
-    int *rp, *ci;
-    double *rv;
+    GeoPairBuildContext *ctx = (GeoPairBuildContext *)data;
+    SEXP neighborhoods = ctx->neighborhoods, coords = ctx->coords;
+    SEXP dim, coords_r, times_r = R_NilValue, par_r;
     int nprotect = 0;
-
     if (!isNewList(neighborhoods))
         error("GeoModels pair cache requires a list of neighborhood indices");
-
     dim = getAttrib(coords, R_DimSymbol);
-    if (isNull(dim) || LENGTH(dim) != 2)
+    if (TYPEOF(dim) != INTSXP || LENGTH(dim) != 2)
         error("GeoModels pair cache requires a coordinate matrix");
-    nobs = INTEGER(dim)[0];
-    ndim = INTEGER(dim)[1];
-    PROTECT(coords_r = coerceVector(coords, REALSXP)); nprotect++;
+    const int nobs = INTEGER(dim)[0], ndim = INTEGER(dim)[1];
     if (nobs < 1 || (ndim != 2 && ndim != 3))
         error("GeoModels pair cache requires N x 2 or N x 3 coordinates");
-
-    use_time = !isNull(times_s);
-    if (use_time) {
-        PROTECT(times_r = coerceVector(times_s, REALSXP)); nprotect++;
-        if (XLENGTH(times_r) != nobs)
-            error("GeoModels pair cache requires one time value per observation");
-        ttimes = REAL(times_r);
+    PROTECT(coords_r = coerceVector(coords, REALSXP)); nprotect++;
+    const double *cc = REAL(coords_r), *ttimes = NULL;
+    for (R_xlen_t i = 0; i < XLENGTH(coords_r); ++i) {
+        if ((i & 65535) == 0) R_CheckUserInterrupt();
+        if (!R_FINITE(cc[i])) error("GeoModels pair cache requires finite coordinates");
     }
+    const int use_time = !isNull(ctx->times);
+    if (use_time) {
+        PROTECT(times_r = coerceVector(ctx->times, REALSXP)); nprotect++;
+        if (XLENGTH(times_r) != nobs)
+            error("GeoModels pair cache requires one time per observation");
+        ttimes = REAL(times_r);
+        for (int i = 0; i < nobs; ++i)
+            if (!R_FINITE(ttimes[i])) error("GeoModels pair cache requires finite times");
+    }
+    PROTECT(par_r = coerceVector(ctx->par, REALSXP)); nprotect++;
+    int cormod = asInteger(ctx->cormod), type = asInteger(ctx->type);
+    double radius = asReal(ctx->radius);
+    geo_validate_corr_buffer(cormod, par_r);
+    const double *par = REAL(par_r);
+    if (!R_FINITE(radius) || radius <= 0.0)
+        error("GeoModels pair cache received invalid radius");
 
-    PROTECT(par_r = coerceVector(par_s, REALSXP)); nprotect++;
-    cc = REAL(coords_r);
-    par = REAL(par_r);
-    cormod = asInteger(cormod_s);
-    type = asInteger(type_s);
-    radius = asReal(radius_s);
-    if (!R_FINITE(radius)) error("GeoModels pair cache received invalid radius");
+    SEXP budget_opt = GetOption1(install("GeoModels.local_pair_cache_max_bytes"));
+    ctx->budget = isNull(budget_opt) ? 256.0 * 1024.0 * 1024.0 : asReal(budget_opt);
+    if ((!isNull(budget_opt) && XLENGTH(budget_opt) != 1) ||
+        !R_FINITE(ctx->budget) || ctx->budget < 0.0)
+        error("GeoModels.local_pair_cache_max_bytes must be one finite nonnegative number");
 
-    ntask = XLENGTH(neighborhoods);
-    for (tt = 0; tt < ntask; ++tt) {
+    R_xlen_t ntask = XLENGTH(neighborhoods);
+    double total_occ = 0.0;
+    for (R_xlen_t tt = 0; tt < ntask; ++tt) {
+        if ((tt & 1023) == 0) R_CheckUserInterrupt();
         SEXP idx = VECTOR_ELT(neighborhoods, tt);
         R_xlen_t k = XLENGTH(idx);
-        if (k > 1) total_occ += ((double) k * (double) (k - 1)) / 2.0;
-    }
-
-    estimate = (size_t) nobs * 16u;
-    if (estimate < 4096u) estimate = 4096u;
-    if (total_occ > 0.0 && (double) estimate > total_occ)
-        estimate = (size_t) total_occ;
-    if (estimate < 16u) estimate = 16u;
-    capacity = geo_next_pow2((size_t) ((double) estimate / 0.65) + 1u);
-    if (capacity < 1024u) capacity = 1024u;
-
-    keys = (uint64_t *) R_Calloc(capacity, uint64_t);
-    values = (double *) R_Calloc(capacity, double);
-
-    for (tt = 0; tt < ntask; ++tt) {
-        SEXP idx = VECTOR_ELT(neighborhoods, tt);
-        R_xlen_t k = XLENGTH(idx), a, b;
-        for (a = 0; a + 1 < k; ++a) {
-            int ia0 = geo_index_at(idx, a) - 1;
-            if (ia0 < 0 || ia0 >= nobs) {
-                R_Free(keys); R_Free(values);
+        for (R_xlen_t a = 0; a < k; ++a)
+            if (geo_index_at(idx, a) > nobs)
                 error("GeoModels pair cache found an invalid observation index");
-            }
-            for (b = a + 1; b < k; ++b) {
-                int ib0 = geo_index_at(idx, b) - 1;
-                int i, j;
-                uint64_t key;
-                if (ib0 < 0 || ib0 >= nobs) {
-                    R_Free(keys); R_Free(values);
-                    error("GeoModels pair cache found an invalid observation index");
+        if (k > 1) total_occ += (double)k * (double)(k - 1) / 2.0;
+    }
+    if (!R_FINITE(total_occ)) error("GeoModels pair occurrence count overflow");
+    if (nobs == INT_MAX) goto no_cache; /* CSR row-vector length must fit int. */
+    double est = fmax(16.0, fmin(fmax((double)nobs * 16.0, 4096.0), total_occ));
+    if (est > (double)INT_MAX) est = INT_MAX;
+    if (est / 0.65 + 1.0 > (double)(SIZE_MAX / 2)) goto no_cache;
+    size_t capacity = geo_next_pow2((size_t)(est / 0.65) + 1u);
+    if (capacity < 1024u) capacity = 1024u;
+    if (capacity > SIZE_MAX / sizeof(uint64_t) || capacity > SIZE_MAX / sizeof(double) ||
+        !geo_pair_budget_ok(ctx, (double)(sizeof(uint64_t) + sizeof(double)) * capacity) ||
+        !geo_pair_budget_ok(ctx, sizeof(int) * ((double)nobs + 1.0))) goto no_cache;
+    ctx->capacity = capacity;
+    ctx->keys = (uint64_t *)calloc(capacity, sizeof(uint64_t));
+    ctx->values = (double *)calloc(capacity, sizeof(double));
+    if (!ctx->keys || !ctx->values) goto no_cache;
+
+    size_t used = 0, visited = 0;
+    for (R_xlen_t tt = 0; tt < ntask; ++tt) {
+        SEXP idx = VECTOR_ELT(neighborhoods, tt);
+        R_xlen_t k = XLENGTH(idx);
+        for (R_xlen_t a = 0; a + 1 < k; ++a) {
+            int ia = geo_index_at(idx, a) - 1;
+            for (R_xlen_t b = a + 1; b < k; ++b) {
+                if ((visited++ & 8191u) == 0) R_CheckUserInterrupt();
+                int ib = geo_index_at(idx, b) - 1;
+                if (ia == ib) continue;
+                int i = ia < ib ? ia : ib, j = ia < ib ? ib : ia;
+                uint64_t key = (((uint64_t)(uint32_t)i) << 32) | (uint64_t)(uint32_t)j;
+                size_t slot = geo_pair_hash(key) & (ctx->capacity - 1u);
+                while (ctx->keys[slot] && ctx->keys[slot] != key)
+                    slot = (slot + 1u) & (ctx->capacity - 1u);
+                if (ctx->keys[slot]) continue;
+                if (used >= INT_MAX) goto no_cache; /* CSR offsets are int. */
+                if ((double)(used + 1u) > 0.7 * (double)ctx->capacity) {
+                    if (!geo_pair_rehash(ctx)) goto no_cache;
+                    slot = geo_pair_hash(key) & (ctx->capacity - 1u);
+                    while (ctx->keys[slot]) slot = (slot + 1u) & (ctx->capacity - 1u);
                 }
-                if (ia0 == ib0) continue;
-                i = ia0 < ib0 ? ia0 : ib0;
-                j = ia0 < ib0 ? ib0 : ia0;
-                key = (((uint64_t) (uint32_t) i) << 32) |
-                      ((uint64_t) (uint32_t) j);
-
-                if ((used + 1u) * 10u > capacity * 7u)
-                    geo_pair_rehash(&keys, &values, &capacity);
-
-                slot = geo_pair_hash(key) & (capacity - 1u);
-                while (keys[slot] != 0 && keys[slot] != key)
-                    slot = (slot + 1u) & (capacity - 1u);
-
-                if (keys[slot] == 0) {
-                    double zi = ndim == 3 ? cc[i + (R_xlen_t) 2 * nobs] : 0.0;
-                    double zj = ndim == 3 ? cc[j + (R_xlen_t) 2 * nobs] : 0.0;
-                    double dis = dist(type,
-                                      cc[i], cc[j],
-                                      cc[i + nobs], cc[j + nobs],
-                                      zi, zj, radius);
-                    double dit = use_time ? fabs(ttimes[i] - ttimes[j]) : 0.0;
-                    keys[slot] = key;
-                    values[slot] = CorFct(&cormod, dis, dit, (double *) par, 0, 0);
-                    if (!R_FINITE(values[slot])) {
-                        R_Free(keys); R_Free(values);
-                        error("GeoModels pair cache produced a non-finite correlation");
-                    }
-                    ++used;
-                }
+                const double zi = ndim == 3 ? cc[i + (R_xlen_t)2 * nobs] : 0.0;
+                const double zj = ndim == 3 ? cc[j + (R_xlen_t)2 * nobs] : 0.0;
+                double dis = dist(type, cc[i], cc[j], cc[(R_xlen_t)i+nobs], cc[(R_xlen_t)j+nobs], zi, zj, radius);
+                double dit = use_time ? fabs(ttimes[i] - ttimes[j]) : 0.0;
+                double rho = CorFct(&cormod, dis, dit, (double *)par, 0, 0);
+                if (!R_FINITE(rho)) error("GeoModels pair cache produced a non-finite correlation");
+                ctx->keys[slot] = key; ctx->values[slot] = rho; ++used;
             }
         }
     }
-
-    entries = (GeoPairEntry *) R_Calloc(used > 0 ? used : 1u, GeoPairEntry);
-    e = 0;
-    for (slot = 0; slot < capacity; ++slot) {
-        if (keys[slot] != 0) {
-            entries[e].key = keys[slot];
-            entries[e].rho = values[slot];
-            ++e;
+    if (used > SIZE_MAX / sizeof(GeoPairEntry) ||
+        !geo_pair_budget_ok(ctx, (double)(sizeof(uint64_t) + sizeof(double)) * ctx->capacity +
+                                  (double)sizeof(GeoPairEntry) * used) ||
+        !geo_pair_budget_ok(ctx, (double)(sizeof(GeoPairEntry) + sizeof(int) + sizeof(double)) * used +
+                                  sizeof(int) * ((double)nobs + 1.0))) goto no_cache;
+    ctx->entries = (GeoPairEntry *)calloc(used ? used : 1u, sizeof(GeoPairEntry));
+    if (!ctx->entries) goto no_cache;
+    size_t e = 0;
+    for (size_t slot = 0; slot < ctx->capacity; ++slot) {
+        if ((slot & 65535u) == 0) R_CheckUserInterrupt();
+        if (ctx->keys[slot]) {
+            ctx->entries[e].key = ctx->keys[slot];
+            ctx->entries[e++].rho = ctx->values[slot];
         }
     }
-    qsort(entries, used, sizeof(GeoPairEntry), geo_pair_compare);
+    /* Release the hash before sorting and allocating the CSR output. */
+    free(ctx->keys); ctx->keys = NULL;
+    free(ctx->values); ctx->values = NULL;
+    R_CheckUserInterrupt();
+    qsort(ctx->entries, used, sizeof(GeoPairEntry), geo_pair_compare);
+    R_CheckUserInterrupt();
 
-    PROTECT(row_ptr = allocVector(INTSXP, (R_xlen_t) nobs + 1)); nprotect++;
-    PROTECT(col_idx = allocVector(INTSXP, (R_xlen_t) used)); nprotect++;
-    PROTECT(rho_out = allocVector(REALSXP, (R_xlen_t) used)); nprotect++;
-    rp = INTEGER(row_ptr);
-    ci = INTEGER(col_idx);
-    rv = REAL(rho_out);
-    memset(rp, 0, ((size_t) nobs + 1u) * sizeof(int));
-
-    for (e = 0; e < (R_xlen_t) used; ++e) {
-        int i = (int) (entries[e].key >> 32);
+    SEXP row_ptr, col_idx, rho_out, ans, names;
+    PROTECT(row_ptr = allocVector(INTSXP, (R_xlen_t)nobs + 1)); nprotect++;
+    PROTECT(col_idx = allocVector(INTSXP, (R_xlen_t)used)); nprotect++;
+    PROTECT(rho_out = allocVector(REALSXP, (R_xlen_t)used)); nprotect++;
+    int *rp = INTEGER(row_ptr), *ci = INTEGER(col_idx);
+    double *rv = REAL(rho_out);
+    memset(rp, 0, ((size_t)nobs + 1u) * sizeof(int));
+    for (e = 0; e < used; ++e) {
+        if ((e & 65535u) == 0) R_CheckUserInterrupt();
+        int i = (int)(ctx->entries[e].key >> 32);
         rp[i + 1]++;
-        ci[e] = (int) (entries[e].key & UINT64_C(0xffffffff));
-        rv[e] = entries[e].rho;
+        ci[e] = (int)(ctx->entries[e].key & UINT64_C(0xffffffff));
+        rv[e] = ctx->entries[e].rho;
     }
     for (int i = 0; i < nobs; ++i) rp[i + 1] += rp[i];
+    free(ctx->entries); ctx->entries = NULL;
 
-    R_Free(entries);
-    R_Free(keys);
-    R_Free(values);
-
-    PROTECT(ans = allocVector(VECSXP, 5)); nprotect++;
-    PROTECT(names = allocVector(STRSXP, 5)); nprotect++;
-    SET_VECTOR_ELT(ans, 0, row_ptr);
-    SET_VECTOR_ELT(ans, 1, col_idx);
-    SET_VECTOR_ELT(ans, 2, rho_out);
-    SET_VECTOR_ELT(ans, 3, ScalarReal(total_occ));
-    SET_VECTOR_ELT(ans, 4, ScalarReal((double) used));
-    SET_STRING_ELT(names, 0, mkChar("row_ptr"));
-    SET_STRING_ELT(names, 1, mkChar("col_idx"));
-    SET_STRING_ELT(names, 2, mkChar("rho"));
-    SET_STRING_ELT(names, 3, mkChar("total_pair_occurrences"));
-    SET_STRING_ELT(names, 4, mkChar("unique_pairs"));
+    PROTECT(ans = allocVector(VECSXP, 7)); nprotect++;
+    PROTECT(names = allocVector(STRSXP, 7)); nprotect++;
+    SET_VECTOR_ELT(ans, 0, row_ptr); SET_VECTOR_ELT(ans, 1, col_idx); SET_VECTOR_ELT(ans, 2, rho_out);
+    SET_VECTOR_ELT(ans, 3, ScalarReal(total_occ)); SET_VECTOR_ELT(ans, 4, ScalarReal((double)used));
+    SET_VECTOR_ELT(ans, 5, ScalarReal(ctx->peak)); SET_VECTOR_ELT(ans, 6, ScalarReal(ctx->budget));
+    const char *nm[] = {"row_ptr", "col_idx", "rho", "total_pair_occurrences", "unique_pairs", "peak_bytes", "budget_bytes"};
+    for (int i = 0; i < 7; ++i) SET_STRING_ELT(names, i, mkChar(nm[i]));
     setAttrib(ans, R_NamesSymbol, names);
-
     UNPROTECT(nprotect);
     return ans;
+
+no_cache:
+    UNPROTECT(nprotect);
+    return R_NilValue;
+}
+
+static SEXP geo_build_pair_cache(SEXP neighborhoods, SEXP coords, SEXP times,
+                                 SEXP cormod, SEXP par, SEXP type, SEXP radius)
+{
+    GeoPairBuildContext ctx = {0};
+    ctx.neighborhoods = neighborhoods; ctx.coords = coords; ctx.times = times;
+    ctx.cormod = cormod; ctx.par = par; ctx.type = type; ctx.radius = radius;
+    return R_ExecWithCleanup(geo_build_pair_cache_body, &ctx, geo_pair_cleanup, &ctx);
 }
 
 SEXP GeoBuildSpatialPairCache(SEXP neighborhoods, SEXP coords,
@@ -264,16 +288,23 @@ SEXP GeoPairCachePacked(SEXP indices, SEXP row_ptr, SEXP col_idx, SEXP rho)
 {
     SEXP out;
     R_xlen_t k = XLENGTH(indices), npairs, h = 0;
-    const int *rp = INTEGER(row_ptr), *ci = INTEGER(col_idx);
-    const double *rv = REAL(rho);
-    int nrows = LENGTH(row_ptr) - 1;
+    const int *rp, *ci;
+    const double *rv;
+    int nrows;
     R_xlen_t jloc, iloc;
 
     if (TYPEOF(row_ptr) != INTSXP || TYPEOF(col_idx) != INTSXP ||
-        TYPEOF(rho) != REALSXP || XLENGTH(col_idx) != XLENGTH(rho))
+        TYPEOF(rho) != REALSXP || XLENGTH(col_idx) != XLENGTH(rho) ||
+        XLENGTH(row_ptr) < 2 || XLENGTH(row_ptr) > INT_MAX || XLENGTH(rho) > INT_MAX)
         error("GeoModels pair cache has an invalid internal representation");
 
-    npairs = k > 1 ? k * (k - 1) / 2 : 0;
+    rp = INTEGER(row_ptr); ci = INTEGER(col_idx); rv = REAL(rho);
+    nrows = LENGTH(row_ptr) - 1;
+    if (rp[0] != 0 || rp[nrows] != XLENGTH(rho))
+        error("GeoModels pair cache has invalid CSR offsets");
+    if ((double)k * (double)(k - 1) / 2.0 > R_XLEN_T_MAX)
+        error("GeoModels pair cache lookup is too large");
+    npairs = k > 1 ? (k / 2) * (k - 1) + (k % 2) * ((k - 1) / 2) : 0;
     PROTECT(out = allocVector(REALSXP, npairs));
 
     for (jloc = 0; jloc + 1 < k; ++jloc) {
@@ -291,6 +322,8 @@ SEXP GeoPairCachePacked(SEXP indices, SEXP row_ptr, SEXP col_idx, SEXP rho)
             }
             i = ia < ja ? ia : ja;
             j = ia < ja ? ja : ia;
+            if (rp[i] < 0 || rp[i + 1] < rp[i] || rp[i + 1] > XLENGTH(rho))
+                error("GeoModels pair cache has invalid CSR offsets");
             lo = rp[i];
             hi = rp[i + 1] - 1;
             while (lo <= hi) {
@@ -351,6 +384,7 @@ SEXP GeoPairCrossCorrelation(SEXP indices, SEXP coords, SEXP times_s,
     ll = REAL(loc_r);
     par = REAL(par_r);
     cormod = asInteger(cormod_s);
+    geo_validate_corr_buffer(cormod, par_r);
     type = asInteger(type_s);
     radius = asReal(radius_s);
     pred_time = asReal(pred_time_s);
@@ -366,7 +400,7 @@ SEXP GeoPairCrossCorrelation(SEXP indices, SEXP coords, SEXP times_s,
             error("GeoModels pair cross-correlation received an invalid observation index");
         zi = ndim == 3 ? cc[i + (R_xlen_t) 2 * nobs] : 0.0;
         zl = ndim == 3 ? ll[2] : 0.0;
-        dis = dist(type, cc[i], ll[0], cc[i + nobs], ll[1], zi, zl, radius);
+        dis = dist(type, cc[i], ll[0], cc[(R_xlen_t)i + nobs], ll[1], zi, zl, radius);
         dit = use_time ? fabs(ttimes[i] - pred_time) : 0.0;
         val = CorFct(&cormod, dis, dit, (double *) par, 0, 0);
         if (!R_FINITE(val))

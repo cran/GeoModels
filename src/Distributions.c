@@ -94,7 +94,6 @@ double poch(double a, double m)
 
 
 
-
 /*for bivariate t distributions*/
 double A[] = {
     8.11614167470508450300E-4,
@@ -203,7 +202,6 @@ double biv_sinh(double corr,double zi,double zj,double mi,double mj,double skew,
   double lp = biv_log_sas(corr, zi, zj, mi, mj, skew, tail, vari);
   return (lp == -INFINITY) ? 0.0 : exp(lp);
 }
-
 
 
 
@@ -499,25 +497,7 @@ static R_INLINE double pg_exp_log_signed(double logabs, int sign)
     return sign < 0 ? -exp(logabs) : exp(logabs);
 }
 
-static R_INLINE double pg_signed_logdiff(double logpos, double logneg)
-{
-    if (ISNAN(logpos) || ISNAN(logneg)) return R_NaN;
-    if (logpos == R_NegInf && logneg == R_NegInf) return 0.0;
-    if (logpos == R_NegInf) return pg_exp_log_signed(logneg, -1);
-    if (logneg == R_NegInf) return pg_exp_log_signed(logpos, +1);
-    if (!R_FINITE(logpos) || !R_FINITE(logneg)) return R_NaN;
-    if (logpos == logneg) return 0.0;
-    if (logpos > logneg) {
-        const double u = -expm1(logneg - logpos);
-        if (!(u > 0.0) || !R_FINITE(u)) return R_NaN;
-        return pg_exp_log_signed(logpos + log(u), +1);
-    }
-    {
-        const double u = -expm1(logpos - logneg);
-        if (!(u > 0.0) || !R_FINITE(u)) return R_NaN;
-        return pg_exp_log_signed(logneg + log(u), -1);
-    }
-}
+
 
 /* q-sequence: I_w(p,q+l), B(p,q+l), l=0,1,... . */
 typedef struct {
@@ -970,6 +950,183 @@ static double pem_corr_corrected_core(double corr, double mean_i,
     return fmax2(0.0, fmin2(1.0, result));
 }
 
+
+/* Non-stationary PEM correlation from the simplified form of Theorem 5.1.
+ *
+ * Let q=rho^2, d=1-q, nu_i=kappa/mu_i, nu_j=kappa/mu_j, and define
+ *
+ *   A = d*nu_i*nu_j + nu_i + nu_j + 2,
+ *   K = {A + sqrt[A^2-4(1+nu_i)(1+nu_j)]}/2,
+ *   alpha = (1+nu_j)/K, beta = (1+nu_i)/K.
+ *
+ * Then
+ *
+ *   rho_M = q [ sqrt{(1+nu_i)(1+nu_j)}/K
+ *             + d*nu_i*nu_j/(kappa*sqrt{(1+nu_i)(1+nu_j)})
+ *               S_kappa(alpha,beta) ],
+ *
+ * where
+ *
+ *   S_kappa(alpha,beta)
+ *     = sum_{h>=1} I_alpha(h,kappa) I_beta(h,kappa).
+ *
+ * This removes the outer Erlang-mixture sum used by the previous corrected
+ * evaluator.  The beta tails are advanced by the existing stable p-sequence
+ * recurrence, with periodic pbeta re-anchoring.  For kappa=1 and kappa=2 the
+ * series is evaluated in closed form.  R_NaN means "use the legacy positive
+ * double-series fallback".
+ */
+static double pem_corr_nonstationary_single_series(double corr,
+                                                    double mean_i,
+                                                    double mean_j,
+                                                    double kappa)
+{
+    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
+        !R_FINITE(kappa) || fabs(corr) > 1.0 + PG_PROB_TOL ||
+        mean_i <= MIN_MEAN_THRESHOLD || mean_j <= MIN_MEAN_THRESHOLD ||
+        kappa <= MIN_A_THRESHOLD)
+        return R_NaN;
+
+    if (fabs(corr) < MIN_CORRELATION_THRESHOLD) return 0.0;
+    if (fabs(corr) >= 1.0 - RHO_EPS)
+        corr = copysign(1.0 - RHO_EPS, corr);
+
+    if (fmax2(mean_i, mean_j) / kappa <= PG_POISSON_REL_TOL) {
+        const double out = corr_pois(corr, mean_i, mean_j);
+        return R_FINITE(out) ? fmax2(0.0, fmin2(1.0, out)) : R_NaN;
+    }
+
+    const double q = corr * corr;
+    const double d = 1.0 - q;
+    const double nu_i = kappa / mean_i;
+    const double nu_j = kappa / mean_j;
+    if (!(q > 0.0 && q < 1.0) || !(d > 0.0) ||
+        !R_FINITE(nu_i) || !R_FINITE(nu_j) ||
+        !(nu_i > 0.0) || !(nu_j > 0.0))
+        return R_NaN;
+
+    const double B = 1.0 + nu_j;
+    const double C = 1.0 + nu_i;
+    const double uv = nu_i * nu_j;
+    const double A = B + C + d * uv;
+
+    /* Algebraically identical to A*A-4*B*C, but non-negative by
+       construction and much safer when A is close to 2*sqrt(B*C). */
+    const double BCdiff = B - C;
+    const double disc = BCdiff * BCdiff +
+                        d * uv * (2.0 * (B + C) + d * uv);
+    if (!R_FINITE(A) || !R_FINITE(disc) || disc < 0.0)
+        return R_NaN;
+
+    const double K = 0.5 * (A + sqrt(disc));
+    if (!R_FINITE(K) || !(K > 0.0)) return R_NaN;
+
+    const double alpha = B / K;
+    const double beta = C / K;
+    if (!(alpha > 0.0 && alpha < 1.0) ||
+        !(beta > 0.0 && beta < 1.0))
+        return R_NaN;
+
+    const double sqrtD = sqrt(B * C);
+    if (!R_FINITE(sqrtD) || !(sqrtD > 0.0)) return R_NaN;
+
+    double S = R_NaN;
+
+    if (fabs(kappa - 1.0) <= 32.0 * DBL_EPSILON) {
+        const double x = alpha * beta;
+        const double den = 1.0 - x;
+        if (!(x >= 0.0 && x < 1.0) || !(den > 0.0)) return R_NaN;
+        S = x / den;
+    } else if (fabs(kappa - 2.0) <= 64.0 * DBL_EPSILON) {
+        const double x = alpha * beta;
+        const double den = 1.0 - x;
+        if (!(x >= 0.0 && x < 1.0) || !(den > 0.0)) return R_NaN;
+        const double den2 = den * den;
+        const double den3 = den2 * den;
+        S = x / den +
+            (2.0 - alpha - beta) * x / den2 +
+            (1.0 - alpha) * (1.0 - beta) * x * (1.0 + x) / den3;
+    } else {
+        PGBetaPSeq seq_i, seq_j;
+        if (!pg_beta_pseq_init(&seq_i, 1.0, kappa, alpha) ||
+            !pg_beta_pseq_init(&seq_j, 1.0, kappa, beta))
+            return R_NaN;
+
+        KahanSum total;
+        kahan_init(&total);
+        const double asym_ratio = alpha * beta;
+        double prev_term = R_NaN;
+        int quiet = 0;
+        int converged = 0;
+
+        for (int h = 1; h <= PEM_CORR_MAX_OUTER; ++h) {
+            const double li = seq_i.logI;
+            const double lj = seq_j.logI;
+            if (ISNAN(li) || ISNAN(lj)) return R_NaN;
+
+            double term = 0.0;
+            if (li != R_NegInf && lj != R_NegInf) {
+                const double lt = li + lj;
+                if (ISNAN(lt) || lt > 64.0 * DBL_EPSILON) return R_NaN;
+                term = (lt < -745.0) ? 0.0 :
+                       ((lt > 0.0) ? 1.0 : exp(lt));
+            }
+            if (!R_FINITE(term) || term < 0.0) return R_NaN;
+
+            kahan_add(&total, term);
+
+            if (term == 0.0) {
+                converged = 1;
+                break;
+            }
+
+            if (h > 8 && R_FINITE(prev_term) && prev_term > 0.0 &&
+                term >= 0.0 && term <= prev_term) {
+                const double ratio = term / prev_term;
+                double rbound = fmax2(ratio, asym_ratio);
+                if (rbound < 0.0) rbound = 0.0;
+                if (rbound > 1.0 - 16.0 * DBL_EPSILON)
+                    rbound = 1.0 - 16.0 * DBL_EPSILON;
+
+                const double rem = (term == 0.0) ? 0.0 :
+                                   term * rbound / (1.0 - rbound);
+                const double scale = fmax2(1e-300, fabs(total.sum));
+                if (R_FINITE(rem) && rem <= PG_SUM_TOL * scale) {
+                    if (++quiet >= PG_MIN_QUIET) {
+                        converged = 1;
+                        break;
+                    }
+                } else {
+                    quiet = 0;
+                }
+            } else {
+                quiet = 0;
+            }
+
+            prev_term = term;
+            if (h < PEM_CORR_MAX_OUTER) {
+                if (!pg_beta_pseq_advance(&seq_i) ||
+                    !pg_beta_pseq_advance(&seq_j))
+                    return R_NaN;
+            }
+        }
+
+        if (!converged || !R_FINITE(total.sum) || total.sum < 0.0)
+            return R_NaN;
+        S = total.sum;
+    }
+
+    if (!R_FINITE(S) || S < 0.0) return R_NaN;
+
+    const double result = q *
+        (sqrtD / K + d * nu_i * nu_j * S / (kappa * sqrtD));
+    if (!R_FINITE(result) || result < -PG_PROB_TOL ||
+        result > 1.0 + PG_PROB_TOL)
+        return R_NaN;
+
+    return fmax2(0.0, fmin2(1.0, result));
+}
+
 /* Stable special evaluation for kappa=3/2 in the stationary PEM
  * correlation.  In CorrPGs the hypergeometric factor is
  *
@@ -1154,9 +1311,16 @@ double CorrPGs(double corr, double mean, double a)
     return pem_corr_stationary_eval(corr, mean, a);
 }
 
-/* Non-stationary corrected Theorem 5.1. */
+/* Non-stationary Theorem 5.1.  Keep the historical function name to avoid
+ * changing callers.  The new single-series representation is the active
+ * path; the previous positive double-series evaluator is retained only as a
+ * robust fallback for extreme numerical cases. */
 double CorrPGns_AdaptiveBlocks(double corr, double mean_i, double mean_j, double a)
 {
+    pg_set_status(PG_STATUS_OK);
+    const double out =
+        pem_corr_nonstationary_single_series(corr, mean_i, mean_j, a);
+    if (R_FINITE(out)) return out;
     return pem_corr_corrected_core(corr, mean_i, mean_j, a, 0);
 }
 
@@ -1560,17 +1724,27 @@ double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, 
     return dens;
 }
 
-double log_biv_Norm(double corr, double zi, double zj, double mi, double mj, double vari, double nugget) {
-    double u = zi - mi;
-    double v = zj - mj;
-    double u2 = u * u;
-    double v2 = v * v;
-    double s1 = vari;
-    double s12 = s1 * corr * (1 - nugget);
-    double det = s1 * s1 - s12 * s12;
-    double dens = -0.5 * (2 * log(2 * M_PI) + log(det) + (s1 * (u2 + v2) - 2 * s12 * u * v) / det);
-    
-    return dens;
+double log_biv_Norm(double corr, double zi, double zj, double mi, double mj,
+                    double vari, double nugget)
+{
+    const double r = corr * (1.0 - nugget);
+    if (!isfinite(vari) || vari <= 0.0 || !isfinite(r) || fabs(r) >= 1.0 ||
+        !isfinite(nugget) || nugget < 0.0 || nugget > 1.0)
+        return NAN;
+
+    const double sd = sqrt(vari);
+    double u = zi - mi, v = zj - mj;
+    /* Avoid overflowing an otherwise representable standardized residual. */
+    u = isfinite(u) ? u / sd : zi / sd - mi / sd;
+    v = isfinite(v) ? v / sd : zj / sd - mj / sd;
+    /* Orthogonal coordinates give a sum of nonnegative terms, avoiding
+       subtraction of nearly equal terms when |r| is close to one. */
+    const double inv_sqrt2 = 0.70710678118654752440;
+    const double zp = (u * inv_sqrt2 + v * inv_sqrt2) / sqrt(1.0 + r);
+    const double zm = (u * inv_sqrt2 - v * inv_sqrt2) / sqrt(1.0 - r);
+    const double quadratic = zp * zp + zm * zm;
+    const double log_det = 2.0 * log(vari) + log1p(-r) + log1p(r);
+    return -0.5 * (2.0 * log(2.0 * M_PI) + log_det + quadratic);
 }
 
 
@@ -2178,7 +2352,6 @@ static double log_aux_biv_binomneg_simple(
 
 
 
-
 /**********************************************************************/
 /* Stable log-pmf dispatcher                                           */
 /**********************************************************************/
@@ -2406,7 +2579,6 @@ double biv_binom222(int n1, int n2, int u, int v, double p1, double p2, double p
 
 
 
-
 // bivariate pois-binomial 
 double biv_poisbin (int NN, int u, int  v, double p01,double p10,double p11)
 {
@@ -2461,7 +2633,6 @@ double pbneginflated(double z, int N,double m, double p)
  else     res=p + (1 - p) * ans;
  return(res);
 }
-
 
 
 
@@ -2706,8 +2877,6 @@ double appellF4(double a, double b, double c, double d, double x, double y)
     }  
     return sum;
 }
-
-
 
 
 
@@ -4200,7 +4369,6 @@ static double hyp2F1_trunc_recur_general(double a1, int m, double c, double z) {
 
 
 
-
 /********************************************************************/
 /********* poisson gamma bivariate distribution *********************/
 /********************************************************************/
@@ -4289,11 +4457,7 @@ static R_INLINE int pg_shape_is_integer(double a)
     return fabs(a - nearbyint(a)) <= 1e-12 * fmax2(1.0, fabs(a));
 }
 
-static R_INLINE double pg_log_poch(double base, double order)
-{
-    if (base <= 0.0 || base + order <= 0.0) return R_NaN;
-    return lgammafn(base + order) - lgammafn(base);
-}
+
 
 static R_INLINE double pg_hyp_bparam(double a1, double bpar, double c,
                                      double z, int mpoly)
@@ -4527,63 +4691,7 @@ static R_INLINE double pg_hyp_bseq_get(PGHypBSeq *st, int l1)
     return val;
 }
 
-/*
- * Exact H2 elimination for PGrt.
- *
- * For p>0, q>0, w=1/(1+y),
- *
- *   2F1~(1,1-q;p+1;-1/y)
- *     = (1-w)^(1-q) w^(-p) B_w(p,q) / Gamma(p),
- *
- * and B_w(p,q)=B(p,q) I_w(p,q).  In the PGrt coefficients this
- * cancels the second regularizing Gamma factor and one of the two
- * Pochhammer factors exactly.  Only the regularized incomplete beta
- * I_w(p,q) remains.  Along l1, q=a+l1 and
- *
- *   I_w(p,q+1) = I_w(p,q) + Delta_q,
- *   Delta_{q+1}/Delta_q = (1-w)(p+q)/(q+1).
- *
- * We keep I and Delta in log scale.  Thus each row needs one pbeta()
- * seed and all following l1 values use only elementary operations.
- */
-/* Beta recurrences and log-space helpers are defined with the PEM correlation
- * helpers above and reused here. */
 
-/*
- * Positive Gauss factor in log scale for the A=1 PEM kernels.
- *
- * For p=C-1>0, q=shape+l1>0, z=-1/y<0 and w=1/(1+y),
- *
- *   2F1(1,1-q;p+1;-1/y)
- *     = p (1-w)^(1-q) w^(-p) B_w(p,q).
- *
- * With B_w=B*I_w and I_w supplied by PGBetaBSeq this gives a
- * completely positive log-scale representation.  It is used by PGrr to
- * avoid overflow of the individual hypergeometric factors before their
- * cancellation with the series coefficient.
- */
-static R_INLINE double pg_log_hyp1_beta(PGBetaBSeq *st, int l1)
-{
-    const double q = st->shape + (double)l1;
-    const double logI = pg_beta_bseq_get(st, l1);
-    if (!(st->p > 0.0) || !(q > 0.0) || ISNAN(logI)) return R_NaN;
-    if (logI == R_NegInf) return R_NegInf;
-    return log(st->p) + (1.0 - q) * st->log1mw - st->p * st->logw +
-           st->logBeta + logI;
-}
-
-
-static R_INLINE double pg_term_h1_logbeta(double logcoef, double h1,
-                                           double logI)
-{
-    if (!R_FINITE(logcoef) || !R_FINITE(h1) || ISNAN(logI)) return R_NaN;
-    if (h1 == 0.0 || logI == R_NegInf) return 0.0;
-    const double la = logcoef + log(fabs(h1)) + logI;
-    if (ISNAN(la)) return R_NaN;
-    if (la < -745.0) return 0.0;
-    if (la > 700.0 || la == R_PosInf) return R_NaN;
-    return (h1 < 0.0 ? -1.0 : 1.0) * exp(la);
-}
 
 static R_INLINE double pg_finish_prob(double p)
 {
@@ -5106,631 +5214,6 @@ static double PGrt_positive(double corr, int n, int m,
     return pg_finish_prob(total.sum);
 }
 
-/* ------------------------------------------------------------------ */
-/* Case n = m = 0: equation (10).                                    */
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-/* Case n = m = 0: equation (10).                                    */
-/* ------------------------------------------------------------------ */
-double PG00(double corr, int r, int t, double mean_i, double mean_j, double a)
-{
-    (void)r; (void)t;
-    pg_set_status(PG_STATUS_OK);
-    const double rho2 = corr * corr;
-    const double x = a / mean_i;
-    const double y = a / mean_j;
-    if (!(rho2 > 0.0 && rho2 < 1.0) || !(x > 0.0) || !(y > 0.0))
-        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
-
-    /* After transforming both regularized Gauss factors to incomplete beta,
-       all large Gamma and scale factors cancel exactly:
-
-       S00=(1-rho2)^(a+1) sum_{k,l>=0} rho2^(k+l)
-             (a)_l/l! I_{wi}(k+1,a+l) I_{wj}(k+1,a+l). */
-    const double wi = 1.0 / (1.0 + x);
-    const double wj = 1.0 / (1.0 + y);
-    const double log_rho2 = log(rho2);
-    const double log1mr2 = log1p(-rho2);
-    const int stationary =
-        fabs(x - y) <= 1e-14 * fmax2(1.0, fmax2(x, y));
-
-    PGBetaPSeq pseq_i, pseq_j;
-    if (!pg_beta_pseq_init(&pseq_i, 1.0, a, wi) ||
-        (!stationary && !pg_beta_pseq_init(&pseq_j, 1.0, a, wj)))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    KahanSum total;
-    kahan_init(&total);
-    int quiet_k = 0;
-    int outer_converged = 0;
-    double logcoef_k0 = (a + 1.0) * log1mr2;
-
-    for (int k = 0; k < PG_MAX_OUTER; ++k) {
-        PGBetaBSeq bi, bj;
-        if (!pg_beta_bseq_from_pseq(&bi, &pseq_i) ||
-            (!stationary && !pg_beta_bseq_from_pseq(&bj, &pseq_j)))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-        KahanSum row;
-        kahan_init(&row);
-        int quiet_l = 0;
-        int row_converged = 0;
-        double logcoef = logcoef_k0;
-
-        for (int l = 0; l < PG_MAX_INNER; ++l) {
-            const double li = pg_beta_bseq_get(&bi, l);
-            const double lj = stationary ? li : pg_beta_bseq_get(&bj, l);
-            if (ISNAN(li) || ISNAN(lj))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-            const double logterm = (li == R_NegInf || lj == R_NegInf)
-                ? R_NegInf : logcoef + li + lj;
-            const double term = pg_exp_log_signed(logterm, +1);
-            if (!R_FINITE(term))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-            kahan_add(&row, term);
-
-            if (l > 10) {
-                const double scale = fmax2(1e-300, fabs(row.sum));
-                if (fabs(term) <= PG_SUM_TOL * scale) {
-                    if (++quiet_l >= PG_MIN_QUIET) {
-                        row_converged = 1;
-                        break;
-                    }
-                } else quiet_l = 0;
-            }
-
-            if (l + 1 < PG_MAX_INNER)
-                logcoef += log_rho2 + log(a + (double)l) -
-                           log((double)l + 1.0);
-        }
-        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
-
-        kahan_add(&total, row.sum);
-        if (k > 12) {
-            const double scale = fmax2(1e-300, fabs(total.sum));
-            if (fabs(row.sum) <= PG_SUM_TOL * scale) {
-                if (++quiet_k >= PG_MIN_QUIET) {
-                    outer_converged = 1;
-                    break;
-                }
-            } else quiet_k = 0;
-        }
-
-        if (k + 1 < PG_MAX_OUTER) {
-            logcoef_k0 += log_rho2;
-            if (!pg_beta_pseq_advance(&pseq_i) ||
-                (!stationary && !pg_beta_pseq_advance(&pseq_j)))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        }
-    }
-    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
-
-    const double logp0i = a * (log(x) - log1p(x));
-    const double logp0j = a * (log(y) - log1p(y));
-    KahanSum probability;
-    kahan_init(&probability);
-    kahan_add(&probability, -1.0);
-    kahan_add(&probability, exp(logp0i));
-    kahan_add(&probability, exp(logp0j));
-    kahan_add(&probability, total.sum);
-    return pg_finish_prob(probability.sum);
-}
-
-/* ------------------------------------------------------------------ */
-/* Case n >= 1, m = 0: equation (11).                                */
-/* ------------------------------------------------------------------ */
-double PGr0(double corr, int r, int t, double mean_i, double mean_j, double a)
-{
-    (void)t;
-    pg_set_status(PG_STATUS_OK);
-    const int b = r;
-    const double rho2 = corr * corr;
-    const double x = a / mean_i;
-    const double y = a / mean_j;
-    const double bx = 1.0 + x - rho2;
-    if (b < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
-        !(x > 0.0) || !(y > 0.0) || !(bx > 0.0))
-        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
-
-    const double log_rho2 = log(rho2);
-    const double log_x = log(x);
-    const double log1px = log1p(x);
-    const double z1 = -rho2 / bx;
-    const double w = 1.0 / (1.0 + y);
-    const int a_int = pg_shape_is_integer(a) ? (int)llround(a) : 0;
-
-    const double log_marg = pg_log_poch(a, (double)b) + a * log_x -
-                            lgammafn((double)b + 1.0) -
-                            ((double)b + a) * log1px;
-    const double log_pref = (a + (double)b) * log1p(-rho2) -
-                            (double)b * log(bx) - lgammafn(a) +
-                            a * (log_x - log1px);
-    if (!R_FINITE(log_marg) || !R_FINITE(log_pref))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    const double log_inner_base = log_x + log_rho2 - log1px;
-    const double log_outer_base = log_rho2 - log1px;
-    double logcoef_l0 = lgammafn(a + (double)b) -
-                        lgammafn((double)b + 1.0);
-    if (!R_FINITE(logcoef_l0))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    PGBetaPSeq pseq;
-    if (!pg_beta_pseq_init(&pseq, 1.0, a, w))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    KahanSum total;
-    kahan_init(&total);
-    int quiet_l = 0;
-    int outer_converged = 0;
-
-    for (int l = 0; l < PG_MAX_OUTER; ++l) {
-        const double c1 = (double)l + (double)b + 1.0;
-        PGHypBSeq hseq;
-        PGBetaBSeq bseq;
-        pg_hyp_bseq_init(&hseq, (double)b, a, c1, z1, a_int);
-        if (!pg_beta_bseq_from_pseq(&bseq, &pseq))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-        KahanSum row;
-        kahan_init(&row);
-        int quiet_l1 = 0;
-        int row_converged = 0;
-        double logcoef = logcoef_l0;
-
-        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
-            double h1 = pg_hyp_bseq_get(&hseq, l1);
-            const double logI = pg_beta_bseq_get(&bseq, l1);
-            if (!(h1 > 0.0) || !R_FINITE(h1)) {
-                const double bpar = 1.0 - (double)l1 - a;
-                h1 = pg_hyp_integral_seed((double)b, bpar, c1, z1);
-            }
-            if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-            const double term = pg_term_h1_logbeta(logcoef, h1, logI);
-            if (!R_FINITE(term))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-            kahan_add(&row, term);
-
-            if (l1 > 10) {
-                const double scale = fmax2(1e-300, fabs(row.sum));
-                if (fabs(term) <= PG_SUM_TOL * scale) {
-                    if (++quiet_l1 >= PG_MIN_QUIET) {
-                        row_converged = 1;
-                        break;
-                    }
-                } else quiet_l1 = 0;
-            }
-
-            if (l1 + 1 < PG_MAX_INNER) {
-                logcoef += log_inner_base +
-                           log((double)l1 + a + (double)l + (double)b) -
-                           log((double)l1 + 1.0);
-            }
-        }
-        if (!row_converged) return pg_fail(PG_STATUS_MAXITER);
-
-        kahan_add(&total, row.sum);
-        if (l > 12) {
-            const double scale = fmax2(1e-300, fabs(total.sum));
-            if (fabs(row.sum) <= PG_SUM_TOL * scale) {
-                if (++quiet_l >= PG_MIN_QUIET) {
-                    outer_converged = 1;
-                    break;
-                }
-            } else quiet_l = 0;
-        }
-
-        if (l + 1 < PG_MAX_OUTER) {
-            logcoef_l0 += log_outer_base +
-                          log(a + (double)b + (double)l) -
-                          log((double)b + (double)l + 1.0);
-            if (!pg_beta_pseq_advance(&pseq))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        }
-    }
-    if (!outer_converged) return pg_fail(PG_STATUS_MAXITER);
-    if (total.sum < -PG_PROB_TOL)
-        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
-
-    const double log_second = total.sum <= 0.0
-        ? R_NegInf : log_pref + log(total.sum);
-    return pg_finish_prob(pg_signed_logdiff(log_marg, log_second));
-}
-
-/* ------------------------------------------------------------------ */
-/* Case n = m >= 1: corrected equation (12), fused double series.    */
-/* ------------------------------------------------------------------ */
-double PGrr(double corr, int r, int t, double mean_i, double mean_j, double a)
-{
-    (void)t;
-    pg_set_status(PG_STATUS_OK);
-    const int n = r;
-    const double rho2 = corr * corr;
-    const double x = a / mean_i;
-    const double y = a / mean_j;
-    const double xy = x * y;
-    const double D = (1.0 + x) * (1.0 + y);
-    const double bxi = 1.0 + x - rho2;
-    const double byj = 1.0 + y - rho2;
-    if (n < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
-        !(x > 0.0) || !(y > 0.0) || !(bxi > 0.0) || !(byj > 0.0))
-        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
-
-    const double log_rho2 = log(rho2);
-    const double log_xy = log(xy);
-    const double log_D = log(D);
-    const double log1mr2 = log1p(-rho2);
-    const double wi0 = 1.0 / (1.0 + x);
-    const double wj0 = 1.0 / (1.0 + y);
-    const double wir = rho2 / (1.0 + x);
-    const double wjr = rho2 / (1.0 + y);
-    const int stationary =
-        fabs(x - y) <= 1e-14 * fmax2(1.0, fmax2(x, y));
-
-    /* The first row k and the second row s=k-1 have the same beta p and
-       the same inner coefficient ratio.  Evaluate them in one pass. */
-    PGBetaPSeq psi0, psj0, psir, psjr;
-    if (!pg_beta_pseq_init(&psi0, (double)n, a, wi0) ||
-        !pg_beta_pseq_init(&psir, (double)n, a, wir) ||
-        (!stationary &&
-         (!pg_beta_pseq_init(&psj0, (double)n, a, wj0) ||
-          !pg_beta_pseq_init(&psjr, (double)n, a, wjr))))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    double logcoef1_row =
-        ((double)n + a) * log1mr2 + a * log_xy -
-        ((double)n + a) * log_D +
-        2.0 * (lgammafn(a + (double)n) - lgammafn(a)) -
-        2.0 * lgammafn((double)n + 1.0);
-    double logcoef2_row =
-        ((double)n + a + 1.0) * log1mr2 + (a - 1.0) * log_xy -
-        ((double)n + a) * log_D +
-        2.0 * (lgammafn(a + (double)n + 1.0) - lgammafn(a)) -
-        2.0 * lgammafn((double)n + 2.0);
-    if (!R_FINITE(logcoef1_row) || !R_FINITE(logcoef2_row))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    KahanSum first, second;
-    kahan_init(&first);
-    kahan_init(&second);
-    int quiet_first = 0, quiet_second = 0;
-    int active_first = 1, active_second = 1;
-    int converged_first = 0, converged_second = 0;
-
-    for (int qrow = 0; qrow <= PG_MAX_OUTER &&
-                         (active_first || active_second); ++qrow) {
-        const int do_first = active_first && qrow < PG_MAX_OUTER;
-        const int do_second = active_second && qrow >= 1 &&
-                              qrow <= PG_MAX_OUTER;
-        if (!do_first && !do_second) break;
-
-        PGBetaBSeq bi0, bj0, bir, bjr;
-        if (!pg_beta_bseq_from_pseq(&bi0, &psi0) ||
-            (!stationary && !pg_beta_bseq_from_pseq(&bj0, &psj0)))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        if (do_first &&
-            (!pg_beta_bseq_from_pseq(&bir, &psir) ||
-             (!stationary && !pg_beta_bseq_from_pseq(&bjr, &psjr))))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-        KahanSum row1, row2;
-        kahan_init(&row1);
-        kahan_init(&row2);
-        int quiet_l1_1 = 0, quiet_l1_2 = 0;
-        int row1_done = !do_first, row2_done = !do_second;
-        double lc1 = logcoef1_row;
-        double lc2 = logcoef2_row;
-
-        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
-            const double lhi0 = pg_log_hyp1_beta(&bi0, l1);
-            const double lhj0 = stationary ? lhi0 :
-                pg_log_hyp1_beta(&bj0, l1);
-            if (ISNAN(lhi0) || ISNAN(lhj0))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-            if (do_first && !row1_done) {
-                const double lhir = pg_log_hyp1_beta(&bir, l1);
-                const double lhjr = stationary ? lhir :
-                    pg_log_hyp1_beta(&bjr, l1);
-                if (ISNAN(lhir) || ISNAN(lhjr))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-                const double logneg = lc1 + log(D / xy) + lhi0 + lhj0;
-                const double logpos1 = lc1 + log(D / (bxi * y)) + lhir + lhj0;
-                const double logpos2 = lc1 + log(D / (x * byj)) + lhi0 + lhjr;
-                const double term = pg_signed_logdiff(
-                    pg_logspace_add_pos(logpos1, logpos2), logneg);
-                if (!R_FINITE(term))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                kahan_add(&row1, term);
-                if (l1 > 10) {
-                    const double scale = fmax2(1e-300, fabs(row1.sum));
-                    if (fabs(term) <= PG_SUM_TOL * scale) {
-                        if (++quiet_l1_1 >= PG_MIN_QUIET) row1_done = 1;
-                    } else quiet_l1_1 = 0;
-                }
-            }
-
-            if (do_second && !row2_done) {
-                const double term = pg_exp_log_signed(lc2 + lhi0 + lhj0, +1);
-                if (!R_FINITE(term))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                kahan_add(&row2, term);
-                if (l1 > 10) {
-                    const double scale = fmax2(1e-300, fabs(row2.sum));
-                    if (fabs(term) <= PG_SUM_TOL * scale) {
-                        if (++quiet_l1_2 >= PG_MIN_QUIET) row2_done = 1;
-                    } else quiet_l1_2 = 0;
-                }
-            }
-
-            if (row1_done && row2_done) break;
-            if (l1 + 1 < PG_MAX_INNER) {
-                const double u = (double)l1;
-                const double inc = log_xy + log_rho2 - log_D +
-                    2.0 * log(a + (double)n + (double)qrow + u) -
-                    log(a + u) - log(u + 1.0);
-                lc1 += inc;
-                lc2 += inc;
-            }
-        }
-        if (!row1_done || !row2_done) return pg_fail(PG_STATUS_MAXITER);
-
-        if (do_first) {
-            kahan_add(&first, row1.sum);
-            if (qrow > 12) {
-                const double scale = fmax2(1e-300, fabs(first.sum));
-                if (fabs(row1.sum) <= PG_SUM_TOL * scale) {
-                    if (++quiet_first >= PG_MIN_QUIET) {
-                        active_first = 0;
-                        converged_first = 1;
-                    }
-                } else quiet_first = 0;
-            }
-        }
-        if (do_second) {
-            const int ss = qrow - 1;
-            kahan_add(&second, row2.sum);
-            if (ss > 12) {
-                const double scale = fmax2(1e-300, fabs(second.sum));
-                if (fabs(row2.sum) <= PG_SUM_TOL * scale) {
-                    if (++quiet_second >= PG_MIN_QUIET) {
-                        active_second = 0;
-                        converged_second = 1;
-                    }
-                } else quiet_second = 0;
-            }
-        }
-
-        if (qrow < PG_MAX_OUTER) {
-            if (qrow + 1 < PG_MAX_OUTER) {
-                const double k = (double)qrow;
-                logcoef1_row += log_rho2 - log_D +
-                    log((double)n + k) - log(k + 1.0) +
-                    2.0 * log(a + (double)n + k) -
-                    2.0 * log((double)n + k + 1.0);
-            }
-            if (qrow >= 1 && qrow < PG_MAX_OUTER) {
-                const double ss = (double)(qrow - 1);
-                logcoef2_row += log_rho2 - log_D +
-                    log((double)n + 1.0 + ss) - log(ss + 1.0) +
-                    2.0 * log(a + (double)n + ss + 1.0) -
-                    2.0 * log((double)n + ss + 2.0);
-            }
-            if (!pg_beta_pseq_advance(&psi0) ||
-                !pg_beta_pseq_advance(&psir) ||
-                (!stationary &&
-                 (!pg_beta_pseq_advance(&psj0) ||
-                  !pg_beta_pseq_advance(&psjr))))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        }
-    }
-
-    if (!converged_first || !converged_second)
-        return pg_fail(PG_STATUS_MAXITER);
-    return pg_finish_prob(first.sum + second.sum);
-}
-
-/* ------------------------------------------------------------------ */
-/* Case b > c >= 1: corrected equation (13), fused double series.    */
-/* ------------------------------------------------------------------ */
-static double PGrt_h2beta_core(double corr, int r, int t,
-                               double mean_i, double mean_j, double a)
-{
-    pg_set_status(PG_STATUS_OK);
-    const int b = r, c = t;
-    const double rho2 = corr * corr;
-    const double x = a / mean_i;
-    const double y = a / mean_j;
-    const double bx = 1.0 + x - rho2;
-    if (b <= c || c < 1 || !(rho2 > 0.0 && rho2 < 1.0) ||
-        !(x > 0.0) || !(y > 0.0) || !(bx > 0.0))
-        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
-
-    const double log_rho2 = log(rho2);
-    const double log_x = log(x);
-    const double log1px = log1p(x);
-    const double log1mr2 = log1p(-rho2);
-    const double z1 = -rho2 / bx;
-    const double w = 1.0 / (1.0 + y);
-    const int a_int = pg_shape_is_integer(a) ? (int)llround(a) : 0;
-
-    const double log_pref1 = ((double)b + a) * log1mr2 + a * log_x -
-                             ((double)b - (double)c + 1.0) * log(bx);
-    const double log_pref2 = ((double)b + a) * log1mr2 + a * log_x -
-                             ((double)b - (double)c) * log(bx);
-    double logcoef_l0 = pg_log_poch(a, (double)b) -
-                        ((double)c + a - 1.0) * log1px -
-                        lgammafn((double)b + 1.0);
-    double logcoef_s0 = pg_log_poch(a, (double)b) -
-                        ((double)c + a) * log1px -
-                        lgammafn((double)b + 1.0);
-    if (!R_FINITE(log_pref1) || !R_FINITE(log_pref2) ||
-        !R_FINITE(logcoef_l0) || !R_FINITE(logcoef_s0))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    PGBetaPSeq pseq;
-    if (!pg_beta_pseq_init(&pseq, (double)c, a, w))
-        return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-    KahanSum sum1, sum2;
-    kahan_init(&sum1);
-    kahan_init(&sum2);
-    int quiet_l = 0, quiet_s = 0;
-    int active_l = 1, active_s = 1;
-    int converged_l = 0, converged_s = 0;
-
-    for (int outer = 0; outer <= PG_PGRT_MAX_OUTER &&
-                            (active_l || active_s); ++outer) {
-        const int do_l = active_l && outer < PG_PGRT_MAX_OUTER;
-        const int do_s = active_s && outer >= 1 && outer <= PG_PGRT_MAX_OUTER;
-        if (!do_l && !do_s) break;
-
-        PGBetaBSeq bseq_l, bseq_s;
-        if (do_l && !pg_beta_bseq_from_pseq(&bseq_l, &pseq))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        if (do_s && !pg_beta_bseq_from_pseq(&bseq_s, &pseq))
-            return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-
-        PGHypBSeq hseq_l, hseq_s;
-        if (do_l)
-            pg_hyp_bseq_init(&hseq_l, (double)(b - c + 1), a,
-                             (double)outer + (double)b + 1.0, z1, a_int);
-        if (do_s)
-            pg_hyp_bseq_init(&hseq_s, (double)(b - c), a,
-                             (double)outer + (double)b, z1, a_int);
-
-        KahanSum row_l, row_s;
-        kahan_init(&row_l);
-        kahan_init(&row_s);
-        int ql = 0, qs = 0;
-        int done_l = !do_l, done_s = !do_s;
-        double lc_l = logcoef_l0, lc_s = logcoef_s0;
-
-        for (int l1 = 0; l1 < PG_MAX_INNER; ++l1) {
-            if (do_l && !done_l) {
-                double h1 = pg_hyp_bseq_get(&hseq_l, l1);
-                const double logI = pg_beta_bseq_get(&bseq_l, l1);
-                if (!(h1 > 0.0) || !R_FINITE(h1)) {
-                    h1 = pg_hyp_integral_seed((double)(b - c + 1),
-                        1.0 - (double)l1 - a,
-                        (double)outer + (double)b + 1.0, z1);
-                }
-                if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                const double term = pg_term_h1_logbeta(lc_l, h1, logI);
-                if (!R_FINITE(term))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                kahan_add(&row_l, term);
-                if (l1 > 10) {
-                    const double scale = fmax2(1e-300, fabs(row_l.sum));
-                    if (fabs(term) <= PG_SUM_TOL * scale) {
-                        if (++ql >= PG_MIN_QUIET) done_l = 1;
-                    } else ql = 0;
-                }
-            }
-
-            if (do_s && !done_s) {
-                double h1 = pg_hyp_bseq_get(&hseq_s, l1);
-                const double logI = pg_beta_bseq_get(&bseq_s, l1);
-                if (!(h1 > 0.0) || !R_FINITE(h1)) {
-                    h1 = pg_hyp_integral_seed((double)(b - c),
-                        1.0 - (double)l1 - a,
-                        (double)outer + (double)b, z1);
-                }
-                if (!(h1 >= 0.0) || !R_FINITE(h1) || ISNAN(logI))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                const double term = pg_term_h1_logbeta(lc_s, h1, logI);
-                if (!R_FINITE(term))
-                    return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-                kahan_add(&row_s, term);
-                if (l1 > 10) {
-                    const double scale = fmax2(1e-300, fabs(row_s.sum));
-                    if (fabs(term) <= PG_SUM_TOL * scale) {
-                        if (++qs >= PG_MIN_QUIET) done_s = 1;
-                    } else qs = 0;
-                }
-            }
-
-            if (done_l && done_s) break;
-            if (l1 + 1 < PG_MAX_INNER) {
-                const double u = (double)l1;
-                lc_l += log_x + log_rho2 - log1px +
-                        log(a + (double)b + (double)outer + u) -
-                        log(u + 1.0);
-                lc_s += log_x + log_rho2 - log1px +
-                        log(a + (double)b + (double)outer - 1.0 + u) -
-                        log(u + 1.0);
-            }
-        }
-        if (!done_l || !done_s) return pg_fail(PG_STATUS_MAXITER);
-
-        if (do_l) {
-            kahan_add(&sum1, row_l.sum);
-            if (outer > 12) {
-                const double scale = fmax2(1e-300, fabs(sum1.sum));
-                if (fabs(row_l.sum) <= PG_SUM_TOL * scale) {
-                    if (++quiet_l >= PG_MIN_QUIET) {
-                        active_l = 0;
-                        converged_l = 1;
-                    }
-                } else quiet_l = 0;
-            }
-        }
-        if (do_s) {
-            const int ss = outer - 1;
-            kahan_add(&sum2, row_s.sum);
-            if (ss > 12) {
-                const double scale = fmax2(1e-300, fabs(sum2.sum));
-                if (fabs(row_s.sum) <= PG_SUM_TOL * scale) {
-                    if (++quiet_s >= PG_MIN_QUIET) {
-                        active_s = 0;
-                        converged_s = 1;
-                    }
-                } else quiet_s = 0;
-            }
-        }
-
-        if (outer < PG_PGRT_MAX_OUTER) {
-            if (outer + 1 < PG_PGRT_MAX_OUTER) {
-                const double u = (double)outer;
-                logcoef_l0 += log_rho2 - log1px +
-                    log((double)c + u) - log(u + 1.0) +
-                    log(a + (double)b + u) -
-                    log((double)b + u + 1.0);
-            }
-            if (outer >= 1 && outer < PG_PGRT_MAX_OUTER) {
-                const double u = (double)(outer - 1);
-                logcoef_s0 += log_rho2 - log1px +
-                    log((double)c + 1.0 + u) - log(u + 1.0) +
-                    log(a + (double)b + u) -
-                    log((double)b + u + 1.0);
-            }
-            if (!pg_beta_pseq_advance(&pseq))
-                return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        }
-    }
-
-    if (!converged_l || !converged_s)
-        return pg_fail(PG_STATUS_MAXITER);
-    if (sum1.sum < -PG_PROB_TOL || sum2.sum < -PG_PROB_TOL)
-        return pg_fail(PG_STATUS_INVALID_PROBABILITY);
-    const double pos1 = fmax2(0.0, sum1.sum);
-    const double pos2 = fmax2(0.0, sum2.sum);
-    const double logA = pos1 == 0.0 ? R_NegInf :
-                        log_pref1 + log(pos1);
-    const double logB = pos2 == 0.0 ? R_NegInf :
-                        log_pref2 + log(pos2);
-    return pg_finish_prob(pg_signed_logdiff(logA, logB));
-}
-
-double PGrt(double corr, int r, int t, double mean_i, double mean_j, double a)
-{
-    return PGrt_h2beta_core(corr, r, t, mean_i, mean_j, a);
-}
 
 
 static R_INLINE double pg_nb_logpmf(int z, double mean, double shape)
@@ -5793,48 +5276,6 @@ double biv_PoissonGamma(double corr, int r, int t,
 }
 
 
-/* Legacy PEM bivariate evaluator retained for regression tests and timing
- * comparisons.  It is not used by the public PoissonGamma likelihood path. */
-static double biv_PoissonGamma_legacy(double corr, int r, int t,
-                                      double mean_i, double mean_j, double a)
-{
-    pg_set_status(PG_STATUS_OK);
-    if (!R_FINITE(corr) || !R_FINITE(mean_i) || !R_FINITE(mean_j) ||
-        !R_FINITE(a) || fabs(corr) > 1.0 + PG_PROB_TOL ||
-        r < 0 || t < 0 || !(mean_i > 0.0) || !(mean_j > 0.0) || !(a > 0.0))
-        return pg_fail(PG_STATUS_INVALID_ARGUMENT);
-
-    const int equal_means =
-        fabs(mean_i - mean_j) <=
-        1e-12 * fmax2(1.0, fmax2(mean_i, mean_j));
-    if (fabs(corr) >= 1.0 - PG_RHO_EPS) {
-        if (equal_means) {
-            if (r != t) return 0.0;
-            return pg_exp_logprob(pg_nb_logpmf(r, 0.5 * (mean_i + mean_j), a));
-        }
-        corr = copysign(1.0 - PG_RHO_EPS, corr);
-    }
-
-    if (fabs(corr) <= PG_INDEP_TOL)
-        return pg_exp_logprob(pg_nb_logpmf(r, mean_i, a) +
-                              pg_nb_logpmf(t, mean_j, a));
-
-    if (fmax2(mean_i, mean_j) / a <= PG_POISSON_REL_TOL) {
-        const double lp = biv_Poisson(corr, r, t, mean_i, mean_j);
-        if (lp == R_NegInf) return 0.0;
-        if (!R_FINITE(lp)) return pg_fail(PG_STATUS_SPECIAL_FUNCTION);
-        return pg_exp_logprob(lp);
-    }
-
-    if (r == t) {
-        if (r == 0) return PG00(corr, r, t, mean_i, mean_j, a);
-        return PGrr(corr, r, t, mean_i, mean_j, a);
-    }
-    if (r == 0) return PGr0(corr, t, r, mean_j, mean_i, a);
-    if (t == 0) return PGr0(corr, r, t, mean_i, mean_j, a);
-    return r > t ? PGrt(corr, r, t, mean_i, mean_j, a)
-                 : PGrt(corr, t, r, mean_j, mean_i, a);
-}
 
 double biv_PoissonGammaZIP(double corr, int r, int t,
                            double mean_i, double mean_j, double mup,
@@ -6046,13 +5487,6 @@ void GeoPEMPGrtBetaEval(double *corr, int *r, int *t,
 }
 
 
-void GeoPEMPGrtLegacyEval(double *corr, int *r, int *t,
-                          double *mean_i, double *mean_j, double *shape,
-                          double *out)
-{
-    if (out) out[0] = biv_PoissonGamma_legacy(corr[0], r[0], t[0],
-                                              mean_i[0], mean_j[0], shape[0]);
-}
 
 void GeoPEMZIPEval(double *corr, int *r, int *t,
                    double *mean_i, double *mean_j, double *mup,
@@ -7356,7 +6790,6 @@ double qsn(double p, double omega, double alpha, double tau, double tol) {
     double x = (alpha < 0) ? -xc : xc;
     return omega * x;
 }
-
 
 
 

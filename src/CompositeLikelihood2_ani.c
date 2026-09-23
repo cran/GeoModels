@@ -59,7 +59,7 @@ void Comp_Pair_WrapGauss2mem_aniso(int *cormod, double *coord1,double *coord2, d
     int i=0;double lag=0.0;
     double  u=0.0,v=0.0,weights=1.0,corr=0.0;
     double wrap_gauss;
-    double alfa=2.0;
+    double alfa=3.0;
      double nugget=nuis[0];
     double sill=nuis[1];
 
@@ -69,7 +69,7 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
       lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
                 u=data1[i];
                 v=data2[i];
-                corr=CorFct(cormod,lag,0,par,0,0);
+                corr=(1.0-nugget)*clamp_corr(CorFct(cormod,lag,0,par,0,0));
                 wrap_gauss=biv_wrapped(alfa,u,v,mean1[i],mean2[i],nuis[0],nuis[1],corr);
                     if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                     *res+=log(wrap_gauss)*weights ;

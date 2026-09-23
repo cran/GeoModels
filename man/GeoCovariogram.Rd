@@ -12,7 +12,7 @@ GeoCovariogram(fitted, distance="Eucl",answer.cov=FALSE,
  answer.vario=FALSE, answer.range=FALSE, fix.lags=NULL, 
  fix.lagt=NULL, show.cov=FALSE, show.vario=TRUE, 
  show.range=FALSE, add.cov=FALSE, add.vario=FALSE,
- pract.range=95, vario, invisible=FALSE, \dots)
+ pract.range=95, vario = NULL, invisible=FALSE, \dots)
 }
 \arguments{
  \item{fitted}{A fitted object obtained from the

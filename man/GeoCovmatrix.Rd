@@ -66,7 +66,13 @@ external \code{param$mean} vector use this same order.  See
  \item{coordx_dyn}{A list of \eqn{t} matrices of spatial coordinates.}
  \item{covmatrix}{The covariance matrix if \code{type} is \code{Standard}. An object of
  class \code{spam} if \code{type} is \code{Tapering} or \code{Standard} and
- \code{sparse} is \code{TRUE}.}
+ \code{sparse} is \code{TRUE}. For \code{model="Wrapped"}, this is the
+ covariance matrix of \eqn{\sin(\Theta-\mu)}, not an ordinary covariance
+ matrix of numerically represented angles.}
+ \item{wrapped_cos_covmatrix}{For \code{model="Wrapped"}, the covariance
+ matrix of \eqn{\cos(\Theta-\mu)}. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_circular_correlation}{For \code{model="Wrapped"}, the
+ Jammalamadaka--Sarma circular correlation matrix. This component is present only for \code{model="Wrapped"}.}
  \item{corrmodel}{String: the correlation model.}
  \item{distance}{String: the type of spatial distance.}
  \item{grid}{Logical: the value supplied by the user, indicating whether the original spatial coordinates described a regular grid.}
@@ -89,6 +95,21 @@ external \code{param$mean} vector use this same order.  See
 For plain (non-copula) bivariate correlation models, observed-scale covariance is currently validated only for Gaussian margins; unsupported non-Gaussian bivariate combinations are rejected explicitly. For direct Negative-Binomial fields, the public argument \code{n} denotes the single common integer \eqn{r} in the waiting-time construction.
 For \code{copula="Gaussian"}, \code{copula="Clayton"}, and \code{copula="SkewGaussian"}, continuous-margin covariance matrices are constructed directly on the observed scale. The implementation supports \code{"Gaussian"}, \code{"StudentT"}, \code{"LogGaussian"}, \code{"Gamma"}, \code{"Weibull"}, \code{"Beta"}, \code{"Beta2"}, \code{"Kumaraswamy"}, \code{"Kumaraswamy2"}, \code{"Logistic"}, \code{"SkewLaplace"}, \code{"Tukeyh"}, \code{"Tukeyh2"}, and \code{"SinhAsinh"}. Under the Gaussian copula, covariance for the last three is evaluated with the exact covariance of the corresponding monotone transformed-Gaussian field. For location-dependent copula margins, pairwise covariances use the two site-specific marginal predictors supplied through \code{X} or an external mean vector. Clayton-like covariance uses cached deterministic copula quadrature; skew-Gaussian covariance uses a cached bivariate Hermite expansion of the latent representation, avoiding pair-by-pair adaptive two-dimensional integration. The count margins \code{"Poisson"}, \code{"Binomial"}, and \code{"BinomialNeg"} are also available for Gaussian, Clayton-like, and skew-Gaussian copula covariance in the global prediction path; Binomial currently requires a common trial count \code{n}.
 The same observed-scale covariance engines are used by \code{\link{GeoCovariogram}} and \code{\link{GeoKrig}}, so covariance matrices, fitted semivariogram curves, and linear prediction are numerically consistent.
+
+For \code{model="Wrapped"}, let \eqn{\Theta=(\mu+Z) \bmod 2\pi}, with
+latent Gaussian variance \eqn{\sigma^2} given by \code{sill} and off-diagonal latent
+correlation \eqn{r_{ij}=(1-\tau)\rho_{ij}}, where \eqn{\tau} is \code{nugget}. Ordinary covariance
+of the numeric angles is not used because it depends on the arbitrary branch
+cut. Instead, \code{covmatrix} contains
+\deqn{\operatorname{Cov}[\sin(\Theta_i-\mu_i),\sin(\Theta_j-\mu_j)]
+= e^{-\sigma^2}\sinh(\sigma^2 r_{ij}),}
+with the exact marginal variance on the diagonal. The returned
+\code{wrapped_cos_covmatrix} contains
+\deqn{e^{-\sigma^2}
+[\cosh(\sigma^2 r_{ij})-1],}
+and \code{wrapped_circular_correlation} contains
+\deqn{\frac{\sinh(\sigma^2 r_{ij})}{\sinh(\sigma^2)}.}
+These matrices are evaluated with numerically stable exponential formulas.
 
 
 For univariate models whose covariance depends on the marginal location, the

@@ -49,7 +49,9 @@ Only \code{cholesky} is available when \code{sparse=TRUE}.}
  \item{nloc}{Positive integer size at prediction tasks. For Binomial, if observation-side \code{n} is location-specific then \code{nloc} is required and is never inferred by averaging \code{n}; otherwise a scalar \code{n} is reused when \code{nloc=NULL}. For direct Negative Binomial, \code{nloc}, if supplied, must equal the common \eqn{r}; for Geometric it must equal 1.}
  \item{mse}{Logical; if \code{TRUE}, compute the MSE of the kriging predictor.
  The default is \code{FALSE}; in that case the returned \code{mse} component is
- \code{NULL}, including for fixed- and dynamic-support space-time prediction.} 
+ \code{NULL}, including for fixed- and dynamic-support space-time prediction.
+ For \code{model="Wrapped"}, this is the sum of the sine- and cosine-component
+ linear-prediction MSEs, not an ordinary squared error between numeric angles.} 
  \item{model}{String; the type of RF and therefore the densities associated to the likelihood
  objects. \code{Gaussian} is the default, see the Section
  Details.} 
@@ -112,6 +114,19 @@ regarded as fixed and contribute zero uncertainty.  External mean vectors
 supplied through \code{param$mean} or \code{Mloc} are already known, so a
 requested universal prediction is treated as simple kriging with a warning.
 
+
+For \code{model="Wrapped"}, prediction is circular rather than ordinary
+kriging of numeric angles. Writing \eqn{\mu=2\arctan(\eta)+\pi},
+\code{GeoKrig} forms the centered trigonometric components
+\eqn{\sin(\Theta-\mu)} and
+\eqn{\cos(\Theta-\mu)-\exp(-\code{sill}/2)}, computes a separate
+optimal linear predictor for each using their exact wrapped-Gaussian
+covariances, and reconstructs the predicted direction with \code{atan2}.
+This makes the predictor invariant to the \eqn{0/2\pi} branch cut. For this
+model, a requested \code{type_krig="Universal"} is replaced by componentwise
+Simple prediction because the final angular reconstruction is nonlinear.
+The returned \code{weights} component is a list with \code{sin} and
+\code{cos} weight matrices.
 
 For prediction, names beginning with \code{Gaussian_misp_} are interpreted as
 estimation specifications rather than new data-generating models.  They are
@@ -202,7 +217,16 @@ See \code{\link{GeoModels-spacetime-ordering}}.
  \item{type_krig}{String: the type of kriging (simple or universal)}
  \item{mse}{When \code{mse=TRUE}, the prediction MSE (a time-by-location matrix
  for space-time prediction and a vector for spatial prediction); otherwise
- \code{NULL}.}
+ \code{NULL}. For \code{model="Wrapped"}, this equals the sum of the two
+ trigonometric-component MSEs and is not an ordinary angular squared error.}
+ \item{wrapped_mse_sin}{For \code{model="Wrapped"} and \code{mse=TRUE},
+ the linear-prediction MSE for the sine component. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_mse_cos}{For \code{model="Wrapped"} and \code{mse=TRUE},
+ the linear-prediction MSE for the cosine component. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_resultant}{For \code{model="Wrapped"}, the norm of the
+ predicted first trigonometric-moment vector, truncated at one. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_prediction_method}{For \code{model="Wrapped"}, a short
+ description of the componentwise circular prediction method. This component is present only for \code{model="Wrapped"}.}
 
 }
 

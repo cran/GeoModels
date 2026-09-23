@@ -87,6 +87,11 @@ method=.GeoKrigMatchMethod(method, sparse=sparse, context="GeoKrig")
 type_key=tolower(gsub("[[:blank:]]", "",type_krig))
 if(!(type_key %in% c("simple","universal"))) stop("type_krig must be 'Simple' or 'Universal'")
 type_krig=if(type_key=="simple") "Simple" else "Universal"
+if(identical(model, "Wrapped") && identical(type_krig, "Universal")) {
+  warning("For model = 'Wrapped', prediction uses componentwise Simple kriging of sine/cosine residuals; type_krig = 'Universal' is replaced by 'Simple'.",
+          call. = FALSE)
+  type_krig <- "Simple"
+}
 if(!is.logical(weigthed) || length(weigthed)!=1L || is.na(weigthed))
   stop("weigthed must be TRUE or FALSE")
 if(!is.logical(progress) || length(progress)!=1L || is.na(progress))
@@ -442,6 +447,9 @@ corrparam = covmatrix$param[covmatrix$namescorr]# selecting the correlation para
 if(bivariate) {if(!(which==1 || which==2)) {stop("which  parameter must be 1 or 2")}}
 pred = NULL
 varpred=vv=vv2=NULL
+wrapped_mse_sin <- wrapped_mse_cos <- NULL
+wrapped_resultant <- NULL
+wrapped_prediction_method <- NULL
 k = 0
 
 ###### observed coordinates in covariance ordering
@@ -458,6 +466,145 @@ if(!is.null(anisopars)) {
 if(bivariate) dataT <- .GeoBivariateDataVector(data, covmatrix$ns, context = "GeoKrig")
 else if(spacetime && spacetime_dyn) dataT <- as.numeric(unlist(data, use.names = FALSE))
 else dataT <- as.numeric(data)
+
+####################################################################
+############### wrapped Gaussian componentwise prediction ###########
+####################################################################
+if(!bivariate && is.null(covmatrix$copula) && as.integer(covmatrix$model) == 13L) {
+  sill_wrap <- as.numeric(covmatrix$param["sill"])
+  nugget_wrap <- as.numeric(covmatrix$param["nugget"])
+  if(!is.finite(sill_wrap) || sill_wrap <= 0 ||
+     !is.finite(nugget_wrap) || nugget_wrap < 0 || nugget_wrap >= 1)
+    stop("GeoKrig: Wrapped requires sill > 0 and 0 <= nugget < 1.",
+         call. = FALSE)
+  if(is.null(covmatrix$wrapped_cos_covmatrix))
+    stop("GeoKrig: Wrapped cosine-component covariance is unavailable.",
+         call. = FALSE)
+
+  eta_obs_wrap <- if (is.null(MM)) as.numeric(X %*% betas) else as.numeric(MM)
+  eta_loc_wrap <- if (!is.null(Mloc)) as.numeric(Mloc) else as.numeric(Xloc %*% betas)
+  if(length(eta_obs_wrap) != dimat || length(eta_loc_wrap) != dimat2 ||
+     any(!is.finite(c(eta_obs_wrap, eta_loc_wrap))))
+    stop("GeoKrig: inconsistent Wrapped mean-direction predictors.", call. = FALSE)
+
+  mu_obs_wrap <- .GeoWrappedMeanDirection(eta_obs_wrap)
+  mu_loc_wrap <- .GeoWrappedMeanDirection(eta_loc_wrap)
+  sin_obs_wrap <- sin(as.numeric(dataT) - mu_obs_wrap)
+  cos_mean_wrap <- exp(-0.5 * sill_wrap)
+  cos_obs_wrap <- cos(as.numeric(dataT) - mu_obs_wrap) - cos_mean_wrap
+
+  cov_sin_obj <- covmatrix
+  cov_cos_obj <- covmatrix
+  cov_cos_obj$covmatrix <- covmatrix$wrapped_cos_covmatrix
+  factor_sin_wrap <- .GeoKrigFactor(
+    cov_sin_obj, method = method, context = "GeoKrig Wrapped sine component"
+  )
+  factor_cos_wrap <- .GeoKrigFactor(
+    cov_cos_obj, method = method, context = "GeoKrig Wrapped cosine component"
+  )
+
+  blocks_wrap <- .GeoKrigLocationBlocks(
+    dimat, numloc, tloc, context = "GeoKrig Wrapped"
+  )
+  weights_sin_wrap <- matrix(NA_real_, nrow = dimat, ncol = dimat2)
+  weights_cos_wrap <- matrix(NA_real_, nrow = dimat, ncol = dimat2)
+  sin_pred_wrap <- numeric(dimat2)
+  cos_pred_wrap <- numeric(dimat2)
+  mse_sin_wrap <- if(isTRUE(mse)) numeric(dimat2) else NULL
+  mse_cos_wrap <- if(isTRUE(mse)) numeric(dimat2) else NULL
+  var_sin_wrap <- .GeoWrappedSinVariance(sill_wrap)
+  var_cos_wrap <- .GeoWrappedCosVariance(sill_wrap)
+  nugget_scale_wrap <- 1 - nugget_wrap
+  loc_matrix_wrap <- cbind(locx, locy, locz)
+
+  nblocks_wrap <- length(blocks_wrap)
+  if(isTRUE(progress) && nblocks_wrap > 1L) {
+    restore_wrap_handlers <- .GeoProgressHandlersPush(
+      handler = "txtprogressbar", global = TRUE
+    )
+    on.exit(restore_wrap_handlers(), add = TRUE)
+    wrap_pb <- progressr::progressor(
+      steps = nblocks_wrap, on_exit = FALSE, auto_finish = FALSE
+    )
+    on.exit(wrap_pb(type = "finish"), add = TRUE, after = FALSE)
+  } else wrap_pb <- function(...) {}
+
+  iblock_wrap <- 0L
+  for(loc_idx in blocks_wrap) {
+    iblock_wrap <- iblock_wrap + 1L
+    first_task <- (loc_idx[1L] - 1L) * tloc + 1L
+    last_task <- loc_idx[length(loc_idx)] * tloc
+    task_idx <- seq.int(first_task, last_task)
+    ntarget_block <- length(task_idx)
+
+    rho_block <- .GeoKrigCorrelationBlock(
+      covmatrix = covmatrix, observed_coords = ccc,
+      corrmodel = corrmodel, corrparam = corrparam, distance = distance,
+      loc_block = loc_matrix_wrap[loc_idx, , drop = FALSE],
+      time = time, tloc = tloc, NS = NS, which = which,
+      context = "GeoKrig Wrapped"
+    )
+    latent_block <- nugget_scale_wrap * rho_block
+    CC_sin <- matrix(
+      .GeoWrappedSinCovariance(latent_block, sill_wrap),
+      nrow = dimat, ncol = ntarget_block
+    )
+    CC_cos <- matrix(
+      .GeoWrappedCosCovariance(latent_block, sill_wrap),
+      nrow = dimat, ncol = ntarget_block
+    )
+
+    sys_sin <- .GeoKrigSystem(
+      covmatrix = cov_sin_obj, CC = CC_sin, method = method,
+      type_krig = "Simple", target_variance = var_sin_wrap,
+      mse = mse, factor = factor_sin_wrap,
+      context = "GeoKrig Wrapped sine component"
+    )
+    sys_cos <- .GeoKrigSystem(
+      covmatrix = cov_cos_obj, CC = CC_cos, method = method,
+      type_krig = "Simple", target_variance = var_cos_wrap,
+      mse = mse, factor = factor_cos_wrap,
+      context = "GeoKrig Wrapped cosine component"
+    )
+
+    weights_sin_wrap[, task_idx] <- sys_sin$weights
+    weights_cos_wrap[, task_idx] <- sys_cos$weights
+    sin_pred_wrap[task_idx] <- as.numeric(crossprod(sin_obs_wrap, sys_sin$weights))
+    cos_pred_wrap[task_idx] <- cos_mean_wrap +
+      as.numeric(crossprod(cos_obs_wrap, sys_cos$weights))
+    if(isTRUE(mse)) {
+      mse_sin_wrap[task_idx] <- pmax(0, sys_sin$mse)
+      mse_cos_wrap[task_idx] <- pmax(0, sys_cos$mse)
+    }
+    wrap_pb(sprintf("block %d/%d", iblock_wrap, nblocks_wrap))
+  }
+
+  delta_pred_wrap <- atan2(sin_pred_wrap, cos_pred_wrap)
+  pp_wrap <- (mu_loc_wrap + delta_pred_wrap) %% (2*pi)
+  resultant_wrap <- pmin(1, sqrt(sin_pred_wrap^2 + cos_pred_wrap^2))
+  mse_embed_wrap <- if(isTRUE(mse)) mse_sin_wrap + mse_cos_wrap else NULL
+
+  krig_weights <- list(sin = weights_sin_wrap, cos = weights_cos_wrap)
+  wrapped_prediction_method <- "componentwise linear prediction of sine/cosine residuals"
+
+  if(spacetime) {
+    pred <- matrix(pp_wrap, nrow = tloc, ncol = numloc)
+    wrapped_resultant <- matrix(resultant_wrap, nrow = tloc, ncol = numloc)
+    if(isTRUE(mse)) {
+      varpred <- matrix(mse_embed_wrap, nrow = tloc, ncol = numloc)
+      wrapped_mse_sin <- matrix(mse_sin_wrap, nrow = tloc, ncol = numloc)
+      wrapped_mse_cos <- matrix(mse_cos_wrap, nrow = tloc, ncol = numloc)
+    }
+  } else {
+    pred <- as.numeric(pp_wrap)
+    wrapped_resultant <- as.numeric(resultant_wrap)
+    if(isTRUE(mse)) {
+      varpred <- as.numeric(mse_embed_wrap)
+      wrapped_mse_sin <- as.numeric(mse_sin_wrap)
+      wrapped_mse_cos <- as.numeric(mse_cos_wrap)
+    }
+  }
+}
 
 ####################################################################
 ############### blocked global kriging ###############################
@@ -1309,6 +1456,12 @@ if(!isTRUE(mse)) varpred <- NULL
                    model=model,fit_model=model_requested,param = param_input,pred=pred,n=n_input,nloc=nloc_input,
                    radius=radius,spacetime = covmatrix$spacetime,time=time,type=type,type_krig=type_krig,method=method,weigthed=weigthed,varcov=varcov,
                    weights=krig_weights,mse=varpred)
+    if(identical(model, "Wrapped") && is.null(copula)) {
+      GeoKrig$wrapped_mse_sin <- wrapped_mse_sin
+      GeoKrig$wrapped_mse_cos <- wrapped_mse_cos
+      GeoKrig$wrapped_resultant <- wrapped_resultant
+      GeoKrig$wrapped_prediction_method <- wrapped_prediction_method
+    }
     structure(c(GeoKrig , call = call), class = c("GeoKrig"))
 }
 

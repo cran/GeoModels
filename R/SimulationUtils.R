@@ -427,7 +427,7 @@
   k <- 1L
   npoi <- 1
   if(model %in% c("SkewGaussian", "LogGaussian", "TwoPieceGaussian", "TwoPieceTukeyh")) k <- 1L
-  if(model %in% c("Weibull", "Wrapped")) k <- 2L
+  if(model == "Weibull") k <- 2L
   if(model %in% c("LogLogistic", "Logistic", "SkewLaplace")) k <- 4L
   if(model == "Binomial") k <- max(n)
   if(model == "BinomialLogistic") k <- 2L * max(n)

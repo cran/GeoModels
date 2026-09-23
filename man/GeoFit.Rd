@@ -135,6 +135,17 @@ Supplied coefficient names must be compatible with \code{ncol(X)}. For difficult
 non-Gaussian models, user-supplied starting values can still improve numerical
 optimization.
 
+For \code{model="Wrapped"}, omitted automatic starting values use circular
+statistics. If \eqn{\bar C=n^{-1}\sum_i\cos(\theta_i)},
+\eqn{\bar S=n^{-1}\sum_i\sin(\theta_i)}, and
+\eqn{R=(\bar C^2+\bar S^2)^{1/2}}, the intercept is initialized from the
+sample mean direction through the model link
+\eqn{\mu=2\arctan(\eta)+\pi}, while \code{sill} is initialized as
+\eqn{-2\log R}. Additional automatically initialized mean coefficients are
+set to zero. Explicit entries in \code{start} or \code{fixed} retain
+precedence. The wrapped pairwise and conditional densities use winding
+indices from \eqn{-3} through \eqn{3}.
+
 A site-specific known mean can instead be supplied as a vector in
 \code{fixed$mean}, with one value per observation.  This external mean is
 mutually exclusive with \code{X} and with estimated mean coefficients in

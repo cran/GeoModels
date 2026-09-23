@@ -3,7 +3,9 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
                   n.fold = 0.05, local = FALSE, neighb = NULL, maxdist = NULL,
                   maxtime = NULL, sparse = FALSE, type_krig = "Simple",
                   which = 1, parallel = FALSE, ncores = 6,
-                  progress = TRUE, seed = NULL) {
+                  progress = TRUE, seed = NULL,
+                  predictor = "linear", conditional_nrep = 1000L,
+                  conditional_n_iter = 25L, conditional_mcmc_thin = 1L) {
   .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
   on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
 
@@ -23,6 +25,31 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     stop("progress must be TRUE or FALSE", call. = FALSE)
   if (!is.logical(sparse) || length(sparse) != 1L || is.na(sparse))
     stop("sparse must be TRUE or FALSE", call. = FALSE)
+
+
+  if (!is.character(predictor) || !length(predictor) || anyNA(predictor)) {
+    stop("predictor must contain 'linear', 'conditional', or both.", call. = FALSE)
+  }
+  predictor <- unique(tolower(gsub("[[:blank:]]", "", predictor)))
+  if (any(!(predictor %in% c("linear", "conditional")))) {
+    stop("predictor must contain 'linear', 'conditional', or both.", call. = FALSE)
+  }
+  use_linear <- "linear" %in% predictor
+  use_conditional <- "conditional" %in% predictor
+
+  validate_positive_integer <- function(x, name) {
+    tol <- sqrt(.Machine$double.eps)
+    if (!is.numeric(x) || length(x) != 1L || !is.finite(x) || x < 1 ||
+        abs(x - round(x)) > tol) {
+      stop(name, " must be a positive integer.", call. = FALSE)
+    }
+    as.integer(round(x))
+  }
+  conditional_nrep <- validate_positive_integer(conditional_nrep, "conditional_nrep")
+  conditional_n_iter <- validate_positive_integer(conditional_n_iter, "conditional_n_iter")
+  conditional_mcmc_thin <- validate_positive_integer(
+    conditional_mcmc_thin, "conditional_mcmc_thin"
+  )
 
   fit_copula_phase1 <- if (is.null(fit$copula)) NULL else as.character(fit$copula)[1L]
   fit_model_code_phase1 <- suppressWarnings(as.integer(CkModel(fit$model)))
@@ -90,13 +117,51 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
     progress <- FALSE
   }
 
-  message("Cross-validation kriging can be time consuming ...")
+  if (use_conditional) {
+    message("Cross-validation prediction can be time consuming ...")
+  } else {
+    message("Cross-validation kriging can be time consuming ...")
+  }
 
   ## ---------- model classification ----------
   corr_code <- CkCorrModel(fit$corrmodel)
   spacetime <- CheckST(corr_code)
   bivariate <- CheckBiv(corr_code)
   space <- !spacetime && !bivariate
+
+  if (use_conditional) {
+    conditional_model <- .GeoPredictionCanonicalModel(as.character(fit$model)[1L])
+    if (!space) {
+      stop(
+        "GeoCV conditional prediction is currently implemented only for purely spatial univariate fits.",
+        call. = FALSE
+      )
+    }
+    if (!(conditional_model %in% c("Binomial", "BinomialNeg"))) {
+      stop(
+        "GeoCV conditional prediction is currently available only for direct Binomial and BinomialNeg random fields.",
+        call. = FALSE
+      )
+    }
+    if (!is.null(fit$copula)) {
+      stop(
+        "GeoCV conditional prediction is not available for copula models; use predictor='linear'.",
+        call. = FALSE
+      )
+    }
+    if (isTRUE(local)) {
+      stop(
+        "GeoCV conditional prediction for direct count random fields requires local=FALSE.",
+        call. = FALSE
+      )
+    }
+    if (isTRUE(sparse)) {
+      stop(
+        "GeoCV conditional prediction for direct count random fields requires sparse=FALSE.",
+        call. = FALSE
+      )
+    }
+  }
 
   if (bivariate && !(which %in% c(1, 2)))
     stop("which must be 1 or 2", call. = FALSE)
@@ -288,16 +353,49 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
         fit_s$fixed <- fixed_for_est
       }
 
-      pr <- .GeoCVPredict(
-        fit_s, loc = coords_pred, Xloc = X_pred, Mloc = M_pred, nloc = n_pred,
-        local = local, neighb = neighb, maxdist = maxdist, maxtime = maxtime_use,
-        type_krig = type_krig, sparse = sparse, method = fit_method
-      )
+      fold_scores <- numeric(0)
 
-      .GeoCVSummarizeScores(data_pred, pr$pred, pr$mse, gaussian_scores)
+      if (use_linear) {
+        pr <- .GeoCVPredict(
+          fit_s, loc = coords_pred, Xloc = X_pred, Mloc = M_pred, nloc = n_pred,
+          local = local, neighb = neighb, maxdist = maxdist, maxtime = maxtime_use,
+          type_krig = type_krig, sparse = sparse, method = fit_method
+        )
+        sc_linear <- .GeoCVSummarizeScores(
+          data_pred, pr$pred, pr$mse, gaussian_scores
+        )
+        names(sc_linear) <- paste0("linear.", names(sc_linear))
+        fold_scores <- c(fold_scores, sc_linear)
+      }
+
+      if (use_conditional) {
+        pr_cond <- .GeoCVConditionalPredict(
+          fit_s, loc = coords_pred, Xloc = X_pred, Mloc = M_pred,
+          nloc = n_pred,
+          nrep = conditional_nrep,
+          n_iter = conditional_n_iter,
+          mcmc_thin = conditional_mcmc_thin
+        )
+        sc_cond <- .GeoCVSummarizeScores(
+          data_pred, pr_cond$pred,
+          rep(NA_real_, length(pr_cond$pred)),
+          gaussian_scores = FALSE
+        )
+        names(sc_cond) <- paste0("conditional.", names(sc_cond))
+        fold_scores <- c(fold_scores, sc_cond)
+      }
+
+      fold_scores
     }
 
-    results <- .GeoCVRunIterations(cv_iteration, K, parallel, ncores, progress)
+    result_metric_names <- c(
+      if (use_linear) paste0("linear.", .GeoCVMetricNames),
+      if (use_conditional) paste0("conditional.", .GeoCVMetricNames)
+    )
+    results <- .GeoCVRunIterations(
+      cv_iteration, K, parallel, ncores, progress,
+      metric_names = result_metric_names
+    )
   }
 
   ## ---------- space-time case ----------
@@ -561,18 +659,58 @@ GeoCV <- function(fit, K = 100, estimation = TRUE,
   if (is.null(results))
     stop("Unsupported GeoFit configuration for GeoCV.", call. = FALSE)
 
-  list(
-    rmse = results[, "rmse"],
-    mae = results[, "mae"],
-    mad = results[, "mad"],
-    brie = results[, "brie"],
-    crps = results[, "crps"],
-    lscore = results[, "lscore"],
-    pit_mean = results[, "pit_mean"],
-    pit = results[, "pit_mean"],
-    intscore = results[, "intscore"],
-    coverage = results[, "coverage"],
-    seed = seed,
-    estimation_model = model1
+  make_score_list <- function(prefix = NULL) {
+    get_metric <- function(name) {
+      col <- if (is.null(prefix)) name else paste0(prefix, ".", name)
+      results[, col]
+    }
+    list(
+      rmse = get_metric("rmse"),
+      mae = get_metric("mae"),
+      mad = get_metric("mad"),
+      brie = get_metric("brie"),
+      crps = get_metric("crps"),
+      lscore = get_metric("lscore"),
+      pit_mean = get_metric("pit_mean"),
+      pit = get_metric("pit_mean"),
+      intscore = get_metric("intscore"),
+      coverage = get_metric("coverage"),
+      n_requested = get_metric("n_requested"),
+      n_valid = get_metric("n_valid"),
+      n_failed = get_metric("n_failed"),
+      n_invalid_mse = get_metric("n_invalid_mse"),
+      n_valid_prob = get_metric("n_valid_prob"),
+      warnings = attr(results, "task_warnings", exact = TRUE)
+    )
+  }
+
+  if (!space || (!use_conditional && use_linear)) {
+    primary <- if (space) make_score_list("linear") else make_score_list(NULL)
+    return(c(
+      primary,
+      list(
+        seed = seed,
+        estimation_model = model1
+      )
+    ))
+  }
+
+  out <- list()
+  if (use_linear) out$linear <- make_score_list("linear")
+  if (use_conditional) out$conditional <- make_score_list("conditional")
+
+  primary <- if (use_linear) out$linear else out$conditional
+  out <- c(
+    out,
+    primary,
+    list(
+      seed = seed,
+      estimation_model = model1,
+      predictor = predictor,
+      conditional_nrep = if (use_conditional) conditional_nrep else NULL,
+      conditional_n_iter = if (use_conditional) conditional_n_iter else NULL,
+      conditional_mcmc_thin = if (use_conditional) conditional_mcmc_thin else NULL
+    )
   )
+  out
 }

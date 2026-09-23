@@ -1,4 +1,5 @@
 #include "header.h"
+#include <limits.h>
 
 /*
  * Count-constrained latent Gaussian Gibbs sampler used by GeoSimcond for
@@ -189,15 +190,39 @@ static void mvn_add_upper_chol(double *x, const double *chol, int p)
  * .Call interface.
  * model_code: 0 = Binomial, 1 = Negative Binomial.
  */
-SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
-                     SEXP freeLenSEXP, SEXP successCountSEXP,
-                     SEXP forcedSuccessSEXP,
-                     SEXP WSEXP, SEXP muLocSEXP,
-                     SEXP cholCondSEXP, SEXP cholLocSEXP,
-                     SEXP sizePredSEXP, SEXP modelCodeSEXP,
-                     SEXP burnSEXP, SEXP thinSEXP, SEXP nrepSEXP,
-                     SEXP LSEXP)
+typedef struct {
+    SEXP args[15];
+    int rng_active;
+} GeoCountSimContext;
+
+static void geo_count_rng_cleanup(void *data)
 {
+    GeoCountSimContext *ctx = (GeoCountSimContext *) data;
+    if (ctx->rng_active) {
+        ctx->rng_active = 0;
+        PutRNGstate();
+    }
+}
+
+static SEXP geo_count_cond_sim_body(void *data)
+{
+    GeoCountSimContext *ctx = (GeoCountSimContext *) data;
+    SEXP QSEXP = ctx->args[0];
+    SEXP muObsSEXP = ctx->args[1];
+    SEXP freeLenSEXP = ctx->args[2];
+    SEXP successCountSEXP = ctx->args[3];
+    SEXP forcedSuccessSEXP = ctx->args[4];
+    SEXP WSEXP = ctx->args[5];
+    SEXP muLocSEXP = ctx->args[6];
+    SEXP cholCondSEXP = ctx->args[7];
+    SEXP cholLocSEXP = ctx->args[8];
+    SEXP sizePredSEXP = ctx->args[9];
+    SEXP modelCodeSEXP = ctx->args[10];
+    SEXP burnSEXP = ctx->args[11];
+    SEXP thinSEXP = ctx->args[12];
+    SEXP nrepSEXP = ctx->args[13];
+    SEXP LSEXP = ctx->args[14];
+
     SEXP qdim, wdim, ans;
     int m, p, L, model_code, burn, thin, nrep;
     int i, j, l, rep, sweep;
@@ -301,6 +326,7 @@ SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
         }
 
         GetRNGstate();
+        ctx->rng_active = 1;
 
         /* Random valid initialization. */
         for (i = 0; i < m; ++i) {
@@ -395,6 +421,7 @@ SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
             if (model_code == 0 && max_pred_size > L) {
                 int trial;
                 for (trial = L; trial < max_pred_size; ++trial) {
+                    if ((trial & 1023) == 0) R_CheckUserInterrupt();
                     for (j = 0; j < p; ++j) work_p[j] = norm_rand();
                     mvn_add_upper_chol(work_p, cholLoc, p);
                     for (j = 0; j < p; ++j) {
@@ -409,7 +436,8 @@ SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
                 int trial = L;
                 for (j = 0; j < p; ++j) n_done += done[j];
                 while (n_done < p) {
-                    if (trial > L + 10000000)
+                    if ((trial & 1023) == 0) R_CheckUserInterrupt();
+                    if ((double)trial > (double)L + 10000000.0 || trial == INT_MAX)
                         error("Negative-Binomial conditional simulation exceeded the safety trial limit.");
                     for (j = 0; j < p; ++j) work_p[j] = norm_rand();
                     mvn_add_upper_chol(work_p, cholLoc, p);
@@ -430,9 +458,22 @@ SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
             R_CheckUserInterrupt();
         }
 
-        PutRNGstate();
         UNPROTECT(1);
     }
 
     return ans;
+}
+
+SEXP GeoCountCondSim(SEXP QSEXP, SEXP muObsSEXP,
+                     SEXP freeLenSEXP, SEXP successCountSEXP,
+                     SEXP forcedSuccessSEXP,
+                     SEXP WSEXP, SEXP muLocSEXP,
+                     SEXP cholCondSEXP, SEXP cholLocSEXP,
+                     SEXP sizePredSEXP, SEXP modelCodeSEXP,
+                     SEXP burnSEXP, SEXP thinSEXP, SEXP nrepSEXP,
+                     SEXP LSEXP)
+{
+    GeoCountSimContext ctx = {{QSEXP, muObsSEXP, freeLenSEXP, successCountSEXP, forcedSuccessSEXP, WSEXP, muLocSEXP, cholCondSEXP, cholLocSEXP, sizePredSEXP, modelCodeSEXP, burnSEXP, thinSEXP, nrepSEXP, LSEXP}, 0};
+    return R_ExecWithCleanup(geo_count_cond_sim_body, &ctx,
+                             geo_count_rng_cleanup, &ctx);
 }

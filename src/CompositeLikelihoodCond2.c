@@ -21,6 +21,14 @@ void Comp_Cond_Gauss2mem(int *cormod, double *data1, double *data2, int *N1, int
     const double sqrt_sill = sqrt(sill);
     double total = 0.0;  // Accumulator variable
 
+    /* Opt-in OpenMP path for Gaussian spatial Matérn conditional likelihood. */
+    if (GeoModels_gauss_pair_omp(1, *cormod, data1, data2, par, weighted,
+                                 mean1, mean2, n_pairs, max_dist,
+                                 sill, nugget, &total)) {
+        *res = R_FINITE(total) ? total : LOW;
+        return;
+    }
+
     // Main processing loop
     for(int i = 0; i < n_pairs; i++) {
         const double d1 = data1[i];
@@ -45,7 +53,7 @@ void Comp_Cond_WrapGauss2mem(int *cormod, double *data1, double *data2, int *N1,
                            double *par, int *weigthed, double *res, double *mean1, double *mean2,
                            double *nuis,  int *type_cop, int *cond)
 {
-    const double alfa = 2.0;
+    const double alfa = 3.0;
     const double nugget = nuis[0];
     const double sill = nuis[1];
     if(sill <= 0 || nugget < 0 || nugget >= 1) {
@@ -2001,7 +2009,7 @@ void Comp_Cond_WrapGauss_st2mem(int *cormod, double *data1, double *data2, int *
                                double *par, int *weigthed, double *res, double *mean1, double *mean2,
                                double *nuis,  int *type_cop, int *cond)
 {
-    const double alfa = 2.0;  // Valore costante
+    const double alfa = 3.0;  // Valore costante
     const double nugget = nuis[0];
     const double sill = nuis[1];
     const int npairs_val = npairs[0];

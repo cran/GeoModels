@@ -16,7 +16,8 @@ GeoCV(
   neighb = NULL, maxdist = NULL, maxtime = NULL,
   sparse = FALSE, type_krig = "Simple", which = 1,
   parallel = FALSE, ncores = 6, progress = TRUE,
-  seed = NULL
+  seed = NULL, predictor = "linear", conditional_nrep = 1000L,
+  conditional_n_iter = 25L, conditional_mcmc_thin = 1L
 )
 }
 
@@ -64,6 +65,32 @@ GeoCV(
  \item{which}{Numeric; in the case of bivariate cokriging, it indicates which
  variable to predict. It can be \code{1} or \code{2}.}
 
+
+ \item{predictor}{Character vector selecting the prediction method. The default
+ \code{"linear"} preserves the historical behaviour based on \code{GeoKrig} or
+ \code{GeoKrigloc}. For direct spatial \code{Binomial} and \code{BinomialNeg}
+ random fields without a copula, \code{"conditional"} uses the conditional mean
+ estimated by \code{GeoSimcond}. Supplying
+ \code{c("linear", "conditional")} evaluates both predictors on exactly the same
+ held-out observations and, when \code{estimation=TRUE}, from the same fold-specific
+ refit. Conditional prediction is currently restricted to purely spatial,
+ univariate, non-copula direct count models with \code{local=FALSE} and
+ \code{sparse=FALSE}.}
+
+ \item{conditional_nrep}{Positive integer; number of retained conditional
+ simulations used by \code{GeoSimcond} to estimate the conditional mean within
+ each cross-validation iteration. Used only when
+ \code{predictor} includes \code{"conditional"}. Default is 1000.}
+
+ \item{conditional_n_iter}{Positive integer; burn-in length, in full Gibbs
+ sweeps, for the direct count conditional sampler used within each
+ cross-validation iteration. Used only when \code{predictor} includes
+ \code{"conditional"}. Default is 25.}
+
+ \item{conditional_mcmc_thin}{Positive integer; thinning interval for retained
+ direct-count conditional simulations within each cross-validation iteration.
+ Used only when \code{predictor} includes \code{"conditional"}. Default is 1.}
+
  \item{parallel}{Logical; default \code{FALSE}. Set \code{TRUE} to evaluate the cross-validation iterations in parallel.}
 
  \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and the number of cross-validation jobs. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free. Non-integer values are rejected.}
@@ -74,14 +101,36 @@ GeoCV(
 }
 
 \details{
+The option \code{GeoModels.cv_strict = TRUE} rejects any excluded observation,
+non-finite prediction, or invalid Gaussian predictive MSE. The default is
+\code{FALSE}: exclusions are counted explicitly, and a fold with no usable
+predictions returns \code{NA} scores rather than an unreported change of denominator.
+Warnings raised by iterations are collected and summarized in the calling R
+session; \code{options(warn = 2)} continues to treat warnings as errors.
+
 For a spatio-temporal \code{GeoFit} object, the stored temporal coordinates are reused without imposing equal spacing. Local temporal neighborhoods interpret \code{maxtime} as a distance threshold in the same units as those coordinates.
 
 
 The function randomly removes a fraction \code{n.fold} of the observations at
-each iteration, predicts the removed observations using kriging, and computes a
-set of predictive scores.
+each iteration, predicts the removed observations, and computes predictive
+scores. With the default \code{predictor="linear"}, prediction uses kriging as
+in previous versions. For supported direct binomial and negative-binomial random
+fields, \code{predictor="conditional"} instead estimates the conditional mean
+from repeated calls to the count-constrained conditional simulator. When both
+predictors are requested, the fold is constructed and the model is refitted
+only once, so the comparison is paired within each cross-validation iteration.
 
 If \code{estimation = TRUE}, the model is re-estimated at each cross-validation iteration before prediction. Refits preserve the fitted likelihood settings, including pair weighting, pair thinning, distance-memory handling and anisotropy. For misspecified estimators, the response model stored in \code{fit$model} remains distinct from the working likelihood stored in \code{fit$estimation_model}; the latter is used for each refit. Estimated anisotropy parameters are passed once through \code{anisopars}, avoiding duplicate \code{angle}/\code{ratio} entries in the starting or fixed parameter lists.
+
+
+For conditional prediction of direct \code{Binomial} and \code{BinomialNeg}
+random fields, each fold-specific fitted object is passed to
+\code{GeoSimcond}. The conditional predictor is the empirical mean of
+\code{conditional_nrep} retained conditional simulations after
+\code{conditional_n_iter} burn-in sweeps, with thinning
+\code{conditional_mcmc_thin}. Parallelisation, when requested, is performed over
+cross-validation iterations; the nested \code{GeoSimcond} call is deliberately
+run serially within each worker to avoid nested parallel execution.
 
 For Universal kriging with fold-specific re-estimation, full-likelihood fits request \code{varest = TRUE} within each fold. Composite-likelihood refits are not assigned the Godambe covariance matrix from the full dataset: \code{GeoCV} instead rejects \code{estimation = TRUE, type_krig = "Universal"} for composite likelihood, because a statistically coherent analysis would require a fold-specific \code{GeoVarest} calculation.
 
@@ -105,10 +154,19 @@ function preserves and restores the user's random number generator state.
 }
 
 \value{
-Returns a list containing the following components:
- \item{rmse}{The vector of root mean squared errors.}
- \item{mae}{The vector of mean absolute errors.}
- \item{mad}{The vector of median absolute errors.}
+Returns a list containing predictive score vectors. With the default
+\code{predictor="linear"}, the historical top-level structure is unchanged.
+When conditional prediction is requested, components \code{linear} and/or
+\code{conditional} contain the corresponding score lists. For the conditional
+predictor, RMSE, MAE and MAD are populated and the Gaussian-only probability
+scores remain \code{NA}. For backward compatibility, the top-level score
+aliases refer to the linear predictor when it is requested, and otherwise to
+the conditional predictor.
+ \item{linear}{When requested, a list of score vectors for the linear predictor.}
+ \item{conditional}{When requested, a list of score vectors for the conditional-mean predictor.}
+ \item{rmse}{The vector of root mean squared errors for the primary predictor.}
+ \item{mae}{The vector of mean absolute errors for the primary predictor.}
+ \item{mad}{The vector of median absolute errors for the primary predictor.}
  \item{brie}{The vector of Brier scores, or \code{NA} for non-Gaussian fits.}
  \item{crps}{The vector of continuous ranked probability scores, or
  \code{NA} for non-Gaussian fits.}
@@ -119,10 +177,23 @@ Returns a list containing the following components:
  non-Gaussian fits.}
  \item{coverage}{The vector of empirical coverage values, or \code{NA} for
  non-Gaussian fits.}
+ \item{n_requested}{Number of requested predictions in each iteration.}
+ \item{n_valid}{Number of finite observation/prediction pairs used for error scores.}
+ \item{n_failed}{Number of excluded pairs; \code{n_requested - n_valid}.}
+ \item{n_invalid_mse}{Among valid pairs, the number with non-finite or nonpositive
+ predictive MSE. \code{NA} when Gaussian probability scores are not applicable.}
+ \item{n_valid_prob}{Number of pairs used for Gaussian probability scores;
+ \code{NA} when not applicable.}
+ \item{warnings}{A frequency table of warning messages from all iterations,
+ or \code{NULL} when none were raised.}
  \item{seed}{The seed used for reproducibility, or \code{NULL}.}
+ \item{predictor}{The prediction method or methods requested.}
+ \item{conditional_nrep}{When conditional prediction is requested, the number of retained conditional simulations per fold.}
+ \item{conditional_n_iter}{When conditional prediction is requested, the Gibbs burn-in length per fold.}
+ \item{conditional_mcmc_thin}{When conditional prediction is requested, the Gibbs thinning interval.}
 }
 
-\seealso{\code{\link{GeoKrig}}, \code{\link{GeoKrigloc}}, \code{\link{GeoFit}}.}
+\seealso{\code{\link{GeoKrig}}, \code{\link{GeoKrigloc}}, \code{\link{GeoSimcond}}, \code{\link{GeoFit}}.}
 
 \author{
 Moreno Bevilacqua, \email{moreno.bevilacqua89@gmail.com},

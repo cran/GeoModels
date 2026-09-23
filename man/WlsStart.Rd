@@ -12,7 +12,7 @@ WlsStart(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
  distance, fcall, fixed, grid, likelihood, maxdist, neighb,
  maxtime, model, n, param, parscale, paramrange, radius, start,
  taper, tapsep, type, varest, weighted, copula, X, memdist,
- nosym, p_neighb, thin_method)
+ nosym, p_neighb = 1, thin_method = "bernoulli")
 }
 \arguments{
  \item{coordx}{A numeric (\eqn{d \times 2}{d x 2})-matrix or (\eqn{d \times 3}{d x 3})-matrix.

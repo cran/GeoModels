@@ -210,8 +210,26 @@ if(do_plot) {
   if(bivariate&&dyn) par(mfrow=c(1,2))
 }
 
-fitted$param=unlist(fitted$param)
-fitted$fixed=unlist(fitted$fixed)
+    ## Preserve a site-specific fixed mean before flattening the fitted
+    ## parameter containers.  Otherwise unlist() converts fixed$mean into
+    ## separate elements named mean1, mean2, ..., and the external mean can
+    ## no longer be identified by .GeoMean_external().
+    external_mean_fit <- NULL
+    if(!bivariate) {
+      nobs_mean_fit <- length(unlist(fitted$data, use.names = FALSE))
+      external_mean_fit <- .GeoMean_external(
+        fitted$fixed, n = nobs_mean_fit
+      )
+      if(!is.null(external_mean_fit)) {
+        if(!is.list(fitted$fixed)) fitted$fixed <- as.list(fitted$fixed)
+        ## Keep a scalar placeholder for the native/nuisance parameter paths;
+        ## the original location-specific vector is retained separately above.
+        fitted$fixed[["mean"]] <- 0
+      }
+    }
+
+    fitted$param <- unlist(fitted$param)
+    fitted$fixed <- unlist(fitted$fixed)
 
     ## Normalize the optional copula field.  Older GeoFit objects may encode
     ## "no copula" as NULL, NA, or an empty string.
@@ -350,7 +368,7 @@ fitted$fixed=unlist(fitted$fixed)
         nuisance <- nuisance[!(names(nuisance) %in% mean_names)]
 
         nobs_mean <- length(unlist(fitted$data, use.names = FALSE))
-        external_mean <- .GeoMean_external(fitted$fixed, n = nobs_mean)
+        external_mean <- external_mean_fit
         if(!is.null(external_mean)) {
           mean_reference <- mean(external_mean)
         } else {

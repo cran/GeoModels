@@ -9,7 +9,7 @@ or considering a fixed number of spatio (temporal) neighbors.
 }
 
 \usage{
-GeoNeighborhood(data=NULL, coordx, coordy=NULL,coordz=NULL,
+GeoNeighborhood(data=NULL, coordx = NULL, coordy=NULL,coordz=NULL,
 coordt=NULL, coordx_dyn=NULL, bivariate=FALSE,
  distance="Eucl", grid=FALSE, 
  loc, neighb=NULL,maxdist=NULL,

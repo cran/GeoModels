@@ -472,7 +472,11 @@ double hyp2f1ra(double a, double b, double c, double x,
     
     *loss = 0;
     
-    assert(da != 0);
+    if (da == 0.0 || !isfinite(da)) {
+        /* Invalid recurrence: report total loss instead of aborting R. */
+        *loss = 1.0;
+        return NPY_NAN;
+    }
     
     if (fabs(da) > MAX_ITERATIONS) {
         /* Too expensive to compute this value, so give up */

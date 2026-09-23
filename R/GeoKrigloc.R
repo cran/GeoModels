@@ -62,8 +62,14 @@
 
   if (!is.null(neigh$numpoints) && length(neigh$numpoints) >= k &&
       neigh$numpoints[k] == 0L) {
-    return(list(indices = as.integer(k), pred = NA_real_,
-                mse = if (mse) NA_real_ else NULL))
+    out <- list(indices = as.integer(k), pred = NA_real_,
+                mse = if (mse) NA_real_ else NULL)
+    if (identical(model, "Wrapped") && is.null(copula)) {
+      out$wrapped_mse_sin <- if (mse) NA_real_ else NULL
+      out$wrapped_mse_cos <- if (mse) NA_real_ else NULL
+      out$wrapped_resultant <- NA_real_
+    }
+    return(out)
   }
 
   local_param <- param
@@ -138,7 +144,14 @@
       # bivariate: preserve the two variable-specific coordinate blocks.
       coordx_dyn_k <- if (!is.null(neigh$coordx_dyn)) neigh$coordx_dyn[[k]] else NULL
       if (!is.null(neigh$block_sizes) && any(neigh$block_sizes[[k]] == 0L)) {
-        return(list(pred = NA_real_, mse = if (mse) NA_real_ else NULL))
+        out <- list(indices = as.integer(k), pred = NA_real_,
+                    mse = if (mse) NA_real_ else NULL)
+        if (identical(model, "Wrapped") && is.null(copula)) {
+          out$wrapped_mse_sin <- if (mse) NA_real_ else NULL
+          out$wrapped_mse_cos <- if (mse) NA_real_ else NULL
+          out$wrapped_resultant <- NA_real_
+        }
+        return(out)
       }
       pr <- GeoKrig(
         data      = neigh$data[[k]],
@@ -167,8 +180,14 @@
     }
   }
 
-  list(indices = as.integer(k), pred = pr$pred,
-       mse = if (mse) pr$mse else NULL)
+  out <- list(indices = as.integer(k), pred = pr$pred,
+              mse = if (mse) pr$mse else NULL)
+  if (identical(model, "Wrapped") && is.null(copula)) {
+    out$wrapped_mse_sin <- if (mse) pr$wrapped_mse_sin else NULL
+    out$wrapped_mse_cos <- if (mse) pr$wrapped_mse_cos else NULL
+    out$wrapped_resultant <- pr$wrapped_resultant
+  }
+  out
 }
 
 
@@ -343,6 +362,11 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
   if (!(krig_key %in% c("simple", "universal")))
     stop("type_krig must be 'Simple' or 'Universal'")
   type_krig <- if (krig_key == "simple") "Simple" else "Universal"
+  if (identical(model, "Wrapped") && identical(type_krig, "Universal")) {
+    warning("For model = 'Wrapped', prediction uses componentwise Simple kriging of sine/cosine residuals; type_krig = 'Universal' is replaced by 'Simple'.",
+            call. = FALSE)
+    type_krig <- "Simple"
+  }
   if (!is.logical(weigthed) || length(weigthed) != 1L || is.na(weigthed))
     stop("weigthed must be TRUE or FALSE")
   if (!isTRUE(weigthed))
@@ -614,6 +638,10 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
   # Pre-allocate result vectors
   res1 <- numeric(total_tasks)
   res2 <- if (mse) numeric(total_tasks) else NULL
+  wrapped_local <- identical(model, "Wrapped") && is.null(copula)
+  res_wrap_sin <- if (wrapped_local && mse) numeric(total_tasks) else NULL
+  res_wrap_cos <- if (wrapped_local && mse) numeric(total_tasks) else NULL
+  res_wrap_resultant <- if (wrapped_local) numeric(total_tasks) else NULL
 
 
   ###########################################################################
@@ -703,6 +731,13 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
   for (ans in res) {
     res1[ans$indices] <- as.numeric(ans$pred)
     if (mse) res2[ans$indices] <- as.numeric(ans$mse)
+    if (wrapped_local) {
+      res_wrap_resultant[ans$indices] <- as.numeric(ans$wrapped_resultant)
+      if (mse) {
+        res_wrap_sin[ans$indices] <- as.numeric(ans$wrapped_mse_sin)
+        res_wrap_cos[ans$indices] <- as.numeric(ans$wrapped_mse_cos)
+      }
+    }
   }
 
 
@@ -711,18 +746,36 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
   ###########################################################################
 
   varpred <- NULL
+  wrapped_mse_sin <- wrapped_mse_cos <- wrapped_resultant <- NULL
 
   if (spacetime || bivariate) {
     pred <- matrix(res1, nrow = Tloc, ncol = Nloc)
     if (mse) varpred <- matrix(res2, nrow = Tloc, ncol = Nloc)
+    if (wrapped_local) {
+      wrapped_resultant <- matrix(res_wrap_resultant, nrow = Tloc, ncol = Nloc)
+      if (mse) {
+        wrapped_mse_sin <- matrix(res_wrap_sin, nrow = Tloc, ncol = Nloc)
+        wrapped_mse_cos <- matrix(res_wrap_cos, nrow = Tloc, ncol = Nloc)
+      }
+    }
   } else {
     pred <- res1
     if (mse) varpred <- res2
+    if (wrapped_local) {
+      wrapped_resultant <- res_wrap_resultant
+      if (mse) {
+        wrapped_mse_sin <- res_wrap_sin
+        wrapped_mse_cos <- res_wrap_cos
+      }
+    }
   }
 
   if (Tloc == 1) {
     pred    <- c(pred)
     varpred <- c(varpred)
+    wrapped_resultant <- c(wrapped_resultant)
+    wrapped_mse_sin <- c(wrapped_mse_sin)
+    wrapped_mse_cos <- c(wrapped_mse_cos)
   }
 
   GeoKrigloc_out <- list(
@@ -760,6 +813,14 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
     mse       = varpred,
     varcov    = varcov
   )
+
+  if (wrapped_local) {
+    GeoKrigloc_out$wrapped_mse_sin <- wrapped_mse_sin
+    GeoKrigloc_out$wrapped_mse_cos <- wrapped_mse_cos
+    GeoKrigloc_out$wrapped_resultant <- wrapped_resultant
+    GeoKrigloc_out$wrapped_prediction_method <-
+      "componentwise linear prediction of sine/cosine residuals"
+  }
 
   structure(c(GeoKrigloc_out, call = call), class = c("GeoKrigloc"))
 }

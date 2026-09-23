@@ -422,16 +422,18 @@ corrsas <- function(corr, skew, tail, max_coeff = NULL) {
     cache_size <- length(names(II_cache))
     if (cache_size >= MAX_CACHE_SIZE) {
         # Rimuovi metà degli elementi (strategia semplice)
-        keys_to_remove <- sample(names(II_cache), floor(MAX_CACHE_SIZE / 2))
+        keys_to_remove <- head(sort(ls(II_cache, all.names = TRUE),
+                                    method = "radix"), floor(MAX_CACHE_SIZE / 2))
         rm(list = keys_to_remove, envir = II_cache)
     }
     
     # =======================================================================
     # ========================================================================
     II <- function(alpha, kappa, j, r) {
-        key <- paste(round(alpha, 8), round(kappa, 8), j, r, sep = "_")
-        if (exists(key, envir = II_cache)) {
-            return(get(key, envir = II_cache))
+        key <- paste(sprintf("%.17g", alpha), sprintf("%.17g", kappa),
+                     j, r, sep = "_")
+        if (exists(key, envir = II_cache, inherits = FALSE)) {
+            return(get(key, envir = II_cache, inherits = FALSE))
         }
         val <- tryCatch({
             # Limiti finiti: l'integranda decade come exp(-z²/2)

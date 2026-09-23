@@ -38,6 +38,14 @@ void Comp_Pair_Gauss2mem(int *cormod, double *data1, double *data2, int *N1, int
     
     double total = 0.0;
 
+    /* Opt-in OpenMP path for Gaussian spatial Matérn pairwise likelihood. */
+    if (GeoModels_gauss_pair_omp(0, *cormod, data1, data2, par, weighted,
+                                 mean1, mean2, n_pairs, max_dist,
+                                 sill, nugget, &total)) {
+        *res = R_FINITE(total) ? total : LOW;
+        return;
+    }
+
     // Loop principale separato per i due casi (con e senza pesi)
     if(weighted) {
         // Caso con pesi
@@ -89,7 +97,7 @@ void Comp_Pair_WrapGauss2mem(int *cormod, double *data1, double *data2, int *N1,
     const int n_pairs = npairs[0];
     const double max_dist = maxdist[0];
     const double nn = 1.0 - nugget;  // Rinomina da "scale" a "nn"
-    const double alfa = 2.0;
+    const double alfa = 3.0;
     double total = 0.0;
 
     // Loop principale separato per i due casi (con e senza pesi)
@@ -1975,7 +1983,7 @@ void Comp_Pair_WrapGauss_st2mem(int *cormod, double *data1,double *data2,int *N1
     int i=0;
     double  u=0.0, w=0.0,weights=1.0;
     double bl=0.0,corr=0.0;
-    double alfa=2.0;  double nugget=nuis[0];  double sill =nuis[1];
+    double alfa=3.0;  double nugget=nuis[0];  double sill =nuis[1];
    if(sill<0 || nugget<0||nugget>=1){*res=LOW; return;}
    for(i=0;i<npairs[0];i++){
              if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){

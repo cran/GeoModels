@@ -3,7 +3,7 @@
 \encoding{UTF-8}
 \title{Deleting NA values (missing values) from a spatial or spatio-temporal dataset.}
 \description{The function deletes NA values from a spatial or spatio-temporal dataset }
-\usage{GeoNA(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,
+\usage{GeoNA(data, coordx = NULL, coordy=NULL,coordz=NULL, coordt=NULL,
 coordx_dyn=NULL, grid=FALSE, X=NULL, setting="spatial")}
 \arguments{
  \item{data}{A \eqn{d}{d}-dimensional vector (a single spatial realisation) or a (\eqn{d \times d}{d x d})-matrix (a single spatial realisation on regular grid) or a

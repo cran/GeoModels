@@ -56,7 +56,7 @@ kriging system.  The choices are \code{cholesky} (default) and \code{svd}.
 Only \code{cholesky} is available when \code{sparse=TRUE}.}
  \item{n}{Positive integer size parameter. For Binomial it may be scalar or contain one value per observation. For direct Negative Binomial it is the single common number \eqn{r} of successes; Geometric corresponds to \eqn{r=1}. Default is \eqn{1}.}
  \item{nloc}{Positive integer size at prediction tasks. For Binomial, site-specific observation sizes require explicit prediction sizes. For direct Negative Binomial, \code{nloc}, if supplied, must equal the common \eqn{r}; for Geometric it must equal 1. No prediction size is inferred by averaging observation-side values.} 
- \item{mse}{Logical; if \code{TRUE} (the default) MSE of the kriging predictor is computed} 
+ \item{mse}{Logical; if \code{TRUE} (the default) MSE of the kriging predictor is computed. For \code{model="Wrapped"}, the returned MSE is the sum of the sine- and cosine-component linear-prediction MSEs rather than an ordinary squared angular error.} 
  \item{model}{String; the type of RF and therefore the densities associated to the likelihood
  objects. \code{Gaussian} is the default, see the Section
  Details.} 
@@ -100,6 +100,14 @@ It is normally inherited from \code{estobj}.}
 }
 
 \details{
+The optional pair cache is bounded by
+\code{getOption("GeoModels.local_pair_cache_max_bytes", 256 * 1024^2)}.
+This is a per-process budget in bytes for native cache workspace and CSR output,
+not a limit on total R memory. The peak during hash growth is included.
+A zero budget disables cache construction. If the budget or integer-index
+limit would be exceeded, the uncached calculation is used automatically.
+Each parallel worker may hold its own R objects.
+
 
 The univariate mean convention is the same as in \code{\link{GeoKrig}}:
 \eqn{\mu=X\beta} with coefficients named \code{mean}, \code{mean1}, and so
@@ -119,6 +127,13 @@ covariance (inverse Godambe information).  Mean coefficients missing from
 \code{varcov} are treated as fixed.  External mean vectors are already
 known, so a requested universal prediction is treated as simple kriging with
 a warning.
+
+For \code{model="Wrapped"}, each neighborhood delegates to the dedicated
+circular predictor in \code{\link{GeoKrig}}: sine and cosine residual
+components are predicted linearly with their exact wrapped-Gaussian
+covariances and the final direction is reconstructed with \code{atan2}. A
+requested \code{type_krig="Universal"} is therefore replaced by componentwise
+Simple prediction.
 
 For \code{copula="Gaussian"}, \code{copula="Clayton"}, and
 \code{copula="SkewGaussian"}, each local prediction uses the same
@@ -212,7 +227,11 @@ See \code{\link{GeoModels-spacetime-ordering}}.
  \item{time}{A \eqn{m}{m}-dimensional vector of temporal coordinates to be predicted;}
  \item{type}{String: the type of kriging (Standard or Tapering).}
  \item{type_krig}{String: the type of kriging: Simple or Universal}
- \item{mse}{When \code{mse=TRUE}, the prediction MSE; otherwise \code{NULL}.}
+ \item{mse}{When \code{mse=TRUE}, the prediction MSE; otherwise \code{NULL}. For \code{model="Wrapped"}, this is the sum of the sine- and cosine-component MSEs.}
+ \item{wrapped_mse_sin}{For \code{model="Wrapped"} and \code{mse=TRUE}, the local sine-component MSE. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_mse_cos}{For \code{model="Wrapped"} and \code{mse=TRUE}, the local cosine-component MSE. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_resultant}{For \code{model="Wrapped"}, the norm of the predicted first trigonometric-moment vector, truncated at one. This component is present only for \code{model="Wrapped"}.}
+ \item{wrapped_prediction_method}{For \code{model="Wrapped"}, a short description of the componentwise circular prediction method. This component is present only for \code{model="Wrapped"}.}
 
 }
 

@@ -447,12 +447,62 @@ if(!bivariate)
 #################################################################################
 
 
-if(model==13)   ##  wrapped
+if(model==13)   ## wrapped Gaussian
     {
       if(!bivariate) {
-         corr=cr$corr*(1-as.numeric(nuisance['nugget']))
-         vv=sinh(as.numeric(nuisance['sill']))
-         corr=sinh(as.numeric(nuisance['sill'])*corr)/vv
+         nugget_wrap <- as.numeric(nuisance['nugget'])
+         sill_wrap <- as.numeric(nuisance['sill'])
+         if(!is.finite(sill_wrap) || sill_wrap <= 0 ||
+            !is.finite(nugget_wrap) || nugget_wrap < 0 || nugget_wrap >= 1)
+           stop("GeoCovmatrix: Wrapped requires sill > 0 and 0 <= nugget < 1.",
+                call. = FALSE)
+
+         ## Off-diagonal correlation of the latent Gaussian residuals.
+         rho_wrap <- cr$corr * (1 - nugget_wrap)
+
+         ## Jammalamadaka--Sarma circular correlation.  This is exactly
+         ## sinh(sill * rho) / sinh(sill), evaluated by a stable formula.
+         corr_wrap <- .GeoWrappedCircularCorrelation(rho_wrap, sill_wrap)
+
+         ## GeoCovmatrix cannot use ordinary covariance of numerical angles,
+         ## which depends on the arbitrary branch cut.  For Wrapped it returns
+         ## the covariance of sin(Theta-mu), the component underlying the
+         ## circular correlation above.  The cosine-component covariance is
+         ## attached and exposed by the outer GeoCovmatrix object.
+         cov_sin <- .GeoWrappedSinCovariance(rho_wrap, sill_wrap)
+         cov_cos <- .GeoWrappedCosCovariance(rho_wrap, sill_wrap)
+         vv_sin <- .GeoWrappedSinVariance(sill_wrap)
+         vv_cos <- .GeoWrappedCosVariance(sill_wrap)
+
+         if(type=="Standard") {
+           varcov <- diag(vv_sin, dime)
+           varcov[lower.tri(varcov)] <- cov_sin
+           varcov <- t(varcov)
+           varcov[lower.tri(varcov)] <- cov_sin
+
+           coscov <- diag(vv_cos, dime)
+           coscov[lower.tri(coscov)] <- cov_cos
+           coscov <- t(coscov)
+           coscov[lower.tri(coscov)] <- cov_cos
+
+           circorr <- diag(1, dime)
+           circorr[lower.tri(circorr)] <- corr_wrap
+           circorr <- t(circorr)
+           circorr[lower.tri(circorr)] <- corr_wrap
+         }
+         if(type=="Tapering") {
+           varcov <- new("spam", entries=cov_sin, colindices=setup$ja,
+                         rowpointers=setup$ia, dimension=as.integer(rep(dime,2)))
+           diag(varcov) <- vv_sin
+           coscov <- new("spam", entries=cov_cos, colindices=setup$ja,
+                         rowpointers=setup$ia, dimension=as.integer(rep(dime,2)))
+           diag(coscov) <- vv_cos
+           circorr <- new("spam", entries=corr_wrap, colindices=setup$ja,
+                          rowpointers=setup$ia, dimension=as.integer(rep(dime,2)))
+           diag(circorr) <- 1
+         }
+         attr(varcov, "wrapped_cos_covmatrix") <- coscov
+         attr(varcov, "wrapped_circular_correlation") <- circorr
         }
      if(bivariate){}
     }
@@ -1112,6 +1162,8 @@ else {
                         initparam$param[initparam$namescorr],setup,initparam$radius,initparam$spacetime,spacetime_dyn,initparam$type,copula,ML,other_nuis)
                     }
 
+    wrapped_cos_covmatrix <- attr(covmatrix, "wrapped_cos_covmatrix", exact = TRUE)
+    wrapped_circular_correlation <- attr(covmatrix, "wrapped_circular_correlation", exact = TRUE)
 
     if(type=="Tapering") sparse=TRUE
 
@@ -1162,6 +1214,10 @@ if(is.null(X)) initparam$X=NULL
                    sparse=sparse,
     
                    X=initparam$X)
+    if(initparam$model == 13) {
+      CovMat$wrapped_cos_covmatrix <- wrapped_cos_covmatrix
+      CovMat$wrapped_circular_correlation <- wrapped_circular_correlation
+    }
     CovMat$call <- call
     structure(CovMat, class = c("GeoCovmatrix"))
 }

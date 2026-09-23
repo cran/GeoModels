@@ -486,6 +486,49 @@
 }
 
 ################################################################################
+## Wrapped-Gaussian circular component helpers                                 ##
+################################################################################
+
+.GeoWrappedMeanDirection <- function(eta) {
+  (2 * atan(as.numeric(eta)) + pi) %% (2 * pi)
+}
+
+.GeoWrappedSinVariance <- function(sill) {
+  sill <- as.numeric(sill)[1L]
+  if(!is.finite(sill) || sill <= 0)
+    stop("Wrapped Gaussian prediction requires sill > 0.", call. = FALSE)
+  0.5 * (-expm1(-2 * sill))
+}
+
+.GeoWrappedCosVariance <- function(sill) {
+  sill <- as.numeric(sill)[1L]
+  if(!is.finite(sill) || sill <= 0)
+    stop("Wrapped Gaussian prediction requires sill > 0.", call. = FALSE)
+  0.5 * (1 - exp(-sill))^2
+}
+
+.GeoWrappedSinCovariance <- function(rho, sill) {
+  sill <- as.numeric(sill)[1L]
+  if(!is.finite(sill) || sill <= 0)
+    stop("Wrapped Gaussian prediction requires sill > 0.", call. = FALSE)
+  rho <- pmax(-1, pmin(1, as.numeric(rho)))
+  0.5 * (exp(-sill * (1 - rho)) - exp(-sill * (1 + rho)))
+}
+
+.GeoWrappedCosCovariance <- function(rho, sill) {
+  sill <- as.numeric(sill)[1L]
+  if(!is.finite(sill) || sill <= 0)
+    stop("Wrapped Gaussian prediction requires sill > 0.", call. = FALSE)
+  rho <- pmax(-1, pmin(1, as.numeric(rho)))
+  0.5 * (exp(-sill * (1 - rho)) + exp(-sill * (1 + rho))) - exp(-sill)
+}
+
+.GeoWrappedCircularCorrelation <- function(rho, sill) {
+  ## Stable evaluation of sinh(sill * rho) / sinh(sill).
+  .GeoWrappedSinCovariance(rho, sill) / .GeoWrappedSinVariance(sill)
+}
+
+################################################################################
 ## Prediction model/counter helpers                                            ##
 ################################################################################
 .GeoPredictionCanonicalModel <- function(model) {
@@ -512,7 +555,7 @@
   "Gaussian", "SkewGaussian", "SkewLaplace", "StudentT", "SkewStudentT",
   "Gamma", "Weibull", "LogLogistic", "LogGaussian", "TwoPieceStudentT",
   "Beta", "TwoPieceGaussian", "TwoPieceTukeyh", "TwoPieceBimodal",
-  "Tukeygh", "Tukeyh", "Tukeyh2", "SinhAsinh",
+  "Tukeygh", "Tukeyh", "Tukeyh2", "SinhAsinh", "Wrapped",
   "Binary", "Bernoulli", "Binomial", "Geom", "Geometric", "BinomialNeg",
   "Poisson", "PoissonZIP", "BinomialNegZINB",
   "PoissonGamma", "PoissonGammaZIP", "PoissonGammaZIP1"
@@ -738,11 +781,25 @@
   list(coords = coords, times = times)
 }
 
+.GeoPairCacheBudgetOK <- function(indices, nobs) {
+  budget <- getOption("GeoModels.local_pair_cache_max_bytes", 256 * 1024^2)
+  if (!is.numeric(budget) || length(budget) != 1L ||
+      !is.finite(budget) || budget < 0)
+    stop("GeoModels.local_pair_cache_max_bytes must be a finite nonnegative number.",
+         call. = FALSE)
+  if (!is.list(indices)) stop("Neighborhood indices must be a list.", call. = FALSE)
+  ## These arrays alone must fit, even before accounting for the hash table.
+  k <- if (length(indices)) max(lengths(indices)) else 0
+  lower_bound <- 65536 + 4 * (as.double(nobs) + 1) + 12 * k * (k - 1) / 2
+  budget >= lower_bound
+}
+
 .GeoBuildSpatialPairCache <- function(indices, coords, corrmodel_code,
                                       corrparam, distance_code, radius,
                                       context = "local spatial kriging") {
   if (!.GeoPairCacheThresholdOK(indices)) return(NULL)
   geom <- .GeoValidatePairCacheGeometry(coords, context = context)
+  if (!.GeoPairCacheBudgetOK(indices, nrow(geom$coords))) return(NULL)
   corrparam <- as.double(corrparam)
   if (!length(corrparam) || any(!is.finite(corrparam))) {
     stop(context, ": invalid correlation parameters for pair cache.",
@@ -764,6 +821,7 @@
                                         context = "local space-time kriging") {
   if (!.GeoPairCacheThresholdOK(indices)) return(NULL)
   geom <- .GeoValidatePairCacheGeometry(coords, times, context)
+  if (!.GeoPairCacheBudgetOK(indices, nrow(geom$coords))) return(NULL)
   corrparam <- as.double(corrparam)
   if (!length(corrparam) || any(!is.finite(corrparam))) {
     stop(context, ": invalid correlation parameters for pair cache.",
@@ -780,6 +838,8 @@
 }
 
 .GeoValidatePairCache <- function(cache, context) {
+  ## NULL is an intentional memory-budget/allocation fallback, not corrupt data.
+  if (is.null(cache)) return(NULL)
   if (!is.list(cache) || is.null(cache$row_ptr) || is.null(cache$col_idx) ||
       is.null(cache$rho) || length(cache$col_idx) != length(cache$rho)) {
     stop(context, ": native pair-cache construction returned invalid data.",
@@ -833,6 +893,24 @@
                                      distance_code, radius,
                                      context = "local kriging") {
   geom <- .GeoValidatePairCacheGeometry(coords, times, context)
+  .GeoPairCrossCorrelationValidated(
+    indices, geom, loc, pred_time, corrmodel_code, corrparam,
+    distance_code, radius, context
+  )
+}
+
+## geom is constructed once by .GeoValidatePairCacheGeometry().  Keep all
+## per-target validation O(k), never rescan the N global observations here.
+.GeoPairCrossCorrelationValidated <- function(indices, geom, loc,
+                                               pred_time = 0, corrmodel_code,
+                                               corrparam, distance_code, radius,
+                                               context = "local kriging") {
+  if (!is.numeric(indices) || any(!is.finite(indices)) ||
+      any(indices != floor(indices)) || any(indices < 1) ||
+      any(indices > nrow(geom$coords)))
+    stop(context, ": invalid neighborhood indices.", call. = FALSE)
+  if (!is.numeric(pred_time) || length(pred_time) != 1L || !is.finite(pred_time))
+    stop(context, ": invalid prediction time.", call. = FALSE)
   loc <- as.numeric(loc)
   if (length(loc) != ncol(geom$coords) || any(!is.finite(loc))) {
     stop(context, ": invalid prediction coordinates for pair correlation.",
@@ -852,17 +930,7 @@
 
 .GeoPairCorrelationParam <- function(corrmodel, param,
                                      context = "local kriging") {
-  code <- as.integer(CkCorrModel(corrmodel))
-  nm <- CorrelationPar(code)
-  if (!length(nm)) {
-    stop(context, ": correlation parameters are not defined.", call. = FALSE)
-  }
-  vals <- unlist(param[nm], use.names = FALSE)
-  vals <- as.double(vals)
-  if (length(vals) != length(nm) || any(!is.finite(vals))) {
-    stop(context, ": missing or invalid correlation parameters.", call. = FALSE)
-  }
-  vals
+  .GeoValidateCorrelationParameters(corrmodel, param, context = context)
 }
 
 .GeoGaussianPairCovariance <- function(indices, cache, param,

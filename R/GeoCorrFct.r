@@ -47,10 +47,14 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
     model <- .GeoCovCanonicalModel(model)
     if(is.null(CkCorrModel (corrmodel))) stop("The name of the correlation model  is not correct\n")
     if(is.null(CkModel(model)))   stop("The name of the  model  is not correct\n")
-    if(!is.numeric(x)) stop("Distances must be numeric\n")
-    if(sum(x<0)>=1) stop("Distances must be positive\n")
+    if (!is.numeric(x) || is.complex(x) || !length(x) ||
+        any(!is.finite(x)) || any(x < 0))
+      stop("GeoCorrFct: distances must be finite, nonnegative numeric values.", call. = FALSE)
+    if (!is.null(t) && (!is.numeric(t) || is.complex(t) || !length(t) ||
+                       any(!is.finite(t)) || any(t < 0)))
+      stop("GeoCorrFct: temporal lags must be finite and nonnegative.", call. = FALSE)
     if(!is.list(param)) stop("param  must be a list\n")
-    .GeoValidateHoleWendlandParameters(corrmodel, param, d=2L, context="GeoCorrFct")
+    .GeoValidateParameterNames(param, "GeoCorrFct")
 
     spacetime<-CheckST(CkCorrModel(corrmodel))
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
@@ -70,19 +74,19 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
            call.=FALSE)
 
     if(model %in% c("Binary","Bernoulli")) {
-      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || as.integer(round(n)) != 1L)
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n != 1)
         stop("GeoCorrFct: Binary/Bernoulli is the one-trial field; n must equal 1.", call.=FALSE)
       n <- 1L
     }
     if(model == "Binomial") {
-      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 ||
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 || n > .Machine$integer.max ||
          abs(n-round(n)) > sqrt(.Machine$double.eps))
         stop("GeoCorrFct: a lag-only Binomial curve requires one common positive integer n; use GeoCovmatrix for site-specific n.", call.=FALSE)
       n <- as.integer(round(n))
     }
     if(model %in% c("BinomialNeg","Geom","Geometric")) {
       if(model %in% c("Geom","Geometric")) n <- 1L
-      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 ||
+      if(!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 || n > .Machine$integer.max ||
          abs(n-round(n)) > sqrt(.Machine$double.eps))
         stop("GeoCorrFct: Negative-Binomial n is the common number r of successes and must be one positive integer scalar.", call.=FALSE)
       n <- as.integer(round(n))
@@ -114,6 +118,12 @@ if(!bivariate) {
 }
 
 mu=if(!bivariate) as.numeric(param$mean) else 0
+if (bivariate && !covariance) {
+  if (is.null(param[["sill_1"]])) param$sill_1 <- 1
+  if (is.null(param[["sill_2"]])) param$sill_2 <- 1
+}
+.GeoValidateCorrelationParameters(corrmodel, param, context = "GeoCorrFct")
+.GeoValidateCurveNuisance(param, model, bivariate)
   ## selecting nuisance mean and correlation parameters
       if(!bivariate){
         corr_names <- CorrelationPar(CkCorrModel(corrmodel))

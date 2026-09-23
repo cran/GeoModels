@@ -483,7 +483,6 @@ void GeoPEMTimeGet(double *out);
 void GeoPEMStatusGet(int *out);
 void GeoPEMHypRecGet(double *out);
 void GeoPEMPGrtBetaEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
-void GeoPEMPGrtLegacyEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
 void GeoPEMCorrEval(double *corr,double *mean_i,double *mean_j,double *shape,double *out);
 void GeoPEMZIPEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,
                    double *mup,double *nugget1,double *nugget2,double *shape,double *out);
@@ -623,6 +622,23 @@ void C_mult_mat(Rcomplex *z, Rcomplex *x, int xrows, int xcols, Rcomplex *y, int
 
 
 void Comp_supp(double *c_supp,int *cormod, double h,double u, double *par);
+/* Optional OpenMP acceleration for Gaussian spatial pairwise likelihoods. */
+int GeoModels_omp_threads_internal(void);
+int GeoModels_omp_min_pairs_internal(void);
+int GeoModels_gauss_pair_omp(int conditional,
+                             int cormod,
+                             const double *data1,
+                             const double *data2,
+                             const double *par,
+                             int weighted,
+                             const double *mean1,
+                             const double *mean2,
+                             int n_pairs,
+                             double max_dist,
+                             double sill,
+                             double nugget,
+                             double *result);
+
 double CorFct(int *cormod, double h, double u, double *par, int c11, int c22);
 double CorFunCauchy(double lag, double power2, double scale);
 double CorFunDagum(double lag, double power1, double power2, double scale);
@@ -713,7 +729,6 @@ double d22norm(double x, double y,double v11,double v22,double v12);
 double d2lognorm(double x, double y, double sill,double nugget, double mux,double muy,double rho);
 
 double dNnorm(int N,double **M, double *dat);
-double kummer(double a, double b,double c);
 
 double int_hyp(double x,double a, double b,double c,double z);
 double int_gen_hyp(double x,double a, double b,double z,double c);
@@ -983,13 +998,9 @@ double Pr0(double corr,int r, int t, double mean_i, double mean_j);
 
 double P00(double corr,int r, int t, double mean_i, double mean_j);
 
-double PG00(double corr,int r, int t, double mean_i, double mean_j, double a);
 
-double PGrr(double corr,int r, int t, double mean_i, double mean_j, double a);
 
-double PGr0(double corr,int r, int t, double mean_i, double mean_j, double a);
 
-double PGrt(double corr,int r, int t, double mean_i, double mean_j, double a);
 
 double int_kuma(double x,double eta, double gam,double k,double m);
 

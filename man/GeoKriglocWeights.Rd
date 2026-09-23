@@ -74,6 +74,14 @@ GeoKriglocWeights(coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL, coordx_dyn
  by \code{GeoSimcond(local=TRUE)}.}
 }
 \details{
+The optional pair cache is bounded by
+\code{getOption("GeoModels.local_pair_cache_max_bytes", 256 * 1024^2)}.
+This is a per-process budget in bytes for native cache workspace and CSR output,
+not a limit on total R memory. The peak during hash growth is included.
+A zero budget disables cache construction. If the budget or integer-index
+limit would be exceeded, the uncached calculation is used automatically.
+Each parallel worker may hold its own R objects.
+
 
 Mean inputs follow \code{\link{GeoKrigloc}}.  Coefficients \code{mean},
 \code{mean1}, and so on correspond in order to the columns of \code{X}; an

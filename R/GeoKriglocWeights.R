@@ -329,8 +329,8 @@
   C <- .GeoGaussianPairCovariance(
     idx, vars$pair_cache, vars$param, context = "GeoKriglocWeights"
   )
-  cross_corr <- .GeoPairCrossCorrelation(
-    idx, vars$st_geometry$coords, vars$st_geometry$times,
+  cross_corr <- .GeoPairCrossCorrelationValidated(
+    idx, vars$st_geometry,
     loc = loc, pred_time = pred_time,
     corrmodel_code = vars$corrmodel_code,
     corrparam = vars$corrparam,

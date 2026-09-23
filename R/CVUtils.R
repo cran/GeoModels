@@ -4,10 +4,14 @@
 
 .GeoCVMetricNames <- c(
   "rmse", "mae", "mad", "lscore", "brie",
-  "crps", "pit_mean", "intscore", "coverage"
+  "crps", "pit_mean", "intscore", "coverage",
+  "n_requested", "n_valid", "n_failed", "n_invalid_mse", "n_valid_prob"
 )
 
-.GeoCVSummarizeScores <- function(obs, pred, mse, gaussian_scores) {
+.GeoCVSummarizeScores <- function(obs, pred, mse, gaussian_scores,
+                                   strict = getOption("GeoModels.cv_strict", FALSE)) {
+  if (!is.logical(strict) || length(strict) != 1L || is.na(strict))
+    stop("GeoModels.cv_strict must be TRUE or FALSE.", call. = FALSE)
   obs <- as.numeric(c(obs))
   pred <- as.numeric(c(pred))
   mse <- as.numeric(c(mse))
@@ -20,16 +24,21 @@
     stop("length of predictive MSE and predictions does not match", call. = FALSE)
 
   ok_err <- is.finite(obs) & is.finite(pred)
-  if (!any(ok_err))
-    stop("no finite observation/prediction pairs are available", call. = FALSE)
-
+  ok_mse <- is.finite(mse) & mse > 0
+  n_invalid_mse <- if (gaussian_scores) sum(ok_err & !ok_mse) else NA_integer_
+  if (strict && (any(!ok_err) || (gaussian_scores && any(ok_err & !ok_mse))))
+    stop("Cross-validation excluded invalid predictions or predictive MSE (strict mode).",
+         call. = FALSE)
   err <- obs[ok_err] - pred[ok_err]
   ans <- c(
-    rmse = sqrt(mean(err^2)),
-    mae = mean(abs(err)),
-    mad = stats::median(abs(err)),
+    rmse = if (length(err)) sqrt(mean(err^2)) else NA_real_,
+    mae = if (length(err)) mean(abs(err)) else NA_real_,
+    mad = if (length(err)) stats::median(abs(err)) else NA_real_,
     lscore = NA_real_, brie = NA_real_, crps = NA_real_,
-    pit_mean = NA_real_, intscore = NA_real_, coverage = NA_real_
+    pit_mean = NA_real_, intscore = NA_real_, coverage = NA_real_,
+    n_requested = length(obs), n_valid = sum(ok_err), n_failed = sum(!ok_err),
+    n_invalid_mse = n_invalid_mse,
+    n_valid_prob = if (gaussian_scores) sum(ok_err & ok_mse) else NA_integer_
   )
 
   if (gaussian_scores) {
@@ -59,11 +68,11 @@
   ans[.GeoCVMetricNames]
 }
 
-.GeoCVBindScores <- function(x) {
+.GeoCVBindScores <- function(x, metric_names = .GeoCVMetricNames) {
   if (!is.list(x) || !length(x))
     stop("No cross-validation results were returned", call. = FALSE)
   sizes <- vapply(x, length, integer(1))
-  bad <- which(sizes != length(.GeoCVMetricNames))
+  bad <- which(sizes != length(metric_names))
   if (length(bad)) {
     stop(
       "Invalid score vector returned by cross-validation iteration(s): ",
@@ -71,13 +80,40 @@
     )
   }
   ans <- do.call(rbind, x)
-  if (is.null(dim(ans)) || ncol(ans) != length(.GeoCVMetricNames))
+  if (is.null(dim(ans)) || ncol(ans) != length(metric_names))
     stop("Cross-validation score results have invalid dimensions", call. = FALSE)
-  colnames(ans) <- .GeoCVMetricNames
+  colnames(ans) <- metric_names
+  warning_messages <- unlist(lapply(x, attr, which = "GeoModels.task_warnings"),
+                             use.names = FALSE)
+  if (length(warning_messages)) {
+    tab <- sort(table(warning_messages), decreasing = TRUE)
+    shown <- head(tab, 10L)
+    warning("Cross-validation warnings: ",
+            paste(sprintf("%s [n=%d]", names(shown), as.integer(shown)), collapse = "; "),
+            if (length(tab) > 10L) "; additional warning types are stored in the result.",
+            call. = FALSE)
+    attr(ans, "task_warnings") <- tab
+  }
   ans
 }
 
-.GeoCVRunIterations <- function(iteration_fun, K, parallel, ncores, progress) {
+.GeoCVRunIterations <- function(iteration_fun, K, parallel, ncores, progress,
+                                metric_names = .GeoCVMetricNames) {
+  strict <- getOption("GeoModels.cv_strict", FALSE)
+  warn_policy <- getOption("warn", 0L)
+  run_iteration <- function(i) {
+    old_options <- options(GeoModels.cv_strict = strict)
+    on.exit(options(old_options), add = TRUE)
+    messages <- character()
+    ans <- withCallingHandlers(iteration_fun(i), warning = function(w) {
+      ## Do not turn warn=2 into a silently accepted result.
+      if (warn_policy >= 2L) stop(conditionMessage(w), call. = FALSE)
+      messages <<- c(messages, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+    attr(ans, "GeoModels.task_warnings") <- messages
+    ans
+  }
   n.cores <- .GeoResolveWorkers(parallel, ncores, n_jobs = K)
   if (n.cores <= 1L) {
     out <- vector("list", K)
@@ -87,10 +123,10 @@
       on.exit(close(pb), add = TRUE)
     }
     for (i in seq_len(K)) {
-      out[[i]] <- iteration_fun(i)
+      out[[i]] <- run_iteration(i)
       if (isTRUE(progress)) setTxtProgressBar(pb, i)
     }
-    return(.GeoCVBindScores(out))
+    return(.GeoCVBindScores(out, metric_names = metric_names))
   }
 
   old_plan <- future::plan()
@@ -103,20 +139,20 @@
       future.apply::future_lapply(
         seq_len(K),
         function(i) {
-          z <- iteration_fun(i)
+          z <- run_iteration(i)
           p()
           z
         },
-        future.seed = TRUE, future.stdout = FALSE, future.conditions = "none"
+        future.seed = TRUE, future.stdout = FALSE, future.conditions = "condition"
       )
     })
   } else {
     out <- future.apply::future_lapply(
-      seq_len(K), iteration_fun,
-      future.seed = TRUE, future.stdout = FALSE, future.conditions = "none"
+      seq_len(K), run_iteration,
+      future.seed = TRUE, future.stdout = FALSE, future.conditions = "condition"
     )
   }
-  .GeoCVBindScores(out)
+  .GeoCVBindScores(out, metric_names = metric_names)
 }
 
 .GeoCVMakeTestSamples <- function(n, K, n.fold, groups = NULL) {
@@ -143,16 +179,18 @@
 
   lapply(seq_len(K), function(i) {
     remaining <- group_sizes
-    selected <- integer(0)
+    selected <- integer(ntest)
+    n_selected <- 0L
     for (idx in sample.int(n)) {
       g <- groups[idx]
       if (remaining[g] > 1L) {
-        selected <- c(selected, idx)
+        n_selected <- n_selected + 1L
+        selected[n_selected] <- idx
         remaining[g] <- remaining[g] - 1L
-        if (length(selected) == ntest) break
+        if (n_selected == ntest) break
       }
     }
-    if (length(selected) != ntest)
+    if (n_selected != ntest)
       stop("Unable to construct a valid space-time cross-validation fold.", call. = FALSE)
     sort(selected)
   })
@@ -291,4 +329,53 @@
   if (!is.null(time)) args$maxtime <- maxtime
   args$progress <- FALSE
   .GeoWithDuplicateCheckSuppressed(do.call(GeoKrigloc, args))
+}
+
+
+.GeoCVConditionalPredict <- function(
+    fit, loc, Xloc, Mloc, nloc,
+    nrep, n_iter, mcmc_thin
+) {
+  model <- .GeoPredictionCanonicalModel(as.character(fit$model)[1L])
+  if (!(model %in% c("Binomial", "BinomialNeg"))) {
+    stop(
+      "GeoCV conditional prediction is currently available only for direct Binomial and BinomialNeg random fields.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(fit$copula)) {
+    stop(
+      "GeoCV conditional prediction is currently available only for the direct count random fields, not copula models.",
+      call. = FALSE
+    )
+  }
+
+  ans <- .GeoWithDuplicateCheckSuppressed(do.call(
+    GeoSimcond,
+    list(
+      estobj = fit,
+      loc = loc,
+      Xloc = Xloc,
+      Mloc = Mloc,
+      nloc = nloc,
+      nrep = nrep,
+      n_iter = n_iter,
+      mcmc_thin = mcmc_thin,
+      method = "Cholesky",
+      local = FALSE,
+      sparse = FALSE,
+      parallel = FALSE,
+      progress = FALSE
+    )
+  ))
+
+  pred <- as.numeric(ans$cond_mean)
+  if (length(pred) != nrow(as.matrix(loc)) || any(!is.finite(pred))) {
+    stop(
+      "GeoSimcond returned an invalid conditional-mean prediction inside GeoCV.",
+      call. = FALSE
+    )
+  }
+
+  list(pred = pred, cond_var = as.numeric(ans$cond_var))
 }

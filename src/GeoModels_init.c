@@ -112,7 +112,6 @@ extern void SetPGPairCounts(double *data1,double *data2,int *n,int *ok);
 extern void GeoPEMStatusGet(int *out);
 extern void GeoPEMCorrEval(double *corr,double *mean_i,double *mean_j,double *shape,double *out);
 extern void GeoPEMPGrtBetaEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
-extern void GeoPEMPGrtLegacyEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,double *shape,double *out);
 extern void GeoPEMZIPEval(double *corr,int *r,int *t,double *mean_i,double *mean_j,
                           double *mup,double *nugget1,double *nugget2,double *shape,double *out);
 extern SEXP GeoCorrPGsVecCall(SEXP corr,SEXP mean,SEXP shape);
@@ -1040,7 +1039,16 @@ extern void GeoClaytonInterp3(double *eta_grid, int *ne,
                                double *tab, double *eta1, double *eta2,
                                double *x, int *n, double *out);
 
+extern void GeoModels_set_omp_threads(int *n);
+extern void GeoModels_set_omp_min_pairs(int *n);
+extern void GeoModels_openmp_info(int *compiled, int *threads,
+                                  int *max_threads, int *min_pairs);
+
 static const R_CMethodDef CEntries[] = {
+    {"GeoModels_set_omp_threads",     (DL_FUNC) &GeoModels_set_omp_threads,     1},
+    {"GeoModels_set_omp_min_pairs",   (DL_FUNC) &GeoModels_set_omp_min_pairs,   1},
+    {"GeoModels_openmp_info",         (DL_FUNC) &GeoModels_openmp_info,         4},
+
     {"GeoBivDensity",               (DL_FUNC) &GeoBivDensity,              16},
     {"GeoCopulaDensity",            (DL_FUNC) &GeoCopulaDensity,            7},
     {"GeoCovSeriesForward",          (DL_FUNC) &GeoCovSeriesForward,          7},
@@ -1098,7 +1106,6 @@ static const R_CMethodDef CEntries[] = {
     {"GeoPEMStatusGet",             (DL_FUNC) &GeoPEMStatusGet,              1},
     {"GeoPEMCorrEval",              (DL_FUNC) &GeoPEMCorrEval,               5},
     {"GeoPEMPGrtBetaEval",          (DL_FUNC) &GeoPEMPGrtBetaEval,           7},
-    {"GeoPEMPGrtLegacyEval",        (DL_FUNC) &GeoPEMPGrtLegacyEval,         7},
     {"GeoPEMZIPEval",               (DL_FUNC) &GeoPEMZIPEval,               10},
     {"DeleteGlobalVar",             (DL_FUNC) &DeleteGlobalVar,              0},
     {"DeleteGlobalVar2",            (DL_FUNC) &DeleteGlobalVar2,             0},
