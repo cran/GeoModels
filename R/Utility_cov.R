@@ -634,12 +634,10 @@ variance_disp <- function(model_type, params) {
       ss * (1 - 2 * sk + 2 * sk^2) / (sk^2 * (1 - sk)^2)
     },  # SkewLaplace
     "18" = {
-      df <- 1 / as.numeric(params["df"])
-      skew <- as.numeric(params["skew"])
-      mu <- as.numeric(params["mean"])
-      mu * ((df / (df - 2)) * (1 + skew^2) -
-              df * skew^2 * gamma(0.5 * (df - 1)) / (pi * gamma(0.5 * df)))
-    },  # legacy SkewStudentT expression retained for compatibility
+      moments <- .GeoSkewStudentMoments(
+        1 / as.numeric(params["df"]), as.numeric(params["skew"]))
+      as.numeric(params["sill"]) * moments$variance
+    },
     "10" = as.numeric(params["sill"]) + as.numeric(params["skew"])^2 * (1 - 2 / pi),
     "34" = {
       h <- suppressWarnings(as.numeric(params["tail"]))
@@ -890,29 +888,8 @@ compute_ak_vectorized <- function(M, model_type, params) {
 .GeoGaussianCopulaPolynomial <- function(rho, coefficient) {
   rho <- as.numeric(rho)
   if (!length(rho)) return(numeric(0))
-
-  good <- is.finite(rho) & !is.na(rho)
-  out <- rep(NA_real_, length(rho))
-  if (!any(good)) return(out)
-
-  rr <- rho[good]
-  coefficient <- as.numeric(coefficient)
-  M <- length(coefficient)
-  if (!M) {
-    out[good] <- 0
-    return(out)
-  }
-
-  acc <- rep(coefficient[M], length(rr))
-  if (M > 1L) {
-    for (k in seq.int(M - 1L, 1L))
-      acc <- coefficient[k] + rr * acc
-  }
-  val <- rr * acc
-  val[abs(rr) < 1e-12] <- 0
-  val[!is.finite(val)] <- 0
-  out[good] <- val
-  out
+  .Call("GeoGaussianCopulaPolynomial", rho, as.numeric(coefficient),
+        PACKAGE = "GeoModels")
 }
 
 # Gaussian-copula covariance.  Continuous margins use one cached
@@ -2529,3 +2506,82 @@ if (!bivariate && common_copula_model) {
 return(varcov)
 }
 ######################################################################################################
+
+## Shared observed correlation of the constructive Student random field.
+## Copula margins deliberately use the separate copula covariance engine.
+.GeoStudentCorrelation <- function(rho_base, rho_num, nu) {
+  rho_base <- as.numeric(rho_base)
+  rho_num <- as.numeric(rho_num)
+  nu <- as.numeric(nu)
+  if (length(nu) != 1L || is.na(nu) || nu <= 2 ||
+      length(rho_base) != length(rho_num) ||
+      any(!is.finite(rho_base)) || any(!is.finite(rho_num)))
+    stop("Student covariance requires nu > 2 and matching finite correlations.",
+         call. = FALSE)
+  if (!length(rho_base)) return(numeric())
+  if (length(rho_base) > .Machine$integer.max)
+    stop("Too many correlations for the Student covariance kernel.", call. = FALSE)
+  out <- dotCall64::.C64(
+    "GeoStudentCorrelationVec",
+    SIGNATURE = c("double", "double", "double", "double", "integer"),
+    rho_base, rho_num, nu,
+    result = dotCall64::vector_dc("double", length(rho_base)),
+    as.integer(length(rho_base)),
+    INTENT = c("r", "r", "r", "w", "r"),
+    PACKAGE = "GeoModels", VERBOSE = 0, NAOK = TRUE
+  )$result
+  if (any(!is.finite(out)))
+    stop("Student correlation evaluation failed or a correlation is outside [-1,1].",
+         call. = FALSE)
+  out
+}
+
+## Constructive skew-Student field:
+## (skew * abs(G0) + sqrt(1-skew^2) * G1) / sqrt(sum(Gj^2)/nu).
+## G0 and the denominator copies use rho_base; only G1 carries the nugget.
+## Reuse the stable Student kernel for A_nu * 2F1(1/2,1/2;nu/2;rho_base^2),
+## including the Gaussian limit and endpoints.  This is shared by matrices,
+## cross-covariances and diagnostic curves.
+.GeoSkewStudentMoments <- function(nu, skew) {
+  nu <- as.numeric(nu)
+  skew <- as.numeric(skew)
+  if (length(nu) != 1L || is.na(nu) || nu <= 2 ||
+      length(skew) != 1L || !is.finite(skew) || abs(skew) > 1)
+    stop("SkewStudentT covariance requires nu > 2 and skew in [-1,1].",
+         call. = FALSE)
+  factor <- .GeoStudentCorrelation(0, 1, nu)
+  student_variance <- 1 / (1 - 2 / nu)
+  mean <- skew * sqrt(student_variance * (2 / pi) * factor)
+  list(mean = mean,
+       variance = student_variance * (1 - skew^2 * (2 / pi) * factor))
+}
+
+.GeoSkewStudentCorrelation <- function(rho_base, rho_num, nu, skew) {
+  rho_base <- as.numeric(rho_base)
+  rho_num <- as.numeric(rho_num)
+  nu <- as.numeric(nu)
+  skew <- as.numeric(skew)
+  moments <- .GeoSkewStudentMoments(nu, skew)
+  if (length(rho_base) != length(rho_num) ||
+      any(!is.finite(rho_base)) || any(!is.finite(rho_num)) ||
+      any(abs(rho_base) > 1 + 64 * .Machine$double.eps) ||
+      any(abs(rho_num) > 1 + 64 * .Machine$double.eps))
+    stop("SkewStudentT covariance requires matching correlations in [-1,1].",
+         call. = FALSE)
+  if (!length(rho_base)) return(numeric())
+  if (skew == 0) return(.GeoStudentCorrelation(rho_base, rho_num, nu))
+  rho_base <- pmax(-1, pmin(1, rho_base))
+  rho_num <- pmax(-1, pmin(1, rho_num))
+  ah <- .GeoStudentCorrelation(c(0, rho_base), rep(1, length(rho_base) + 1L), nu)
+  a <- ah[1L]
+  ah <- ah[-1L]
+  skew2 <- skew^2
+  abs_product <- sqrt(pmax(0, 1 - rho_base^2)) + rho_base * asin(rho_base)
+  numerator <- ah * ((1 - skew2) * rho_num +
+                      skew2 * (2 / pi) * (abs_product - 1)) +
+    skew2 * (2 / pi) * (ah - a)
+  out <- numerator / (moments$variance * (1 - 2 / nu))
+  out[rho_base == 0 & rho_num == 0] <- 0
+  out[rho_base == 1 & rho_num == 1] <- 1
+  out
+}

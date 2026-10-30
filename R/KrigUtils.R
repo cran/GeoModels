@@ -169,8 +169,65 @@
   unname(coords)
 }
 
-.GeoKrigFactor <- function(covmatrix, method = "cholesky",
-                           context = "Kriging") {
+.GeoKrigNewFactorCache <- function() {
+  budget <- suppressWarnings(as.numeric(
+    getOption("GeoModels.krigloc.factor_cache_bytes", 64 * 1024^2))[1L])
+  if (!is.finite(budget) || budget < 0) budget <- 64 * 1024^2
+  if (budget == 0) return(NULL)
+  cache <- new.env(parent = emptyenv())
+  cache$entries <- new.env(parent = emptyenv())
+  cache$order <- character()
+  cache$bytes <- 0
+  cache$budget <- budget
+  cache$hits <- 0
+  cache
+}
+
+## A cache is installed only for repeated, identically ordered neighborhoods
+## within one GeoKrigloc call.  Comparing the actual covariance matrix prevents
+## reuse when a mean-dependent margin or any other model input changes it.
+## Storage is bounded and private to the call (and to each future worker).
+.GeoKrigFactor <- function(covmatrix, method = "cholesky", context = "Kriging") {
+  method <- .GeoKrigMatchMethod(method, sparse = isTRUE(covmatrix$sparse),
+                                context = context)
+  cache <- getOption("GeoModels.local_krig_factor_cache", NULL)
+  local_key <- getOption("GeoModels.local_krig_factor_key", NULL)
+  use_cache <- is.environment(cache) && is.environment(cache$entries) &&
+    is.character(local_key) && length(local_key) == 1L && !is.na(local_key)
+  if (!use_cache)
+    return(.GeoKrigFactorUncached(covmatrix, method, context))
+
+  key <- paste(context, method, isTRUE(covmatrix$sparse), local_key, sep = "|")
+  previous <- cache$entries[[key]]
+  if (!is.null(previous) && identical(previous$covariance, covmatrix$covmatrix)) {
+    cache$hits <- cache$hits + 1
+    return(previous$factor)
+  }
+  factor <- .GeoKrigFactorUncached(covmatrix, method, context)
+  entry <- list(covariance = covmatrix$covmatrix, factor = factor)
+  entry$bytes <- as.numeric(utils::object.size(entry))
+  if (!is.null(previous)) {
+    cache$bytes <- cache$bytes - previous$bytes
+    rm(list = key, envir = cache$entries)
+    cache$order <- cache$order[cache$order != key]
+  }
+  if (entry$bytes <= cache$budget) {
+    while (length(cache$order) &&
+           (cache$bytes + entry$bytes > cache$budget || length(cache$order) >= 128L)) {
+      oldest <- cache$order[1L]
+      cache$bytes <- cache$bytes - cache$entries[[oldest]]$bytes
+      rm(list = oldest, envir = cache$entries)
+      cache$order <- cache$order[-1L]
+    }
+    cache$entries[[key]] <- entry
+    cache$order <- c(cache$order, key)
+    cache$bytes <- cache$bytes + entry$bytes
+  }
+  factor
+}
+
+.GeoKrigFactorUncached <- function(covmatrix, method = "cholesky",
+                                   context = "Kriging") {
   method <- .GeoKrigMatchMethod(method, sparse = isTRUE(covmatrix$sparse),
                                 context = context)
   C <- covmatrix$covmatrix
@@ -437,14 +494,13 @@
       stop(context, ": invalid precomputed kriging weights.", call. = FALSE)
     }
   }
-  quad <- colSums(CC * weights)
-
   mse_value <- NULL
   if (isTRUE(mse)) {
     if (is.null(target_variance)) {
       stop(context, ": target variance is required to compute the MSE.",
            call. = FALSE)
     }
+    quad <- colSums(CC * weights)
     mse_value <- rep(as.numeric(target_variance), length.out = npred) - quad
 
     if (identical(type_key, "universal")) {
@@ -828,6 +884,10 @@
          call. = FALSE)
   }
 
+  .st_old <- .GeoSTEnter(corrmodel_code, coordx = geom$coords,
+                         distance = distance_code, context = context)
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+
   cache <- .Call(
     "GeoBuildSpacetimePairCache",
     indices, geom$coords, geom$times, as.integer(corrmodel_code), corrparam,
@@ -916,6 +976,10 @@
     stop(context, ": invalid prediction coordinates for pair correlation.",
          call. = FALSE)
   }
+  .st_old <- .GeoSTEnter(corrmodel_code, coordx = geom$coords,
+                         distance = distance_code, context = context)
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+
   out <- .Call(
     "GeoPairCrossCorrelation",
     as.integer(indices), geom$coords, geom$times, loc, as.double(pred_time),

@@ -53,7 +53,7 @@ library(GeoModels)
 ##################
 set.seed(21)
 model="Tukeyh";tail=0.1
-N=400 # number of location sites
+N=150 # number of location sites
 # Set the coordinates of the points:
 x = runif(N, 0, 1)
 y = runif(N, 0, 1)
@@ -94,7 +94,7 @@ GeoQQ(res,type="D",lwd=2,ylim=c(0,0.5),breaks=20)
 ##################
 set.seed(21)
 model="Weibull";shape=1.5
-N=600 # number of location sites
+N=150 # number of location sites
 # Set the coordinates of the points:
 x = runif(N, 0, 1)
 y = runif(N, 0, 1)

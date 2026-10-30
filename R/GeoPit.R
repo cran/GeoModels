@@ -263,7 +263,7 @@ GeoPit <- function(object, type = c("Uniform", "Gaussian"), data_to_pred = NULL)
   if (model %in% c("SkewStudentT", "Gaussian_misp_SkewStudentT")) {
     inv_df <- require_par("df")
     if (inv_df <= 0) stop("The inverse degrees-of-freedom parameter must be positive.")
-    alpha <- require_par("skew")
+    alpha <- .GeoSkewStudentTAlpha(require_par("skew"))
     nu <- 1 / inv_df
     data <- sn::pst(
       (dd - allmean) / sqrt(allsill),

@@ -163,7 +163,7 @@ library(GeoModels)
 
 ######### spatial case
 set.seed(32)
-N=500 # number of location sites
+N=150 # number of location sites
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)

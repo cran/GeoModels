@@ -225,6 +225,16 @@
   )
 }
 
+.GeoSkewStudentTAlpha <- function(skew) {
+  delta <- as.numeric(skew)
+  if (length(delta) != 1L || !is.finite(delta) || abs(delta) >= 1) {
+    stop("For SkewStudentT, skew must lie strictly between -1 and 1.",
+         call. = FALSE)
+  }
+  ## GeoModels uses the latent skewness delta; sn uses the shape alpha.
+  delta / sqrt(1 - delta^2)
+}
+
 .GeoMarginalPLogLogistic <- function(x, shape, rate = 1, scale = 1 / rate) {
   if (missing(shape)) stop("argument 'shape' is missing, with no default")
   if (length(shape) != 1L || !is.finite(shape) || shape <= 0) {
@@ -232,6 +242,129 @@
   }
   scale <- as.numeric(scale)
   if (any(scale <= 0, na.rm = TRUE)) stop("'scale' must be positive")
-  z <- (x / scale)^shape
-  z / (1 + z)
+  ## Work on the log scale to avoid overflow in (x / scale)^shape.
+  ## pmax maps the nonpositive support to log(0), while preserving NA/NaN.
+  stats::plogis(shape * (log(pmax(x, 0)) - log(scale)))
+}
+
+
+## E|T_nu| under GeoModels' convention nu = 1/df.  The ratio expansion
+## prevents cancellation/overflow for large nu; nu=Inf is its exact limit.
+.GeoStudentAbsMean <- function(nu) {
+  nu <- as.numeric(nu)
+  if (length(nu) != 1L || is.na(nu) || nu <= 1)
+    stop("The Student marginal mean requires nu > 1.", call. = FALSE)
+  if (is.infinite(nu)) return(sqrt(2 / pi))
+  x <- 0.5 * (nu - 2)
+  if (x >= 1000) {
+    r <- 1 / x
+    log_a <- r * (-0.25 + r^2 * (1 / 96 - r^2 / 320))
+    return(exp(0.5 * (log(2 / pi) - log1p(-2 / nu) + log_a)))
+  }
+  exp(0.5 * (log(nu) - log(pi)) +
+        lgamma(0.5 * (nu - 1)) - lgamma(0.5 * nu))
+}
+
+## Observed-scale marginal mean for linear-prediction diagnostics.
+## Keep direct and copula parametrizations separate (notably Kumaraswamy).
+## Unsupported models must not silently be treated as having zero mean.
+.GeoMarginalMean <- function(model_type, params, eta, n = 1, copula = NULL) {
+  model_type <- as.integer(model_type)
+  eta <- as.numeric(eta)
+  if (length(model_type) != 1L || is.na(model_type) ||
+      !length(eta) || any(!is.finite(eta)))
+    stop("Invalid model or marginal location vector.", call. = FALSE)
+  scalar <- function(name) {
+    value <- suppressWarnings(as.numeric(params[[name]]))
+    if (length(value) != 1L || !is.finite(value))
+      stop("A finite scalar parameter '", name, "' is required.", call. = FALSE)
+    value
+  }
+  sizes <- function() {
+    nn <- as.numeric(n)
+    if (length(nn) == 1L) nn <- rep(nn, length(eta))
+    if (length(nn) != length(eta) || any(!is.finite(nn)) || any(nn < 0))
+      stop("n must contain one valid size or one size per observation.", call. = FALSE)
+    nn
+  }
+  bounded <- function(mean01) {
+    lo <- scalar("min"); hi <- scalar("max")
+    if (hi <= lo) stop("Bounded margins require min < max.", call. = FALSE)
+    lo + (hi - lo) * mean01
+  }
+  if (model_type == 13L)
+    stop("GeoDoScores does not define circular scores for Wrapped; use circular prediction diagnostics, not Euclidean scores on angles.",
+         call. = FALSE)
+
+  # Count means; the links do not depend on the copula, and n may vary by site.
+  if (model_type %in% c(2L, 11L, 51L)) return(sizes() * pnorm(eta))
+  if (model_type == 49L) return(sizes() * plogis(eta))
+  if (model_type %in% c(14L, 16L, 45L, 52L, 56L)) {
+    nn <- if (model_type == 14L) 1 else sizes()
+    mm <- nn * pnorm(eta, lower.tail = FALSE) / pnorm(eta)
+    if (model_type %in% c(45L, 56L)) mm <- mm * pnorm(scalar("pmu"), lower.tail = FALSE)
+    return(as.numeric(mm))
+  }
+  if (model_type %in% c(30L, 36L, 46L, 47L)) return(exp(eta))
+  if (model_type %in% c(43L, 44L, 53L, 57L, 58L))
+    return(pnorm(scalar("pmu"), lower.tail = FALSE) * exp(eta))
+
+  if (!is.null(copula))
+    return(as.numeric(.GeoCopulaMarginalMoments(model_type, params, eta)$mean))
+
+  if (model_type %in% c(1L, 12L, 35L, 34L, 25L)) return(eta)
+  if (model_type %in% c(21L, 22L, 24L, 26L)) return(exp(eta))
+  if (model_type == 10L) return(eta + scalar("skew") * sqrt(2 / pi))
+  if (model_type %in% c(18L, 27L, 37L)) {
+    df_param <- scalar("df")
+    if (df_param < 0) stop("df cannot be negative.", call. = FALSE)
+    nu <- if (df_param == 0) Inf else 1 / df_param
+    shift <- sqrt(scalar("sill")) * scalar("skew") * .GeoStudentAbsMean(nu)
+    return(eta + if (model_type == 27L) -2 * shift else shift)
+  }
+  if (model_type == 29L)
+    return(eta - 2 * scalar("skew") * sqrt(2 * scalar("sill") / pi))
+  if (model_type == 38L)
+    return(eta - 2 * scalar("skew") * sqrt(2 * scalar("sill") / pi) /
+             (1 - scalar("tail")))
+  if (model_type %in% c(20L, 40L))
+    return(as.numeric(.GeoPlainTransformedMarginalMoments(model_type, params, eta)$mean))
+  if (model_type %in% c(9L, 41L)) {
+    g <- scalar("skew"); h <- scalar("tail")
+    if (h < 0 || h >= 1) stop("The Tukeygh mean requires 0 <= tail < 1.", call. = FALSE)
+    shift <- if (g == 0) 0 else expm1(g^2 / (2 * (1 - h))) / (g * sqrt(1 - h))
+    return(eta + sqrt(scalar("sill")) * shift)
+  }
+  if (model_type == 39L) {
+    nu <- scalar("df"); shape <- scalar("shape")
+    if (nu <= 0 || shape < 0)
+      stop("TwoPieceBimodal requires df > 0 and shape >= 0.", call. = FALSE)
+    alpha <- 2 * (shape + 1) / nu
+    abs_mean <- sqrt(2) * exp(lgamma(nu / 2 + 1 / alpha) - lgamma(nu / 2))
+    return(eta - 2 * scalar("skew") * sqrt(scalar("sill")) * abs_mean)
+  }
+  if (model_type == 59L) {
+    sk <- scalar("skew")
+    if (sk <= 0 || sk >= 1) stop("SkewLaplace skew must lie in (0,1).", call. = FALSE)
+    return(eta + sqrt(scalar("sill")) * (1 / sk - 1 / (1 - sk)))
+  }
+  if (model_type == 28L) {
+    a <- scalar("shape1"); b <- scalar("shape2")
+    return(rep(bounded(a / (a + b)), length(eta)))
+  }
+  if (model_type %in% c(33L, 42L)) {
+    if (model_type == 33L) {
+      # Direct model: F(x)=1-(1-x^shape2)^shape1, unlike copula margins.
+      a <- scalar("shape2"); b <- scalar("shape1")
+    } else {
+      a <- scalar("shape")
+      b <- log(0.5) / log1p(-plogis(eta)^a)
+    }
+    if (a <= 0 || any(!is.finite(b)) || any(b <= 0))
+      stop("Invalid Kumaraswamy shape parameters.", call. = FALSE)
+    mm <- bounded(exp(log(b) + lbeta(1 + 1 / a, b)))
+    return(if (length(mm) == 1L) rep(mm, length(eta)) else as.numeric(mm))
+  }
+  stop("GeoDoScores marginal centering is not implemented for model id ",
+       model_type, ".", call. = FALSE)
 }

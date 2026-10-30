@@ -39,12 +39,16 @@ GeoVariogramDir(data, coordx, coordy = NULL, coordz = NULL,
  }
  \item{maxdist}{
  Maximum spatial distance to consider between pairs. If \code{NULL}, an internal default is used.
+ For \code{"Geod"} the distance is an angle in radians on the unit sphere;
+ for \code{"Chor"} it is the chord length on the unit sphere.
  }
  \item{neighb}{
  Number of nearest neighbors to use for each location. If \code{NULL}, an internal default is used.
  }
  \item{distance}{
- Type of distance metric to use (default: \code{"Eucl"}). See \code{\link{GeoFit}} for options.
+ Type of distance metric: \code{"Eucl"}, \code{"Geod"}, or \code{"Chor"}.
+ Geographic coordinates are longitude and latitude in degrees. Geographic
+ distances and bin boundaries use the unit sphere; there is no radius argument.
  }
  \item{subsample}{
  Numeric in \eqn{(0,1]}{(0,1]}. Proportion of spatial locations used to compute the directional semivariograms
@@ -56,14 +60,21 @@ GeoVariogramDir(data, coordx, coordy = NULL, coordz = NULL,
  The function computes empirical semivariograms for several directions by:
  \itemize{
  \item Selecting pairs of points within \code{maxdist} and among the \code{neighb} nearest neighbors using
- \code{\link{GeoNeighIndex}}.
+ a nearest-neighbor search. Geographic searches use a three-dimensional unit-sphere
+ embedding, so neighbor selection also works across the antimeridian and near the poles.
  \item Computing squared differences for each selected pair.
  \item Assigning each pair to a directional class if the vector connecting the pair falls within the
  specified angular tolerance around a given direction.
  \item Binning pairs by distance and computing the average squared difference (semivariogram) within each bin.
  }
 
- The direction is defined in the \emph{xy-plane} even in 3D. For 2D data, set \code{coordz = NULL}.
+ For Euclidean coordinates, direction is measured from the positive x axis in the
+ \emph{xy-plane}, even in 3D. For geographic coordinates, it is the unoriented
+ great-circle tangent at the pair midpoint, measured from local east toward north.
+ This definition is invariant to swapping the endpoints. Antipodal pairs, coincident
+ endpoints and pairs with a polar midpoint have no such azimuth and are omitted
+ unless \code{tolerance=90}, which includes all directions. For 2D data, set
+ \code{coordz = NULL}. Pairs with a non-finite data value are omitted.
 
  The \code{subsample} argument can be used to reduce computational cost by randomly selecting a subset of
  spatial locations prior to pair construction. This is particularly useful for large datasets.
@@ -90,7 +101,7 @@ columns. The automatic maximum lag includes the extent of the z coordinate.
 \examples{
 require(GeoModels)
 set.seed(960)
-NN <- 2500
+NN <- 150
 coords <- cbind(runif(NN), runif(NN))
 scale <- 0.5/3
 param <- list(mean = 0, sill = 1, nugget = 0, scale = scale, smooth = 0.5)

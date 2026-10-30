@@ -240,8 +240,8 @@ library(GeoModels)
 ### random field with Matérn correlation.
 ################################################################
 set.seed(514)
-x = runif(200, 0, 1)
-y = runif(200, 0, 1)
+x = runif(120, 0, 1)
+y = runif(120, 0, 1)
 coords = cbind(x,y)
 
 corrmodel = "Matern"
@@ -263,17 +263,17 @@ plot(vario, pch=20, ylim=c(0,1), ylab="Semivariogram", xlab="Distance")
 ### Gaussian random field with Gneiting correlation.
 ################################################################
 set.seed(331)
-x = runif(200, 0, 1)
-y = runif(200, 0, 1)
+x = runif(25, 0, 1)
+y = runif(25, 0, 1)
 coords = cbind(x,y)
-times = seq(1,10,1)
+times = seq(1,6,1)
 
 data = GeoSim(coordx=coords, coordt=times, corrmodel="gneiting",
  param=list(mean=0, scale_s=0.08, scale_t=0.4, sill=1,
  nugget=0, power_s=1, power_t=1, sep=0.5))$data
 
 vario_st = GeoVariogram(data=data, coordx=coords, coordt=times,
- maxtime=7, maxdist=0.5)
+ maxtime=3, maxdist=0.5)
 plot(vario_st, pch=20)
 
 ################################################################
@@ -281,8 +281,8 @@ plot(vario_st, pch=20)
 ### Gaussian random field with Bi-Matérn covariance.
 ################################################################
 set.seed(293)
-x = runif(400, 0, 1)
-y = runif(400, 0, 1)
+x = runif(80, 0, 1)
+y = runif(80, 0, 1)
 coords = cbind(x,y)
 
 param = list(mean_1=0, mean_2=0,

@@ -26,12 +26,14 @@
            required)
 }
 
-.GeoValidateCorrelationParameters <- function(corrmodel, param, d = 2L,
+.GeoValidateCorrelationParameters <- function(corrmodel, param, d = NULL,
                                                 context = "GeoModels") {
   code <- if (is.character(corrmodel)) CkCorrModel(corrmodel) else corrmodel
   if (!is.numeric(code) || length(code) != 1L || !is.finite(code) ||
       code != floor(code) || is.null(CorrelationPar(code)))
     stop(context, ": invalid correlation model.", call. = FALSE)
+  if (is.null(d)) d <- if (code %in% c(85L, 89L)) .GeoSTCurrentDimension() else 2L
+  .GeoSTValidate(code, param, d = d, complete = TRUE, context = context)
   z <- .GeoValidateNamedScalars(param, CorrelationPar(code), context)
   fail <- function(msg) stop(context, ": ", msg, call. = FALSE)
   scales <- z[grepl("^scale($|_)", names(z))]

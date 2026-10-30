@@ -10,6 +10,8 @@ GeoSimCopula <- function(coordx=NULL, coordy=NULL, coordz=NULL,coordt=NULL, coor
      L=10000,parallel=FALSE,ncores=6)
 {
 call <- match.call()
+restore_simulation_cache <- .GeoSimulationCachePush()
+on.exit(restore_simulation_cache(), add = TRUE)
 
     corrmodel <- .GeoSimulationCanonicalCorrModel(corrmodel)
     if(is.null(CkCorrModel(corrmodel))) stop("The name of the correlation model is not correct\n")
@@ -142,7 +144,7 @@ on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
   )
 }
 
-SIM=list()
+SIM <- vector("list", nrep)
 ###################################################
 ### starting number of replicates
 ###################################################

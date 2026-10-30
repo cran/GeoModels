@@ -179,7 +179,7 @@ library(GeoModels)
 ###
 ###############################################################
 set.seed(261)
-NN=1400
+NN=100
 x <- runif(NN);y <- runif(NN)
 coords=cbind(x,y)
 

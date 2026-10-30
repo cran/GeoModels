@@ -1,0 +1,144 @@
+{
+  "status": "PASS",
+  "checks": {
+    "elementary_covariances": 420,
+    "GW_65digit_margins": 312,
+    "GW_65digit_joint": 60,
+    "Matern_65digit": 210,
+    "origin": 30,
+    "fixed_margins": 60,
+    "exact_support": 75,
+    "invalid_parameters": 20,
+    "invalid_lags": 8,
+    "strict_shape": 1,
+    "strict_smoothness": 2,
+    "PSD_finite": 60,
+    "PSD_min_eigenvalue": 60,
+    "Kronecker_identity": 2,
+    "nugget_PSD": 6,
+    "GW_Matern_limit": 9
+  },
+  "total": 1335,
+  "max_absolute_errors": {
+    "elementary_covariances": 5.551115123125783e-17,
+    "GW_65digit_margins": 4.475753101473856e-12,
+    "GW_65digit_joint": 8.643086246706844e-14,
+    "Matern_65digit": 2.6645352591003757e-15,
+    "origin": 0,
+    "fixed_margins": 0,
+    "exact_support": 0,
+    "Kronecker_identity": 5.551115123125783e-17
+  },
+  "minimum_PSD_eigenvalue": 0.002533838423431696,
+  "limit_errors": [
+    {
+      "kappa": [
+        -0.25,
+        0.2
+      ],
+      "sep": -0.7,
+      "errors": [
+        0.009513101738464008,
+        0.0018738578085472635,
+        0.0006229260069316456
+      ]
+    },
+    {
+      "kappa": [
+        -0.25,
+        0.2
+      ],
+      "sep": 0,
+      "errors": [
+        0.004462316750489893,
+        0.0008867481619261042,
+        0.00029526551955243174
+      ]
+    },
+    {
+      "kappa": [
+        -0.25,
+        0.2
+      ],
+      "sep": 0.7,
+      "errors": [
+        0.0032190707269291324,
+        0.0005993653839841684,
+        0.00019734189561779192
+      ]
+    },
+    {
+      "kappa": [
+        0,
+        0
+      ],
+      "sep": -0.7,
+      "errors": [
+        0.014234504354830257,
+        0.0027983630000317228,
+        0.00092995597233686
+      ]
+    },
+    {
+      "kappa": [
+        0,
+        0
+      ],
+      "sep": 0,
+      "errors": [
+        0.006631897340964782,
+        0.0013219442591551334,
+        0.00044039012079619133
+      ]
+    },
+    {
+      "kappa": [
+        0,
+        0
+      ],
+      "sep": 0.7,
+      "errors": [
+        0.0030382311662729387,
+        0.000627802378686839,
+        0.00020985098512753958
+      ]
+    },
+    {
+      "kappa": [
+        1,
+        1
+      ],
+      "sep": -0.7,
+      "errors": [
+        0.03016892294723461,
+        0.006199032873098642,
+        0.002075965134198221
+      ]
+    },
+    {
+      "kappa": [
+        1,
+        1
+      ],
+      "sep": 0,
+      "errors": [
+        0.030971614621387145,
+        0.006344989201670759,
+        0.002123596926379201
+      ]
+    },
+    {
+      "kappa": [
+        1,
+        1
+      ],
+      "sep": 0.7,
+      "errors": [
+        0.02895262137157556,
+        0.0058667903892714035,
+        0.0019598044178260055
+      ]
+    }
+  ],
+  "note": "Production fixed_margin_st.c compiled unchanged. Original CorFunWitMat excerpt used; Rmath gamma/digamma/Bessel calls supplied by standard C++/Boost in this standalone harness. No R runtime or full-package installation was available."
+}

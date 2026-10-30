@@ -38,11 +38,19 @@ within each temporal block.  See \code{\link{GeoModels-spacetime-ordering}}.
 
 \value{
  Returns a list containing the following components:
- \item{coordx}{A \eqn{d}{d}-dimensional vector of spatial coordinates;}
- \item{coordy}{A \eqn{d}{d}-dimensional vector of spatial coordinates;}
+ \item{coordx}{For fixed sites, a coordinate matrix with one row per retained
+ spatial site and one column per coordinate dimension. Grid inputs are expanded
+ into explicit sites. For dynamic sites, \code{NULL}.}
+ \item{coordy}{\code{NULL}; all fixed-site coordinate dimensions are in \code{coordx}.}
+ \item{coordz}{\code{NULL}; all fixed-site coordinate dimensions are in \code{coordx}.}
+ \item{coordx_dyn}{For dynamic sites, the list of filtered coordinate matrices;
+ otherwise \code{NULL}.}
  \item{coordt}{A \eqn{t}{t}-dimensional vector of temporal coordinates;}
- \item{data}{The data without NAvalues }
- \item{grid}{\code{TRUE} if the spatial data are observed in a regular grid, otherwise \code{FALSE};}
+ \item{data}{The data without missing or infinite values. Spatial data are
+ returned as a vector aligned with the rows of \code{coordx}, including when
+ the input is a grid matrix.}
+ \item{grid}{\code{FALSE}; returned coordinates represent explicit sites,
+ including when the input was a regular grid.}
  \item{perc}{The percentage of NA values.}
  \item{setting}{Are data of spatial or spatio-temporal or spatial bivariate type}
  \item{X}{The covariate matrix after deleting the rows corresponding to removed observations. For fixed-coordinate spatio-temporal data, deleting a site removes its row from every temporal block.} 

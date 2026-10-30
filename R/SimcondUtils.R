@@ -46,6 +46,9 @@
     n_iter = 1000L, batch_size = NULL, max_batch_mb = 256,
     mean_obs = NULL, mean_loc = NULL
 ) {
+  restore_simulation_cache <- .GeoSimulationCachePush()
+  on.exit(restore_simulation_cache(), add = TRUE)
+
 
   ##########################################################################
   ## Parameters and checks
@@ -729,6 +732,9 @@
     parallel = FALSE, ncores = 1, progress = FALSE,
     n_iter = 1000L, max_batch_mb = 256
 ) {
+  restore_simulation_cache <- .GeoSimulationCachePush()
+  on.exit(restore_simulation_cache(), add = TRUE)
+
   coord_obs <- as.matrix(coord_obs)
   loc <- as.matrix(loc)
   u_obs <- as.numeric(u_obs)
@@ -957,6 +963,9 @@
                          L = NULL, distance = "Eucl", radius = 1, anisopars = NULL,
                          parallel = FALSE, ncores = 1, progress = FALSE,
                          mean_obs = NULL, mean_loc = NULL) {
+  restore_simulation_cache <- .GeoSimulationCachePush()
+  on.exit(restore_simulation_cache(), add = TRUE)
+
   shape_raw <- as.numeric(param$shape)
   if (length(shape_raw) != 1L || !is.finite(shape_raw) || shape_raw <= 0 ||
       abs(shape_raw - round(shape_raw)) > sqrt(.Machine$double.eps)) {
@@ -1527,7 +1536,7 @@
 
   if (length(mu_obs) != n_obs || length(mu_loc) != n_loc ||
       any(!is.finite(c(mu_obs, mu_loc)))) {
-    stop("Could not construct finite Gaussian means for local conditioning.")
+    stop("Could not construct finite Gaussian means for conditioning.")
   }
 
   list(obs = as.numeric(mu_obs), loc = as.numeric(mu_loc))
@@ -1684,17 +1693,6 @@
     rm(local_weights)
   } else {
     cat("Computing global kriging predictor and weights ...\n")
-    krig_sim_args <- list(
-      coordx = coord_obs, coordt = coordt_use,
-      data = data, corrmodel = corrmodel,
-      loc = loc, X = X, Xloc = Xloc, Mloc = Mloc, time = time,
-      distance = distance, radius = radius, anisopars = anisopars,
-      param = param
-    )
-    krig_sim <- do.call(GeoKrig, krig_sim_args)
-    krig_pred_vec <- as.numeric(krig_sim$pred)
-    rm(krig_sim)
-
     weights_args <- list(
       coordx = coord_obs, coordt = coordt_use,
       corrmodel = corrmodel, loc = loc,
@@ -1718,6 +1716,22 @@
       stop("The nloc_by_nobs kriging weights have incompatible dimensions.")
     }
     rm(krig_weights_obj)
+    ## The same weights define both the conditional mean and the simulated
+    ## residual correction.  Reuse them instead of rebuilding and factoring
+    ## the observation covariance in a separate GeoKrig() call.
+    means <- .GeoSimcondGaussianMeans(
+      param = param, X = X, Xloc = Xloc, Mloc = Mloc,
+      n_obs = n_obs, n_loc = n_loc
+    )
+    centered_data <- data - means$obs
+    krig_pred_vec <- means$loc + as.numeric(
+      if (weights_orientation == "nobs_by_nloc") {
+        crossprod(W, centered_data)
+      } else {
+        W %*% centered_data
+      }
+    )
+    rm(means, centered_data)
     weights_obj <- W
     rm(W)
   }
@@ -2053,4 +2067,233 @@
   }
 
   lapply(seq_len(nrep), function(j) as.numeric(ans[, j]))
+}
+
+################################################################################
+### Direct SkewLaplace RF: four-Gaussian quadratic construction, no copula
+### NOT the Gaussian copula with SkewLaplace marginal distributions.
+################################################################################
+.GeoSimcondSkewLaplaceDirect <- function(
+    coord_obs, loc, data, param, corrmodel, mean_obs, mean_loc,
+    nrep = 1L, n_iter = 1000L, mcmc_thin = 1L,
+    method = "Cholesky", L = 1000L, distance = "Eucl", radius = 1,
+    anisopars = NULL, parallel = FALSE, ncores = 1L, progress = FALSE) {
+  restore_simulation_cache <- .GeoSimulationCachePush()
+  on.exit(restore_simulation_cache(), add = TRUE)
+
+
+  coord_obs <- as.matrix(coord_obs)
+  loc <- as.matrix(loc)
+  data <- as.numeric(data)
+  mean_obs <- as.numeric(mean_obs)
+  mean_loc <- as.numeric(mean_loc)
+  nobs <- nrow(coord_obs)
+  nloc <- nrow(loc)
+  p <- as.numeric(param$skew)
+  sill <- as.numeric(param$sill)
+  nugget <- if (is.null(param$nugget)) 0 else as.numeric(param$nugget)
+  if (length(p) != 1L || !is.finite(p) || p <= 0 || p >= 1)
+    stop("Direct SkewLaplace conditional simulation requires 0 < param$skew < 1.",
+         call. = FALSE)
+  if (length(sill) != 1L || !is.finite(sill) || sill <= 0)
+    stop("Direct SkewLaplace conditional simulation requires param$sill > 0.",
+         call. = FALSE)
+  if (length(nugget) != 1L || !is.finite(nugget) || nugget < 0 || nugget >= 1)
+    stop("Direct SkewLaplace conditional simulation requires nugget in [0,1).",
+         call. = FALSE)
+  if (length(data) != nobs || length(mean_obs) != nobs || length(mean_loc) != nloc)
+    stop("Direct SkewLaplace observations and location vectors have incompatible lengths.",
+         call. = FALSE)
+  if (any(!is.finite(c(data, mean_obs, mean_loc))))
+    stop("Direct SkewLaplace data or means are not finite.", call. = FALSE)
+
+  sigma <- sqrt(sill)
+  yy <- (data - mean_obs) / sigma
+  if (any(!is.finite(yy)))
+    stop("Direct SkewLaplace standardized observations are not finite.",
+         call. = FALSE)
+
+  ## Deal explicitly with prediction locations coinciding with observed sites:
+  ## they are conditioned exactly, and must NOT be duplicated in the joint
+  ## Gaussian simulation, which otherwise creates a singular covariance.
+  ## The latent error is the same, though mean_loc may differ from mean_obs.
+  loc_key <- function(x) apply(x, 1L, function(r) paste(sprintf("%.17g", r), collapse = "|"))
+  k_obs <- loc_key(coord_obs)
+  k_loc <- loc_key(loc)
+  obs_match <- match(k_loc, k_obs)
+  unknown <- which(is.na(obs_match))
+  new_key <- unique(k_loc[unknown])
+  unique_positions <- unknown[!duplicated(k_loc[unknown])]
+  nu <- length(unique_positions)
+  out_base <- numeric(nloc)
+  if (any(!is.na(obs_match))) {
+    idx <- which(!is.na(obs_match))
+    out_base[idx] <- data[obs_match[idx]] - mean_obs[obs_match[idx]]
+  }
+  if (nu == 0L) {
+    res1 <- mean_loc + out_base
+    return(rep(list(res1), nrep))
+  }
+  loc_new <- loc[unique_positions, , drop = FALSE]
+  loc_map <- match(k_loc, new_key)
+
+  ## All four latent Gaussian fields share the SAME correlation structure and
+  ## Gaussian nugget as the direct unconditional GeoSim(model='SkewLaplace').
+  corr_names <- CorrParam(corrmodel)
+  latent_param <- c(as.list(param[corr_names]),
+                    list(mean = 0, sill = 1, nugget = nugget))
+  plan <- NULL
+  if (identical(method, "Cholesky")) {
+    plan <- .GeoSimcondGaussianPlan(
+      coord_obs, loc_new, corrmodel, latent_param,
+      distance, radius, anisopars, precision = TRUE
+    )
+    Q <- plan$Q
+    W <- plan$W
+    orientation <- "nloc_by_nobs"
+  } else {
+    weights_obj <- GeoKrigWeights(
+      coordx = coord_obs, loc = loc_new, model = "Gaussian",
+      corrmodel = corrmodel, param = latent_param,
+      distance = distance, radius = radius, anisopars = anisopars
+    )
+    # One observed Gaussian site has unit marginal variance by definition.
+    Q <- if (nobs == 1L) matrix(1, 1L, 1L) else {
+      as.matrix(MatInv(mtx = weights_obj$covmatrix))
+    }
+    if (!identical(dim(Q), c(nobs, nobs)) || any(!is.finite(Q)) ||
+        any(diag(Q) <= 0))
+      stop("The direct SkewLaplace latent precision matrix is invalid.",
+           call. = FALSE)
+    W <- weights_obj$weights
+    orientation <- weights_obj$weights_orientation
+    if (!(orientation %in% c("nobs_by_nloc", "nloc_by_nobs")))
+      stop("GeoKrigWeights returned an unsupported weights orientation.",
+           call. = FALSE)
+    if (orientation == "nobs_by_nloc") {
+      W <- matrix(as.numeric(W), nrow = nobs, ncol = nu)
+      if (!identical(dim(W), c(nobs, nu)))
+        stop("Invalid latent kriging weights.", call. = FALSE)
+    } else {
+      W <- matrix(as.numeric(W), nrow = nu, ncol = nobs)
+      if (!identical(dim(W), c(nu, nobs)))
+        stop("Invalid latent kriging weights.", call. = FALSE)
+    }
+    rm(weights_obj)
+  }
+
+  if (progress) message("Direct SkewLaplace: sampling the four conditioned latent fields ...")
+  latent <- .Call(
+    "geo_skewlaplace_latent_gibbs",
+    as.double(yy), Q, as.double(p), as.integer(n_iter),
+    as.integer(nrep), as.integer(mcmc_thin), PACKAGE = "GeoModels"
+  )
+
+  ## Exact quadratic constraint at all observed sites, within rounding.
+  validate_draw <- function(k) {
+    zz <- matrix(latent[, , k], nrow = nobs, ncol = 4L)
+    obtained <- (zz[, 1L]^2 + zz[, 2L]^2) / (2 * p) -
+                (zz[, 3L]^2 + zz[, 4L]^2) / (2 * (1 - p))
+    max(abs(obtained - yy)) <= 1e-8 * (1 + max(abs(yy)))
+  }
+  if (!validate_draw(1L) || !validate_draw(nrep))
+    stop("Direct SkewLaplace latent draws violate the observed quadratic constraint.",
+         call. = FALSE)
+
+  ## Exact Cholesky path: factor once, then propagate ALL four fields using
+  ## matrix-matrix products. No repeated GeoSim or joint (nobs+nloc) Cholesky.
+  if (identical(method, "Cholesky")) {
+    batch_rep <- max(1L, min(nrep, floor(64 * 1024^2 / (32 * (nu + nobs)))))
+    result <- vector("list", nrep)
+    if (progress) message("Direct SkewLaplace: propagating with the cached conditional factor ...")
+    for (first in seq.int(1L, nrep, by = batch_rep)) {
+      last <- min(nrep, first + batch_rep - 1L)
+      nb <- last - first + 1L
+      obs_latent <- matrix(latent[, , first:last, drop = FALSE],
+                           nrow = nobs, ncol = 4L * nb)
+      noise <- matrix(stats::rnorm(nu * 4L * nb), nrow = nu, ncol = 4L * nb)
+      propagated <- W %*% obs_latent + plan$L %*% noise
+      for (ib in seq_len(nb)) {
+        columns <- 4L * (ib - 1L) + seq_len(4L)
+        zl <- propagated[, columns, drop = FALSE]
+        error_unique <- sigma * (
+          (zl[, 1L]^2 + zl[, 2L]^2) / (2 * p) -
+          (zl[, 3L]^2 + zl[, 4L]^2) / (2 * (1 - p))
+        )
+        error <- out_base
+        error[unknown] <- error_unique[loc_map[unknown]]
+        result[[first + ib - 1L]] <- mean_loc + error
+      }
+    }
+    attr(result, "simulation_details") <- list(
+      engine = "Direct SkewLaplace: radial-angular Gibbs with cached Gaussian propagation",
+      observation_factorizations = 1L, prediction_factorizations = 1L,
+      conditional_factor = plan$conditional_factor, mcmc = TRUE,
+      burn_in = as.integer(n_iter), thinning = as.integer(mcmc_thin),
+      retained = as.integer(nrep),
+      sweeps = max(as.integer(n_iter), 1L) + (nrep - 1L) * mcmc_thin
+    )
+    return(result)
+  }
+
+  ## Propagate each posterior latent configuration to prediction sites by
+  ## Gaussian conditional substitution. The same weights are used for all
+  ## four independent standard Gaussian fields; this preserves the FULL
+  ## joint predictive covariance, not merely the separate marginal variances.
+  all_coords <- rbind(coord_obs, loc_new)
+  nall <- nrow(all_coords)
+  ## Keep base Gaussian simulations below 128 MB per batch.
+  max_fields <- max(4L, floor(128 * 1024^2 / (8 * nall)))
+  batch_rep <- max(1L, min(nrep, floor(max_fields / 4L)))
+  result <- vector("list", nrep)
+  if (progress) message("Direct SkewLaplace: Gaussian propagation to prediction sites ...")
+  for (first in seq.int(1L, nrep, by = batch_rep)) {
+    last <- min(nrep, first + batch_rep - 1L)
+    nb <- last - first + 1L
+    nfields <- 4L * nb
+    if (identical(method, "Cholesky")) {
+      simobj <- GeoSim(
+        coordx = all_coords, corrmodel = corrmodel, model = "Gaussian",
+        param = latent_param, nrep = nfields, progress = FALSE,
+        distance = distance, radius = radius, anisopars = anisopars
+      )
+    } else if (identical(method, "TB")) {
+      simobj <- GeoSimapprox(
+        coordx = all_coords, corrmodel = corrmodel, model = "Gaussian",
+        param = latent_param, nrep = nfields, method = method, L = L,
+        progress = FALSE, parallel = parallel, ncores = ncores,
+        distance = distance, radius = radius, anisopars = anisopars
+      )
+    } else {
+      stop("Direct SkewLaplace requires method='Cholesky' or method='TB'.",
+           call. = FALSE)
+    }
+    gaussian <- .GeoSimcondNormalizeSimulations(
+      simobj$data, nfields, expected_length = nall
+    )
+    rm(simobj)
+    for (ib in seq_len(nb)) {
+      ir <- first + ib - 1L
+      zl <- matrix(0, nrow = nu, ncol = 4L)
+      for (k in 1:4) {
+        sim <- gaussian[[4L * (ib - 1L) + k]]
+        corrected <- latent[, k, ir] - sim[seq_len(nobs)]
+        adjustment <- if (orientation == "nobs_by_nloc") {
+          as.numeric(crossprod(W, corrected))
+        } else {
+          as.numeric(W %*% corrected)
+        }
+        zl[, k] <- sim[nobs + seq_len(nu)] + adjustment
+      }
+      error_unique <- sigma * (
+        (zl[, 1L]^2 + zl[, 2L]^2) / (2 * p) -
+        (zl[, 3L]^2 + zl[, 4L]^2) / (2 * (1 - p))
+      )
+      error <- out_base
+      error[unknown] <- error_unique[loc_map[unknown]]
+      result[[ir]] <- mean_loc + error
+    }
+    rm(gaussian)
+  }
+  result
 }

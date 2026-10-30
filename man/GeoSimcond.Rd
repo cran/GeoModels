@@ -36,7 +36,7 @@ GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = N
  \item{method}{Unconditional simulation method. Currently \code{"Cholesky"} and \code{"TB"} are available; \code{"CE"} is retained for API compatibility but rejected by the explicit-coordinate conditional workflow.}
  \item{model}{String specifying random field type (default: "Gaussian")}
  \item{n}{For direct \code{Binomial}, the number of trials, either scalar or one positive integer per observed location. For direct \code{BinomialNeg}, the common positive integer number \eqn{r} of successes.}
- \item{nrep}{Number of retained conditional simulation replicates (default: 1). For direct count models these are successive thinned draws from the latent Gibbs chain.}
+ \item{nrep}{Number of retained conditional simulation replicates (default: 1). For direct count models and the direct non-copula \code{SkewLaplace} model, these are successive thinned draws from a latent Gibbs chain.}
  \item{local}{Logical. If \code{FALSE} (default), global conditioning is used. If
  \code{TRUE}, each prediction location is conditioned only on the observations
  selected by \code{neighb} and/or \code{maxdist}.}
@@ -56,11 +56,11 @@ GeoSimcond(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL, coordt = N
  \item{parallel}{Logical; default \code{FALSE}. If \code{TRUE}, supported expensive stages use parallel workers. For \code{method="TB"} or \code{"CE"}, the setting is passed to \code{GeoSimapprox}; for \code{local=TRUE}, local kriging weights may also be computed in parallel. The final local substitution is evaluated in the main R process using a compact sparse weight operator and bounded batches, avoiding duplication of large simulation and weight objects across workers.}
  \item{ncores}{Positive integer or \code{NULL}; default \code{6}. With \code{parallel=TRUE}, an explicit integer requests that many workers, capped by detected cores and available jobs. Set \code{ncores=NULL} for automatic selection, capped at six workers and normally leaving one detected core free. A value of 1 is treated as serial execution.}
  \item{progress}{If TRUE then a progress bar is shown.}
- \item{n_iter}{Positive integer; number of Gibbs sweeps used by latent conditional samplers. For direct \code{Binomial} and \code{BinomialNeg}, it is the burn-in length of the count-constrained Gibbs chain; retained simulations are then separated by \code{mcmc_thin} sweeps. The default for these direct count models is 25. For the other latent Gibbs engines, omitting \code{n_iter} retains the historical default of 1000 sweeps. An explicitly supplied value is always respected. It is ignored by the Gaussian copula conditional simulator.}
+ \item{n_iter}{Positive integer; number of Gibbs sweeps used by latent conditional samplers. For direct \code{Binomial} and \code{BinomialNeg}, it is the burn-in length of the count-constrained Gibbs chain; retained simulations are then separated by \code{mcmc_thin} sweeps. The default for these direct count models is 25. For the direct \code{SkewLaplace} model, this is the burn-in; draws are then separated by \code{mcmc_thin} sweeps. For non-count latent Gibbs engines, omitting \code{n_iter} retains the historical default of 1000 sweeps. An explicitly supplied value is always respected. It is ignored by the Gaussian copula conditional simulator.}
 
 \item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
  \item{nloc}{Prediction-side count size. For direct \code{Binomial}, a scalar or one positive integer per prediction location; it is required when observation-side \code{n} varies by site. For direct \code{BinomialNeg}, if supplied it must equal the common \eqn{r}.}
- \item{mcmc_thin}{Positive integer thinning interval for the direct Binomial and Negative-Binomial count-constrained latent Gibbs sampler. The default is 1.}
+ \item{mcmc_thin}{Positive integer thinning interval for the direct non-copula \code{SkewLaplace} sampler and the direct Binomial and Negative-Binomial count-constrained latent Gibbs samplers. The default is 1.}
 }
 \details{
 The currently validated domain is univariate, purely spatial, non-dynamic and
@@ -71,7 +71,7 @@ or unconditional simulations are constructed.
 
 Without a copula, the currently supported models are
 \code{Gaussian}, \code{LogGaussian}, \code{Tukeyh}, \code{Tukeyh2},
-\code{SinhAsinh}, \code{SkewGaussian}, \code{Gamma}, \code{Weibull}, \code{Binomial}, and \code{BinomialNeg}.  Direct non-copula \code{Gamma}
+\code{SinhAsinh}, \code{SkewGaussian}, \code{Gamma}, \code{Weibull}, \code{SkewLaplace}, \code{Binomial}, and \code{BinomialNeg}.  Direct non-copula \code{Gamma}
 conditional simulation uses the finite Gaussian-square construction and therefore
 requires \code{param$shape} to be a positive integer; non-integer values are
 rejected rather than rounded. For direct and Gaussian-copula Tukey margins,
@@ -80,6 +80,47 @@ rejected rather than rounded. For direct and Gaussian-copula Tukey margins,
 the right-tail and \code{tail2} the left-tail parameter. Zero is valid and
 recovers the Gaussian transformation on that side. \code{SinhAsinh} requires
 a strictly positive \code{tail}.
+
+For the direct non-copula \code{SkewLaplace} random field, conditional
+simulation uses the defining four independent Gaussian fields, rather than a
+Gaussian copula. At observed site \eqn{i}, write the standardized residual
+\eqn{y_i=(Y_i-\eta_i)/\sigma}, with \eqn{p} given by \code{param$skew}, and
+\eqn{Z_{ki}} for the four latent standard Gaussian values. The constraint
+\deqn{(Z_{1i}^2+Z_{2i}^2)/(2p)-(Z_{3i}^2+Z_{4i}^2)/[2(1-p)]=y_i}
+is imposed exactly (up to floating-point roundoff). Conditional on the other
+latent locations, all four coordinates have Gaussian full conditionals with
+a common variance \eqn{v_i} and conditional means \eqn{\mu_{ki}}.
+Writing \eqn{y_i^+=\max(y_i,0)}, \eqn{y_i^-=\max(-y_i,0)}, the
+positive radial variable \eqn{t_i} satisfies
+\deqn{(Z_{1i}^2+Z_{2i}^2)/2=p(t_i+y_i^+), \quad (Z_{3i}^2+Z_{4i}^2)/2=(1-p)(t_i+y_i^-).}
+Its conditional density with respect to \eqn{dt_i} is proportional to
+\deqn{\exp(-t_i/v_i) I_0(\Vert\mu_{1:2,i}\Vert\sqrt{2p(t_i+y_i^+)}/v_i) I_0(\Vert\mu_{3:4,i}\Vert\sqrt{2(1-p)(t_i+y_i^-)}/v_i), \quad t_i>0.}
+A one-dimensional slice sampler updates \eqn{t_i}, and the two angles are
+updated exactly from their von Mises full conditionals. This is a
+slice-within-Gibbs approach; unlike uncorrected surface-measure sampling, it
+has the correct constraint-conditioning Jacobian automatically. The sampler
+uses \code{n_iter} burn-in sweeps, then retains \code{nrep} draws separated by
+\code{mcmc_thin} sweeps. For \code{method="Cholesky"}, the observation covariance is factored once,
+and the conditional covariance at the unique new locations is factored once.
+These factors are reused for every field and replicate through
+\deqn{Z_k^*=W Z_k+L\xi_k, \quad LL^T=R_{**}-R_{*o}R_{oo}^{-1}R_{o*}.}
+No joint unconditional field is regenerated in this exact propagation path.
+The resulting fields are transformed back to the SkewLaplace response.
+Convergence depends on latent Gibbs mixing; use multiple chains or increased
+burn-in/thinning for high spatial dependence. Requires \code{local=FALSE}.
+Prediction locations identical to observations are conditioned exactly.
+\code{method="TB"} provides approximate Gaussian propagation rather than an
+exact joint covariance simulation.
+
+With \code{copula="Gaussian"} and \code{model="SkewLaplace"}, a distinct
+model is used: observed responses are transformed by the asymmetric Laplace
+marginal CDF to latent Gaussian values, simulated conditionally under the
+Gaussian copula, then transformed back with the inverse asymmetric Laplace CDF.
+For that mode, \code{n_iter} and \code{mcmc_thin} are not needed.
+With \code{method="Cholesky"} and \code{local=FALSE}, the Gaussian
+conditional covariance is factored once and reused for all replicates.
+The \code{simulation_details} output records this engine and its factorization counts.
+The two conditional distributions should not be interchanged.
 
 For the direct \code{Binomial} and \code{BinomialNeg} random fields, conditional
 simulation uses the repeated latent Gaussian threshold construction defining the
@@ -160,7 +201,7 @@ without a copula, and for all supported continuous margins with
 \code{copula="Gaussian"}.  In particular, \code{Tukeyh}, \code{Tukeyh2}
 and \code{SinhAsinh} are also supported as continuous margins under the
 Gaussian copula and use the same latent-Gaussian fast path.  The Gibbs-based constructive
-\code{SkewGaussian}, \code{Gamma}, \code{Weibull}, \code{Binomial}, and \code{BinomialNeg} paths and the
+\code{SkewGaussian}, \code{Gamma}, \code{Weibull}, \code{Binomial}, and \code{BinomialNeg} paths, the direct \code{SkewLaplace} path, and the
 \code{Clayton} and \code{SkewGaussian} copulas still require
 \code{local=FALSE}.
 
@@ -251,8 +292,8 @@ library(GeoModels)
 model="Gaussian"
 set.seed(79)
 ### conditioning locations
-x = runif(250, 0, 1)
-y = runif(250, 0, 1)
+x = runif(80, 0, 1)
+y = runif(80, 0, 1)
 coords=cbind(x,y)
 
 # Set the exponential cov parameters:
@@ -279,11 +320,13 @@ fit = GeoFit(data, coordx=coords, corrmodel=corrmodel,model=model,
  start=start,fixed=fixed)
 
 # locations to simulate 
-xx=seq(0,1,0.025)
+xx=seq(0,1,0.125)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
+# Small nrep keeps the example quick; use many more replicates
+# when estimating conditional variances or pointwise quantiles.
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=50)
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=3)
 
 cond_mean=sim_result$cond_mean # conditional mean
 cond_var =sim_result$cond_var # conditional var
@@ -308,8 +351,8 @@ par(mfrow=c(1,1))
 model="LogGaussian"
 set.seed(79)
 ### conditioning locations
-x = runif(500, 0, 1)
-y = runif(500, 0, 1)
+x = runif(80, 0, 1)
+y = runif(80, 0, 1)
 coords=cbind(x,y)
 
 # Set the exponential cov parameters:
@@ -336,11 +379,13 @@ fit = GeoFit(data, coordx=coords, corrmodel=corrmodel,model=model,
  start=start,fixed=fixed)
 
 # locations to simulate 
-xx=seq(0,1,0.025)
+xx=seq(0,1,0.125)
 loc_to_sim=as.matrix(expand.grid(xx,xx))
 
+# Small nrep keeps the example quick; use many more replicates
+# when estimating conditional variances or pointwise quantiles.
 # Conditional simulation
-sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=50)
+sim_result <- GeoSimcond(fit,loc = loc_to_sim,nrep=3)
 
 cond_mean=sim_result$cond_mean # conditional mean
 cond_var =sim_result$cond_var # conditional var

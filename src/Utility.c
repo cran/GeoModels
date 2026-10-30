@@ -280,7 +280,7 @@ else{  //no tapering
     *npairs=h;
     lags= (double *) R_Calloc(*npairs,double);
     for(i=0;i<*npairs;i++)  lags[i]=tlags[i];  
-     //R_Free(tlags);
+     //R_Free(tlags); tlags = NULL;
 	return;
 }
 
@@ -296,9 +296,7 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
 
   if (*istap) {// start tapering case
 
-  double *thre,*c_supp;
-  c_supp=(double *) R_alloc(2, sizeof(double));   // vector of compact support in space time tapering
-  thre=(double *)   R_alloc(2, sizeof(double));
+  double thre[2], c_supp[2];
   thre[0]=thres[1];thre[1]=thret[1];
   
   h=0;
@@ -319,7 +317,7 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
                   if((dij<c_supp[0]||is_equal(dij,c_supp[0]))&&(dtv<c_supp[1] ||  is_equal(dtv,c_supp[1]))){    
                                tlags[h]=dij;
                                tlagt[h]=dtv;
-                               idx[h] =(t * (ncoord[0]) * (ncoord[0]) * ntime[0]) +  (i*  ntime[0] *  *ncoord) +  (1+j+ *ntime * v);
+                               idx[h] =(t * (ncoord[0]) * (ncoord[0]) * ntime[0]) +  (i*  ntime[0] *  *ncoord) +  (1+j+ *ncoord * v);
                                ja[h]=1+j+(*ncoord) * v;
                                cc=cc+1;
                                h = h +1 ;
@@ -361,7 +359,7 @@ void SpaceTime_Dist(double *coordx,double *coordy,double *coordz,double *coordt,
     lagt= (double *) R_Calloc(*npairs,double);
     for(i=0;i<*npairs;i++)  
         {lags[i]=tlags[i];lagt[i]=tlagt[i];  }
-    // R_Free(tlags); R_Free(tlagt);   
+    // R_Free(tlags); tlags = NULL; R_Free(tlagt); tlagt = NULL;   
 
   return;
 }
@@ -445,7 +443,7 @@ void SpaceBiv_Dist(double *coordx,double *coordy,double *coordz,double *coordt,i
   for(i=0;i<count;i++) { lags_1[i]=tlags[i];
                          first_1[i]=tfirst[i];
                          second_1[i]=tsecond[i];}
-  //R_Free(tlags);R_Free(tfirst);R_Free(tsecond);
+  //R_Free(tlags); tlags = NULL;R_Free(tfirst); tfirst = NULL;R_Free(tsecond); tsecond = NULL;
   return;
 }
 
@@ -515,7 +513,8 @@ void Comp_supp(double *c_supp,int *cormod, double h,double u, double *par)
         case 75:
         case 76:
         case 77:
-        case 78:   
+        case 78:
+        case 85: /* fixed rectangular support, independent of sep */
             c_supp[0]=par[0];
             c_supp[1]=par[1];
             break;
@@ -572,6 +571,8 @@ void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *
 		  int *npair,double *radius,double *srange, double *sep,int *st, int *times,double *trange,
 		  int *tap,int *tapmodel,int *tp,int *weighted, int *colidx,int *rowidx, int *ns, int *NS, int *dyn)
 {
+  DeleteGlobalVar();
+
 
 
   //Spatial settings: //Spatial settings:
@@ -609,7 +610,7 @@ void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *
   if(npairs==NULL) {*ismal=0; return;}
 
   isbiv=(int *) R_Calloc(1,int);//is a bivariate random field?
-  if(isbiv==NULL) {*isbiv=0; return;}
+  if(isbiv==NULL) {*ismal=0; return;}
   isbiv[0]=biv[0];  
 
   ismem=(int *) R_Calloc(1,int);//is distances computed using memory allocation
@@ -621,7 +622,7 @@ void SetGlobalVar(int *biv,double *coordx,double *coordy,double *coordz,double *
   isst[0]=st[0]; 
     
   cdyn=(int *) R_Calloc(1,int);//dynamic coords
-  if(dyn==NULL) {*cdyn=0; return;}
+  if(cdyn==NULL || dyn==NULL) {*ismal=0; return;}
   cdyn[0]=dyn[0]; 
 
   istap=(int *) R_Calloc(1,int);//is tapering?
@@ -691,7 +692,7 @@ if(!isst[0]&&!isbiv[0]) {// spatial case
           else 
             { // distances composite likelihood  
             *npairs= (int)( 0.5 * (*ncoord) * (*ncoord-1));
-            tlags= (double *) R_Calloc(*npairs,double *);
+            tlags= (double *) R_Calloc(*npairs,double);
             if(tlags==NULL) {*ismal=0; return;}
             } // end  no tapering case
 
@@ -699,7 +700,7 @@ if(!isst[0]&&!isbiv[0]) {// spatial case
  // computing spatial distances and indexes      
  Space_Dist(coordx,coordy,coordz,ia,idx,ismal,ja,colidx,rowidx,srange[1]);
   //Space_Dist(coordx,coordy,coordz,ia,idx,ismal,ja,colidx,rowidx,srange[1]);
- R_Free(tlags);
+ R_Free(tlags); tlags = NULL;
       if(!ismal[0]) return;
   /***********************************************************/  
 }  // end spatial case
@@ -763,14 +764,14 @@ else {  // distance for composite likelihood
                if(isst[0])  npairs[0]=(int)(qq * (qq-1) * 0.5);
                if(isbiv[0]) npairs[0]=(int)(qq * (qq-1) * 0.5);
     
-               tlags= (double *) R_Calloc(*npairs,double *);
+               tlags= (double *) R_Calloc(*npairs,double);
     
               if(tlags==NULL) {*ismal=0; return;}
           // allocates the matrix of temporal distances:
           if(isst[0]) {
              //memory allocation of matrix temporal distances
               
-             tlagt= (double *) R_Calloc(*npairs,double *);
+             tlagt= (double *) R_Calloc(*npairs,double);
               
              if(tlagt==NULL) {*ismal=0; return;}
                      }
@@ -787,13 +788,13 @@ else {  // distance for composite likelihood
        }
 if(isst[0])  {SpaceTime_Dist(coordx,coordy,coordz,coordt,ia,idx,ismal,ja,tapmodel,
                                         ns,NS,colidx,rowidx,srange,trange);
-               R_Free(tlags); R_Free(tlagt);}
+               R_Free(tlags); tlags = NULL; R_Free(tlagt); tlagt = NULL;}
 if(isbiv[0]) {
     
     SpaceBiv_Dist(coordx,coordy,coordz,coordt,ia,idx,ismal,ja,tapmodel,
                                      ns,NS,colidx,rowidx,srange);
     
-               R_Free(tlags);R_Free(tfirst);R_Free(tsecond);
+               R_Free(tlags); tlags = NULL;R_Free(tfirst); tfirst = NULL;R_Free(tsecond); tsecond = NULL;
     
 }
   if(!ismal[0]) return;
@@ -819,31 +820,32 @@ if(isbiv[0]) {
      }
 }
 /****************************************************************/
+/* Both setup paths own the same process-local context.  Release every
+ * buffer independently, including partially initialized and bivariate state.
+ * The two public cleanup entry points are intentionally idempotent. */
 void DeleteGlobalVar(void)
 {
-  int i=0;
-  // Delete all the global variables:
-  R_Free(maxdist);R_Free(maxtime);
-  R_Free(ncoord);R_Free(ncoordx);R_Free(ncoordy);R_Free(ncoordz); 
-  R_Free(npairs);
-  R_Free(type);R_Free(REARTH);
-  R_Free(tapsep);
-  if(isbiv[0])for(i=0;i<ntime[0];i++)  R_Free(dista[i]);
-  R_Free(dista);
-  R_Free(ntime);
-  if(ismem[0]) {
-           R_Free(lags);
-           if(isst[0])    {R_Free(lagt);}
-           if(isbiv[0])   {R_Free(first);R_Free(second);}
-  }
-  if (pairweights) { R_Free(pairweights); pairweights = NULL; }
-  if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
-  if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
-  if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
-  R_Free(isbiv); R_Free(istap);
-  R_Free(isst);R_Free(ismem);
-  R_Free(cdyn);
-  return;
+#define GEO_FREE_CONTEXT(p) do { if ((p) != NULL) { R_Free(p); (p) = NULL; } } while (0)
+    if (dista != NULL) {
+        const int rows = ntime != NULL ? ntime[0] : 0;
+        for (int i = 0; i < rows; ++i) GEO_FREE_CONTEXT(dista[i]);
+        GEO_FREE_CONTEXT(dista);
+    }
+    GEO_FREE_CONTEXT(lags); GEO_FREE_CONTEXT(lagt);
+    GEO_FREE_CONTEXT(lags_1); GEO_FREE_CONTEXT(first_1); GEO_FREE_CONTEXT(second_1);
+    GEO_FREE_CONTEXT(first); GEO_FREE_CONTEXT(second);
+    GEO_FREE_CONTEXT(tlags); GEO_FREE_CONTEXT(tlagt);
+    GEO_FREE_CONTEXT(tfirst); GEO_FREE_CONTEXT(tsecond);
+    GEO_FREE_CONTEXT(pairweights);
+    GEO_FREE_CONTEXT(pg_count1); GEO_FREE_CONTEXT(pg_count2); GEO_FREE_CONTEXT(pg_count_n);
+    GEO_FREE_CONTEXT(maxdist); GEO_FREE_CONTEXT(maxtime);
+    GEO_FREE_CONTEXT(ncoord); GEO_FREE_CONTEXT(ncoordx);
+    GEO_FREE_CONTEXT(ncoordy); GEO_FREE_CONTEXT(ncoordz);
+    GEO_FREE_CONTEXT(npairs); GEO_FREE_CONTEXT(ntime);
+    GEO_FREE_CONTEXT(type); GEO_FREE_CONTEXT(REARTH); GEO_FREE_CONTEXT(tapsep);
+    GEO_FREE_CONTEXT(isbiv); GEO_FREE_CONTEXT(isst); GEO_FREE_CONTEXT(ismem);
+    GEO_FREE_CONTEXT(istap); GEO_FREE_CONTEXT(cdyn);
+#undef GEO_FREE_CONTEXT
 }
 /*#######################################################################*/
 
@@ -1004,7 +1006,7 @@ void SetGlobalVar2(int *nsite, int *times,          // 2
         }
     }
 
-    /* Pair weights are initialized lazily by GeoPGCachedWeight().
+    /* Pair weights are initialized lazily by GeoCachedPairWeight().
        This avoids allocating an additional O(npairs) vector for unweighted
        fits while still computing every fixed Bohman weight only once. */
     pairweights = NULL;
@@ -1018,27 +1020,7 @@ void SetGlobalVar2(int *nsite, int *times,          // 2
 /*#######################################################################*/
 void DeleteGlobalVar2(void)
 {
-    /* Pair-geometry arrays. */
-    if (lags) { R_Free(lags); lags = NULL; }
-    if (lagt) { R_Free(lagt); lagt = NULL; }
-    if (lags_1) { R_Free(lags_1); lags_1 = NULL; }
-    if (first_1) { R_Free(first_1); first_1 = NULL; }
-    if (second_1) { R_Free(second_1); second_1 = NULL; }
-
-    /* Derived caches. */
-    if (pairweights) { R_Free(pairweights); pairweights = NULL; }
-    if (pg_count1) { R_Free(pg_count1); pg_count1 = NULL; }
-    if (pg_count2) { R_Free(pg_count2); pg_count2 = NULL; }
-    if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
-
-    /* Scalars and flags. */
-    if (ncoord) { R_Free(ncoord); ncoord = NULL; }
-    if (ntime) { R_Free(ntime); ntime = NULL; }
-    if (maxdist) { R_Free(maxdist); maxdist = NULL; }
-    if (maxtime) { R_Free(maxtime); maxtime = NULL; }
-    if (npairs) { R_Free(npairs); npairs = NULL; }
-    if (isbiv) { R_Free(isbiv); isbiv = NULL; }
-    if (isst) { R_Free(isst); isst = NULL; }
+    DeleteGlobalVar();
 }
 
 void SetPGPairCounts(double *data1, double *data2, int *n, int *ok)
@@ -1087,7 +1069,7 @@ fail:
     if (pg_count_n) { R_Free(pg_count_n); pg_count_n = NULL; }
 }
 
-double GeoPGCachedWeight(int index, int weighted, int spacetime)
+double GeoCachedPairWeight(int index, int weighted, int spacetime)
 {
     if (!weighted) return 1.0;
     if (index < 0 || !npairs || index >= npairs[0] || npairs[0] <= 0)

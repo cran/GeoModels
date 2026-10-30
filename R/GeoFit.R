@@ -189,7 +189,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
   }
   memdist <- TRUE
 
-  suppressWarnings({
+  {
 
     ## start is genuinely optional.  WlsStart/StartParam provide conservative
     ## internal initial values for parameters omitted by the user.
@@ -549,6 +549,12 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     }
 
     #############################################################################
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = coordx, coordy = coordy,
+    coordz = coordz, coordx_dyn = coordx_dyn,
+    distance = distance, context = "GeoFit")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+
     checkinput <- CkInput(coordx, coordy, coordz, coordt, coordx_dyn, corrmodel, data,
                           distance, "Fitting", fixed, grid, likelihood, maxdist, maxtime,
                           model, n, optimizer, NULL, radius, start, taper, tapsep, type,
@@ -747,7 +753,9 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
             sum(sort(names(initparam$param)) == sort(names(lower))) < npar)
           stop("the names of parameters in the lower and/or upper bounds do not match with starting parameters names.\n")
 
-        ll[ll == 0] <- .Machine$double.eps
+        replace_zero <- ll == 0
+        if (!is.na(.GeoSTCode(corrmodel))) replace_zero[names(ll) == "sep"] <- FALSE
+        ll[replace_zero] <- .Machine$double.eps
         uu[uu == Inf] <- 1e+12
         initparam$upper <- uu
         initparam$lower <- ll
@@ -780,7 +788,8 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
       if (!is.finite(p0))
         stop("invalid starting value for one-parameter optimization\n")
 
-      if (lb == 0) lb <- .Machine$double.eps
+      if (lb == 0 && !(pname == "sep" && !is.na(.GeoSTCode(corrmodel))))
+        lb <- .Machine$double.eps
 
       ## Positive parameters keep the broad automatic upper bound; the
       ## one-dimensional composite-likelihood optimizer now works on the log
@@ -967,7 +976,9 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     conf.int <- NULL
     pvalues <- NULL
 
-    if (!is.null(initparam$coordz) && all(initparam$coordz == 0)) initparam$coordz <- NULL
+    if (!is.null(initparam$coordz) && all(initparam$coordz == 0) &&
+        (is.na(.GeoSTCode(corrmodel)) || .GeoSTCurrentDimension() != 3L))
+      initparam$coordz <- NULL
 
     if (likelihood == "Full" && type == "Standard") {
       if (varest) {
@@ -1052,7 +1063,7 @@ GeoFit <- function(data, coordx, coordy = NULL, coordz = NULL, coordt = NULL,
     .fit_result <- structure(c(GeoFit, call = call), class = c("GeoFit"))
     .fit_success <- TRUE
     .fit_result
-  })
+  }
 }
 
 ################################################################################

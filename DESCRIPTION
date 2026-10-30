@@ -1,7 +1,7 @@
 Package: GeoModels
-Version: 2.2.9
-Date: 2026-08-24
-Depends: R (>= 4.1.0), fields, progressr, future.apply
+Version: 2.3.0
+Date: 2026-10-29
+Depends: R (>= 4.4.0), fields, progressr, future.apply
 Suggests: numDeriv, memuse, mapproj, scatterplot3d, sp
 Authors@R: c(person("Moreno", "Bevilacqua", role = c("aut", "cre","cph"),
                      email = "moreno.bevilacqua89@gmail.com"),
@@ -14,7 +14,7 @@ Title: Procedures for Gaussian and Non Gaussian Geostatistical (Large)
 License: GPL (>= 3)
 Encoding: UTF-8
 Imports: methods, spam, dotCall64, FastGP, pbivnorm, sn, nabor,
-        hypergeo, VGAM, future, minqa
+        hypergeo, VGAM, future, minqa, parallelly
 URL: https://vmoprojs.github.io/GeoModels-page/
 BugReports: https://github.com/vmoprojs/GeoModels/issues
 NeedsCompilation: yes
@@ -24,6 +24,6 @@ Author: Moreno Bevilacqua [aut, cre, cph],
   Francisco Cuevas-Pacheco [ctb],
   Christian Caamaño-Carrillo [ctb]
 Maintainer: Moreno Bevilacqua <moreno.bevilacqua89@gmail.com>
-Packaged: 2026-09-23 10:56:45 UTC; morenobevilacqua
+Packaged: 2026-10-29 17:06:25 UTC; morenobevilacqua
 Repository: CRAN
-Date/Publication: 2026-09-23 11:20:02 UTC
+Date/Publication: 2026-10-30 14:10:08 UTC

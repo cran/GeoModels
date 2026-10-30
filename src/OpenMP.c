@@ -195,6 +195,7 @@ int GeoModels_gauss_pair_omp(int conditional,
     (void) result;
     return 0;
 #else
+    (void) max_dist;
     if (result == NULL || cormod != 14 || n_pairs < GeoModels_omp_min_pairs_internal())
         return 0;
 
@@ -236,6 +237,12 @@ int GeoModels_gauss_pair_omp(int conditional,
         if (corr_smooth > (double) (INT_MAX - 2)) return 0;
         nb = 1 + (int) floor(corr_smooth);
         if (nb < 1) return 0;
+    }
+
+    const double *cached_weights = NULL;
+    if (weighted) {
+        if (!isfinite(GeoCachedPairWeight(0, 1, 0))) return 0;
+        cached_weights = pairweights;
     }
 
     double *partial = (double *) calloc((size_t) nthreads, sizeof(double));
@@ -282,7 +289,7 @@ int GeoModels_gauss_pair_omp(int conditional,
                     continue;
                 }
                 const double corr = correlation_multiplier * clamp_corr(corr0);
-                const double weight = weighted ? CorFunBohman(lag, max_dist) : 1.0;
+                const double weight = weighted ? cached_weights[i] : 1.0;
                 const double log_biv = log_biv_Norm(
                     corr, d1, d2, mean1[i], mean2[i], sill, 0.0);
                 if (!isfinite(log_biv)) {

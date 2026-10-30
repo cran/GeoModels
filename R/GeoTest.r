@@ -437,7 +437,7 @@ GeoTests <- function(object1, object2, ..., statistic) {
     )
   }
 
-  boundary_reasons <- function(parameter_names, null_values, marginal_rule) {
+  boundary_reasons <- function(parameter_names, null_values, marginal_rule, corrmodel) {
     reasons <- marginal_rule$boundary
 
     if (length(parameter_names) > 0L) {
@@ -449,7 +449,8 @@ GeoTests <- function(object1, object2, ..., statistic) {
         }
 
         if (identical(nm, "sep") &&
-            (isTRUE(all.equal(value, 0)) || isTRUE(all.equal(value, 1)))) {
+            (if (!is.na(.GeoSTCode(corrmodel))) isTRUE(all.equal(abs(value), 1))
+             else (isTRUE(all.equal(value, 0)) || isTRUE(all.equal(value, 1))))) {
           reasons <- c(reasons, paste0(nm, " = ", value))
         }
 
@@ -615,7 +616,8 @@ GeoTests <- function(object1, object2, ..., statistic) {
     reasons <- boundary_reasons(
       tested_parameters,
       null_values,
-      marginal_rule
+      marginal_rule,
+      model1$corrmodel
     )
 
     list(

@@ -92,7 +92,7 @@ CkCorrModel <- function(corrmodel)
                              Gneiting_wen_S=87,gneiting_wen_S=87,Gneiting_Wen_S=87,
                              Gneiting_wen_T=88,gneiting_wen_T=88, #ok
                              Matern_Matern_nosep=89,
-                             Genwend_Genwend_nosep=85,
+                             Genwend_Genwend_nosep=85, GenWend_GenWend_nosep=85,
               # spatial-temporal separable models
                              Wend0_Wend0=69,wend0_wend0=69, #ok
                              Wend0_Wend1=70,wend0_wend1=70, #ok
@@ -223,8 +223,8 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
         if(!is.na(param['sill_1'])) if(param['sill_1'] <= 0) return(FALSE)
         if(!is.na(param['sill_2'])) if(param['sill_2'] <= 0) return(FALSE)
         #if(!is.na(param['smooth'])) if(param['smooth'] <= 0) return(FALSE)
-        if(!is.na(param['smooth_s'])) if(param['smooth_s'] < 0) return(FALSE)
-        if(!is.na(param['smooth_t'])) if(param['smooth_t'] < 0) return(FALSE)
+        if(!is.na(param['smooth_s']) && !isTRUE(CkCorrModel(corrmodel) == 85L)) if(param['smooth_s'] < 0) return(FALSE)
+        if(!is.na(param['smooth_t']) && !isTRUE(CkCorrModel(corrmodel) == 85L)) if(param['smooth_t'] < 0) return(FALSE)
         #if(!is.na(param['smooth_1'])) if(param['smooth_1'] < 0) return(FALSE)
         if(!is.na(param['smooth_2'])) if(param['smooth_2'] < 0) return(FALSE)
         #if(!is.na(param['smooth_12'])) if(param['smooth_12'] < 0) return(FALSE)
@@ -232,6 +232,18 @@ CkInput <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data, 
         return(TRUE)  
     }
    
+    ## The new interaction has model-specific shape and sign constraints.
+    if (!is.na(.GeoSTCode(corrmodel))) {
+      st_error <- tryCatch({
+        st_d <- .GeoSTDimension(coordx, coordy, coordz, coordx_dyn, distance,
+                                context = "GeoModels input")
+        supplied <- if (identical(fcall, "Fitting")) c(start, fixed) else param
+        .GeoSTValidate(corrmodel, supplied, d = st_d, complete = FALSE,
+                        context = "GeoModels input")
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(st_error)) return(list(error = st_error))
+    }
     bivariate=CheckBiv(CkCorrModel(corrmodel))
 
     dimension_error <- tryCatch({
@@ -1252,37 +1264,7 @@ StartParam <- function(coordx, coordy,coordz ,coordt,coordx_dyn, corrmodel, data
 ### START internal functions:
 #################################### 
     replicates=1
-    # Check if the correlation is bivariate
-    CheckBiv <- function(corrmodel)
-    {
-        CheckBiv <- NULL
-        if(corrmodel >= 101 & corrmodel <= 140) CheckBiv <- TRUE
-        else CheckBiv <- FALSE
-        return(CheckBiv)
-    }
-    # Check if the correlation is spatial or spatial-temporal
-    CheckST <- function(corrmodel)
-    {
-        CheckST <- NULL
-        if(corrmodel >40 & corrmodel <= 100) CheckST <- TRUE
-        else  CheckST <- FALSE
-        return(CheckST)
-    }
-    # Check the type of distances
-    CheckDistance<- function(distance)
-    {
-        CheckDistance <- NULL
-        CheckDistance <- switch(distance,
-                                eucl=0,
-                                Eucl=0,
-                                chor=1,
-                                Chor=1,
-                                geod=2,
-                                Geod=2,
-                                proj=3,
-                                Proj=3)
-        return(CheckDistance)
-    }
+    ## Reuse the canonical CheckBiv/CheckST/CheckDistance implementations.
 ##############################################################################################    
 newtap<- function(coords,numcoord, coordt,numtime, distance,maxdist,maxtime,spacetime,bivariate,radius)
 ### using nearest.dist...
@@ -1692,7 +1674,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
         if(typereal=="Tapering"||typereal=="Tapering1"||typereal=="Tapering2"){
         tapering<-1
 
-        if(!space){
+        if(!space && isdyn){
         idx<-integer((numcoord*numtime)^2)
         ja<-integer((numcoord*numtime)^2)
         ia<-integer(numcoord*numtime+1)}
@@ -1727,7 +1709,7 @@ if(model %in% c(11,14,15,16,19,17,30,45,49,51,52,53,54,56,58)){                 
         if((typereal=="Tapering"&&type=="Tapering")||(typereal=="Tapering1"&&type=="Tapering1")||(typereal=="Tapering2"&&type=="Tapering2")){
                  tapering<-1
                  nt=numcoord*numtime
-               if(!space){  
+               if(!space && isdyn){
                 idx<-integer(nt^2)
                 ja<-integer(nt^2)
                 ia<-integer(nt+1)
@@ -1780,7 +1762,26 @@ if(tapering) mem=TRUE
 
 ###################### using new "spam" with neighdist(just for space)#########################################################
 
-if(tapering&space){
+if(tapering && !space && !isdyn) {
+    ## Allocate only the retained entries for regular space-time/bivariate
+    ## tapering. The native two-pass setup preserves the CSR ordering and
+    ## initializes the same covariance context as the legacy setup.
+    if (!length(coordz)) coordz <- double(length(coordx))
+    atap <- .Call("GeoSparseTaperSetup", list(
+      coordx = as.double(coordx), coordy = as.double(coordy),
+      coordz = as.double(coordz), coordt = as.double(coordt),
+      numcoord = as.integer(numcoord), numtime = as.integer(numtime),
+      distance = as.integer(distance), radius = as.double(radius),
+      srange = as.double(srange), trange = as.double(trange),
+      tapsep = as.double(tapsep), tapmodel = as.integer(tapmodel),
+      bivariate = isTRUE(bivariate)), PACKAGE = "GeoModels")
+    idx <- atap$idx; ja <- atap$ja; ia <- atap$ia
+    colidx <- atap$colidx; rowidx <- atap$rowidx
+    numpairs <- atap$numpairs; nozero <- atap$nozero
+    isinit <- atap$isinit
+    K <- NULL
+}
+else if(tapering&space){
     cc=cbind(coordx, coordy,coordz);numcoord=nrow(cc);numtime=length(coordt)
     atap=newtap(cc,numcoord, coordt,numtime, distance,maxdist,maxtime,spacetime,bivariate,radius)
     ja=colidx=atap$colidx

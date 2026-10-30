@@ -1460,22 +1460,9 @@ double corr_tukeygh(double rho,double eta,double tail){
     return rho1;
 }
 
-double corr_skewt(double corr,double df,double skew)
+double corr_skewt(double corr, double df, double skew)
 {
-if(fabs(corr)<MACHEP){return(0.0);}
-    else{
-    double d,w,corr1,skew2,CorSkew,nu,l,y,KK;
-    skew2=skew*skew; nu=df; l=df/2;  d=(df-1)/2; w=sqrt(1-skew2);
-    y=corr;
-    CorSkew=(2*skew2/(M_PI*w*w+skew2*(M_PI-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*y/(w*w+skew2*(1-2/M_PI)) ;
-   
-    if(df<99){
-    KK=exp(log(M_PI)+log(nu-2)+2*lgammafn(d)
-    - log(2)-log(M_PI*R_pow(gammafn(l),2)*(1+skew2) - skew2*(nu-2)*R_pow(gammafn(d),2)));
-    corr1=KK * (hypergeo(0.5,0.5,l,y*y)*((1+skew2*(1-2/M_PI))*CorSkew+2*skew2/M_PI) - 2*skew2/M_PI);}
-    else {corr1=CorSkew;}
-return(corr1);
-}
+    return corr_skewt2(corr, corr, df, skew);
 }
 
 double biv_gamma(double corr, double zi, double zj,
@@ -1631,32 +1618,39 @@ double biv_skew(double corr, double z1, double z2, double mi, double mj, double 
     return dens;
 }
 
-double biv_wrapped(double alfa, double u, double v, double mi, double mj, double nugget, double sill, double corr) {
-    double x = u - 2 * atan(mi) - M_PI;
-    double y = v - 2 * atan(mj) - M_PI;
-
-    double s1 = sill;
-    double s12 = sill * corr;
-    double det = R_pow(s1, 2) - R_pow(s12, 2);
-    double wrap_gauss = 0.0;
-
-    double k1 = -alfa, k2 = -alfa;
-
-    double common_factor = 1 / (2 * M_PI * sqrt(det)); // Precompute common factor
-
-    while (k1 <= alfa) {
-        while (k2 <= alfa) {
-            double term1 = x + 2 * k2 * M_PI;
-            double term2 = y + 2 * k1 * M_PI;
-            double quadr = -0.5 * (1.0 / det) * (s1 * R_pow(term2, 2) + s1 * R_pow(term1, 2) - 2.0 * s12 * term1 * term2);
-
-            wrap_gauss += common_factor * exp(quadr);
-            k2++;
+double biv_wrapped_log(double alfa, double u, double v, double mi, double mj,
+                       double nugget, double sill, double corr)
+{
+    /* corr already includes the nugget; do not attenuate it a second time. */
+    (void)nugget;
+    if (!R_FINITE(alfa) || alfa < 0.0 || !R_FINITE(sill) || sill <= 0.0 ||
+        !R_FINITE(corr) || fabs(corr) >= 1.0 || !R_FINITE(u) ||
+        !R_FINITE(v) || !R_FINITE(mi) || !R_FINITE(mj)) return R_NaN;
+    const double x = u - 2.0 * atan(mi) - M_PI;
+    const double y = v - 2.0 * atan(mj) - M_PI;
+    const double sd = sqrt(sill);
+    const double log_norm = -log(2.0 * M_PI) - log(sill) -
+                           0.5 * (log1p(-corr) + log1p(corr));
+    double log_sum = R_NegInf;
+    for (double k1 = -alfa; k1 <= alfa; k1 += 1.0) {
+        const double zy = (y + 2.0 * M_PI * k1) / sd;
+        for (double k2 = -alfa; k2 <= alfa; k2 += 1.0) {
+            const double zx = (x + 2.0 * M_PI * k2) / sd;
+            /* Positive quadratic form, avoiding determinant cancellation. */
+            const double diff = zx - zy, sum = zx + zy;
+            const double quadr = 0.25 * (diff * diff / (1.0 - corr) +
+                                         sum * sum / (1.0 + corr));
+            log_sum = pg_logspace_add_pos(log_sum, log_norm - quadr);
         }
-        k1++;
-        k2 = -alfa;
     }
-    return wrap_gauss;
+    return log_sum;
+}
+
+double biv_wrapped(double alfa, double u, double v, double mi, double mj,
+                   double nugget, double sill, double corr)
+{
+    /* Preserve the ordinary-density API; likelihood callers use the log API. */
+    return exp(biv_wrapped_log(alfa, u, v, mi, mj, nugget, sill, corr));
 }
 
 double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, double rho, double skew1, double skew2) {
@@ -1724,65 +1718,76 @@ double biv_skew2(double corr, double zi, double zj, double vari1, double vari2, 
     return dens;
 }
 
+/* Stable bivariate normal log density with unequal marginal variances.
+ * This fixed-size path performs no allocation, LU factorization or inversion. */
+double log_biv_Norm2(double corr, double zi, double zj, double mi, double mj,
+                     double vari, double varj)
+{
+    if (!isfinite(vari) || vari <= 0.0 || !isfinite(varj) || varj <= 0.0 ||
+        !isfinite(corr) || fabs(corr) >= 1.0)
+        return NAN;
+    const double sdi = sqrt(vari), sdj = sqrt(varj);
+    double u = zi - mi, v = zj - mj;
+    u = isfinite(u) ? u / sdi : zi / sdi - mi / sdi;
+    v = isfinite(v) ? v / sdj : zj / sdj - mj / sdj;
+    const double inv_sqrt2 = 0.70710678118654752440;
+    const double zp = (u * inv_sqrt2 + v * inv_sqrt2) / sqrt(1.0 + corr);
+    const double zm = (u * inv_sqrt2 - v * inv_sqrt2) / sqrt(1.0 - corr);
+    const double log_det = log(vari) + log(varj) + log1p(-corr) + log1p(corr);
+    return -0.5 * (2.0 * log(2.0 * M_PI) + log_det + zp * zp + zm * zm);
+}
+
 double log_biv_Norm(double corr, double zi, double zj, double mi, double mj,
                     double vari, double nugget)
 {
-    const double r = corr * (1.0 - nugget);
-    if (!isfinite(vari) || vari <= 0.0 || !isfinite(r) || fabs(r) >= 1.0 ||
-        !isfinite(nugget) || nugget < 0.0 || nugget > 1.0)
-        return NAN;
-
-    const double sd = sqrt(vari);
-    double u = zi - mi, v = zj - mj;
-    /* Avoid overflowing an otherwise representable standardized residual. */
-    u = isfinite(u) ? u / sd : zi / sd - mi / sd;
-    v = isfinite(v) ? v / sd : zj / sd - mj / sd;
-    /* Orthogonal coordinates give a sum of nonnegative terms, avoiding
-       subtraction of nearly equal terms when |r| is close to one. */
-    const double inv_sqrt2 = 0.70710678118654752440;
-    const double zp = (u * inv_sqrt2 + v * inv_sqrt2) / sqrt(1.0 + r);
-    const double zm = (u * inv_sqrt2 - v * inv_sqrt2) / sqrt(1.0 - r);
-    const double quadratic = zp * zp + zm * zm;
-    const double log_det = 2.0 * log(vari) + log1p(-r) + log1p(r);
-    return -0.5 * (2.0 * log(2.0 * M_PI) + log_det + quadratic);
+    if (!isfinite(nugget) || nugget < 0.0 || nugget > 1.0) return NAN;
+    return log_biv_Norm2(corr * (1.0 - nugget), zi, zj, mi, mj, vari, vari);
 }
 
-
-
-/*multivariate gaussian PDF*/
-double dNnorm(int N, double **M, double *dat) {
-    double dd, pdf = 0.0;
-    int m, n, i;
-    int *indx = (int *) R_Calloc(N, int);
-    double *col = (double *) R_Calloc(N, double);
-    double **inverse = (double **) R_Calloc(N, double *);
-
-    for (i = 0; i < N; i++) {
-        inverse[i] = (double *) R_Calloc(N, double);
+/* Log density for a positive-definite covariance.  N=2 is allocation-free;
+ * the general fallback uses Cholesky and one triangular solve, not an inverse.
+ * As in the former LU implementation, the general path overwrites M. */
+double log_dNnorm(int N, double **M, double *dat)
+{
+    if (N < 1 || M == NULL || dat == NULL) return NAN;
+    if (N == 2) {
+        if (M[0] == NULL || M[1] == NULL ||
+            !isfinite(M[0][0]) || M[0][0] <= 0.0 ||
+            !isfinite(M[1][1]) || M[1][1] <= 0.0) return NAN;
+        const double corr = (M[0][1] / sqrt(M[0][0])) / sqrt(M[1][1]);
+        return log_biv_Norm2(corr, dat[0], dat[1], 0.0, 0.0,
+                             M[0][0], M[1][1]);
     }
-    ludcmp(M, N, indx, &dd);
-    dd = 1.0;
-    for (m = 0; m < N; m++) {
-        dd *= M[m][m];
-    }
-    for (n = 0; n < N; n++) {
-        for (m = 0; m < N; m++) {
-            col[m] = 0.0;
+    double *work = (double *) R_Calloc(N, double);
+    double log_det = 0.0, quadratic = 0.0;
+    int valid = 1;
+    for (int i = 0; i < N && valid; ++i) {
+        if (M[i] == NULL) { valid = 0; break; }
+        for (int j = 0; j <= i; ++j) {
+            double value = M[i][j];
+            for (int k = 0; k < j; ++k) value -= M[i][k] * M[j][k];
+            if (!isfinite(value) || (i == j && value <= 0.0)) {
+                valid = 0; break;
+            }
+            if (i == j) {
+                M[i][j] = sqrt(value);
+                log_det += log(value);
+            } else M[i][j] = value / M[j][j];
         }
-        col[n] = 1.0;
-        lubksb(M, N, indx, col);
-        for (m = 0; m < N; m++) {
-            inverse[m][n] = col[m];
+        if (valid) {
+            double value = dat[i];
+            for (int j = 0; j < i; ++j) value -= M[i][j] * work[j];
+            work[i] = value / M[i][i];
+            quadratic += work[i] * work[i];
         }
     }
-    pdf = R_pow(2 * M_PI, -N / 2) * R_pow(dd, -0.5) * exp(-0.5 * QFORM(inverse, dat, dat, N));
-    R_Free(indx);
-    R_Free(col);
-    for (i = 0; i < N; i++) {
-        R_Free(inverse[i]);
-    }
-    R_Free(inverse);
-    return pdf;
+    R_Free(work);
+    return valid ? -0.5 * (N * log(2.0 * M_PI) + log_det + quadratic) : NAN;
+}
+
+double dNnorm(int N, double **M, double *dat)
+{
+    return exp(log_dNnorm(N, M, dat));
 }
 
 static inline double inv_tukey_h(double z, double h) {
@@ -1853,217 +1858,8 @@ double biv_tukey_hh(double rho,
 
 
 
-#define LOG_TOL   (-16.0)
-#define EXP_CUTOFF (-600.0)
-#define MAX_STREAK 4
-#define MAX_TERMS 8192
-#define KMAX_DEFAULT 50
-#define KMAX_MAX 50
-#define CONV_TOL 1e-6
-#define CONV_STREAK_MIN 1
+/* Direct SkewLaplace bivariate density: see skewlaplace_density.c. */
 
-static inline double logsumexp_r_style(const double *log_terms, int n) {
-    if (n <= 0) return R_NegInf;
-
-    double m = R_NegInf;
-    for (int i = 0; i < n; i++) {
-        if (R_FINITE(log_terms[i]) && log_terms[i] > m) {
-            m = log_terms[i];
-        }
-    }
-    if (!R_FINITE(m)) return R_NegInf;
-
-    double sum_exp = 0.0;
-    for (int i = 0; i < n; i++) {
-        if (R_FINITE(log_terms[i])) {
-            double diff = log_terms[i] - m;
-            if (diff > EXP_CUTOFF) {
-                sum_exp += exp(diff);
-            }
-        }
-    }
-    // MIGLIORIA: Check su sum_exp con tolleranza numerica
-    if (sum_exp <= 0.0) return R_NegInf;
-    return m + log(sum_exp);
-}
-static inline double lchoose_fast_local(int n, int k, const double *lfact) {
-    if (k < 0 || k > n) return R_NegInf;
-    if (k == 0 || k == n) return 0.0;
-    return lfact[n] - lfact[k] - lfact[n - k];
-}
-
-static double Ikell_log_r_style_local(int k, int ell, double z, double alpha,
-                                      double log_alpha, const double *lfact) {
-    int max_terms = (z <= 0.0) ? (ell + 1) : (k + 1);
-    double *terms_log = (double*) R_alloc(max_terms, sizeof(double));
-    
-    for (int i = 0; i < max_terms; i++) terms_log[i] = R_NegInf;
-
-    // MIGLIORIA: Gestione più robusta di z == 0
-    double abs_z = fabs(z);
-    const double Z_TOL = 1e-15;  // Tolleranza per considerare z ≈ 0
-
-    if (z <= 0.0) {
-        for (int m = 0; m <= ell; m++) {
-            // Se z è vicino a 0 e ell-m > 0, il termine è trascurabile
-            if (abs_z < Z_TOL && (ell - m) > 0) continue;
-
-            double log_binom = lchoose_fast_local(ell, m, lfact);
-            if (!R_FINITE(log_binom)) continue;
-
-            double log_pow = 0.0;
-            if (abs_z >= Z_TOL || (ell - m) == 0) {
-                log_pow = (ell - m) * (abs_z < Z_TOL ? R_NegInf : log(abs_z));
-            }
-            
-            double log_gamma = lfact[k + m];
-            double log_alpha_term = -(k + m + 1.0) * log_alpha;
-
-            terms_log[m] = log_binom + log_pow + log_gamma + log_alpha_term;
-        }
-        return logsumexp_r_style(terms_log, ell + 1);
-    } else {
-        for (int m = 0; m <= k; m++) {
-            if (abs_z < Z_TOL && (k - m) > 0) continue;
-
-            double log_binom = lchoose_fast_local(k, m, lfact);
-            if (!R_FINITE(log_binom)) continue;
-
-            double log_pow = 0.0;
-            if (abs_z >= Z_TOL || (k - m) == 0) {
-                log_pow = (k - m) * (abs_z < Z_TOL ? R_NegInf : log(z));
-            }
-            
-            double log_gamma = lfact[ell + m];
-            double log_alpha_term = -(ell + m + 1.0) * log_alpha;
-
-            terms_log[m] = log_binom + log_pow + log_gamma + log_alpha_term;
-        }
-        double log_sum = logsumexp_r_style(terms_log, k + 1);
-        if (!R_FINITE(log_sum)) return R_NegInf;
-        return -alpha * z + log_sum;
-    }
-}
-
-double biv_skewlaplace_kmax(double z1, double z2, double p, double rho, int Kmax) {
-    if (p <= 0.0 || p >= 1.0 || fabs(rho) >= 1.0) return R_NegInf;
-    if (!R_FINITE(z1) || !R_FINITE(z2)) return R_NegInf;
-    if (Kmax < 0) Kmax = KMAX_DEFAULT;
-    if (Kmax > KMAX_MAX) Kmax = KMAX_MAX;
-
-    double Delta = 1.0 - rho * rho;
-    // MIGLIORIA: Tolleranza più appropriata per Delta
-    if (Delta <= 1e-14) return R_NegInf;
-
-    double alpha = 1.0 / Delta;
-    double log_p = log(p);
-    double log_1mp = log1p(-p);
-    double log_Delta = log(Delta);
-    double log_abs_rho = log(fabs(rho));
-    double log_alpha = log(alpha);
-
-    double log_pref = 2.0 * log_p + 2.0 * log_1mp - 2.0 * log_Delta +
-                      ((1.0 - p) * (z1 + z2)) / Delta;
-    if (!R_FINITE(log_pref)) return R_NegInf;
-
-    int max_fact_needed = 2 * Kmax + 2;
-    double *lfact = (double*) R_alloc(max_fact_needed + 1, sizeof(double));
-    for (int i = 0; i <= max_fact_needed; i++) {
-        lfact[i] = lgammafn(i + 1.0);
-    }
-
-    int max_possible_terms = (Kmax + 1) * (Kmax + 1);
-    double *log_terms_total = (double*) R_alloc(max_possible_terms, sizeof(double));
-    int nterms = 0;
-
-    for (int k = 0; k <= Kmax; k++) {
-        for (int ell = 0; ell <= Kmax; ell++) {
-            double log_coef = -2.0 * lfact[k] - 2.0 * lfact[ell] +
-                              k * (2.0 * log_abs_rho + 2.0 * log_p - 2.0 * log_Delta) +
-                              ell * (2.0 * log_abs_rho + 2.0 * log_1mp - 2.0 * log_Delta);
-
-            // MIGLIORIA: Check di validità prima di calcolare
-            if (!R_FINITE(log_coef)) continue;
-
-            double log_I1 = Ikell_log_r_style_local(k, ell, z1, alpha, log_alpha, lfact);
-            double log_I2 = Ikell_log_r_style_local(k, ell, z2, alpha, log_alpha, lfact);
-
-            if (R_FINITE(log_I1) && R_FINITE(log_I2)) {
-                double total_term = log_coef + log_I1 + log_I2;
-                if (R_FINITE(total_term) && nterms < max_possible_terms) {
-                    log_terms_total[nterms++] = total_term;
-                }
-            }
-        }
-    }
-    
-    if (nterms == 0) return R_NegInf;
-    
-    double log_density = log_pref + logsumexp_r_style(log_terms_total, nterms);
-    return R_FINITE(log_density) ? log_density : R_NegInf;
-}
-
-double log_biv_skewlaplace(double rho, double z1, double z2, double m1, double m2, 
-                           double sill, double p) {
-    // MIGLIORIA: Validazione parametri all'inizio
-    if (sill <= 0.0) return R_NegInf;
-    if (p <= 0.0 || p >= 1.0) return R_NegInf;
-    if (fabs(rho) >= 1.0) return R_NegInf;
-    if (!R_FINITE(z1) || !R_FINITE(z2) || !R_FINITE(m1) || !R_FINITE(m2)) 
-        return R_NegInf;
-
-    // MIGLIORIA: Tolleranza più appropriata per rho ≈ 0
-    const double RHO_TOL = 1e-10;
-    
-    if (fabs(rho) < RHO_TOL) {
-        // Caso indipendente: somma di log-densità univariate
-        return (one_log_SkewLaplace(z1, m1, sill, p) + 
-                one_log_SkewLaplace(z2, m2, sill, p));
-    }
-
-    // Standardizzazione
-    double sqrt_sill = sqrt(sill);
-    z1 = (z1 - m1) / sqrt_sill;
-    z2 = (z2 - m2) / sqrt_sill;
-
-    double log_density_prev = R_NegInf;
-    double log_density_curr = R_NegInf;
-    int convergence_streak = 0;
-
-    // MIGLIORIA: Inizio da Kmax più piccolo per casi semplici
-    int Kmax_start = (fabs(z1) < 2.0 && fabs(z2) < 2.0) ? 5 : 10;
-    int Kmax_step = 5;  // Incrementi più piccoli per convergenza più fine
-
-    for (int Kmax = Kmax_start; Kmax <= KMAX_MAX; Kmax += Kmax_step) {
-        log_density_curr = biv_skewlaplace_kmax(z1, z2, p, rho, Kmax);
-
-        if (!R_FINITE(log_density_curr)) {
-            log_density_prev = log_density_curr;
-            continue;
-        }
-
-        if (Kmax > Kmax_start && R_FINITE(log_density_prev)) {
-            double abs_diff = fabs(log_density_curr - log_density_prev);
-            double rel_diff = abs_diff / (1.0 + fabs(log_density_curr));
-            
-            if (rel_diff < CONV_TOL) {
-                convergence_streak++;
-                if (convergence_streak >= CONV_STREAK_MIN) {
-                    return (log_density_curr - log(sill));
-                }
-            } else {
-                convergence_streak = 0;
-            }
-        }
-        log_density_prev = log_density_curr;
-    }
-
-    // MIGLIORIA: Ritorna valore finale anche se non convergente
-    if (R_FINITE(log_density_curr)) {
-        return (log_density_curr - log(sill));
-    }
-    return R_NegInf;
-}
 
 
 
@@ -4210,9 +4006,6 @@ return(dens);
 double biv_Mis_PoissonZIP(double corr, double data_i, double data_j,
                           double mean_i, double mean_j, double mup,
                           double nugget1, double nugget2) {
-    const int N = 2;
-    double M[2][2];
-    double dat[2];
     double dens = 0.0;
 
     double p = pnorm(mup, 0, 1, 1, 0);
@@ -4229,14 +4022,8 @@ double biv_Mis_PoissonZIP(double corr, double data_i, double data_j,
     double sqrt_mean_i = sqrt(mean_i);
     double sqrt_mean_j = sqrt(mean_j);
 
-    M[0][0] = mean_i;
-    M[1][1] = mean_j;
-    M[0][1] = M[1][0] = sqrt(mean_i * mean_j) * corr1;
-
-    dat[0] = data_i - mean_i;
-    dat[1] = data_j - mean_j;
-
-    double pdf2 = dNnorm(N, (double **)M, dat); // Bivariate normal
+    double pdf2 = exp(log_biv_Norm2(corr1, data_i, data_j, mean_i, mean_j,
+                                     mean_i, mean_j));
     double pdf1i = dnorm(data_i, mean_i, sqrt_mean_i, 0); // Univariate marginals
     double pdf1j = dnorm(data_j, mean_j, sqrt_mean_j, 0);
 
@@ -6817,9 +6604,9 @@ double one_log_SkewLaplace(double z, double mu, double sill, double skew) {
     double z_std = (z - mu) / sigma; // Standardizzazione
     
     if (z_std >= 0) {
-        return log(skew * (1 - skew)) - log(sigma) - (1 - skew) * z_std;
+        return log(skew * (1 - skew)) - log(sigma) - skew * z_std;
     } else {
-        return log(skew * (1 - skew)) - log(sigma) + skew * z_std;
+        return log(skew * (1 - skew)) - log(sigma) + (1 - skew) * z_std;
     }
 }
 double one_log_tukeyh(double z, double m, double sill, double tail)
@@ -6940,18 +6727,19 @@ double one_log_two_pieceGauss(double z,double m, double sill, double eta)
   return(res-log(sqrt(sill)));
 }
 
-double one_log_wrapped(double alfa,double u,double mi,double sill)
+double one_log_wrapped(double alfa, double u, double mi, double sill)
 {
-    double x,wrap_gauss=0.0; 
-    x=u-2*atan(mi)-M_PI; 
-    double k1=-alfa;
-
-     while(k1<=alfa){
-      wrap_gauss +=  dnorm((x+2*k1*M_PI),0,sqrt(sill),0); 
-     
-     k1 = k1+1;
-      }
-return(log(wrap_gauss));
+    if (!R_FINITE(alfa) || alfa < 0.0 || !R_FINITE(sill) || sill <= 0.0 ||
+        !R_FINITE(u) || !R_FINITE(mi)) return R_NaN;
+    const double x = u - 2.0 * atan(mi) - M_PI;
+    const double sd = sqrt(sill);
+    const double log_norm = -0.5 * (log(2.0 * M_PI) + log(sill));
+    double log_sum = R_NegInf;
+    for (double k = -alfa; k <= alfa; k += 1.0) {
+        const double z = (x + 2.0 * M_PI * k) / sd;
+        log_sum = pg_logspace_add_pos(log_sum, log_norm - 0.5 * z * z);
+    }
+    return log_sum;
 }
 
 /************************************************************************/

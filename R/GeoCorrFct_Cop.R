@@ -52,6 +52,11 @@ GeoCorrFct_Cop <- function(x, t = NULL, corrmodel, model = "Gaussian", copula = 
          call. = FALSE)
   }
 
+  .st_old <- .GeoSTEnter(corrmodel, distance = distance,
+                         context = "GeoCorrFct_Cop")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoCorrFct_Cop")
+
   spacetime <- CheckST(corr_id)
   bivariate <- CheckBiv(corr_id)
   if (bivariate)

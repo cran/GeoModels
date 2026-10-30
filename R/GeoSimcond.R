@@ -165,7 +165,7 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
   # from falling through to an undefined 'res' object.
   supported_plain <- c(
     "Gaussian", "LogGaussian", "Tukeyh", "Tukeyh2", "SinhAsinh",
-    "SkewGaussian", "Gamma", "Weibull", "Binomial", "BinomialNeg"
+    "SkewGaussian", "Gamma", "Weibull", "SkewLaplace", "Binomial", "BinomialNeg"
   )
   continuous_copula_margins <- c(
     "Gaussian", "StudentT", "LogGaussian", "Gamma", "Weibull",
@@ -236,7 +236,7 @@ GeoSimcond <- function(estobj = NULL, data, coordx, coordy = NULL, coordz = NULL
           "GeoSimcond local=TRUE is currently supported for Gaussian fields, ",
           "LogGaussian/Tukeyh/Tukeyh2/SinhAsinh transformations, and continuous ",
           "margins with copula='Gaussian'. Gibbs-based SkewGaussian, Gamma/Weibull, ",
-          "direct Binomial/BinomialNeg models, Clayton and SkewGaussian copulas still require local=FALSE."
+          "direct SkewLaplace/Binomial/BinomialNeg models, Clayton and SkewGaussian copulas still require local=FALSE."
         ),
         call. = FALSE
       )
@@ -481,6 +481,21 @@ if (is.null(copula)) {
   ################################################################################
   ############### non monotone transformations of more than one Gaussian RF ######
   ################################################################################
+  ## Direct four-Gaussian / two-Gamma construction from the AL-RF paper.
+  ## Deliberately separate from copula="Gaussian", whose conditional law
+  ## has a different spatial dependence structure.
+  if (model == "SkewLaplace") {
+    eta <- get_eta_obs_loc(param, X, Xloc, Mloc, n_obs_mean, n_loc_mean)
+    res <- .GeoSimcondSkewLaplaceDirect(
+      coord_obs = coord_obs, loc = loc, data = data, param = param,
+      corrmodel = corrmodel, mean_obs = eta$obs, mean_loc = eta$loc,
+      nrep = nrep, n_iter = n_iter, mcmc_thin = mcmc_thin,
+      method = method, L = L, distance = distance, radius = radius,
+      anisopars = anisopars, parallel = parallel,
+      ncores = ncores, progress = progress
+    )
+  }
+
   if (model == "SkewGaussian") {
     eta <- get_eta_obs_loc(param, X, Xloc, Mloc, n_obs_mean, n_loc_mean)
     param_skew <- .GeoMean_intercept_param(param, 0)
@@ -710,13 +725,22 @@ if (is.null(copula)) {
     datanorm <- stats::qnorm(margin$u_obs)
     param_latent <- .GeoCopula_latent_param(param, corrmodel, margin$nugget)
 
-    res <- .GeoSimcondGaussian(
-      datanorm, corrmodel, nrep, method, L, param_latent,
-      coord_obs, loc, coordt_use, time, NULL, NULL, NULL,
-      distance, radius, anisopars, local, neighb, maxdist, maxtime,
-      space, spacetime, bivariate, parallel, ncores, progress
-    )
+    if (identical(model, "SkewLaplace") && !local && identical(method, "Cholesky")) {
+      res <- .GeoSimcondGaussianExact(
+        datanorm, coord_obs, loc, corrmodel, param_latent, nrep,
+        distance, radius, anisopars, progress
+      )
+    } else {
+      res <- .GeoSimcondGaussian(
+        datanorm, corrmodel, nrep, method, L, param_latent,
+        coord_obs, loc, coordt_use, time, NULL, NULL, NULL,
+        distance, radius, anisopars, local, neighb, maxdist, maxtime,
+        space, spacetime, bivariate, parallel, ncores, progress
+      )
+    }
+    simulation_details <- attr(res, "simulation_details")
     res <- lapply(res, function(z) margin$q_loc(stats::pnorm(z)))
+    attr(res, "simulation_details") <- simulation_details
   }
 
   if (copula == "Clayton") {
@@ -850,6 +874,8 @@ GeoSimcond_out <- list(
     neighb = neighb,
     L = L,
     mcmc_thin = mcmc_thin,
+    n_iter = n_iter,
+    simulation_details = attr(res, "simulation_details"),
     condsim = res,            # list of nrep vectors, each of length numloc
     cond_mean = cond_mean,    # conditional mean across replications
     cond_var = cond_var,      # conditional variance across replications

@@ -33,6 +33,19 @@ covariance=FALSE,variogram=FALSE)
  }
 
 
+
+\details{
+For fixed-margin space--time models 85 and 89, the spatial dimension is
+handled internally without additional arguments or covariance parameters.
+A standalone Euclidean lag-only call uses dimension two; chordal distance
+uses the three-dimensional Euclidean embedding. Curves evaluated inside a
+coordinate-based operation inherit its dimension, which is restored on exit.
+For Euclidean fits with three-dimensional coordinates, use
+\code{\link{GeoCovariogram}} on the fitted object to retain that dimension;
+lag values alone do not identify a spatial dimension.
+See \code{\link{GeoFixedMarginST}}.
+}
+
 \value{Returns correlations or covariances values associated to a given parametric spatial and temporal correlation models.}
 
 

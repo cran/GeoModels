@@ -78,7 +78,10 @@ identify_missing <- function(x) {
 
 #' Process spatial data
 process_spatial <- function(data, coords, X) {
-  
+  # Coordinates are returned as an explicit matrix, including grid inputs.
+  # Flatten a spatial grid in the same order used by expand.grid().
+  data <- c(data)
+
   # Find missing values
   missing_mask <- identify_missing(data)
   valid_mask <- !missing_mask
@@ -330,13 +333,13 @@ if (FALSE) {
   
   # Return standardized output
   return(list(
-    coordx = if (is.null(coordx_dyn)) result$coords else coordx,
-    coordy = coordy,
-    coordz = coordz,
+    coordx = result$coords,
+    coordy = NULL,
+    coordz = NULL,
     coordt = coordt,
     coordx_dyn = result$coordx_dyn,
     data = result$data,
-    grid = grid,
+    grid = FALSE,
     perc = result$perc,
     setting = setting,
     X = result$X

@@ -429,6 +429,13 @@ if(!bivariate) {
     mu <- rep(as.numeric(mm["mean"]), numlags_m * numlagt_m)
   } else{}  
    ###############
+    .st_old <- .GeoSTEnter(fitted$corrmodel,
+      coordx = fitted$coordx, coordy = fitted$coordy, coordz = fitted$coordz,
+      coordx_dyn = fitted$coordx_dyn,
+      distance = if (is.null(fitted$distance)) distance else fitted$distance,
+      context = "GeoCovariogram")
+    on.exit(.GeoSTRestore(.st_old), add = TRUE)
+
     corrmodel <- CkCorrModel(fitted$corrmodel)
 
      nui=nuisance
@@ -672,8 +679,8 @@ if(!copula_cont) {
                               correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))
                               nu=1/as.numeric(nuisance['df']);sill=as.numeric(nuisance['sill'])
       
-                              vs=sill*(nu)/(nu-2)
-                              cc=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,correlation^2))*correlation1)/(2*gamma(nu/2)^2)
+                              vs=sill/(1-2/nu)
+                              cc=.GeoStudentCorrelation(correlation, correlation1, nu)
                               covariance=vs*cc;variogram=vs*(1-cc) 
                                             }
                                 else
@@ -693,12 +700,8 @@ if(!copula_cont) {
                                correlation1=correlation*(1-nuisance['nugget'] )
                                nu=as.numeric(1/nuisance['df']); sk=as.numeric(nuisance['skew'])
                                sill=as.numeric(nuisance['sill'])
-                               skew2=sk*sk;l=nu/2; f=(nu-1)/2; w=sqrt(1-skew2);y=correlation;
-                               CorSkew=(2*skew2/(pi*w*w+skew2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*correlation1/(w*w+skew2*(1-2/pi)) ;
-                               cc=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(l)^2-skew2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,l,y*y))
-                                *((1-2*skew2/pi)*CorSkew+2*skew2/pi)-2*skew2/pi);
-                               mm=sqrt(nu)*gamma(f)*sk/(sqrt(pi)*gamma(l));
-                               vs=sill*(nu/(nu-2)-mm*mm);
+                               cc <- .GeoSkewStudentCorrelation(correlation, correlation1, nu, sk)
+                               vs <- sill * .GeoSkewStudentMoments(nu, sk)$variance
                                covariance=vs*cc;variogram=vs*(1-cc)
                                             }
                                 else

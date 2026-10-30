@@ -71,7 +71,9 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
  \item{memdist}{Deprecated logical argument retained for backward compatibility. The selected pair structure is always precomputed and reused during composite-likelihood optimization. Supplying \code{FALSE} produces a warning and is treated as \code{TRUE}.}
 
  \item{method}{String; the type of matrix decomposition/linear algebra backend used in likelihood computations.
- Default is \code{"cholesky"}. Another possible choice is \code{"svd"} (when available).}
+ Default is \code{"cholesky"}. Another possible choice is \code{"svd"} for dense
+ likelihood computations. Sparse Gaussian and tapered likelihoods require
+ \code{"cholesky"}; requesting \code{"svd"} for these paths raises an error.}
 
  \item{model}{String; the type of random field (and associated density) used in the likelihood objects. Default is \code{"Gaussian"}; see Details for the accepted options.}
 
@@ -119,6 +121,18 @@ GeoFit(data, coordx, coordy=NULL, coordz=NULL, coordt=NULL,
 \item{check.duplicates}{Logical. If \code{TRUE}, perform a fast exact scan for duplicated observation locations at this user entry point. The default is \code{FALSE}, so no duplicate-location scan is imposed. Internal bootstrap, cross-validation, and refitting calls do not repeat the scan.}
 }
 \details{
+For the fixed-margin models \code{Genwend_Genwend_nosep} (85) and
+\code{Matern_Matern_nosep} (89), \code{sep} is the normalized interaction
+on \eqn{[-1,1]}; \code{sep=0} is separable and is not a boundary value.
+Automatic starts use zero for this parameter and automatic bounds admit
+both signs. The GW shape constraints are coupled to the smoothness and
+spatial dimension. Invalid trial parameter vectors are rejected by the
+native covariance evaluator; user-specified starts must be valid.
+See \code{\link{GeoFixedMarginST}} for parameter meanings and examples.
+These definitions replace the previous models at codes 85 and 89, so old
+fits using those codes must be refitted.
+
+
 
 For a univariate model the mean is specified as
 \deqn{\mu = X\beta.}
@@ -397,7 +411,7 @@ library(GeoModels)
 
 # Define the spatial-coordinates of the points:
 set.seed(3)
-N=300 # number of location sites
+N=100 # number of location sites
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -482,7 +496,7 @@ print(fit1)
 ###############################################################
 # Define the spatial-coordinates of the points:
 set.seed(3)
-N=250 # number of location sites
+N=100 # number of location sites
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -518,7 +532,7 @@ print(fit2)
 ###############################################################
 set.seed(524)
 # Define the spatial-coordinates of the points:
-N=300
+N=100
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -581,8 +595,8 @@ print(unlist(fit2$param))
 set.seed(261)
 model="SkewGaussian"
 # Define the spatial-coordinates of the points:
-x <- runif(500, 0, 1)
-y <- runif(500, 0, 1)
+x <- runif(100, 0, 1)
+y <- runif(100, 0, 1)
 coords <- cbind(x,y)
 
 corrmodel="Wend0"
@@ -618,7 +632,7 @@ print(unlist(fit1$param))
 ###############################################################
 
 set.seed(422)
-N=250
+N=100
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -675,7 +689,7 @@ print(fit2)
 ###############################################################
 set.seed(52)
 # Define the temporal sequence:
-time <- seq(1, 9, 1)
+time <- seq(1, 5, 1)
 
 # Define the spatial-coordinates of the points:
 x <- runif(20, 0, 1)
@@ -728,8 +742,8 @@ print(fit)
 
 # Define the spatial-coordinates of the points:
 set.seed(89)
-x <- runif(300, 0, 1)
-y <- runif(300, 0, 1)
+x <- runif(100, 0, 1)
+y <- runif(100, 0, 1)
 coords=cbind(x,y)
 # parameters
 param=list(mean_1=0,mean_2=0,scale=0.1,smooth=0.5,sill_1=1,sill_2=1,

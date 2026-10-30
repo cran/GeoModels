@@ -2,6 +2,81 @@
 ### Internal simulation validation helpers
 ####################################################
 
+## Preparation caches are confined to the lifetime of one public simulation
+## call.  Nested simulators share them; workers without the option simply
+## prepare their own factors.  No simulation draws or RNG state are cached.
+.GeoSimulationCachePush <- function() {
+  old <- getOption("GeoModels.simulation.cache", NULL)
+  if (is.environment(old) && inherits(old, "GeoModelsSimulationCache"))
+    return(function() invisible(NULL))
+  cache <- new.env(parent = emptyenv())
+  class(cache) <- "GeoModelsSimulationCache"
+  options(GeoModels.simulation.cache = cache)
+  function() {
+    options(GeoModels.simulation.cache = old)
+    invisible(NULL)
+  }
+}
+
+.GeoSimulationMemoise <- function(kind, key, prepare) {
+  cache <- getOption("GeoModels.simulation.cache", NULL)
+  if (!is.environment(cache) || !inherits(cache, "GeoModelsSimulationCache"))
+    return(prepare())
+  entries <- cache[[kind]]
+  if (length(entries)) {
+    for (i in seq_along(entries)) {
+      if (identical(entries[[i]]$key, key)) {
+        answer <- entries[[i]]$value
+        if (i > 1L) cache[[kind]] <- c(entries[i], entries[-i])
+        return(answer)
+      }
+    }
+  }
+  answer <- prepare()
+  ## Two entries cover distinct latent nugget structures without retaining an
+  ## unbounded collection of large covariance matrices.
+  cache[[kind]] <- c(list(list(key = key, value = answer)),
+                    utils::head(entries, 1L))
+  answer
+}
+
+.GeoSimulationFactor <- function(covmatrix, method, sparse) {
+  if (isTRUE(sparse)) {
+    factor <- spam::chol(covmatrix)
+    return(list(R = spam::as.spam(factor),
+                iord = spam::ordering(factor, inv = TRUE)))
+  }
+  factor <- MatDecomp(covmatrix, method)
+  if (is.logical(factor))
+    stop("Covariance matrix is not positive definite.", call. = FALSE)
+  list(sqrt = MatSqrt(factor, method))
+}
+
+.GeoSimulationPrepareExact <- function(args, method, sparse) {
+  .GeoSimulationMemoise(
+    "exact", list(args = args, method = method, sparse = sparse),
+    function() {
+      covariance <- do.call(GeoCovmatrix, args)
+      list(ccov = covariance,
+           factor = .GeoSimulationFactor(covariance$covmatrix, method, sparse))
+    }
+  )
+}
+
+## Change the off-diagonal attenuation without allocating a dense mask.
+## Use spam's methods explicitly: its namespace need not be attached.
+.GeoSimulationScaleOffDiagonal <- function(covmatrix, multiplier) {
+  if (isTRUE(multiplier == 1)) return(covmatrix)
+  if (inherits(covmatrix, "spam")) {
+    return(spam::`diag<-.spam`(multiplier * covmatrix,
+                              spam::diag.spam(covmatrix)))
+  }
+  diagonal <- diag(covmatrix)
+  result <- multiplier * covmatrix
+  diag(result) <- diagonal
+  result
+}
+
 .GeoSimulationCanonicalModel <- function(model) {
   if(length(model) != 1L || is.na(model))
     stop("model must be a single non-missing character string.", call. = FALSE)
@@ -450,10 +525,10 @@
   if(model == "Gamma") k <- as.integer(param$shape)
   if(model == "Beta") k <- as.integer(param$shape1) + as.integer(param$shape2)
   if(model %in% c("Kumaraswamy", "Kumaraswamy2")) k <- 4L
-  if(model == "StudentT") k <- as.integer(round(1 / param$df)) + 1L
+  if(model == "StudentT") k <- as.integer(round(1 / param$df))
   if(model == "TwoPieceBimodal") k <- as.integer(param$df) + 1L
   if(model %in% c("SkewStudentT", "TwoPieceStudentT")) {
-    k <- as.integer(round(1 / param$df)) + 2L
+    k <- as.integer(round(1 / param$df)) + 1L
   }
   list(k = as.integer(k), npoi = npoi, param = param)
 }
@@ -518,11 +593,11 @@
   if(model %in% c("SkewGaussian", "SkewGauss")) {
     sim <- mm + sk * c(abs(dd[, , 1L])) + sqrt(vv) * c(t(simDD))
   } else if(model == "SkewStudentT") {
-    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k - 2L)) / (k - 2L))
-    bb <- sk * abs(dd[, , k - 1L]) + sqrt(1 - sk^2) * t(simDD)
+    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k - 1L)) / (k - 1L))
+    bb <- sk * abs(dd[, , k]) + sqrt(1 - sk^2) * t(simDD)
     sim <- mm + sqrt(vv) * (bb / denom)
   } else if(model == "StudentT") {
-    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k - 1L)) / (k - 1L))
+    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k)) / k)
     sim <- mm + sqrt(vv) * (c(t(simDD)) / denom)
   } else if(model %in% c("TwoPieceGaussian", "TwoPieceGauss")) {
     base <- t(simDD)
@@ -552,7 +627,7 @@
     discrete[!sel] <- -1 - sk
     sim <- mm + c(sqrt(vv) * base^(1 / alpha) * discrete)
   } else if(model == "TwoPieceStudentT") {
-    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k - 2L)) / (k - 2L))
+    denom <- sqrt(.GeoSimulationSquareSums(dd, seq_len(k - 1L)) / (k - 1L))
     base <- c(t(simDD)) / denom
     discrete <- dd[, , k]
     pp <- qnorm((1 - sk) / 2)

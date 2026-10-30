@@ -23,7 +23,8 @@ GeoKrigWeights <- function(
   return_CC <- TRUE
   weights_orientation <- "nobs_by_nloc"
 
-  method <- gsub("[[:blank:]]", "", method)
+  method <- .GeoKrigMatchMethod(method, sparse = isTRUE(sparse),
+                                context = "GeoKrigWeights")
   model <- .GeoPredictionCanonicalModel(gsub("[[:blank:]]", "", model))
   corrmodel <- gsub("[[:blank:]]", "", corrmodel)
   distance <- gsub("[[:blank:]]", "", distance)
@@ -53,6 +54,13 @@ GeoKrigWeights <- function(
   if (bivariate && !(which == 1 || which == 2)) {
     stop("which parameter must be 1 or 2")
   }
+
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = coordx, coordy = coordy,
+    coordz = coordz, coordx_dyn = coordx_dyn,
+    distance = distance, context = "GeoKrigWeights")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoKrigWeights")
 
   if (spacetime && !is.null(coordx_dyn)) {
     coordx_dyn <- .GeoNormalizeDynamicCoordinates(
@@ -323,8 +331,8 @@ GeoKrigWeights <- function(
   ############################################################################
   ## Final weights
   ############################################################################
-  weights_result <- getInvC(covmatrix, CC, mse = FALSE)
-  krig_weights <- weights_result$a
+  krig_weights <- .GeoKrigSolve(covmatrix, CC, method = method,
+                                context = "GeoKrigWeights")
 
   ## Default is the historical orientation used by GeoSimcond:
   ## kriging vector = crossprod(weights, data), i.e. weights is nobs x nloc.

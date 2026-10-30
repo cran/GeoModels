@@ -55,9 +55,17 @@
                                     radius, mse, copula, varcov, method,
                                     loc, time, Xloc, Mloc, M,
                                     task_indices, is_space, spacetime,
-                                    which) {
+                                    which, factor_cache = NULL, factor_keys = NULL) {
   .dup_old <- .GeoSuppressDuplicateChecksForNestedCalls()
   on.exit(.GeoRestoreDuplicateCheckOption(.dup_old), add = TRUE)
+
+  if (is.environment(factor_cache) && length(factor_keys) >= k &&
+      !is.na(factor_keys[k])) {
+    old_factor_options <- options(
+      GeoModels.local_krig_factor_cache = factor_cache,
+      GeoModels.local_krig_factor_key = factor_keys[k])
+    on.exit(options(old_factor_options), add = TRUE)
+  }
 
 
   if (!is.null(neigh$numpoints) && length(neigh$numpoints) >= k &&
@@ -451,6 +459,12 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
     time <- as.numeric(time)
   }
 
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = if (is.null(coordx_dyn)) coords else NULL,
+    coordx_dyn = coordx_dyn, distance = distance, context = "GeoKrigloc")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoKrigloc")
+
   .GeoValidate3D(
     coordx = if (is.null(coordx_dyn)) coords else NULL,
     coordx_dyn = coordx_dyn, distance = distance, grid = grid,
@@ -654,6 +668,16 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
   ## in the package.  Keeping one numerical path avoids duplicating covariance,
   ## copula, mean, MSE, and solver logic inside GeoKrigloc.
   jobs <- seq_len(total_tasks)
+  factor_cache <- .GeoKrigNewFactorCache()
+  factor_keys <- NULL
+  if (!is.null(factor_cache) && length(neigh$indices) == total_tasks) {
+    factor_keys <- vapply(neigh$indices, function(ii) paste(ii, collapse = ","), character(1L))
+    repeated <- duplicated(factor_keys) | duplicated(factor_keys, fromLast = TRUE)
+    factor_keys[!repeated | !nzchar(factor_keys)] <- NA_character_
+    if (all(is.na(factor_keys))) factor_cache <- NULL
+  } else {
+    factor_cache <- NULL
+  }
   worker_args <- list(
     neigh = neigh, param = param, corrmodel = corrmodel,
     distance = distance, n = n, nloc = nloc, model = model,
@@ -662,7 +686,8 @@ GeoKrigloc = function(estobj=NULL, data, coordx=NULL, coordy=NULL, coordz=NULL, 
     copula = copula, varcov = varcov, method = method,
     loc = loc_metric, time = time, Xloc = Xloc, Mloc = Mloc, M = M,
     task_indices = task_indices, is_space = space,
-    spacetime = spacetime, which = which
+    spacetime = spacetime, which = which,
+    factor_cache = factor_cache, factor_keys = factor_keys
   )
 
 

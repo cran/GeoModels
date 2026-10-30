@@ -60,226 +60,27 @@
   out
 }
 
-.GeoKriglocSpatialPackedCorrelation <- function(coords, corrmodel_code,
-                                                    corrparam, distance_code,
-                                                    radius,
-                                                    context = "GeoKrigloc") {
-  coords <- as.matrix(coords)
-  if (!is.numeric(coords) || nrow(coords) < 1L ||
-      !(ncol(coords) %in% c(2L, 3L)) || any(!is.finite(coords))) {
-    stop(context, ": invalid coordinates for packed correlation assembly.",
-         call. = FALSE)
-  }
-  if (ncol(coords) == 2L) coords <- cbind(coords, 0)
-  storage.mode(coords) <- "double"
-  nobs <- nrow(coords)
+## Assemble the Gaussian covariance from the already cached packed pairs.
+## This helper is deliberately Gaussian-only, matching the public weights API.
+.GeoKriglocSpatialDenseCovariance <- function(nobs, nuisance, raw_corr,
+                                               context = "GeoKriglocWeights") {
   npairs <- as.double(nobs) * as.double(nobs - 1L) / 2
-  if (npairs <= 0) return(numeric(0L))
-
-  ans <- dotCall64::.C64(
-    "Corr_spatial_packed",
-    SIGNATURE = c("double", "double", "double", "double",
-                  "integer", "integer", "double", "integer", "double"),
-    rho = dotCall64::vector_dc("double", npairs),
-    coords[, 1L], coords[, 2L], coords[, 3L],
-    as.integer(corrmodel_code), as.integer(nobs), as.double(corrparam),
-    as.integer(distance_code), as.double(radius),
-    INTENT = c("w", rep("r", 8)),
-    NAOK = TRUE, PACKAGE = "GeoModels"
-  )$rho
-
-  if (length(ans) != npairs || any(!is.finite(ans))) {
-    stop(context, ": non-finite packed spatial correlations.", call. = FALSE)
-  }
-  as.numeric(ans)
-}
-
-.GeoKriglocMultiplicativeStdVariance <- function(model_code, nuisance,
-                                                       context = "GeoKrigloc") {
-  code <- as.integer(model_code)[1L]
-  if (code == 21L) {
-    sh <- as.numeric(nuisance["shape"])[1L]
-    out <- 2 / sh
-  } else if (code == 26L) {
-    sh <- as.numeric(nuisance["shape"])[1L]
-    out <- gamma(1 + 2 / sh) / gamma(1 + 1 / sh)^2 - 1
-  } else if (code == 24L) {
-    sh <- as.numeric(nuisance["shape"])[1L]
-    out <- 2 * sh * sin(pi / sh)^2 / (pi * sin(2 * pi / sh)) - 1
-  } else if (code == 22L) {
-    ss <- as.numeric(nuisance["sill"])[1L]
-    out <- exp(ss) - 1
-  } else {
-    stop(context, ": unsupported positive multiplicative model.", call. = FALSE)
-  }
-  if (!length(out) || !is.finite(out) || out <= 0) {
-    stop(context, ": invalid standardized multiplicative variance.", call. = FALSE)
-  }
-  as.numeric(out)
-}
-
-.GeoKriglocMultiplicativeCorr <- function(latent, model_code, nuisance,
-                                           context = "GeoKrigloc") {
-  code <- as.integer(model_code)[1L]
-  latent <- as.numeric(latent)
-  if (code == 21L) {
-    out <- latent^2
-  } else if (code == 26L) {
-    sh <- as.numeric(nuisance["shape"])[1L]
-    out <- .GeoWeibullCorr(latent, sh)
-  } else if (code == 24L) {
-    sh <- as.numeric(nuisance["shape"])[1L]
-    cc2 <- latent^2
-    factor <- pi * sin(2 * pi / sh) /
-      (2 * sh * sin(pi / sh)^2 - pi * sin(2 * pi / sh))
-    F1 <- hypergeo::hypergeo(-1 / sh, -1 / sh, 1, cc2)
-    F2 <- hypergeo::hypergeo( 1 / sh,  1 / sh, 1, cc2)
-    out <- factor * (Re(F1) * Re(F2) - 1)
-  } else if (code == 22L) {
-    ss <- as.numeric(nuisance["sill"])[1L]
-    out <- (exp(ss * latent) - 1) / (exp(ss) - 1)
-  } else {
-    stop(context, ": unsupported positive multiplicative model.", call. = FALSE)
-  }
-  if (length(out) != length(latent) || any(!is.finite(out))) {
-    stop(context, ": non-finite multiplicative correlation.", call. = FALSE)
-  }
-  as.numeric(out)
-}
-
-.GeoKriglocSpatialDenseCovariance <- function(coords_obs, template,
-                                               param_vec, nuisance,
-                                               eta_obs, copula_cont,
-                                               plain_multiplicative = FALSE,
-                                               corrmodel_code,
-                                               distance_code,
-                                               raw_corr = NULL,
-                                               context = "GeoKrigloc") {
-  coords_obs <- as.matrix(coords_obs)
-  if (!is.numeric(coords_obs) || nrow(coords_obs) < 1L ||
-      !(ncol(coords_obs) %in% c(2L, 3L)) || any(!is.finite(coords_obs))) {
-    stop(context, ": invalid local coordinates for direct covariance assembly.",
-         call. = FALSE)
-  }
-  if (ncol(coords_obs) == 2L) coords3 <- cbind(coords_obs, 0) else coords3 <- coords_obs
-  storage.mode(coords3) <- "double"
-  dime <- nrow(coords3)
-  npairs <- as.double(dime) * as.double(dime - 1L) / 2
-
-  ## For fix26 the strict lower triangle can be supplied from an adaptive
-  ## global latent-correlation cache.  Otherwise compute it locally.  The
-  ## native packed kernel evaluates each unordered pair only once; the legacy
-  ## Corr_c(n x n) route remains available behind an internal regression
-  ## option so numerical equivalence can be tested directly.
-  if (is.null(raw_corr)) {
-    use_packed <- isTRUE(getOption("GeoModels.krigloc.packed_correlation", TRUE))
-    if (use_packed) {
-      raw_corr <- .GeoKriglocSpatialPackedCorrelation(
-        coords = coords3,
-        corrmodel_code = corrmodel_code,
-        corrparam = param_vec[template$namescorr],
-        distance_code = distance_code,
-        radius = template$local_cov_radius,
-        context = context
-      )
-    } else {
-      rho_full <- dotCall64::.C64(
-        "Corr_c",
-        SIGNATURE = c(
-          "double", "double", "double", "double", "double", "integer",
-          "integer", "double", "double", "double", "integer", "integer",
-          "integer", "integer", "integer", "integer", "double", "integer",
-          "integer", "double", "integer", "integer", "double"
-        ),
-        corri = dotCall64::vector_dc("double", dime * dime),
-        coords3[, 1L], coords3[, 2L], coords3[, 3L], 0,
-        as.integer(corrmodel_code), 0L,
-        coords3[, 1L], coords3[, 2L], coords3[, 3L],
-        as.integer(dime), as.integer(dime), 1L,
-        as.integer(dime), 0L, 1L, param_vec[template$namescorr],
-        0L, 0L, 0, as.integer(distance_code), 0L,
-        as.numeric(template$local_cov_radius),
-        INTENT = c("w", rep("r", 22)), NAOK = TRUE, PACKAGE = "GeoModels"
-      )$corri
-      if (length(rho_full) != dime * dime || any(!is.finite(rho_full))) {
-        stop(context, ": non-finite local correlation matrix.", call. = FALSE)
-      }
-      rho_full <- matrix(rho_full, nrow = dime, ncol = dime)
-      raw_corr <- if (npairs > 0) rho_full[lower.tri(rho_full)] else numeric(0L)
-    }
-  }
-  if (length(raw_corr) != npairs || any(!is.finite(raw_corr))) {
+  if (length(raw_corr) != npairs || any(!is.finite(raw_corr)))
     stop(context, ": invalid packed local correlation vector.", call. = FALSE)
-  }
-
-  nugget_scale <- 1 - as.numeric(nuisance["nugget"])
-  if (!length(nugget_scale) || !is.finite(nugget_scale[1L])) nugget_scale <- 1
-  nugget_scale <- nugget_scale[1L]
-
-  if (isTRUE(copula_cont)) {
-    moments <- .GeoCopulaMarginalMoments(template$model, nuisance, eta_obs)
-    vv <- as.numeric(moments$variance)
-    if (length(vv) != dime || any(!is.finite(vv))) {
-      stop(context, ": invalid local marginal variances.", call. = FALSE)
-    }
-    return(.GeoDenseCopulaCovarianceBlocked(
-      raw_corr = raw_corr, dime = dime, copula = template$copula,
-      model_type = template$model, params = nuisance, eta_obs = eta_obs,
-      variances = vv, nugget_scale = nugget_scale
-    ))
-  }
-
-  if (isTRUE(plain_multiplicative)) {
-    stdvar <- .GeoKriglocMultiplicativeStdVariance(
-      template$model, nuisance, context = context
-    )
-    pair_corr <- .GeoKriglocMultiplicativeCorr(
-      nugget_scale * raw_corr, template$model, nuisance, context = context
-    )
-    C <- diag(stdvar, nrow = dime, ncol = dime)
-    if (length(pair_corr)) {
-      pair_cov <- stdvar * pair_corr
-      C[lower.tri(C)] <- pair_cov
-      C <- t(C)
-      C[lower.tri(C)] <- pair_cov
-    }
-    return(C)
-  }
-
-  if (as.integer(template$model) %in% c(20L, 34L, 40L)) {
-    moments <- .GeoPlainTransformedMarginalMoments(template$model, nuisance, eta_obs)
-    vv <- as.numeric(moments$variance)
-    if (length(vv) == 1L) vv <- rep(vv, dime)
-    if (length(vv) != dime || any(!is.finite(vv)) || any(vv <= 0))
-      stop(context, ": invalid transformed marginal variances.", call. = FALSE)
-    pair_cov <- .GeoPlainTransformedCrossCov(
-      nugget_scale * raw_corr, template$model, nuisance
-    )
-    C <- diag(vv, nrow = dime, ncol = dime)
-    if (length(pair_cov)) {
-      C[lower.tri(C)] <- pair_cov
-      C <- t(C)
-      C[lower.tri(C)] <- pair_cov
-    }
-    return(C)
-  }
-
-  ## Gaussian direct path: construct the correlation matrix first and apply
-  ## the marginal sill.
-  sill <- as.numeric(nuisance["sill"])
-  if (!length(sill) || !is.finite(sill[1L])) {
+  nugget <- as.numeric(nuisance["nugget"])[1L]
+  sill <- as.numeric(nuisance["sill"])[1L]
+  if (!is.finite(nugget)) nugget <- 0
+  if (!is.finite(sill) || sill <= 0)
     stop(context, ": invalid Gaussian sill parameter.", call. = FALSE)
-  }
-  corr <- as.numeric(raw_corr) * nugget_scale
-  C <- diag(dime)
+  corr <- as.numeric(raw_corr) * (1 - nugget)
+  C <- diag(nobs)
   if (length(corr)) {
     C[lower.tri(C)] <- corr
     C <- t(C)
     C[lower.tri(C)] <- corr
   }
-  C * sill[1L]
+  C * sill
 }
-
 
 ## Fast compact spatial Gaussian weights using the shared observation-pair
 ## correlation cache.  The cross-correlation to the prediction location is
@@ -292,16 +93,7 @@
   nuisance <- vars$cache_param_vec[vars$cov_template$namesnuis]
   nuisance <- nuisance[!is.na(names(nuisance))]
   C <- .GeoKriglocSpatialDenseCovariance(
-    coords_obs = coords_obs,
-    template = vars$cov_template,
-    param_vec = vars$cache_param_vec,
-    nuisance = nuisance,
-    eta_obs = rep(0, length(idx)),
-    copula_cont = FALSE,
-    plain_multiplicative = FALSE,
-    corrmodel_code = vars$corrmodel_code,
-    distance_code = vars$distance_code,
-    raw_corr = raw_corr,
+    nobs = length(idx), nuisance = nuisance, raw_corr = raw_corr,
     context = "GeoKriglocWeights"
   )
 
@@ -459,7 +251,8 @@ GeoKriglocWeights <- function(coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL
   corrmodel <- gsub("[[:blank:]]", "", corrmodel)
   model <- .GeoPredictionCanonicalModel(gsub("[[:blank:]]", "", model))
   distance <- gsub("[[:blank:]]", "", distance)
-  method <- gsub("[[:blank:]]", "", method)
+  method <- .GeoKrigMatchMethod(method, sparse = isTRUE(sparse),
+                                context = "GeoKriglocWeights")
 
   bivariate = CheckBiv(CkCorrModel(corrmodel))
   spacetime = CheckST(CkCorrModel(corrmodel))
@@ -517,6 +310,12 @@ GeoKriglocWeights <- function(coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL
 
   if(is.vector(loc)) loc = matrix(loc, nrow=1)
   loc = as.matrix(loc)
+
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = if (is.null(coordx_dyn)) coords else NULL,
+    coordx_dyn = coordx_dyn, distance = distance, context = "GeoKriglocWeights")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoKriglocWeights")
 
   .GeoValidate3D(
     coordx = if (is.null(coordx_dyn)) coords else NULL,
@@ -656,7 +455,7 @@ GeoKriglocWeights <- function(coordx=NULL, coordy=NULL, coordz=NULL, coordt=NULL
 
     compact_neigh <- list(indices = neigh$indices)
     cov_template <- pair_cache <- cache_param_vec <- NULL
-    if (isTRUE(compact) && !isTRUE(sparse)) {
+    if (isTRUE(compact) && !isTRUE(sparse) && identical(method, "cholesky")) {
       cov_template <- .GeoKriglocPrepareSpatialCovariance(
         neigh = compact_neigh, coordx_global = coords_aniso,
         X_global = X, param = param, corrmodel = corrmodel,

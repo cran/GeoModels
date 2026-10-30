@@ -223,7 +223,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model%in%c("SkewStudentT","Gaussian_misp_SkewStudentT")){
-        alpha <- as.numeric(pp["skew"])
+        alpha <- .GeoSkewStudentTAlpha(pp["skew"])
         nu    <- as.numeric(1/pp["df"])
         q_t  <- MM + sqrt(VV)*sn::qst(probabilities,  xi=0, omega=1, alpha=alpha, nu=nu)
         q_t1 <- MM + sqrt(VV)*sn::qst(probabilities1, xi=0, omega=1, alpha=alpha, nu=nu)
@@ -455,7 +455,7 @@ GeoQQ <- function(fit, type="Q", add=FALSE, ylim=c(0,1), xlim=NULL, breaks=10, .
       }
 
       if(model%in%c("SkewStudentT","Gaussian_misp_SkewStudentT")){
-        alpha <- as.numeric(pp["skew"]); nu <- as.numeric(1/pp["df"])
+        alpha <- .GeoSkewStudentTAlpha(pp["skew"]); nu <- as.numeric(1/pp["df"])
         xr <- .XL(range(dd, finite=TRUE))
         ll <- .GRID(xr)
         d_st <- sn::dst((ll-MM)/sqrt(VV), xi=0, omega=1, alpha=alpha, nu=nu)/sqrt(VV)

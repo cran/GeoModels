@@ -407,6 +407,7 @@ extern int *cdyn; // dynamic coords indicator
 //char *fkernel; // path to kernel binary
 //int *totpairs;// total number of pairs
 //---------END GLOBAL VARIABLES-------------
+void DeleteGlobalVar(void);
 void DeleteGlobalVar2(void);
 //void indx(double *ind, int *n);
 
@@ -493,6 +494,7 @@ double biv_binomnegZINB(int N, double corr, int r, int t, double mean_i, double 
     double nugget1, double nugget2, double mup,
     double *lgamma_cache, int cache_size);
 double biv_wrapped(double alfa,double u, double v, double mi, double mj, double nugget,double sill,double corr);
+double biv_wrapped_log(double alfa,double u, double v, double mi, double mj, double nugget,double sill,double corr);
 double biv_Weibull(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_gamma(double corr,double zi,double zj,double mui, double muj, double shape);
 double biv_gamma2(double corr,double zi,double zj,double mui, double muj, double shape);
@@ -558,6 +560,9 @@ double corr_pois(double rho,double mi,double mj);
 double corr_pois_gen(double corr,double mean_i, double mean_j, double a);
 double corr_tukeygh(double rho,double eta,double tail);
 double corr_skewt(double corr,double df,double skew);
+double corr_skewt2(double rho_base, double rho_num, double nu, double skew);
+double GeoSkewStudentCorrFromLogFactor(double rho_base, double rho_num,
+                                      double nu, double skew, double log_factor);
 double corr_pois1(double rho,double lambda1,double lambda2);
 
 typedef struct {
@@ -580,7 +585,7 @@ static R_INLINE void GeoKahanAdd(GeoKahanSum *x, double value)
 }
 
 void SetPGPairCounts(double *data1,double *data2,int *n,int *ok);
-double GeoPGCachedWeight(int index,int weighted,int spacetime);
+double GeoCachedPairWeight(int index,int weighted,int spacetime);
 int GeoPGPreparePair(double data_i,double data_j,double eta_i,double eta_j,
                      int *r,int *t,double *mean_i,double *mean_j);
 int GeoPGPreparePairAt(int index,double data_i,double data_j,double eta_i,double eta_j,
@@ -728,6 +733,9 @@ double log_biv_Norm(double corr,double zi,double zj,double mi,double mj,double v
 double d22norm(double x, double y,double v11,double v22,double v12);
 double d2lognorm(double x, double y, double sill,double nugget, double mux,double muy,double rho);
 
+double log_biv_Norm2(double corr, double zi, double zj, double mi, double mj,
+                     double vari, double varj);
+double log_dNnorm(int N, double **M, double *dat);
 double dNnorm(int N,double **M, double *dat);
 
 double int_hyp(double x,double a, double b,double c,double z);
@@ -1028,3 +1036,10 @@ double qnorm55(double p, double mu, double sigma, int lower_tail, int log_p);
 // ******** END: Utility ******
 
 void Maxima_Minima_dist(double *res,double *coordx,double *coordy,double *coordz,int *nsize,int *type_dist,double *radius);
+
+/* Shared constructive Student correlation (not a copula correlation). */
+double GeoStudentCorrLogFactor(double nu);
+double GeoStudentCorrFromLogFactor(double rho_base, double rho_num,
+                                   double nu, double log_factor);
+void GeoStudentCorrelationVec(double *rho_base, double *rho_num, double *nu,
+                              double *result, int *n);

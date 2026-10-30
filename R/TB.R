@@ -57,12 +57,13 @@ result=dotCall64::.C64("for_c",
                      "double","double","double","double","double",
                      "integer","integer","integer",
                      "double","double","integer","integer","double",
-                     "double"), 
+                     "double","double"), 
                          d,c(a),c(nu1), c(CC), c(parameters$nu2),P,N,L,CkCorrModel(corrmodel),
                          c(u),a0,nu0,c(A),c(B),c(sequen),length(sequen),n,coord,phi,vtype,m,
                          simu1=dotCall64::vector_dc("double",length(simu11)),L,
+                         params_other=double(1),  # Matern does not use extra parameters.
          INTENT =    c(rep("r",20),
-                       "r", "rw","r"),
+                       "r", "rw","r","r"),
              PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)$simu1
   simu =  matrix(result,n,P)
   return(simu)

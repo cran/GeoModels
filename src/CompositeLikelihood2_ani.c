@@ -63,16 +63,16 @@ void Comp_Pair_WrapGauss2mem_aniso(int *cormod, double *coord1,double *coord2, d
      double nugget=nuis[0];
     double sill=nuis[1];
 
-      if(sill<0 || nugget<0||nugget>=1){*res=LOW; return;}
+      if(sill<=0 || nugget<0||nugget>=1){*res=LOW; return;}
  for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
       lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
                 u=data1[i];
                 v=data2[i];
                 corr=(1.0-nugget)*clamp_corr(CorFct(cormod,lag,0,par,0,0));
-                wrap_gauss=biv_wrapped(alfa,u,v,mean1[i],mean2[i],nuis[0],nuis[1],corr);
+                wrap_gauss=biv_wrapped_log(alfa,u,v,mean1[i],mean2[i],nuis[0],nuis[1],corr);
                     if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                    *res+=log(wrap_gauss)*weights ;
+                    *res+=wrap_gauss*weights ;
                 }}
     if(!R_FINITE(*res))*res = LOW;
     return;
@@ -630,8 +630,8 @@ if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
                  dat[0]=u-n1*p1;dat[1]=v-n2*p2; 
                  //Rprintf("%d %f %f %f \n",fmin_int(n1,n2),p1,p2,p11 );
                    //#####
-                 bl=dNnorm(N,M,dat);
-                 *res+= log(bl)*weights;       
+                 bl=log_dNnorm(N,M,dat);
+                 *res += bl*weights;       
                 }}
     if(!R_FINITE(*res))*res = LOW;
     return;
@@ -873,8 +873,8 @@ void Comp_Pair_Gauss_misp_Pois2mem_aniso(int *cormod, double *coord1,double *coo
                         M[0][0]=mui; M[1][1]=muj;M[0][1]=sqrt(mui*muj)*corr1;M[1][0]= M[0][1];
                         dat[0]=data1[i]-mui;dat[1]=data2[i]-muj;
 
-                      bl=dNnorm(N,M,dat);
-                      *res+= log(bl)*weights;
+                      bl=log_dNnorm(N,M,dat);
+                      *res += bl*weights;
                     }}
     if(!R_FINITE(*res))  *res = LOW;
     return;
@@ -921,19 +921,21 @@ void Comp_Pair_Gauss_misp_SkewT2mem_aniso(int *cormod, double *coord1,double *co
     sill=nuis[2];
     skew=nuis[3];
 
-    if(df<2||fabs(skew)>1||sill<0||nugget<0||nugget>=1){*res=LOW; return;}
-    //auxuliary variables
-    double D1=(df-1)/2;
-    double D2=df/2;
-    //double delta=skew/sqrt(1-skew*skew);
-    double MM=sqrt(df)*gammafn(D1)*skew/(sqrt(M_PI)*gammafn(D2));
-    double FF=(df/(df-2)-MM*MM);
+    if(ISNAN(df)||df<=2||!R_FINITE(skew)||fabs(skew)>1||
+       !R_FINITE(sill)||sill<=0||!R_FINITE(nugget)||nugget<0||nugget>=1) {
+        *res=LOW; return;
+    }
+    const double log_factor=GeoStudentCorrLogFactor(df);
+    const double factor=exp(log_factor);
+    const double student_variance=1.0/(1.0-2.0/df);
+    const double MM=skew*sqrt(student_variance*(2.0/M_PI)*factor);
+    const double FF=student_variance*(1.0-skew*skew*(2.0/M_PI)*factor);
 
      for(i=0;i<npairs[0];i++){
 if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
     lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                     corr=CorFct(cormod,lag,0,par,0,0)*(1-nugget);
-                     corr2=corr_skewt(corr,df,skew);
+                     corr=clamp_corr(CorFct(cormod,lag,0,par,0,0));
+                     corr2=GeoSkewStudentCorrFromLogFactor(corr,(1-nugget)*corr,df,skew,log_factor);
                      if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
                           bl=log_biv_Norm(corr2,data1[i],data2[i],mean1[i]+sqrt(sill)*MM,
                                                                  mean2[i]+sqrt(sill)*MM,sill*FF,0);
@@ -947,27 +949,32 @@ void Comp_Pair_Gauss_misp_T2mem_aniso(int *cormod, double *coord1,double *coord2
  double *par, int *weigthed, double *res,double *mean1,double *mean2,
  double *nuis, int *type_cop, int *cond)
 {
-    int i=0;double lag=0.0;
-    double weights=1.0,corr,df=0.0,bl;
-
-     double sill=nuis[2];
-    double nugget=nuis[1];
-
-    if( sill<0||nugget<0||nugget>=1||nuis[0]<0||nuis[0]>0.5){*res=LOW; return;}
-    df=1/nuis[0];
-     for(i=0;i<npairs[0];i++){
-if(!ISNAN(data1[i])&&!ISNAN(data2[i]) ){
-lag= hypot(coord1[2*i]-coord2[2*i],coord1[2*i+1]-coord2[2*i+1]);
-                     corr=(1-nugget)*CorFct(cormod,lag,0,par,0,0);
-        //if(df<170) corr=0.5*(df-2)*R_pow(gammafn((df-1)/2),2)/(R_pow(gammafn(df/2),2))* corr *hypergeo(0.5,0.5,df/2,R_pow(corr,2));
-        if(fabs(corr)>0)  corr=exp(log(df-2)+2*lgammafn(0.5*(df-1))-(log(2)+2*lgammafn(df/2))+log(hypergeo(0.5,0.5, df/2,corr*corr))+log(corr*(1-nugget)));
-
-           if(*weigthed) weights=CorFunBohman(lag,maxdist[0]);
-                     bl=log_biv_Norm(corr,data1[i],data2[i],mean1[i],mean2[i],sill*df/(df-2),0);
-                       *res+= bl*weights;
-                    }}
-    if(!R_FINITE(*res))  *res = LOW;
-    return;
+    const double df_param = nuis[0], nugget = nuis[1], sill = nuis[2];
+    if (!R_FINITE(df_param) || !R_FINITE(nugget) || !R_FINITE(sill) ||
+        df_param < 0.0 || df_param >= 0.5 || nugget < 0.0 ||
+        nugget >= 1.0 || sill <= 0.0) {
+        *res = LOW;
+        return;
+    }
+    const double nu = df_param == 0.0 ? R_PosInf : 1.0 / df_param;
+    const double variance = sill / (1.0 - 2.0 * df_param);
+    const double log_factor = GeoStudentCorrLogFactor(nu);
+    const double scale = 1.0 - nugget;
+    double total = 0.0;
+    for (int i = 0; i < npairs[0]; ++i) {
+        if (!ISNAN(data1[i]) && !ISNAN(data2[i])) {
+            const double lag = hypot(coord1[2*i]-coord2[2*i], coord1[2*i+1]-coord2[2*i+1]);
+            const double weights = *weigthed ? CorFunBohman(lag, maxdist[0]) : 1.0;
+            if (weights == 0.0) continue;
+            const double rho = CorFct(cormod, lag, 0.0, par, 0, 0);
+            const double corr = GeoStudentCorrFromLogFactor(
+                rho, scale * rho, nu, log_factor);
+            double log_pair = log_biv_Norm(clamp_corr(corr), data1[i], data2[i],
+                                           mean1[i], mean2[i], variance, 0);
+            total += weights * log_pair;
+        }
+    }
+    *res = R_FINITE(total) ? total : LOW;
 }
 
 

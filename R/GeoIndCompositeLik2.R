@@ -60,7 +60,7 @@ one_log_SkewLaplace <- function(z, mu, sill, skew) {
   sigma <- sqrt(sill)
   z_std <- (z - mu) / sigma  # vettoriale
   base <- log(skew * (1 - skew)) - log(sigma)
-  slope <- ifelse(z_std >= 0, -(1 - skew), skew)
+  slope <- ifelse(z_std >= 0, -skew, 1 - skew)
   res <- base + slope * z_std
   res
 }
@@ -749,20 +749,8 @@ if (optimizer %in% c("L-BFGS-B", "nlminb", "bobyqa") &&
                 data=data, fixed=fixed, fan=fname,
                              n=n,namesnuis=namesnuis,namesparam=namesparam,  X=X,MM=MM)
 
-          if(hessian) 
-          {
-               if(!bivariate)  
-                CompLikelihood$hessian=numDeriv::hessian(func= compindloglik2,x=param,method="Richardson",     
-                              data=data,fixed=fixed,fan=fname,n=n,
-                               namesnuis=namesnuis, namesparam=namesparam,
-                                X=X,MM=MM )
-               if(bivariate)  
-               CompLikelihood$hessian=numDeriv::hessian(func= compindloglik_biv2,x=param,method="Richardson",   
-                             data=data, fixed=fixed,fan=fname,n=n, namesnuis=namesnuis,namesparam=namesparam, 
-                               X=X ,MM=MM)
-               rownames(CompLikelihood$hessian)=namesparam
-               colnames(CompLikelihood$hessian)=namesparam
-          }
+          ## The requested Hessian is computed once in the common block below.
+
   }
 
 #####################################

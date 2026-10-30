@@ -117,7 +117,9 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
     n_y <- nrow(y)
 
     K <- as.integer(K)
-    K <- min(K, n_x, n_y)
+    ## Each query can use up to n_x reference points, irrespective of the
+    ## number of queries. Self-neighbours are removed separately below.
+    K <- min(K, n_x)
 
     sphere_xyz <- function(coords) {
       lon <- coords[, 1L] * pi / 180
@@ -306,12 +308,35 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
         ))
       }
 
+      ## Locate temporal windows in sorted time, then restore the original
+      ## from/to order.  The global tolerance only widens the candidate window;
+      ## the original pair-specific test below still decides which pairs count.
+      sorted_order <- order(ct, seq_along(ct))
+      sorted_time <- ct[sorted_order]
+      position <- integer(nt)
+      position[sorted_order] <- seq_len(nt)
+      window <- maxtime + 100 * .Machine$double.eps * max(1, abs(ct))
+      left <- right <- integer(nt)
+      lo <- 1L
+      hi <- 1L
+      for (ii in seq_len(nt)) {
+        while (lo < ii && sorted_time[ii] - sorted_time[lo] > window)
+          lo <- lo + 1L
+        if (hi < ii) hi <- ii
+        while (hi < nt && sorted_time[hi + 1L] - sorted_time[ii] <= window)
+          hi <- hi + 1L
+        left[ii] <- lo
+        right[ii] <- hi
+      }
+
       out <- vector("list", nt - 1L)
       out_i <- 1L
 
       for (from in seq_len(nt - 1L)) {
-
-        to <- (from + 1L):nt
+        at <- position[from]
+        to <- sorted_order[seq.int(left[at], right[at])]
+        to <- sort(to[to > from])
+        if (!length(to)) next
         lag_time <- abs(ct[to] - ct[from])
         ttol <- 100 * .Machine$double.eps *
           pmax(1, abs(ct[to]), abs(ct[from]))
@@ -387,13 +412,18 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
         return(list(tar = integer(0L), nei = integer(0L)))
       }
 
+      if (identical(ref, query)) {
+        index <- seq_len(nrow(ref))
+        return(list(tar = index, nei = index))
+      }
+
       scale <- suppressWarnings(max(abs(c(ref, query)), na.rm = TRUE))
       if (!is.finite(scale) || scale < 1) scale <- 1
       tol <- 100 * .Machine$double.eps * scale
 
       available <- seq_len(nrow(ref))
-      tar <- integer(0L)
-      nei <- integer(0L)
+      tar <- nei <- integer(min(nrow(ref), nrow(query)))
+      matched <- 0L
 
       for (i in seq_len(nrow(query))) {
         if (!length(available)) break
@@ -402,13 +432,14 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
         dmax <- apply(delta, 1L, max)
         jpos <- which.min(dmax)
         if (length(jpos) && is.finite(dmax[jpos]) && dmax[jpos] <= tol) {
-          tar <- c(tar, i)
-          nei <- c(nei, available[jpos])
+          matched <- matched + 1L
+          tar[matched] <- i
+          nei[matched] <- available[jpos]
           available <- available[-jpos]
         }
       }
 
-      list(tar = tar, nei = nei)
+      list(tar = tar[seq_len(matched)], nei = nei[seq_len(matched)])
     }
 
     out <- list()
@@ -418,17 +449,17 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
     ## 1) Spatial within-time
     ##############################################################
 
+    fixed_within <- if (is.null(coordx_dyn)) {
+      knn_dir(coords, coords, K, drop_self = TRUE, x_equals_y = TRUE)
+    } else NULL
+
     for (t in seq_len(numtime)) {
-
-      Xt <- getX(t)
-
-      inf <- knn_dir(
-        ref = Xt,
-        query = Xt,
-        K = K,
-        drop_self = TRUE,
-        x_equals_y = TRUE
-      )
+      inf <- if (!is.null(fixed_within)) {
+        fixed_within
+      } else {
+        Xt <- getX(t)
+        knn_dir(Xt, Xt, K, drop_self = TRUE, x_equals_y = TRUE)
+      }
 
       if (length(inf$tar) > 0L) {
 
@@ -491,21 +522,21 @@ GeoNeighIndex <- function(coordx = NULL, coordy = NULL, coordz = NULL, coordt = 
     ## 3) Spatio-temporal cross-time
     ##############################################################
 
-    for (rr in seq_len(nrow(time_pairs))) {
+    ## Cross-time searches intentionally retain their own K/self convention.
+    fixed_cross <- if (is.null(coordx_dyn)) {
+      knn_dir(coords, coords, K, drop_self = FALSE, x_equals_y = FALSE)
+    } else NULL
 
+    for (rr in seq_len(nrow(time_pairs))) {
       t_from <- time_pairs$from[rr]
       t_to   <- time_pairs$to[rr]
 
-      Xn <- getX(t_from)
-      Xt <- getX(t_to)
-
-      inf <- knn_dir(
-        ref = Xn,
-        query = Xt,
-        K = K,
-        drop_self = FALSE,
-        x_equals_y = FALSE
-      )
+      inf <- if (!is.null(fixed_cross)) {
+        fixed_cross
+      } else {
+        knn_dir(getX(t_from), getX(t_to), K,
+                drop_self = FALSE, x_equals_y = FALSE)
+      }
 
       if (length(inf$tar) > 0L) {
 

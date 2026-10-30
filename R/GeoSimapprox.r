@@ -8,6 +8,8 @@ GeoSimapprox <- function(coordx=NULL, coordy=NULL,coordz=NULL,coordt=NULL, coord
      n=1, param, anisopars=NULL,radius=6371,X=NULL,spobj=NULL,nrep=1,progress=TRUE,check.duplicates=FALSE)
 {
     call <- match.call()
+    restore_simulation_cache <- .GeoSimulationCachePush()
+    on.exit(restore_simulation_cache(), add = TRUE)
 ####################################################################
 ############  starting internal function ###########################
 ####################################################################
@@ -490,7 +492,11 @@ if(model %in% c("Poisson", "PoissonZIP", "PoissonGamma", "PoissonGammaZIP", "Poi
 }
 
 while(KK<=npoi) {
-for(i in 1:k) {
+  ## The mixing field is fixed after the first arrival.  Subsequent arrivals
+  ## only need the two Gaussian fields defining their exponential increments.
+  k_iteration <- if (KK > 1L && model %in%
+                    c("PoissonGamma", "PoissonGammaZIP", "PoissonWeibull")) 2L else k
+for(i in seq_len(k_iteration)) {
 
 ################# here the approximated simulation  ##################################################
 simd=simu_approx(numxgrid,numygrid,coordx,coordy,coordz,coords,coordt,method,corrmodel,param,M,L,bivariate,spacetime,parallel_inner,n.cores)
@@ -546,21 +552,25 @@ if(model %in% c("BinomialNeg","BinomialNegZINB")){
  }
   ####################################
  if(model %in% c("PoissonGamma","PoissonGammaZIP"))   {
-   if(KK==1) sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+   if(KK==1) {
+     sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+     threshold <- c(exp(mm)*sim3/(k-2))
+   }
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
    ssp=ssp+c(pois1)
-   threshold <- c(exp(mm)*sim3/(k-2))
    active <- ssp <= threshold
    poi_counts <- poi_counts + as.integer(active)
    if(!any(active)) break  ## stopping rule
  }
 if(model %in% c("PoissonWeibull"))   {
-  if(KK==1) sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+  if(KK==1) {
+    sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+    threshold <- c(exp(mm)*(sim3/2)^(1/param$shape)/(gamma(1+1/param$shape)))
+  }
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
    ssp=ssp+c(pois1)
-   threshold <- c(exp(mm)*(sim3/2)^(1/param$shape)/(gamma(1+1/param$shape)))
    active <- ssp <= threshold
    poi_counts <- poi_counts + as.integer(active)
    if(!any(active)) break  ## stopping rule

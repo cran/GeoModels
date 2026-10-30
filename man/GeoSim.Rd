@@ -164,7 +164,7 @@ library(GeoModels)
 ###############################################################
 
 # Define the spatial-coordinates of the points:
-x <- runif(500);y <- runif(500)
+x <- runif(100);y <- runif(100)
 coords=cbind(x,y)
 set.seed(261)
 # Simulation of a spatial Gaussian RF with Matern correlation function
@@ -193,7 +193,7 @@ par(opar)
 ################################################################
 
 # Define the spatial-coordinates of the points:
-x <- runif(800);y <- runif(800)
+x <- runif(120);y <- runif(120)
 coords <- cbind(x,y)
 set.seed(251)
 # Simulation of a spatial Binomial RF:
@@ -215,8 +215,8 @@ if (requireNamespace("fields", quietly = TRUE)) {
 ###
 ###############################################################
 # Define the spatial-coordinates of the points:
-x <- seq(0,1,0.032)
-y <- seq(0,1,0.032)
+x <- seq(0,1,0.125)
+y <- seq(0,1,0.125)
 set.seed(261)
 # Simulation of a spatial Gaussian RF with Matern correlation function
 data1 <- GeoSim(x,y,grid=TRUE, corrmodel="Matern",model="Weibull", 
@@ -232,8 +232,8 @@ if (requireNamespace("fields", quietly = TRUE)) {
 ###
 ###############################################################
 # Define the spatial-coordinates of the points:
-x <- seq(0,1,0.03)
-y <- seq(0,1,0.03)
+x <- seq(0,1,0.1)
+y <- seq(0,1,0.1)
 set.seed(268)
 # Simulation of a spatial Gaussian RF with Matern correlation function
 data1 <- GeoSim(x,y,grid=TRUE, corrmodel="GenWend",model="StudentT", sparse=TRUE,
@@ -254,8 +254,8 @@ if (requireNamespace("fields", quietly = TRUE)) {
 ###############################################################
 
 # Define the spatial-coordinates of the points:
-x <- runif(500, 0, 2)
-y <- runif(500, 0, 2)
+x <- runif(80, 0, 2)
+y <- runif(80, 0, 2)
 coords <- cbind(x,y)
 set.seed(261)
 corrmodel="Wend0"
@@ -286,8 +286,8 @@ lines(density(data2),lty=3)
 ###############################################################
 
 # Define the spatial-coordinates of the points:
-x <- runif(500, 0, 2)
-y <- runif(500, 0, 2)
+x <- runif(80, 0, 2)
+y <- runif(80, 0, 2)
 coords <- cbind(x,y)
 
 # Simulation of a bivariate spatial Gaussian RF:
@@ -326,8 +326,8 @@ par(opar)
 coordt=1:5
 
 # Define the spatial-coordinates of the points:
-x <- runif(50, 0, 2)
-y <- runif(50, 0, 2)
+x <- runif(15, 0, 2)
+y <- runif(15, 0, 2)
 coords <- cbind(x,y)
 
 param<-list(nugget=0,mean=0,scale_s=0.2/3,scale_t=2/3,sill=1,smooth_s=0.5,smooth_t=0.5)
@@ -346,7 +346,7 @@ dim(data)
 
 coordt=1:5
 coordx_dyn=list()
-maxN=30
+maxN=10
 set.seed(8)
 for(k in 1:length(coordt))
 {
@@ -376,7 +376,7 @@ data[[3]]
 ###############################################################
 distance="Geod";radius=6371
 
-NN=3000 ## total point on the sphere on lon/lat format
+NN=150 ## total point on the sphere on lon/lat format
 set.seed(80)
 coords=cbind(runif(NN,-180,180),runif(NN,0,90))
 ## Set the wendland parameters

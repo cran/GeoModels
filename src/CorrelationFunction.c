@@ -1,5 +1,6 @@
 #include "header.h"
 #include "matern_kernel.h"
+#include "fixed_margin_st.h"
 
 /* Small process/thread-local caches for constants that depend only on the
    current correlation parameters. Correlations and lags are never cached. */
@@ -55,7 +56,7 @@ static inline double get_reparam_scale_factor(int kind, double power, double smo
 double CheckCor(int *cormod, double *par)
 {
   double col=0.0, R_power=0.0, R_power1=0.0, R_power2=0.0, R_power_s=0.0, R_power_t=0.0, var11=0.0, var22=0.0;
-  double rho=0.0, sep=0, scale=0.0, smooth=0.0, scale_s=0.0, scale_t=0,smooth_s=0.0,smooth_t=0.0;
+  double rho=0.0, sep=0, scale=0.0, smooth=0.0, scale_s=0.0, scale_t=0, smooth_s=0.0, smooth_t=0.0;
   double scale11=0.0, scale22=0, scale12=0.0, smoo11=0.0, smoo12=0.0, smoo22=0,
     R_power11=0.0, R_power12=0.0, R_power22=0,nug11=0.0,nug22=0.0;
     
@@ -300,25 +301,48 @@ double CheckCor(int *cormod, double *par)
         smooth=par[6];
    if(scale_s<=0||scale_t<=0 || R_power<(2.5+2*smooth) || R_power_s>2|| R_power_s<0||sep<0 ||sep >1|| R_power_t<(3.5+smooth)||smooth<0)  rho=-2;
     break;
-         case 89:
-        scale_s=par[0];
-        scale_t=par[1];
-        smooth_s=par[2];
-        smooth_t=par[3];
-        sep=par[4];
-   if(scale_s<=0||scale_t<=0 || smooth_s<=0||smooth_t<=0 ||  sep<0 )  rho=-2;
-    break;
-
-         case 85:
-        scale_s=par[0];
-        scale_t=par[1];
-        R_power_s=par[2];
-      R_power_t=par[3];
-        smooth_s=par[4];
-        smooth_t=par[5];
-        sep=par[6];
-   if(scale_s<=0||scale_t<=0 || smooth_s<=0||smooth_t<=0 ||  sep<0 || R_power_s<1.5|| R_power_t<1.5)  rho=-2;
-    break;
+    case 85: { /* Fixed GW margins: keep parameter validation in CheckCor. */
+        const int ds = GeoFixedMarginSTDimension();
+        /* par = (scale_s, scale_t, power2_s, power2_t,
+                  smooth_s, smooth_t, sep). */
+        scale_s = par[0];
+        scale_t = par[1];
+        R_power_s = par[2];  /* mu_s */
+        R_power_t = par[3];  /* mu_t */
+        smooth_s = par[4];   /* kappa_s */
+        smooth_t = par[5];   /* kappa_t */
+        sep = par[6];       /* normalized interaction in [-1,1] */
+        if (ds < 1 || ds > 3 ||
+            !R_FINITE(scale_s) || !R_FINITE(scale_t) ||
+            !R_FINITE(R_power_s) || !R_FINITE(R_power_t) ||
+            !R_FINITE(smooth_s) || !R_FINITE(smooth_t) ||
+            !R_FINITE(sep) ||
+            scale_s <= 0.0 || scale_t <= 0.0 ||
+            smooth_s <= -0.5 || smooth_t <= -0.5 ||
+            R_power_s <= 0.5 * (ds + 1.0) + smooth_s + 2.0 ||
+            R_power_t <= smooth_t + 3.0 ||
+            sep < -1.0 || sep > 1.0)
+            rho = -2.0;
+        break;
+    }
+    case 89: { /* Fixed Matern margins. */
+        const int ds = GeoFixedMarginSTDimension();
+        /* par = (scale_s, scale_t, smooth_s, smooth_t, sep). */
+        scale_s = par[0];
+        scale_t = par[1];
+        smooth_s = par[2];  /* nu_s */
+        smooth_t = par[3];  /* nu_t */
+        sep = par[4];
+        if (ds < 1 || ds > 3 ||
+            !R_FINITE(scale_s) || !R_FINITE(scale_t) ||
+            !R_FINITE(smooth_s) || !R_FINITE(smooth_t) ||
+            !R_FINITE(sep) ||
+            scale_s <= 0.0 || scale_t <= 0.0 ||
+            smooth_s <= 0.0 || smooth_t <= 0.0 ||
+            sep < -1.0 || sep > 1.0)
+            rho = -2.0;
+        break;
+    }
 
     case 69:  // separable wendlands
     case 70:
@@ -937,27 +961,11 @@ case 23: // hyperg correlation  parameter with matern my version
         arg=R_pow(1+R_pow(h/scale_s,R_power_s),-1);
         rho=R_pow(arg,R_power)*CorFunW_gen(u,R_power_t,smooth,scale_t*R_pow(arg,sep));
         break;
-   case 89:
-      scale_s=par[0];
-      scale_t=par[1];
-      smooth_s=par[2];
-       smooth_t=par[3];
-        sep=par[4];
-                  // Rprintf("%f %f %f %f  %f \n",scale_s,scale_t,smooth_s,smooth_t,sep);
-      rho=CorFunWitMat(h*R_pow(1+u,-sep), scale_s,smooth_s)*CorFunWitMat(u, scale_t, smooth_t);
-      break;
-          case 85:
-         scale_s=par[0];
-            scale_t=par[1];
-            smooth_s=par[4];
-            smooth_t=par[5];
-            R_power_s=par[2];
-            R_power_t=par[3];
-            sep=par[6];
-
-          rho=CorFunW_gen(h*R_pow(1+u,sep), R_power_s, smooth_s, scale_s)*CorFunW_gen(u, R_power_t, smooth_t, scale_t);
-       break;
-
+    case 85:
+    case 89:
+        rho = GeoFixedMarginSTCorr(*cormod, h, u, par,
+                                  GeoFixedMarginSTDimension());
+        break;
 
     case 63:  //
          R_power_t=par[0];
@@ -3683,7 +3691,7 @@ void CorrelationMat_biv_tap(double *rho, double *coordx, double *coordy, double 
   int i=0;
 
     for(i=0;i<*npairs;i++) {
-      rho[i]=CorFct(cormod,lags[i],0,par,first[i],second[i]);}
+      rho[i]=CorFct(cormod,lags_1[i],0,par,first_1[i],second_1[i]);}
   return;
 }
 
@@ -4542,6 +4550,27 @@ void GradCorrFct(double rho, int *cormod, double eps, int *flag,
 
   switch(*cormod)// Correlation functions are in alphabetical order
     {//spatial gradients of correlations:
+    case 85:
+    case 89: {
+      const int count = (*cormod == 85) ? 7 : 5;
+      const int dimension = GeoFixedMarginSTDimension();
+      double trial[7];
+      const double base = GeoFixedMarginSTCorr(*cormod, h, u, par, dimension);
+      for (int j = 0; j < count; ++j) {
+        if (flag[j] != 1) continue;
+        const double step = cbrt(DBL_EPSILON) * (1.0 + fabs(par[j]));
+        memcpy(trial, par, (size_t)count * sizeof(double));
+        trial[j] = par[j] + step;
+        const double plus = GeoFixedMarginSTCorr(*cormod, h, u, trial, dimension);
+        trial[j] = par[j] - step;
+        const double minus = GeoFixedMarginSTCorr(*cormod, h, u, trial, dimension);
+        if (R_FINITE(plus) && R_FINITE(minus)) grad[i++] = (plus-minus)/(2.0*step);
+        else if (R_FINITE(plus)) grad[i++] = (plus-base)/step;
+        else if (R_FINITE(minus)) grad[i++] = (base-minus)/step;
+        else grad[i++] = R_NaN;
+      }
+      break;
+    }
     case 1:// Cauchy correlation function
       R_power2=par[0];
       scale=par[1];
@@ -4843,7 +4872,7 @@ void DCorrelationMat_biv_tap(int *cormod,double *coordx, double *coordy, double 
      derho= (double *) R_Calloc(*npairs * *nparcor,double);
     k=0;
     for(i=0;i<*npairs;i++){
-        GradCorrFct(rho[i],cormod,eps[0],flagcor,gradcor,lags[i],0,first[i],second[i],parcor);
+        GradCorrFct(rho[i],cormod,eps[0],flagcor,gradcor,lags_1[i],0,first_1[i],second_1[i],parcor);
         for(m=0;m<*nparcor;m++){derho[k]=gradcor[m];k++;}}
     k=0;
     for(i=0;i<*nparcor;i++){
@@ -5289,7 +5318,9 @@ static double cov_st_semi_integer(double h, double u,
     double g_pos = expm1(alpha * l1p) / alpha;
     double exp_neg_g = exp(-g_pos);
 
-    double *g_derivs = (double *)R_alloc(max_m + 1, sizeof(double));
+    /* R_alloc would retain eight new buffers for every lag until .C returns.
+       max_m is bounded above, so a fixed automatic workspace is sufficient. */
+    double g_derivs[MAX_K_CACHE + 1];
     g_derivs[0] = 0.0;
 
     if (max_m >= 1) {
@@ -5309,23 +5340,23 @@ static double cov_st_semi_integer(double h, double u,
         }
     }
 
-    double *x = (double *)R_alloc(max_m + 1, sizeof(double));
+    double x[MAX_K_CACHE + 1];
     x[0] = 0.0;
 
     for (int m = 1; m <= max_m; ++m) {
         x[m] = -g_derivs[m];
     }
 
-    double *bell = (double *)R_alloc(max_m + 1, sizeof(double));
+    double bell[MAX_K_CACHE + 1];
     complete_bell_all_fast(max_m, x, bell);
 
-    double *moment_part = (double *)R_alloc(max_m + 1, sizeof(double));
+    double moment_part[MAX_K_CACHE + 1];
     for (int m = 0; m <= max_m; ++m) {
         moment_part[m] = (m & 1) ? -bell[m] : bell[m];
     }
 
-    double *As = (double *)R_alloc(ks + 1, sizeof(double));
-    double *At = (double *)R_alloc(kt + 1, sizeof(double));
+    double As[MAX_K_CACHE + 1];
+    double At[MAX_K_CACHE + 1];
 
     for (int i = 0; i <= ks; ++i) As[i] = compute_A_cached(ks, i);
     for (int j = 0; j <= kt; ++j) At[j] = compute_A_cached(kt, j);
@@ -5333,8 +5364,8 @@ static double cov_st_semi_integer(double h, double u,
     double base_h = 2.0 * h / scale_s;
     double base_u = 2.0 * u / scale_t;
 
-    double *ph = (double *)R_alloc(ks + 1, sizeof(double));
-    double *pu = (double *)R_alloc(kt + 1, sizeof(double));
+    double ph[MAX_K_CACHE + 1];
+    double pu[MAX_K_CACHE + 1];
 
     ph[ks] = 1.0;
     for (int i = ks - 1; i >= 0; --i) ph[i] = ph[i + 1] * base_h;

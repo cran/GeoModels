@@ -93,6 +93,12 @@ external \code{param$mean} vector use this same order.  See
 
 
 For plain (non-copula) bivariate correlation models, observed-scale covariance is currently validated only for Gaussian margins; unsupported non-Gaussian bivariate combinations are rejected explicitly. For direct Negative-Binomial fields, the public argument \code{n} denotes the single common integer \eqn{r} in the waiting-time construction.
+For direct \code{StudentT} and \code{SkewStudentT} fields, the common scale-mixture
+denominator uses the nugget-free latent correlation. In \code{SkewStudentT}, the
+absolute-Gaussian component also uses that correlation; the additive Gaussian
+component carries the nugget. This agrees with \code{\link{GeoSim}} and the
+cross-covariances used by \code{\link{GeoKrig}}. Setting \code{skew=0} recovers
+the direct Student-t covariance, including when \code{nugget>0}.
 For \code{copula="Gaussian"}, \code{copula="Clayton"}, and \code{copula="SkewGaussian"}, continuous-margin covariance matrices are constructed directly on the observed scale. The implementation supports \code{"Gaussian"}, \code{"StudentT"}, \code{"LogGaussian"}, \code{"Gamma"}, \code{"Weibull"}, \code{"Beta"}, \code{"Beta2"}, \code{"Kumaraswamy"}, \code{"Kumaraswamy2"}, \code{"Logistic"}, \code{"SkewLaplace"}, \code{"Tukeyh"}, \code{"Tukeyh2"}, and \code{"SinhAsinh"}. Under the Gaussian copula, covariance for the last three is evaluated with the exact covariance of the corresponding monotone transformed-Gaussian field. For location-dependent copula margins, pairwise covariances use the two site-specific marginal predictors supplied through \code{X} or an external mean vector. Clayton-like covariance uses cached deterministic copula quadrature; skew-Gaussian covariance uses a cached bivariate Hermite expansion of the latent representation, avoiding pair-by-pair adaptive two-dimensional integration. The count margins \code{"Poisson"}, \code{"Binomial"}, and \code{"BinomialNeg"} are also available for Gaussian, Clayton-like, and skew-Gaussian copula covariance in the global prediction path; Binomial currently requires a common trial count \code{n}.
 The same observed-scale covariance engines are used by \code{\link{GeoCovariogram}} and \code{\link{GeoKrig}}, so covariance matrices, fitted semivariogram curves, and linear prediction are numerically consistent.
 
@@ -244,15 +250,31 @@ mutually exclusive with \code{X}.
 
  \item \code{Gneiting_wen_T} defined by interchanging \eqn{h} with \eqn{u} in \code{Gneiting_wen_S}.
 
- \item \code{Matern_Matern_nosep} defined as:
-\deqn{R(h, u) = \frac{\mathrm{Matern}(h;\nu_s)\,\mathrm{Matern}(u;\nu_t)}
- {1+\lambda\,h^{2}u^{2}/(1+\lambda)}}
-with \eqn{\nu_s,\nu_t>0} and \eqn{\lambda\in[0,1]}.
+ \item \code{Matern_Matern_nosep} (code 89) is the fixed-margin model
+ \deqn{R(h,u)=M_s(h)M_t(u)+\zeta Q_s(h)Q_t(u),}
+ where \eqn{Q_j(v)=2\nu_j\{M_{\nu_j,\beta_j}(v)-M_{\nu_j+1,\beta_j}(v)\}}.
+ The existing parameters \code{scale_s}, \code{scale_t}, \code{smooth_s},
+ \code{smooth_t}, and \code{sep} represent \eqn{\beta_s,\beta_t,\nu_s,\nu_t,\rho}.
+ All scales and smoothness parameters are positive. The coefficient
+ \eqn{\zeta} is obtained from the dimension-dependent normalization of
+ \eqn{\rho=\code{sep}\in[-1,1]}; zero gives the separable product.
+ See \code{\link{GeoFixedMarginST}} for the formula and valid metrics.
 
-\item \code{GenWend_GenWend_nosep} defined as:
-\deqn{R(h, u) = \frac{\mathrm{GenWend}(h;\nu_s,\delta_s)\,\mathrm{GenWend}(u;\nu_t,\delta_t)}
- {1+\lambda\,h^{2}u^{2}/(1+\lambda)}}
-with \eqn{\nu_x \geq -0.5}, \eqn{\delta_x>(d+1)/2+\nu_x} for \eqn{x=s,t}, and \eqn{\lambda\in[0,1]}.
+ \item \code{Genwend_Genwend_nosep} (code 85; alias
+ \code{GenWend_GenWend_nosep}) is the fixed-margin compactly supported model
+ \deqn{R(h,u)=W_s(h)W_t(u)+\eta D_s(h)D_t(u),}
+ where \eqn{W_j(v)=\mathcal{GW}_{\kappa_j,\mu_j}(v/a_j)} and
+ \eqn{D_j(v)=\mathcal{GW}_{\kappa_j,\mu_j+1}(v/a_j)-W_j(v)}.
+ The two terms in each difference have the same support radius.
+ The existing parameters \code{scale_s}, \code{scale_t} are the actual support
+ radii \eqn{a_s,a_t}; \code{power2_s}, \code{power2_t} are \eqn{\mu_s,\mu_t};
+ and \code{smooth_s}, \code{smooth_t} are \eqn{\kappa_s,\kappa_t}.
+ Require \eqn{\kappa_j>-1/2},
+ \eqn{\mu_s>(d+1)/2+\kappa_s+2}, and \eqn{\mu_t>\kappa_t+3}.
+ The parameter \code{sep} is the normalized interaction \eqn{\rho\in[-1,1]},
+ not the coefficient \eqn{\eta}; zero gives separability.
+ The correlation is exactly zero if \eqn{h\ge a_s} or \eqn{u\ge a_t}.
+ See \code{\link{GeoFixedMarginST}} for the normalization.
 
  \item \code{Multiquadric_st} defined as:
  \deqn{R(h, u)= ((1-0.5\alpha_s)^2/(1+(0.5\alpha_s)^2-\alpha_s \psi(u) \cos(h)))^{a_s},\quad h \in [0,\pi]}
@@ -414,7 +436,7 @@ library(GeoModels)
 ###############################################################
 
 set.seed(3)
-N <- 300 # number of location sites
+N <- 100 # number of location sites
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x, y)

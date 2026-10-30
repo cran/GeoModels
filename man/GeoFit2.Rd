@@ -260,7 +260,7 @@ library(GeoModels)
 model="Gaussian"
 # Define the spatial-coordinates of the points:
 set.seed(3)
-N=400 # number of location sites
+N=150 # number of location sites
 x <- runif(N, 0, 1)
 set.seed(6)
 y <- runif(N, 0, 1)
@@ -312,7 +312,7 @@ print(fit1)
 ###############################################################
 set.seed(524)
 # Define the spatial-coordinates of the points:
-N=500
+N=150
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)
 coords <- cbind(x,y)
@@ -354,8 +354,8 @@ print(unlist(fit$param))
 set.seed(261)
 model="SinhAsinh"
 # Define the spatial-coordinates of the points:
-x <- runif(500, 0, 1)
-y <- runif(500, 0, 1)
+x <- runif(150, 0, 1)
+y <- runif(150, 0, 1)
 coords <- cbind(x,y)
 
 corrmodel="Wend0"

@@ -1,4 +1,47 @@
 #include <math.h>
+#include <R.h>
+#include <Rinternals.h>
+#include <R_ext/Utils.h>
+
+/* Gaussian-copula covariance polynomial, sum_k coefficient[k] * rho^k.
+ * Keep the R helper's Horner order and handling of non-finite inputs, while
+ * avoiding one temporary vector per degree.  Inputs are coerced by R.
+ */
+SEXP GeoGaussianCopulaPolynomial(SEXP rho, SEXP coefficient)
+{
+    if (TYPEOF(rho) != REALSXP || TYPEOF(coefficient) != REALSXP)
+        error("rho and coefficient must be double vectors.");
+
+    const R_xlen_t n = XLENGTH(rho);
+    const R_xlen_t degree = XLENGTH(coefficient);
+    SEXP result = PROTECT(allocVector(REALSXP, n));
+    const double *rr = REAL(rho);
+    const double *cc = REAL(coefficient);
+    double *out = REAL(result);
+
+    for (R_xlen_t i = 0; i < n; ++i) {
+        if (i % 65536 == 0)
+            R_CheckUserInterrupt();
+        const double r = rr[i];
+        if (!R_FINITE(r)) {
+            out[i] = NA_REAL;
+            continue;
+        }
+        if (degree == 0) {
+            out[i] = 0.0;
+            continue;
+        }
+
+        double acc = cc[degree - 1];
+        for (R_xlen_t k = degree - 1; k > 0; --k)
+            acc = cc[k - 1] + r * acc;
+        const double value = r * acc;
+        out[i] = (fabs(r) < 1e-12 || !R_FINITE(value)) ? 0.0 : value;
+    }
+
+    UNPROTECT(1);
+    return result;
+}
 
 /*
  * Evaluate

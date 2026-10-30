@@ -1,314 +1,210 @@
+## Geographic nearest-neighbor searches use a unit-sphere embedding.  Chord
+## distance is monotone in great-circle distance on [0, pi], including across
+## the antimeridian and near the poles.
+.GeoVariogramDirSphere <- function(coords) {
+  lon <- coords[, 1L] * pi / 180
+  lat <- coords[, 2L] * pi / 180
+  cbind(cos(lat) * cos(lon), cos(lat) * sin(lon), sin(lat))
+}
+
+.GeoVariogramDirSphereAngle <- function(xyz, i, j) {
+  midpoint <- xyz[i, , drop = FALSE] + xyz[j, , drop = FALSE]
+  tangent <- xyz[j, , drop = FALSE] - xyz[i, , drop = FALSE]
+  norm_mid <- sqrt(rowSums(midpoint^2))
+  horizontal <- sqrt(rowSums(midpoint[, 1:2, drop = FALSE]^2))
+  lon <- atan2(midpoint[, 2L], midpoint[, 1L])
+  lat <- atan2(midpoint[, 3L], horizontal)
+  east <- cbind(-sin(lon), cos(lon), 0)
+  north <- cbind(-sin(lat) * cos(lon), -sin(lat) * sin(lon), cos(lat))
+  angle <- (atan2(rowSums(tangent * north), rowSums(tangent * east)) * 180 / pi) %% 180
+  ## Antipodal endpoints, coincident endpoints and a polar midpoint do not
+  ## define this local geographic azimuth.  They are included only when the
+  ## tolerance is 90 degrees (all directions).
+  undefined <- norm_mid < 64 * .Machine$double.eps |
+    horizontal < 64 * .Machine$double.eps |
+    rowSums(tangent^2) < (64 * .Machine$double.eps)^2
+  angle[undefined] <- NA_real_
+  angle
+}
+
 GeoVariogramDir <- function(data, coordx, coordy = NULL, coordz = NULL,
                             directions = c(0, 45, 90, 135),
-                            tolerance = 22.5,
-                            numbins = 13,
-                            maxdist = NULL,
-                            neighb = NULL,
-                            distance = "Eucl",
-                            subsample = 1) {
-  # ---------------- Checks ----------------
+                            tolerance = 22.5, numbins = 13,
+                            maxdist = NULL, neighb = NULL,
+                            distance = "Eucl", subsample = 1) {
   if (!is.numeric(subsample) || length(subsample) != 1L || !is.finite(subsample) ||
-      subsample <= 0 || subsample > 1) {
+      subsample <= 0 || subsample > 1)
     stop("subsample must be a single numeric value in (0,1].")
-  }
-
-  if (!is.numeric(tolerance) || length(tolerance) != 1L || tolerance <= 0 || tolerance > 90)
+  if (!is.numeric(tolerance) || length(tolerance) != 1L || !is.finite(tolerance) ||
+      tolerance <= 0 || tolerance > 90)
     stop("tolerance must be in (0,90].")
-  if (!is.numeric(numbins) || length(numbins) != 1L || numbins < 2 || numbins %% 1 != 0)
+  if (!is.numeric(numbins) || length(numbins) != 1L || !is.finite(numbins) ||
+      numbins < 2 || numbins %% 1 != 0 || numbins >= .Machine$integer.max)
     stop("numbins must be an integer >= 2.")
+  if (!is.numeric(directions) || !length(directions) || any(!is.finite(directions)))
+    stop("directions must be a non-empty finite numeric vector.")
 
-  # ---------------- Build coords ----------------
-  is_matrix <- is.matrix(coordx) || is.data.frame(coordx)
-
-  if (is_matrix) {
+  if (is.matrix(coordx) || is.data.frame(coordx)) {
     coords <- as.matrix(coordx)
-    if (!(ncol(coords) %in% c(2,3))) stop("coordx must have 2 or 3 columns if matrix/data.frame.")
   } else {
     if (is.null(coordy)) stop("If coordx is a vector, coordy must be provided.")
+    if (length(coordx) != length(coordy) ||
+        (!is.null(coordz) && length(coordz) != length(coordx)))
+      stop("Coordinate vectors must have equal lengths.")
     coords <- if (is.null(coordz)) cbind(coordx, coordy) else cbind(coordx, coordy, coordz)
   }
-
-  coords <- as.matrix(coords)
+  if (!is.numeric(coords) || !(ncol(coords) %in% c(2L, 3L)) ||
+      nrow(coords) < 2L || any(!is.finite(coords)))
+    stop("Coordinates must be a finite numeric matrix with at least two rows and two or three columns.")
   storage.mode(coords) <- "double"
   distance <- match.arg(distance, c("Eucl", "Chor", "Geod"))
-  .GeoValidate3D(coords, distance = distance,
-                 context = "GeoVariogramDir")
+  .GeoValidate3D(coords, distance = distance, context = "GeoVariogramDir")
+  use_geo <- distance %in% c("Geod", "Chor")
+  if (use_geo && any(abs(coords[, 2L]) > 90))
+    stop("Latitude must lie between -90 and 90 degrees.")
+  if (!is.numeric(data) || length(data) != nrow(coords))
+    stop("data must be numeric with one value per coordinate row.")
 
-  n0 <- nrow(coords)
-  if (length(data) != n0) stop("length(data) must match number of coordinate rows.")
-
-  # ---------------- EARLY spatial subsample ----------------
   if (subsample < 1) {
-    m <- max(2L, floor(subsample * n0))
-    m <- min(m, n0)
-    idx0 <- sort(sample.int(n0, m, replace = FALSE))
-
+    m <- min(nrow(coords), max(2L, floor(subsample * nrow(coords))))
+    idx0 <- sort(sample.int(nrow(coords), m, replace = FALSE))
     coords <- coords[idx0, , drop = FALSE]
-    data   <- data[idx0]
+    data <- data[idx0]
+  }
+  n <- length(data)
+  if (is.null(maxdist)) maxdist <- Inf
+  if (!is.numeric(maxdist) || length(maxdist) != 1L || is.na(maxdist) || maxdist <= 0)
+    stop("maxdist must be a positive number or Inf.")
+
+  coords_knn <- if (use_geo) .GeoVariogramDirSphere(coords) else coords
+  metric_distance <- function(chord) {
+    if (identical(distance, "Geod")) 2 * asin(pmin(1, pmax(0, chord / 2))) else chord
   }
 
-  # update n after subsample
-  n <- length(data)
-
-  # ---------------- Defaults ----------------
-  if (is.null(maxdist)) maxdist <- Inf
-
-  # Smart neighb selection based on n and maxdist
   if (is.null(neighb)) {
-    if (is.finite(maxdist)) {
-      if (ncol(coords) == 2) {
-        area_total <- diff(range(coords[,1])) * diff(range(coords[,2]))
-        if (!is.finite(area_total) || area_total <= 0) stop("Degenerate coordinate extent after subsample.")
-        density <- n / area_total
-        area_circle <- pi * maxdist^2
-        expected_neighb <- density * area_circle
-        neighb <- min(n - 1L, max(100L, as.integer(expected_neighb * 2)))
-      } else {
-        volume_total <- diff(range(coords[,1])) * diff(range(coords[,2])) * diff(range(coords[,3]))
-        if (!is.finite(volume_total) || volume_total <= 0) stop("Degenerate coordinate extent after subsample.")
-        density <- n / volume_total
-        volume_sphere <- (4/3) * pi * maxdist^3
-        expected_neighb <- density * volume_sphere
-        neighb <- min(n - 1L, max(100L, as.integer(expected_neighb * 2)))
-      }
-    } else {
+    if (!is.finite(maxdist)) {
       neighb <- n - 1L
+    } else {
+      if (use_geo) {
+        lon <- sort((coords[, 1L] * pi / 180) %% (2 * pi))
+        lon_width <- 2 * pi - max(diff(c(lon, lon[1L] + 2 * pi)))
+        area <- lon_width * diff(range(sin(coords[, 2L] * pi / 180)))
+        theta <- if (distance == "Geod") min(pi, maxdist) else
+          2 * asin(min(1, maxdist / 2))
+        neighborhood_volume <- 4 * pi * sin(theta / 2)^2
+        extent <- area
+      } else {
+        spans <- apply(coords, 2L, function(z) diff(range(z)))
+        extent <- prod(spans)
+        neighborhood_volume <- if (ncol(coords) == 2L) pi * maxdist^2 else
+          (4 / 3) * pi * maxdist^3
+      }
+      ## This only chooses the automatic neighbor cap, as in the historical
+      ## API.  Degenerate bounding rectangles use all available neighbors.
+      expected <- if (is.finite(extent) && extent > 0)
+        2 * n * neighborhood_volume / extent else n - 1L
+      neighb <- as.integer(min(n - 1L, max(100, expected)))
     }
   } else {
-    if (!is.numeric(neighb) || length(neighb) != 1L || neighb < 1 || neighb %% 1 != 0)
+    if (!is.numeric(neighb) || length(neighb) != 1L || !is.finite(neighb) ||
+        neighb < 1 || neighb %% 1 != 0)
       stop("neighb must be a positive integer.")
-    neighb <- min(as.integer(neighb), n - 1L)
+    neighb <- as.integer(min(neighb, n - 1L))
   }
 
-  # Adaptive chunking based on neighb size
-  if (neighb < 500) {
-    chunk_size <- n
-  } else if (neighb < 5000) {
-    chunk_size <- max(500L, min(n, as.integer(1000e6 / (neighb * 24))))
-  } else {
-    chunk_size <- max(100L, min(n, as.integer(500e6 / (neighb * 24))))
-  }
-
-  # ---------------- Distance bins ----------------
+  ## Bound temporary neighbor matrices independently of the number of sites.
+  chunk_size <- max(1L, min(n, floor(64 * 1024^2 / (24 * (neighb + 1)))))
   if (is.finite(maxdist)) {
     maxdist_bin <- maxdist
+  } else if (n > 10000L) {
+    samp <- sample.int(n, min(1000L, n))
+    sampled <- as.numeric(dist(coords_knn[samp, , drop = FALSE]))
+    if (use_geo) sampled <- metric_distance(sampled)
+    maxdist_bin <- as.numeric(quantile(sampled, 0.95, na.rm = TRUE))
   } else {
-    if (n > 10000) {
-      samp <- sample(n, min(1000, n))
-      dists_samp <- as.matrix(dist(coords[samp, ]))
-      maxdist_bin <- as.numeric(quantile(dists_samp[upper.tri(dists_samp)], 0.95, na.rm = TRUE))
-    } else {
-      coordinate_ranges <- apply(coords, 2L, range, na.rm = TRUE)
-      maxdist_bin <- sqrt(sum((coordinate_ranges[2L, ] -
-                               coordinate_ranges[1L, ])^2))
-    }
+    spans <- apply(coords_knn, 2L, function(z) diff(range(z)))
+    bound <- sqrt(sum(spans^2))
+    maxdist_bin <- if (use_geo) metric_distance(min(2, bound)) else bound
   }
+  if (!is.finite(maxdist_bin) || maxdist_bin <= 0)
+    stop("No positive distance range is available for variogram bins.")
 
-  breaks   <- seq(0, maxdist_bin, length.out = numbins + 1)
-  widths   <- diff(breaks)
-  centers  <- breaks[-1] - widths/2
-  numvario <- numbins
-  mm       <- c(breaks[1L], breaks[length(breaks)])
-
-  # ---------------- Directional ranges ----------------
+  breaks <- seq(0, maxdist_bin, length.out = numbins + 1L)
+  centers <- breaks[-1L] - diff(breaks) / 2
+  mm <- c(0, maxdist_bin)
+  ndir <- length(directions)
   ang_min <- (directions - tolerance) %% 180
   ang_max <- (directions + tolerance) %% 180
-  ndir <- length(directions)
+  sums_dir <- replicate(ndir, numeric(numbins), simplify = FALSE)
+  cnts_dir <- replicate(ndir, numeric(numbins), simplify = FALSE)
 
-  sums_dir <- replicate(ndir, numeric(numvario), simplify = FALSE)
-  cnts_dir <- replicate(ndir, integer(numvario), simplify = FALSE)
-
-  # Helper function: C binning
-  .bin_pairs_c <- function(dist_sub, i_sub, j_sub) {
-    np <- length(dist_sub)
-    if (np == 0L) return(list(moms = numeric(numvario), lbins = integer(numvario)))
-
-    zi <- data[i_sub]
-    zj <- data[j_sub]
-
-    binsC  <- double(numbins + 1)
-    lbinsC <- integer(numvario)
-    momsC  <- double(numvario)
-
-    EV <- dotCall64::.C64(
-      "Binned_Variogram2new",
-      SIGNATURE = c("double","integer","double","double","double","integer","double","integer","double"),
-      INTENT    = c("rw","r","r","r","r","rw","rw","r","r"),
-      bins  = binsC,
-      np    = as.integer(np),
-      data1 = as.double(zi),
-      data2 = as.double(zj),
-      vdist = as.double(dist_sub),
-      lbins = lbinsC,
-      moms  = momsC,
-      nbins = as.integer(numbins + 1),
-      mm    = as.double(mm),
-      NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0
-    )
-    list(moms = EV$moms, lbins = EV$lbins)
-  }
-
-  # ---------------- Distance type ----------------
-  use_geo <- distance %in% c("Geod", "Chor")
-  if (use_geo && !requireNamespace("fields", quietly = TRUE)) {
-    stop("Package 'fields' is required by GeoVariogramDir() for geodesic or chordal distance.",
-         call. = FALSE)
-  }
-
-  proj_sinusoidal <- function(M) {
-    lon <- M[,1] * pi / 180
-    lat <- M[,2] * pi / 180
-    cbind(lon * cos(lat), lat)
-  }
-
-  chord_from_arc <- function(theta) 2 * sin(theta / 2)
-
-  coords_knn <- if (use_geo) proj_sinusoidal(coords) else coords
-
-  # ---------------- Chunk processing ----------------
+  radius_knn <- if (!is.finite(maxdist)) Inf else if (distance == "Geod")
+    2 * sin(min(pi, maxdist) / 2) else if (distance == "Chor") min(2, maxdist) else maxdist
+  ## Radius searches use a strict floating-point boundary in some backends.
+  if (is.finite(radius_knn))
+    radius_knn <- radius_knn * (1 + 64 * .Machine$double.eps)
   n_chunks <- ceiling(n / chunk_size)
-
   for (chunk_id in seq_len(n_chunks)) {
-    start_idx <- (chunk_id - 1) * chunk_size + 1
-    end_idx <- min(chunk_id * chunk_size, n)
-    chunk_indices <- start_idx:end_idx
-    n_chunk <- length(chunk_indices)
-
-    query_coords <- coords_knn[chunk_indices, , drop = FALSE]
-
-    if (is.finite(maxdist)) {
-      if (use_geo) {
-        radius_proj <- maxdist * 1.1
-        knn_res <- nabor::knn(coords_knn, query_coords, k = neighb + 1, radius = radius_proj)
-      } else {
-        knn_res <- nabor::knn(coords_knn, query_coords, k = neighb + 1, radius = maxdist)
-      }
-    } else {
-      knn_res <- nabor::knn(coords_knn, query_coords, k = neighb + 1)
-    }
-
+    chunk_indices <- seq.int((chunk_id - 1L) * chunk_size + 1L,
+                             min(chunk_id * chunk_size, n))
+    knn_args <- list(data = coords_knn, query = coords_knn[chunk_indices, , drop = FALSE],
+                     k = neighb + 1L)
+    if (is.finite(radius_knn)) knn_args$radius <- radius_knn
+    knn_res <- do.call(nabor::knn, knn_args)
     idx_mat <- knn_res$nn.idx
-    dists_knn <- knn_res$nn.dists
-
-    # Compute true distances for geodesic cases
-    if (use_geo) {
-      n_query <- nrow(query_coords)
-      K <- ncol(idx_mat)
-      dist_true <- matrix(NA_real_, n_query, K)
-
-      for (r in seq_len(n_query)) {
-        idx <- idx_mat[r, ]
-        valid <- idx > 0
-        if (!any(valid)) next
-
-        global_idx <- chunk_indices[r]
-        neighbor_idx <- idx[valid]
-
-        arc <- fields::rdist.earth.vec(
-          x1 = matrix(coords[global_idx, 1:2], nrow = 1),
-          x2 = coords[neighbor_idx, 1:2, drop = FALSE],
-          miles = FALSE, R = 1
-        )
-
-        if (distance == "Chor") {
-          dist_true[r, which(valid)] <- chord_from_arc(arc)
-        } else {
-          dist_true[r, which(valid)] <- arc
-        }
-      }
-      dist_mat <- dist_true
-    } else {
-      dist_mat <- dists_knn
-    }
-
-    keep <- idx_mat > 0
-    if (is.finite(maxdist)) keep <- keep & (dist_mat <= maxdist)
+    dist_mat <- if (use_geo) metric_distance(knn_res$nn.dists) else knn_res$nn.dists
+    ## pmin/pmax drop matrix attributes on some R versions.
+    dim(dist_mat) <- dim(idx_mat)
+    keep <- idx_mat > 0 & is.finite(dist_mat)
+    if (is.finite(maxdist)) keep <- keep & dist_mat <= maxdist * (1 + 64 * .Machine$double.eps)
     if (!any(keep)) next
+    i <- rep(chunk_indices, times = ncol(idx_mat))[keep]
+    j <- idx_mat[keep]
+    lag <- dist_mat[keep]
+    valid <- i != j & is.finite(data[i]) & is.finite(data[j])
+    i <- i[valid]; j <- j[valid]; lag <- lag[valid]
+    if (!length(i)) next
+    if (is.finite(maxdist)) lag <- pmin(lag, maxdist)
+    angle <- if (use_geo) .GeoVariogramDirSphereAngle(coords_knn, i, j) else
+      (atan2(coords[j, 2L] - coords[i, 2L], coords[j, 1L] - coords[i, 1L]) * 180 / pi) %% 180
 
-    row_indices <- matrix(rep(chunk_indices, times = ncol(idx_mat)),
-                          nrow = n_chunk, byrow = FALSE)
-    i <- as.integer(row_indices[keep])
-    j <- as.integer(idx_mat[keep])
-    dist <- as.double(dist_mat[keep])
-
-    # Remove self-pairs
-    self_pairs <- i == j
-    if (any(self_pairs)) {
-      i <- i[!self_pairs]
-      j <- j[!self_pairs]
-      dist <- dist[!self_pairs]
-    }
-    if (length(i) == 0) next
-
-    dx <- coords[j, 1] - coords[i, 1]
-    dy <- coords[j, 2] - coords[i, 2]
-    angle <- (atan2(dy, dx) * 180 / pi) %% 180
-
-    mask_dir_mat <- matrix(FALSE, nrow = length(angle), ncol = ndir)
+    ## One binning implementation is used for every chunk size.  This avoids
+    ## different edge or missing-data behavior in R and C branches.
     for (k in seq_along(directions)) {
-      if (ang_min[k] < ang_max[k]) {
-        mask_dir_mat[,k] <- (angle >= ang_min[k]) & (angle <= ang_max[k])
-      } else {
-        mask_dir_mat[,k] <- (angle >= ang_min[k]) | (angle <= ang_max[k])
-      }
-    }
-
-    n_pairs_chunk <- length(i)
-    use_c_chunk <- n_pairs_chunk > 5000
-
-    if (use_c_chunk) {
-      for (k in seq_along(directions)) {
-        mask <- mask_dir_mat[,k]
-        if (any(mask)) {
-          bp <- .bin_pairs_c(dist[mask], i[mask], j[mask])
-          sums_dir[[k]] <- sums_dir[[k]] + bp$moms
-          cnts_dir[[k]] <- cnts_dir[[k]] + bp$lbins
-        }
-      }
-    } else {
-      diff2 <- (data[j] - data[i])^2 / 2
-      bin_idx_all <- cut(dist, breaks, labels = FALSE, include.lowest = TRUE)
-
-      for (k in seq_along(directions)) {
-        mask <- mask_dir_mat[,k]
-        if (any(mask)) {
-          for (b in seq_len(numvario)) {
-            bin_mask <- !is.na(bin_idx_all[mask]) & bin_idx_all[mask] == b
-            if (any(bin_mask)) {
-              vals <- diff2[mask][bin_mask]
-              sums_dir[[k]][b] <- sums_dir[[k]][b] + sum(vals, na.rm = TRUE)
-              cnts_dir[[k]][b] <- cnts_dir[[k]][b] + length(vals)
-            }
-          }
-        }
-      }
+      mask <- if (tolerance == 90) rep(TRUE, length(lag)) else if (ang_min[k] < ang_max[k])
+        is.finite(angle) & angle >= ang_min[k] & angle <= ang_max[k] else
+        is.finite(angle) & (angle >= ang_min[k] | angle <= ang_max[k])
+      if (!any(mask)) next
+      ans <- dotCall64::.C64(
+        "Binned_Variogram2new",
+        SIGNATURE = c("double", "integer", "double", "double", "double", "integer", "double", "integer", "double"),
+        INTENT = c("w", "r", "r", "r", "r", "rw", "rw", "r", "r"),
+        bins = double(numbins + 1L), np = as.integer(sum(mask)),
+        data1 = as.double(data[i[mask]]), data2 = as.double(data[j[mask]]),
+        vdist = as.double(lag[mask]), lbins = integer(numbins), moms = double(numbins),
+        nbins = as.integer(numbins + 1L), mm = mm,
+        NAOK = TRUE, PACKAGE = "GeoModels", VERBOSE = 0)
+      sums_dir[[k]] <- sums_dir[[k]] + ans$moms
+      cnts_dir[[k]] <- cnts_dir[[k]] + ans$lbins
     }
   }
 
-  # ---------------- Results ----------------
-  result <- vector("list", ndir)
-  names(result) <- paste0("dir_", directions, "deg")
-
-  for (k in seq_len(ndir)) {
+  result <- lapply(seq_along(directions), function(k) {
     cnt <- cnts_dir[[k]]
-    gamma <- ifelse(cnt > 0, sums_dir[[k]] / cnt, NA_real_)
-    result[[k]] <- list(
-      centers = centers,
-      gamma = as.numeric(gamma),
-      npairs = as.numeric(cnt)
-    )
-  }
-
+    list(centers = centers, gamma = as.numeric(ifelse(cnt > 0, sums_dir[[k]] / cnt, NA_real_)),
+         npairs = as.numeric(cnt))
+  })
+  names(result) <- paste0("dir_", directions, "deg")
   attr(result, "breaks") <- breaks
   attr(result, "maxdist") <- maxdist_bin
   attr(result, "neighb") <- neighb
   attr(result, "n_chunks") <- n_chunks
   attr(result, "subsample") <- subsample
-  attr(result, "direction_definition") <- if (ncol(coords) == 3L) {
+  attr(result, "direction_definition") <- if (use_geo) {
+    "Unoriented great-circle tangent at the pair midpoint, measured from local east toward north."
+  } else if (ncol(coords) == 3L) {
     "Azimuth in the xy plane; Euclidean lag distances use x, y, and z."
-  } else {
-    "Azimuth in the xy plane."
-  }
+  } else "Azimuth in the xy plane."
   structure(result, class = "GeoVariogramDir")
 }
 

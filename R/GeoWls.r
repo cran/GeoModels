@@ -131,7 +131,7 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
                 lower <- c(lower, low)
                 upper <- c(upper, big)}
             if(namesparam[i]=='sep'){
-                lower <- c(lower, low)
+                lower <- c(lower, if (!is.na(.GeoSTCode(corrmodel))) -1 else low)
                 upper <- c(upper, 1)}
             if(namesparam[i]=='pcol'){
                 lower <- c(lower, -1)
@@ -139,6 +139,18 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
             if(namesparam[i]=='sill'||namesparam[i]=='sill_1'||namesparam[i]=='sill_2'||namesparam[i]=='nugget_1'||namesparam[i]=='nugget2_2'){
                 lower <- c(lower, low)
                 upper <- c(upper, big)}
+            if(namesparam[i] %in% c('smooth_s', 'smooth_t') &&
+               !is.na(.GeoSTCode(corrmodel))) {
+                lo <- if (isTRUE(CkCorrModel(corrmodel) == 85L))
+                  -0.5 + sqrt(.Machine$double.eps) else .Machine$double.eps
+                lower <- c(lower, lo)
+                upper <- c(upper, big)
+            }
+            if(namesparam[i] %in% c('power2_s', 'power2_t') &&
+               isTRUE(CkCorrModel(corrmodel) == 85L)) {
+                lower <- c(lower, .Machine$double.eps)
+                upper <- c(upper, big)
+            }
             if(namesparam[i]=='smooth'){
                 lower <- c(lower, low)
                 upper <- c(upper, big)}
@@ -315,6 +327,8 @@ WlsStart <- function(coordx, coordy, coordz,coordt, coordx_dyn, corrmodel, data,
     initparam <- .repair_automatic_starts(
       initparam, start_names_user, expected_mean, model, data
     )
+    initparam <- .GeoSTRepairStarts(initparam, corrmodel, start_names_user)
+
 
     ## Wrapped Gaussian: use circular rather than Euclidean automatic starts.
     ## If the user did not provide them explicitly, initialize the intercept
@@ -406,6 +420,11 @@ GeoWLS <- function(data, coordx, coordy=NULL,coordz=NULL, coordt=NULL,  coordx_d
   {
     call <- match.call()
     grid_requested <- isTRUE(grid)
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = coordx, coordy = coordy,
+    coordz = coordz, coordx_dyn = coordx_dyn,
+    distance = distance, context = "GeoWLS")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
 
     ## GeoWLS is a Gaussian-only variogram least-squares procedure.  Keep the
     ## model label internal because shared setup code and GeoCovariogram use it,

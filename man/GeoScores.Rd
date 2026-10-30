@@ -217,7 +217,7 @@ library(GeoModels)
 
 model <- "Gaussian"
 set.seed(79)
-N <- 1000
+N <- 150
 
 x <- runif(N, 0, 1)
 y <- runif(N, 0, 1)

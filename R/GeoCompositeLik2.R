@@ -172,6 +172,7 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
     namesaniso=c("angle","ratio")
 
     if(length(n)==1) n=rep(n,dimat)
+    n_site <- n  # Never replace site-level trials with a concatenated pair vector.
 ####################### conditional ##############################################
     if(all(model==1, likelihood==1,type==2)) fname <- 'Comp_Cond_Gauss'
     if(all(model==21,likelihood==1,type==2)) fname <- 'Comp_Cond_Gamma'
@@ -315,15 +316,14 @@ comploglik_biv2 <- function(param,colidx,rowidx, corrmodel, coords,data1,data2,f
    ## converted back to the total composite log-likelihood below.
    obj_scale <- max(1, length(data1))
 
-   if((model==11||model==49||model==51)&&length(n)>1) {n1=n[colidx];n2=n[rowidx];n=c(n1,n2)}
 
    ## Quantities below are invariant across objective evaluations.
    ## Cache them once in the CompLik2 frame; comploglik2 accesses them
    ## through lexical scoping without changing its call signature.
    if(!bivariate) {
      sel_mean <- namesnuis %in% .GeoMean_names(ncol(X))
-     n_col <- n[colidx]
-     n_row <- n[rowidx]
+     n_col <- n_site[colidx]
+     n_row <- n_site[rowidx]
    }
 
 ##################
@@ -645,8 +645,8 @@ if (sensitivity || varest)
   ##
   ## Numerical differentiation on the original parameter scale can be
   ## unstable when parameters have very different magnitudes.  We first
-  ## obtain a preliminary Hessian, use its diagonal to define a local
-  ## rescaling, recompute the Hessian in the scaled parameterization, and
+  ## obtain the diagonal of a preliminary Hessian to define a local
+  ## rescaling, compute the full Hessian in the scaled parameterization, and
   ## finally transform it back to the original parameter scale.  In exact
   ## arithmetic this gives the same Hessian; the change is only numerical.
   ##
@@ -721,20 +721,27 @@ if (sensitivity || varest)
     max(abs(A - B)) / denom
   }
 
-  ## Preliminary Hessian of the average negative composite
+  ## Preliminary Hessian diagonal of the average negative composite
   ## log-likelihood.  It is used only to select numerically appropriate
   ## perturbation scales.  Multiplying by obj_scale here would make every
   ## perturbation unnecessarily smaller by sqrt(obj_scale).
-  H0_average <- numDeriv::hessian(
-    func = objective_theta,
-    x = theta_hat,
-    method = "Richardson"
-  )
-  H0_average <- symmetrize_hessian(H0_average)
+  ## One-dimensional Richardson evaluations use the same coordinate steps
+  ## as the full Hessian, without computing unused mixed derivatives.
+  hdiag_average <- vapply(seq_len(ntheta), function(j) {
+    numDeriv::hessian(
+      func = function(value) {
+        theta <- theta_hat
+        theta[j] <- value
+        objective_theta(theta)
+      },
+      x = theta_hat[j],
+      method = "Richardson"
+    )[1L, 1L]
+  }, numeric(1L))
 
-  if (any(!is.finite(H0_average))) {
+  if (any(!is.finite(hdiag_average))) {
     stop(
-      "The preliminary numerical sensitivity matrix contains non-finite values.",
+      "The preliminary numerical sensitivity diagonal contains non-finite values.",
       call. = FALSE
     )
   }
@@ -744,7 +751,7 @@ if (sensitivity || varest)
   ## invalid or zero preliminary diagonal entries; no global curvature floor
   ## is imposed, because legitimate curvatures can differ by many orders of
   ## magnitude.
-  hdiag <- abs(diag(H0_average))
+  hdiag <- abs(hdiag_average)
   valid_diag <- is.finite(hdiag) & hdiag > 0
 
   fallback_scale <- pmax(abs(theta_hat), 1)

@@ -74,7 +74,7 @@ library(GeoModels)
 ###########################
 set.seed(211)
 model="Gaussian";
-N=700 # number of location sites
+N=150 # number of location sites
 # Set the coordinates of the points:
 x = runif(N, 0, 1)
 y = runif(N, 0, 1)
@@ -122,7 +122,7 @@ GeoCovariogram(res, show.vario=TRUE, vario=vario,pch=20)
 ###Example 2: Residuals using a Weibull RF
 ###########################
 model="Weibull";shape=4
-N=700 # number of location sites
+N=150 # number of location sites
 # Set the coordinates of the points:
 x = runif(N, 0, 1)
 y = runif(N, 0, 1)

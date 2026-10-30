@@ -126,6 +126,13 @@ if(!is.null(spobj)) {
    if (!is.null(a$X)) X <- a$X
 }
 
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = coordx, coordy = coordy,
+    coordz = coordz, coordx_dyn = coordx_dyn,
+    distance = distance, context = "GeoKrig")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoKrig")
+
 if(spacetime && !is.null(coordx_dyn)) {
   coordx_dyn <- .GeoNormalizeDynamicCoordinates(
     coordx_dyn, coordt = coordt, context = "GeoKrig"
@@ -857,8 +864,7 @@ if(covmatrix$model==12)
 {
 vv=as.numeric(covmatrix$param['sill']); nu=1/as.numeric(covmatrix$param['df'])
 if(is.null(covmatrix$copula)){
-   cc2 <- cc^2;gamma_num <- gamma((nu - 1)/2)^2;gamma_den <- gamma(nu/2)^2;Fvals <- hypergeo::hypergeo(0.5, 0.5, nu/2, cc2)
-   corri <- ((nu - 2) * gamma_num * Re(Fvals) * cc) / (2 * gamma_den)
+   corri <- .GeoStudentCorrelation(rho, cc, nu)
 }
 else {
       if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)
@@ -905,9 +911,7 @@ if(covmatrix$model==18)
 {
                   vv=as.numeric(covmatrix$param['sill']); nu=1/as.numeric(covmatrix$param['df']);sk=as.numeric(covmatrix$param['skew'])
             if(is.null(covmatrix$copula)){ 
-                  sk2=sk*sk;l=nu/2; f=(nu-1)/2; w=sqrt(1-sk2);y=rho;
-                  CorSkew=(2*sk2/(pi*w*w+sk2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*cc/(w*w+sk2*(1-2/pi)) ;
-                  corri=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(l)^2-sk2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,l,y*y))*((1-2*sk2/pi)*CorSkew+2*sk2/pi)-2*sk2/pi);
+                  corri <- .GeoSkewStudentCorrelation(rho, cc, nu, sk)
               }
                 else { if(covmatrix$copula=="Gaussian") corri= gaussian_copula_cov(cc,covmatrix$model, nuisance)}
 }
@@ -1049,15 +1053,15 @@ else    {
      if(covmatrix$model==59)  {vvar = vv * (1 - 2*sk + 2*sk^2) / (sk^2 * (1-sk)^2)
                                M= sqrt(vv) * (1/sk - 1/(1-sk))
                               }
-     if(covmatrix$model==12)  {vvar= vv*nu/(nu-2) ;     M=0 }
+     if(covmatrix$model==12)  {vvar= vv/(1-2/nu) ;     M=0 }
      if(covmatrix$model==34) {vvar= vv*(1-2*h)^(-1.5); M=0 }
      if(covmatrix$model==40) { vvar= vv* vv1 ; M=sqrt(vv)*mm}
      if(covmatrix$model==20) { vvar= vv* vv1; M=sqrt(vv)*mm}
    ##############################################################
      if(covmatrix$model==18)  {
-                               D1=(nu-1)*0.5; D2=nu*0.5;
-                               mm=sqrt(nu)*gamma(D1)*sk/(sqrt(pi)*gamma(D2));
-                               vvar=vv*(nu/(nu-2)-mm^2); M=sqrt(vv)*mm
+                               mom_st <- .GeoSkewStudentMoments(nu, sk)
+                               vvar <- vv * mom_st$variance
+                               M <- sqrt(vv) * mom_st$mean
                               }
      if(covmatrix$model==27)  {
                               ttemp=gamma(0.5*(nu-1))/gamma(0.5*nu)

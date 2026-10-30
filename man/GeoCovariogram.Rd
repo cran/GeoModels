@@ -179,8 +179,8 @@ library(GeoModels)
 ###############################################################
 set.seed(21)
 # Set the coordinates of the points:
-x = runif(300, 0, 1)
-y = runif(300, 0, 1)
+x = runif(120, 0, 1)
+y = runif(120, 0, 1)
 coords=cbind(x,y)
 
 # Set the model's parameters:
@@ -223,8 +223,8 @@ set.seed(2111)
 
 model="Binomial";n=1
 # Set the coordinates of the points:
-x = runif(500, 0, 1)
-y = runif(500, 0, 1)
+x = runif(150, 0, 1)
+y = runif(150, 0, 1)
 coords=cbind(x,y)
 
 # Set the model's parameters:
@@ -263,8 +263,8 @@ set.seed(111)
 
 model="Weibull";shape=4
 # Set the coordinates of the points:
-x = runif(700, 0, 1)
-y = runif(700, 0, 1)
+x = runif(150, 0, 1)
+y = runif(150, 0, 1)
 coords=cbind(x,y)
 
 # Set the model's parameters:
@@ -305,11 +305,11 @@ GeoCovariogram(fit, show.vario=TRUE, vario=vario,pch=20)
 ###############################################################
 set.seed(92)
 # Define the spatial-coordinates of the points:
-x = runif(50, 0, 1)
-y = runif(50, 0, 1)
+x = runif(25, 0, 1)
+y = runif(25, 0, 1)
 coords=cbind(x,y)
 # Define the temporal sequence:
-time = seq(0, 10, 1)
+time = seq(0, 5, 1)
 
 
 param=list(mean=mean,nugget=nugget,
@@ -324,7 +324,7 @@ fit = GeoFit(data, coordx=coords, coordt=time, corrmodel="Matern_Matern", maxtim
  neighb=3, likelihood="Marginal", type="Pairwise",fixed=fixed, start=start)
 
 # Empirical estimation of spatio-temporal covariance:
-vario = GeoVariogram(data,coordx=coords, coordt=time, maxtime=5,maxdist=0.5)
+vario = GeoVariogram(data,coordx=coords, coordt=time, maxtime=3,maxdist=0.5)
 
 # Plot of the fitted space-time variogram
 GeoCovariogram(fit,vario=vario,show.vario=TRUE)
@@ -342,8 +342,8 @@ GeoCovariogram(fit,vario=vario,fix.lagt=1,fix.lags=1,show.vario=TRUE,pch=20)
 ###############################################################
 set.seed(92)
 # Define the spatial-coordinates of the points:
-x <- runif(600, 0, 2)
-y <- runif(600, 0, 2)
+x <- runif(100, 0, 2)
+y <- runif(100, 0, 2)
 coords <- cbind(x,y)
 
 # Simulation of a bivariate spatial Gaussian RF:

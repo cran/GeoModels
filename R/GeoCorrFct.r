@@ -56,6 +56,11 @@ CorrelationFct <- function(bivariate,corrmodel, lags, lagt, numlags, numlagt, mu
     if(!is.list(param)) stop("param  must be a list\n")
     .GeoValidateParameterNames(param, "GeoCorrFct")
 
+  .st_old <- .GeoSTEnter(corrmodel, distance = distance,
+                         context = "GeoCorrFct")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoCorrFct")
+
     spacetime<-CheckST(CkCorrModel(corrmodel))
     bivariate<-CheckBiv(CkCorrModel(corrmodel))
 
@@ -171,7 +176,7 @@ if(length(t)>1)  A=as.matrix(expand.grid(x,t))
              vs=as.numeric(nuisance["sill"])
 
              if(length(t)>1) cova <- correlation*(1-as.numeric(nuisance["nugget"])) + as.numeric(nuisance["nugget"])*I(A[,1]==0&A[,2]==0)
-             else   cova <- correlation*(1-as.numeric(nuisance["nugget"]))+as.numeric(nuisance["nugget"])*I(x==0)
+             else   cova <- correlation*(1-as.numeric(nuisance["nugget"]))+as.numeric(nuisance["nugget"])*I(x==0 & t[1L]==0)
         }
 }
 
@@ -203,8 +208,8 @@ if(!bivariate){
                  else            correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(x==0)
 
                               nu=1/as.numeric(nuisance['df']);sill=as.numeric(nuisance['sill'])
-                              vs=sill*(nu)/(nu-2)
-                              cc=((nu-2)*gamma((nu-1)/2)^2*Re(hypergeo::hypergeo(0.5,0.5 ,nu/2 ,correlation^2))*correlation1)/(2*gamma(nu/2)^2)
+                              vs=sill/(1-2/nu)
+                              cc=.GeoStudentCorrelation(correlation, correlation1, nu)
                               
                               cova=cc;
                                }
@@ -218,11 +223,8 @@ if(!bivariate){
                  else            correlation1=correlation*(1-as.numeric(nuisance['nugget'] ))+as.numeric(nuisance["nugget"])*I(x==0)
 
                               nu=1/as.numeric(nuisance['df']);sill=as.numeric(nuisance['sill']);sk=as.numeric(nuisance['skew'])
-                              skew2=sk*sk; f=(nu-1)/2; w=sqrt(1-skew2);y=correlation1;
-                              CorSkew=(2*skew2/(pi*w*w+skew2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*correlation/(w*w+skew2*(1-2/pi)) ;
-                              mm=sqrt(nu)*gamma(f)*sk/(sqrt(pi)*gamma(nu/2));
-                cc=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(nu/2)^2-skew2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,nu/2,y*y))*((1-2*skew2/pi)*CorSkew+2*skew2/pi)-2*skew2/pi);
-                               vs=sill*(nu/(nu-2)-mm*mm);
+                              cc <- .GeoSkewStudentCorrelation(correlation, correlation1, nu, sk)
+                              vs <- sill * .GeoSkewStudentMoments(nu, sk)$variance
                               cova=cc;
                                }
                   }

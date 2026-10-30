@@ -100,6 +100,10 @@ It is normally inherited from \code{estobj}.}
 }
 
 \details{
+Repeated neighborhoods with the same observation ordering reuse a matrix
+factorization when their covariance matrices are identical. The cache is bounded
+and lasts only for the current call; prediction still uses the same covariance
+and solver implementation as \code{\link{GeoKrig}}.
 The optional pair cache is bounded by
 \code{getOption("GeoModels.local_pair_cache_max_bytes", 256 * 1024^2)}.
 This is a per-process budget in bytes for native cache workspace and CSR output,
@@ -266,8 +270,8 @@ model="Gaussian"
 
 # Define the spatial-coordinates of the points:
 set.seed(759)
-x = runif(1000, 0, 1)
-y = runif(1000, 0, 1)
+x = runif(120, 0, 1)
+y = runif(120, 0, 1)
 coords=cbind(x,y)
 # Set the exponential cov parameters:
 corrmodel = "GenWend"
@@ -300,7 +304,7 @@ loc_to_pred=matrix(runif(8),4,2)
 param=append(fit$param,fit$fixed)
 pr=GeoKrig(fit,loc=loc_to_pred,mse=TRUE)
 
-pr_loc=GeoKrigloc(fit,loc=loc_to_pred,neighb=100,mse=TRUE)
+pr_loc=GeoKrigloc(fit,loc=loc_to_pred,neighb=40,mse=TRUE,progress=FALSE)
 
 pr$pred;
 pr_loc$pred
@@ -313,8 +317,8 @@ pr_loc$pred
 
 require(GeoModels)
 set.seed(78)
-coords=cbind(runif(100),runif(100))
-coordt=seq(0,5,0.25)
+coords=cbind(runif(25),runif(25))
+coordt=seq(0,5,length.out=6)
 corrmodel="Matern_Matern"
 param=list(nugget=0,mean=0,scale_s=0.2/3,scale_t=0.25/3,sill=2,
  smooth_s=0.5,smooth_t=0.5)
@@ -342,7 +346,7 @@ time=c(0.5,1.5,3.5)
 
 pr=GeoKrig(fit,loc=loc_to_pred,time=time,mse=TRUE)
 pr_loc=GeoKrigloc(fit,loc=loc_to_pred,time=time,
- neigh=25,maxtime=1, mse=TRUE)
+ neighb=25,maxtime=1, mse=TRUE,progress=FALSE)
 
 ## full and local prediction 
 pr$pred

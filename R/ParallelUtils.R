@@ -16,7 +16,9 @@
     stop("parallel must be TRUE or FALSE", call. = FALSE)
 
   ncores <- .GeoValidateNcores(ncores, context)
-  coremax <- suppressWarnings(parallel::detectCores())
+  ## Respect scheduler/cgroup quotas and R's check-time core limits, rather
+  ## than treating all hardware CPUs as available to this R process.
+  coremax <- suppressWarnings(parallelly::availableCores())
   if (is.na(coremax) || coremax < 1L) coremax <- 1L
   coremax <- as.integer(coremax)
 

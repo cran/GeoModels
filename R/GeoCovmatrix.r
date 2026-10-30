@@ -57,8 +57,14 @@ cr=dotCall64::.C64(fname,SIGNATURE = c("double","double","double","double","doub
  INTENT = c("w","r","r","r","r","r","r","r", "r", "r", "r"),
             PACKAGE='GeoModels', VERBOSE = 0, NAOK = TRUE)
 #############
-     ## deleting correlation equual  to 1 because there are problems  with hipergeometric function
-        sel=(abs(cr$corr-1)<.Machine$double.eps);cr$corr[sel]=0
+     ## Sparse univariate kernels include the diagonal.  Its exact marginal
+     ## variance is installed below, so skip singular transformation endpoints
+     ## there only.  Bivariate kernels already return covariances, and a value
+     ## of one can be a genuine variance or cross-covariance.
+     if (!bivariate) {
+       sparse_rows <- rep.int(seq_len(dime), diff(setup$ia))
+       cr$corr[setup$ja == sparse_rows] <- 0
+     }
       }
     }  
     
@@ -91,9 +97,9 @@ if(!bivariate)   {
               vv=  aa*ss
               }
    if(abs(g)<=1e-05&& h>1e-05){ ##
-              aa=(1-2*h)^(1.5) # variance
+              aa=(1-2*h)^(1.5) # reciprocal standardized variance
               corr <- aa*corr/( (1-h)^2-h^2*corr^2 )^(1.5)
-              vv=aa*ss
+              vv=ss/aa
                }
   if(h>1e-05&&abs(g)>1e-05){ # ok
                   rho=corr; rho2=rho*rho;
@@ -153,10 +159,8 @@ if(!bivariate){
    # In the constructive Student-t RF the common scale-mixture component
    # depends on the nugget-free latent correlation, while the Gaussian
    # numerator carries the nugget attenuation.
-   if(nu<170) corr=((nu-2)*gamma((nu-1)/2)^2*
-                    Re(hypergeo::hypergeo(0.5,0.5,nu/2,rho_base^2))*rho_num)/
-                   (2*gamma(nu/2)^2)
-   vv=as.numeric(nuisance['sill'])*(nu)/(nu-2)
+   corr=.GeoStudentCorrelation(rho_base, rho_num, nu)
+   vv=as.numeric(nuisance['sill'])/(1-2/nu)
 }
 if(bivariate){}
 }
@@ -166,14 +170,11 @@ if(bivariate){}
     {
      if(!bivariate)
 {
-    corr=cr$corr*(1-as.numeric(nuisance['nugget']))
-    nu=as.numeric(1/nuisance['df']); sk=as.numeric(nuisance['skew'])
-    skew2=sk*sk;l=nu/2; f=(nu-1)/2; w=sqrt(1-skew2);y=corr;
-    CorSkew=(2*skew2/(pi*w*w+skew2*(pi-2)))*(sqrt(1-y*y)+y*asin(y)-1)+w*w*cr$corr/(w*w+skew2*(1-2/pi)) ;
-    mm=sqrt(nu)*gamma(f)*sk/(sqrt(pi)*gamma(l));
-    corr=(pi*(nu-2)*gamma(f)^2/(2*(pi*gamma(l)^2-skew2*(nu-2)*gamma(f)^2)))*(Re(hypergeo::hypergeo(0.5,0.5,l,y*y))
-                                *((1-2*skew2/pi)*CorSkew+2*skew2/pi)-2*skew2/pi);
-    vv=as.numeric(nuisance['sill'])*(nu/(nu-2)-mm*mm);
+    rho_num <- cr$corr * (1 - as.numeric(nuisance['nugget']))
+    nu <- as.numeric(1 / nuisance['df'])
+    sk <- as.numeric(nuisance['skew'])
+    corr <- .GeoSkewStudentCorrelation(cr$corr, rho_num, nu, sk)
+    vv <- as.numeric(nuisance['sill']) * .GeoSkewStudentMoments(nu, sk)$variance
 }
 if(bivariate){}
 }
@@ -738,7 +739,7 @@ if( !is.character(corrmodel)|| is.null(CkCorrModel(corrmodel)))       stop("the 
   "Hypergeometric2","Hypergeometric","Hypergeometric_Matern","Hypergeometric_Matern2","GenWend_Hole", "GenWend_hole",
   "GenWend_Matern_Hole", "GenWend_Matern_hole","Wen0_space", "wen0_space","Wen0_time",  "wen0_time",
   "Wen1_space", "wen1_space","Wen1_time",  "wen1_time","Wen2_space", "wen2_space","Wen2_time",  "wen2_time",
-  "Gneiting_wen_S", "gneiting_wen_S", "Gneiting_Wen_S","Gneiting_wen_T", "gneiting_wen_T","Genwend_Genwend_nosep",
+  "Gneiting_wen_S", "gneiting_wen_S", "Gneiting_Wen_S","Gneiting_wen_T", "gneiting_wen_T","Genwend_Genwend_nosep", "GenWend_GenWend_nosep",
   "Wend0_Wend0","Wend0_Wend1","Wend0_Wend2","Wend1_Wend0","Wend1_Wend1","Wend1_Wend2","Wend2_Wend0","Wend2_Wend1","Wend2_Wend2",
   "GenWend_GenWend","Bi_wend0_sep", "Bi_Wend0_contr","Bi_wend0","Bi_wend1_sep","Bi_Wend1_contr","Bi_wend1",
   "Bi_wend2_sep","Bi_wend2","Bi_Wend2_contr","Bi_GenWend_sep", "Bi_genWend_sep","Bi_GenWend_contr", "Bi_genWend_contr", "Bi_GenWend", "Bi_genWend"
@@ -814,6 +815,13 @@ grid_input <- isTRUE(grid)
   coordx_dyn = coordx_dyn, distance = distance, grid = grid,
   context = "GeoCovmatrix"
 )
+
+  .st_old <- .GeoSTEnter(corrmodel,
+    coordx = coordx, coordy = coordy,
+    coordz = coordz, coordx_dyn = coordx_dyn,
+    distance = distance, context = "GeoCovmatrix")
+  on.exit(.GeoSTRestore(.st_old), add = TRUE)
+  .GeoSTValidate(corrmodel, param, context = "GeoCovmatrix")
 
 ## Hole-effect generalized Wendland validity depends on the Euclidean
 ## dimension through the turning-bands construction.  Infer d from the
@@ -893,7 +901,7 @@ if(sparse) {
     covmod=CkCorrModel(corrmodel)
     if(covmod %in% c(10,11,13,15,19,6,7,21,22,23,26,29,30,
                      63,64,65,66,67,68,
-                     69,70,71,72,73,74,75,76,77,78,
+                     69,70,71,72,73,74,75,76,77,78,85,
                      111,112,129,113,114,131,132,130,134,
                      115,116,120))
     {

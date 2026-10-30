@@ -183,29 +183,38 @@ CE_Space_Time <- function(coords, time.seq, param, corrmodel, distance,
   sep$spatial$mean <- 0
   sep$temporal$mean <- 0
 
-  spatial_cov <- GeoCovmatrix(
-    coordx = coords, corrmodel = sep$model, model = "Gaussian",
-    param = sep$spatial, distance = distance
-  )$covmatrix
-  spatial_cov <- as.matrix(spatial_cov)
-  diag(spatial_cov) <- 1
-  chol_space <- tryCatch(
-    t(chol(spatial_cov)),
-    error = function(e) {
-      stop("The spatial correlation matrix is not positive definite in CE_Space_Time: ",
-           conditionMessage(e), call. = FALSE)
-    }
-  )
-
   ns <- nrow(coords)
   nt <- length(time.seq)
+  normalized_time <- as.numeric(time.seq - time.seq[1L])
+  prepared <- .GeoSimulationMemoise(
+    "ce_spacetime",
+    list(coords = coords, time = normalized_time, sep = sep,
+         distance = distance, max.ext = max.ext),
+    function() {
+      spatial_cov <- GeoCovmatrix(
+        coordx = coords, corrmodel = sep$model, model = "Gaussian",
+        param = sep$spatial, distance = distance
+      )$covmatrix
+      spatial_cov <- as.matrix(spatial_cov)
+      diag(spatial_cov) <- 1
+      chol_space <- tryCatch(
+        t(chol(spatial_cov)),
+        error = function(e) {
+          stop("The spatial correlation matrix is not positive definite in CE_Space_Time: ",
+               conditionMessage(e), call. = FALSE)
+        }
+      )
+      embedding <- if (nt > 1L) {
+        .CETemporalEmbedding(normalized_time, sep$model, sep$temporal, max.ext)
+      } else NULL
+      list(chol_space = chol_space, embedding = embedding)
+    }
+  )
+  chol_space <- prepared$chol_space
   if (nt == 1L) {
     base <- matrix(as.numeric(chol_space %*% rnorm(ns)), nrow = 1L)
   } else {
-    time.seq <- as.numeric(time.seq - time.seq[1L])
-    embedding <- .CETemporalEmbedding(
-      time.seq, sep$model, sep$temporal, max.ext
-    )
+    embedding <- prepared$embedding
     emb_size <- embedding$size
     spectrum <- sqrt(embedding$lambda)
     freq <- matrix(complex(real = 0, imaginary = 0),
@@ -283,26 +292,36 @@ GRF.CE.Sim <- function(nsim, x, y, M, N, corrmodel, param, max.ext) {
   }
   nsim <- as.integer(nsim)
   max.ext <- .CEValidateMaxExt(max.ext)
-  decomposition <- NULL
-  selected_attempt <- max.ext
-
-  for (attempt in seq_len(max.ext)) {
-    ext <- 2^attempt
-    candidate <- Cov_Mat_CE(
-      x = x, y = y, M = M, N = N, corrmodel = corrmodel,
-      param = param, ext = ext, approx = FALSE
-    )
-    decomposition <- candidate
-    selected_attempt <- attempt
-    if (isTRUE(candidate$valid)) break
-  }
-
-  approx.flag <- !isTRUE(decomposition$valid)
-  if (approx.flag) {
-    warning("The spatial circulant embedding has negative eigenvalues at the maximum extension; negative eigenvalues were truncated to zero.",
-            call. = FALSE)
-    decomposition$prefix <- sqrt(pmax(decomposition$eigenvalues, 0))
-  }
+  prepared <- .GeoSimulationMemoise(
+    "ce_spatial",
+    list(x = x, y = y, M = M, N = N, corrmodel = corrmodel,
+         param = param, max.ext = max.ext),
+    function() {
+      decomposition <- NULL
+      selected_attempt <- max.ext
+      for (attempt in seq_len(max.ext)) {
+        ext <- 2^attempt
+        candidate <- Cov_Mat_CE(
+          x = x, y = y, M = M, N = N, corrmodel = corrmodel,
+          param = param, ext = ext, approx = FALSE
+        )
+        decomposition <- candidate
+        selected_attempt <- attempt
+        if (isTRUE(candidate$valid)) break
+      }
+      approx.flag <- !isTRUE(decomposition$valid)
+      if (approx.flag) {
+        warning("The spatial circulant embedding has negative eigenvalues at the maximum extension; negative eigenvalues were truncated to zero.",
+                call. = FALSE)
+        decomposition$prefix <- sqrt(pmax(decomposition$eigenvalues, 0))
+      }
+      list(decomposition = decomposition, selected_attempt = selected_attempt,
+           approx.flag = approx.flag)
+    }
+  )
+  decomposition <- prepared$decomposition
+  selected_attempt <- prepared$selected_attempt
+  approx.flag <- prepared$approx.flag
 
   simulation <- Cov_Mat_CE.sim(decomposition, nsim = nsim)
   list(

@@ -1,0 +1,13 @@
+GeoModels 2.3.0: CheckCor validation for model 85 and model 89.
+
+The shared CheckCor() switch now reads existing parameter positions and checks
+finite values, positive scales, normalized sep in [-1,1], and smoothness.
+Model 85 also checks the coupled generalized Wendland shape inequalities
+using the spatial dimension already managed by the existing internals.
+
+The native GeoFixedMarginSTValid() remains as a defensive check for direct
+kernel evaluations and finite-difference optimizer trials. It is not called
+by CheckCor() anymore. Public R function signatures and parameter names
+are unchanged. Correlation formulas and native evaluation are untouched.
+
+R / R CMD check not available in this build environment.

@@ -1045,6 +1045,7 @@ extern void GeoModels_openmp_info(int *compiled, int *threads,
                                   int *max_threads, int *min_pairs);
 
 static const R_CMethodDef CEntries[] = {
+    {"GeoStudentCorrelationVec",      (DL_FUNC) &GeoStudentCorrelationVec,      5},
     {"GeoModels_set_omp_threads",     (DL_FUNC) &GeoModels_set_omp_threads,     1},
     {"GeoModels_set_omp_min_pairs",   (DL_FUNC) &GeoModels_set_omp_min_pairs,   1},
     {"GeoModels_openmp_info",         (DL_FUNC) &GeoModels_openmp_info,         4},
@@ -1419,7 +1420,26 @@ extern SEXP GeoPairCachePacked(SEXP indices, SEXP row_ptr, SEXP col_idx, SEXP rh
 extern SEXP GeoPairCrossCorrelation(SEXP indices, SEXP coords, SEXP times, SEXP loc, SEXP pred_time, SEXP cormod, SEXP par, SEXP type, SEXP radius);
 extern SEXP GeoCountCondSim(SEXP Q, SEXP muObs, SEXP freeLen, SEXP successCount, SEXP forcedSuccess, SEXP W, SEXP muLoc, SEXP cholCond, SEXP cholLoc, SEXP sizePred, SEXP modelCode, SEXP burn, SEXP thin, SEXP nrep, SEXP L);
 
+extern SEXP GeoGaussianCopulaPolynomial(SEXP rho, SEXP coefficient);
+extern SEXP geo_skewlaplace_latent_gibbs(SEXP y, SEXP Q, SEXP p, SEXP burn, SEXP nrep, SEXP thin);
+
+extern SEXP geo_skewlaplace_logdensity(SEXP x, SEXP y, SEXP rho, SEXP p, SEXP sill);
+
+extern SEXP GeoFixedMarginSTGetDimension(void);
+extern SEXP GeoFixedMarginSTSetDimension(SEXP dimension);
+extern SEXP GeoFixedMarginSTEvaluate(SEXP model, SEXP hs, SEXP us,
+                                      SEXP parameters, SEXP dimension);
+
+extern SEXP GeoSparseTaperSetup(SEXP input);
+
 static const R_CallMethodDef CallEntries[] = {
+    {"GeoSparseTaperSetup", (DL_FUNC) &GeoSparseTaperSetup, 1},
+    {"GeoFixedMarginSTGetDimension", (DL_FUNC) &GeoFixedMarginSTGetDimension, 0},
+    {"GeoFixedMarginSTSetDimension", (DL_FUNC) &GeoFixedMarginSTSetDimension, 1},
+    {"GeoFixedMarginSTEvaluate", (DL_FUNC) &GeoFixedMarginSTEvaluate, 5},
+    {"geo_skewlaplace_logdensity", (DL_FUNC) &geo_skewlaplace_logdensity, 5},
+    {"GeoGaussianCopulaPolynomial", (DL_FUNC) &GeoGaussianCopulaPolynomial, 2},
+    {"geo_skewlaplace_latent_gibbs", (DL_FUNC) &geo_skewlaplace_latent_gibbs, 6},
     {"GeoDuplicateCoordinates", (DL_FUNC) &GeoDuplicateCoordinates, 1},
     {"GeoCorrPGsVecCall",       (DL_FUNC) &GeoCorrPGsVecCall,       3},
     {"GeoBuildSpatialPairCache", (DL_FUNC) &GeoBuildSpatialPairCache, 6},

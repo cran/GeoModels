@@ -3,14 +3,48 @@
 ### File name: GeoLik_original_style_fixed.R
 ####################################################
 
+## Apply a covariance square root inverse without confusing an SVD with a
+## triangular Cholesky factor.  Both branches give the same quadratic form.
+.GeoLikWhiten <- function(decomp, data, method) {
+  if (identical(method, "cholesky"))
+    return(forwardsolve(decomp, data, transpose = FALSE))
+  if (identical(method, "svd"))
+    return(drop(crossprod(decomp$u, data)) / sqrt(decomp$d))
+  stop("method must be 'cholesky' or 'svd'.", call. = FALSE)
+}
+
+.GeoLikInverseFromFactor <- function(decomp, method) {
+  if (identical(method, "cholesky")) return(chol2inv(t(decomp)))
+  if (identical(method, "svd"))
+    return(tcrossprod(sweep(decomp$v, 2L, decomp$d, "/"), decomp$u))
+  stop("method must be 'cholesky' or 'svd'.", call. = FALSE)
+}
+
+.GeoLikCVFromFactor <- function(decomp, data, method) {
+  precision <- .GeoLikInverseFromFactor(decomp, method)
+  diagonal <- diag(precision)
+  if (any(!is.finite(diagonal)) || any(diagonal <= 0))
+    stop("Invalid precision matrix diagonal.", call. = FALSE)
+  residual <- drop(precision %*% data) / diagonal
+  ## Preserve the historical criterion: mean() was applied to a scalar.
+  sum(residual * residual)
+}
+
 ### Optim call for log-likelihood maximization
 Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmodel,data,fixed,flagcor,flagnuis,grid,lower,
                 mdecomp,model,namescorr,namesnuis,namesparam,numcoord,numpairs,numparamcor,numtime,
                 optimizer,onlyvar,param,radius,setup,spacetime,sparse,varest,taper,type,upper,ns,X,neighb,MM,aniso,score)
 {
+  if (!is.character(mdecomp) || length(mdecomp) != 1L || is.na(mdecomp) ||
+      !(mdecomp %in% c("cholesky", "svd")))
+    stop("method must be 'cholesky' or 'svd'.", call. = FALSE)
+  likelihood_penalty <- 1e20
   type_code <- suppressWarnings(as.integer(type))
   if (length(type_code) == 1L && !is.na(type_code) && type_code == 3L)
     stop("Likelihood type code 3 is no longer supported.", call. = FALSE)
+  if (mdecomp == "svd" &&
+      (type_code %in% c(5L, 6L) || (sparse && type_code == 4L && model == 1L)))
+    stop("Sparse Gaussian and tapered likelihoods require method='cholesky'.", call. = FALSE)
 
   #########################################################################
   ## Utilities
@@ -187,12 +221,12 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   #########################################################################
 
   LogNormDenStand <- function(const, cova, dimat, mdecomp, stdata, ...) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
     if (is.na(logdetvarcov)) return(llik)
-    y <- try(forwardsolve(decompvarcov, stdata, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, stdata, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     quad <- sum(y^2)
     if (!is.finite(quad)) return(llik)
@@ -200,7 +234,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand_spam <- function(const, cova, dimat, mdecomp, stdata, ...) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     mcov <- try(spam::as.spam(cova), silent = TRUE)
     if (inherits(mcov, "try-error")) return(llik)
     cholS <- try(spam::chol.spam(mcov), silent = TRUE)
@@ -211,19 +245,19 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand22 <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
     if (is.na(logdetvarcov)) return(llik)
-    y <- try(forwardsolve(decompvarcov, stdata, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, stdata, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     llik <- 0.5 * (const + logdetvarcov + sum(y^2))
     as.numeric(llik)
   }
 
   LogNormDenStand_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     ident[lower.tri(ident, diag = TRUE)] <- cova
     ident <- t(ident)
     ident[lower.tri(ident, diag = TRUE)] <- cova
@@ -231,14 +265,14 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
     if (is.na(logdetvarcov)) return(llik)
-    y <- try(forwardsolve(decompvarcov, stdata, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, stdata, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     llik <- 0.5 * (const + logdetvarcov + sum(y^2))
     as.numeric(llik)
   }
 
   LogNormDenStand_biv_spam <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     ident[lower.tri(ident, diag = TRUE)] <- cova
     ident <- t(ident)
     ident[lower.tri(ident, diag = TRUE)] <- cova
@@ -252,33 +286,29 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   CVV <- function(const,cova,dimat,mdecomp,stdata,...) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
-    invarcov <- MatInv(cova)
-    D <- diag(1 / diag(invarcov))
-    M <- crossprod(invarcov, D)
-    C <- tcrossprod(M, M)
-    as.numeric(mean(crossprod(t(crossprod(stdata, C)), stdata)))
+    value <- try(.GeoLikCVFromFactor(decompvarcov, stdata, mdecomp), silent = TRUE)
+    if (inherits(value, "try-error") || !is.finite(value)) return(llik)
+    as.numeric(value)
   }
 
   CVV_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     ident[lower.tri(ident, diag = TRUE)] <- cova
     ident <- t(ident)
     ident[lower.tri(ident, diag = TRUE)] <- cova
     decompvarcov <- MatDecomp(ident, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
-    invarcov <- MatInv(ident)
-    D <- diag(1 / diag(invarcov))
-    M <- crossprod(invarcov, D)
-    C <- tcrossprod(M, M)
-    as.numeric(mean(crossprod(t(crossprod(stdata, C)), stdata)))
+    value <- try(.GeoLikCVFromFactor(decompvarcov, stdata, mdecomp), silent = TRUE)
+    if (inherits(value, "try-error") || !is.finite(value)) return(llik)
+    as.numeric(value)
   }
 
   ## Tapering functions are kept for compatibility with type 5/6.
   LogNormDenTap <- function(const,cova,dimat,mdecomp,stdata,setup,...) {
-    lliktap <- 1.0e8
+    lliktap <- likelihood_penalty
     varcovtap <- try(new("spam", entries = cova * setup$taps, colindices = setup$ja,
                          rowpointers = setup$ia, dimension = as.integer(rep(dimat, 2))), silent = TRUE)
     if (inherits(varcovtap, "try-error")) return(lliktap)
@@ -291,7 +321,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenTap1 <- function(const,cova,dimat,mdecomp,stdata,setup,...) {
-    lliktap <- 1.0e8
+    lliktap <- likelihood_penalty
     varcovtap <- try(new("spam", entries = cova * setup$taps, colindices = setup$ja,
                          rowpointers = setup$ia, dimension = as.integer(rep(dimat, 2))), silent = TRUE)
     if (inherits(varcovtap, "try-error")) return(lliktap)
@@ -302,7 +332,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenTap_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    lliktap <- 1.0e8
+    lliktap <- likelihood_penalty
     varcovtap <- try(new("spam", entries = cova * setup$taps, colindices = setup$ja,
                          rowpointers = setup$ia, dimension = as.integer(rep(dimat, 2))), silent = TRUE)
     if (inherits(varcovtap, "try-error")) return(lliktap)
@@ -315,7 +345,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenTap1_biv <- function(const,cova,ident,dimat,mdecomp,nuisance,setup,stdata) {
-    lliktap <- 1.0e8
+    lliktap <- likelihood_penalty
     cova[cova == nuisance['sill']] <- nuisance['sill'] + nuisance['nugget']
     varcovtap <- try(new("spam", entries = cova * setup$taps, colindices = setup$ja,
                          rowpointers = setup$ia, dimension = as.integer(rep(dimat, 2))), silent = TRUE)
@@ -327,7 +357,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogshDenTap1 <- function(const,cova,dimat,mdecomp,nuisance,setup,sill,stdata,...) {
-    lliktap <- 1.0e8
+    lliktap <- likelihood_penalty
     varcovtap <- try(new("spam", entries = setup$taps * cova, colindices = setup$ja,
                          rowpointers = setup$ia, dimension = as.integer(rep(dimat, 2))), silent = TRUE)
     if (inherits(varcovtap, "try-error")) return(lliktap)
@@ -348,7 +378,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik <- function(param, const, coordx, coordy, coordz, coordt, corr, corrmat, corrmodel, data, dimat, fixed, fname,
                      grid, ident, mdecomp, model, namescorr, namesnuis, namesparam, radius, setup, X, ns, NS, MM, aniso, namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -406,7 +436,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_miss_T <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                             grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -435,7 +465,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_miss_skewT <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                                 grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -472,7 +502,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_miss_Poisgamma <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                                     grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance0 <- pram[namesnuis]
@@ -501,7 +531,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_miss_Pois <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                                grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance0 <- pram[namesnuis]
@@ -527,7 +557,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand_Tukey2H <- function(const, cova, dimat, mdecomp, nuisance, sill, setup, stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     delta1 <- as.numeric(nuisance["tail1"])
     delta2 <- as.numeric(nuisance["tail2"])
     if (delta1 < 0 || delta1 >= 0.5 || delta2 < 0 || delta2 >= 0.5 || sill <= 0) return(llik)
@@ -569,7 +599,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
       }
     }
 
-    y <- try(forwardsolve(decompvarcov, tau_inv, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, tau_inv, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     quad_form <- sum(y^2)
     if (!is.finite(quad_form) || !is.finite(log_jacobian)) return(llik)
@@ -578,7 +608,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_tukey2h <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                              grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -608,7 +638,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand_TukeyH <- function(const, cova, ident, dimat, mdecomp, delta, sill, setup, stdata) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     if (delta <= 0 || sill <= 0) return(llik)
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
@@ -616,7 +646,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     if (is.na(logdetvarcov)) return(llik)
     Wval <- as.numeric(VGAM::lambertW(delta * stdata^2))
     IL <- sign(stdata) * sqrt(Wval / delta)
-    y <- try(forwardsolve(decompvarcov, IL, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, IL, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     quad_form <- sum(y^2)
 
@@ -630,7 +660,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_tukeyh <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                             grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -657,12 +687,12 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand_LG <- function(const, cova, ident, dimat, mdecomp, nuisance, sill, setup, stdata, V_data, mu_s) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
     if (is.na(logdetvarcov)) return(llik)
-    y <- try(forwardsolve(decompvarcov, stdata, transpose = FALSE, upper.tri = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, stdata, mdecomp), silent = TRUE)
     if (inherits(y, "try-error")) return(llik)
     quadterm <- sum(y^2)
     sigma <- sqrt(sill)
@@ -673,7 +703,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_loggauss <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                               grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -704,7 +734,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   }
 
   LogNormDenStand_SH <- function(const,cova,mdecomp,nuisance,sill,setup,stdata, dimat = NULL, ...) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     decompvarcov <- MatDecomp(cova, mdecomp)
     if (is.logical(decompvarcov) && !decompvarcov) return(llik)
     logdetvarcov <- MatLogDet(decompvarcov, mdecomp)
@@ -713,7 +743,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     delta <- as.numeric(nuisance["tail"])
     Z <- sinh(delta * asinh(stdata) - skew)
     C <- delta * sqrt((1 + Z^2) / (stdata^2 + 1))
-    y <- try(forwardsolve(decompvarcov, Z, transpose = FALSE), silent = TRUE)
+    y <- try(.GeoLikWhiten(decompvarcov, Z, mdecomp), silent = TRUE)
     if (inherits(y, "try-error") || any(C <= 0)) return(llik)
     llik <- 0.5 * (const + const * log(sill) / log(2*pi) + logdetvarcov - 2 * sum(log(C)) + sum(y^2))
     as.numeric(llik)
@@ -721,7 +751,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
 
   loglik_sh <- function(param,const,coordx,coordy,coordz,coordt,corr,corrmat,corrmodel,data,dimat,fixed,fname,
                         grid,ident,mdecomp,model,namescorr,namesnuis,namesparam,radius,setup,X,ns,NS,MM,aniso,namesaniso) {
-    llik <- 1.0e8
+    llik <- likelihood_penalty
     pram <- combine_param(param, fixed, namesparam)
     paramcorr <- as.numeric(pram[namescorr])
     nuisance <- pram[namesnuis]
@@ -799,9 +829,10 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
   numpairstot <- dimat * (dimat - 1) / 2 + dd
   const <- dimat * log(2*pi)
 
-  if (is.null(neighb)) {
-    corr <- double(numpairstot)
-    ident <- diag(dimat)
+  if (type %in% c(5L, 6L) && model == 1L) {
+    ## Tapering uses only the retained sparse entries, including the diagonal.
+    corr <- double(numpairs)
+    ident <- NULL
   } else {
     corr <- double(numpairstot)
     ident <- diag(dimat)
@@ -840,7 +871,7 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
     if (type == 8) {
       if (bivariate) fname <- "CVV_biv" else fname <- "CVV"
     }
-    if (sparse) fname <- paste(fname, "_spam", sep = "")
+    if (sparse && type == 4L) fname <- paste(fname, "_spam", sep = "")
   }
 
   if (model == 20) {
@@ -1093,7 +1124,8 @@ Lik <- function(copula,bivariate,coordx,coordy,coordz,coordt,coordx_dyn,corrmode
       Likelihood$counts <- NA_real_
     }
 
-    serious_failure <- is.null(maxfun) || !is.finite(maxfun) || maxfun <= -1.0e14
+    serious_failure <- is.null(maxfun) || !is.finite(maxfun) ||
+      maxfun <= -likelihood_penalty
     if (serious_failure) {
       Likelihood$convergence <- 'Optimization may have failed: Try with other starting parameters'
       warning('Optimization may have failed: try with other starting values', call. = FALSE)

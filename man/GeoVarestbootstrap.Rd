@@ -99,7 +99,7 @@ library(GeoModels)
 set.seed(342)
 model="Gaussian" 
 # Define the spatial-coordinates of the points:
-NN=3500
+NN=150
 x = runif(NN, 0, 1)
 y = runif(NN, 0, 1)
 coords = cbind(x,y)

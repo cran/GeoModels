@@ -203,14 +203,14 @@ library(GeoModels)
 
 ################################################################
 ###
-### Example 1. Simulation of a large spatial Gaussian RF 
+### Example 1. Simulation of a spatial Gaussian RF 
 ### with Matern covariance model
 ### using circulant embeeding method
 ### It works only for regular grid
 ###############################################################
 set.seed(68)
-x = seq(0,1,0.005)
-y = seq(0,1,0.005)
+x = seq(0,1,0.1)
+y = seq(0,1,0.1)
 param=list(smooth=1.5,mean=0,sill=1,scale=0.2/3,nugget=0)
 # Simulation of a spatial Gaussian RF with Matern correlation function
 data1 <- GeoSimapprox(coordx=x,coordy=y, grid=TRUE,corrmodel="Matern", model="Gaussian",
@@ -221,32 +221,32 @@ if (requireNamespace("fields", quietly = TRUE)) {
 
 ################################################################
 ###
-### Example 2. Simulation of a large spatial Tukey-h RF 
+### Example 2. Simulation of a spatial Tukey-h RF 
 ### with Matern covariance model
 ### using spectral Turning band method
 ### It works for (ir)regular grid
 ###############################################################
 set.seed(68)
-x = runif(50000)
-y = runif(50000)
+x = runif(300)
+y = runif(300)
 coords=cbind(x,y)
 param=list(smooth=0.5,mean=0,sill=1,scale=0.06,nugget=0,tail=0.15)
 # Simulation of a spatial Gaussian RF with Matern correlation function
 data1 <- GeoSimapprox(coords, corrmodel="Matern", model="Tukeyh",
-                      method="TB",L=1000,param=param)$data
+                      method="TB",L=100,param=param)$data
 if (requireNamespace("fields", quietly = TRUE)) fields::quilt.plot(coords,data1)
 
 
 ################################################################
 ###
-### Example 3. Simulation of a large spacetime Gaussian RF 
+### Example 3. Simulation of a spacetime Gaussian RF 
 ### with separable matern covariance model
 ### using Circular embeeding method
-### It works for (large) regular time grid
+### It works for a regular time grid
 ###############################################################
 set.seed(68)
-coordt <- (0:100)
-coords <- cbind( runif(100, 0 ,1), runif(100, 0 ,1))
+coordt <- (0:8)
+coords <- cbind( runif(12, 0 ,1), runif(12, 0 ,1))
 param <- list(mean = 0, sill = 1, nugget = 0.25,
  scale_s = 0.05, scale_t = 2, 
  smooth_s = 0.5, smooth_t = 0.5)
@@ -259,7 +259,7 @@ dim(data)
 
 ################################################################
 ###
-### Example 4. Simulation of a large spacetime Gaussian RF 
+### Example 4. Simulation of a spacetime Gaussian RF 
 ### with separable GenWend covariance model
 ### using Circular embeeding method in time
 ###############################################################

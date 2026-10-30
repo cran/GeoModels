@@ -326,7 +326,7 @@ set.seed(514)
 ####################################
 ### example 1 : Weibull random field
 ####################################
-NN <- 1000
+NN <- 150
 coords <- cbind(runif(NN), runif(NN))
 
 corrmodel <- "GenWend"
@@ -352,16 +352,16 @@ fit <- GeoFit(data = data, coordx = coords,
               fixed = list(nugget = 0, smooth = 0,
                            power2 = 4))
 
-GeoScatterplot(fit, neighb = c(1, 2),nlevels=8,scale = "Original")
+GeoScatterplot(fit, neighb = c(1, 2), ngrid = 25,nlevels=8,scale = "Original")
 
 ## Gaussian-score scale: useful for assessing reflection asymmetry
-GeoScatterplot(fit, neighb = c(1, 2),nlevels=8, scale = "Gaussian")
+GeoScatterplot(fit, neighb = c(1, 2), ngrid = 25,nlevels=8, scale = "Gaussian")
 
 
 #############################################################
 ### example 2 : beta random field from a skew-Gaussian copula
 #############################################################
-NN <- 1000
+NN <- 150
 coords <- cbind(runif(NN), runif(NN))
 
 corrmodel <- "GenWend"
@@ -396,11 +396,11 @@ fit <- GeoFit(data = data, coordx = coords,
               optimizer = "nlminb")
 
 ## Response scale: marginal shape and copula are both visible
-GeoScatterplot(fit, neighb = c(1, 2),
+GeoScatterplot(fit, neighb = c(1, 2), ngrid = 25,
                scale = "Original")
 
 ## Gaussian-score scale: useful for assessing reflection asymmetry
-GeoScatterplot(fit, neighb = c(1, 2),
+GeoScatterplot(fit, neighb = c(1, 2), ngrid = 25,
                scale = "Gaussian")
 
 
@@ -410,7 +410,7 @@ GeoScatterplot(fit, neighb = c(1, 2),
 
 set.seed(89)
 coordt <- 1:5
-coords <- cbind(runif(200), runif(200))
+coords <- cbind(runif(25), runif(25))
 
 corrmodel <- "Matern_Matern"
 param <- list(mean = 0, sill = 1, nugget = 0,
@@ -433,7 +433,7 @@ fit_st <- GeoFit(data = data_st, coordx = coords, coordt = coordt,
 ## Four panels: two nearest-neighbour candidate sets at temporal lags 0 and 1.
 ## With fixed locations, the panel neighb = 1, time.lag = 1 contains the
 ## colocated temporal pairs and therefore has representative spatial lag h = 0.
-out_st <- GeoScatterplot(fit_st, neighb = c(1, 3),
+out_st <- GeoScatterplot(fit_st, neighb = c(1, 3), ngrid = 25,
                          time.lag = c(0, 1),
                          scale = "Gaussian")
 

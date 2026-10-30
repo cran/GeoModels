@@ -72,90 +72,36 @@ GeoDoScores <- function(data, method = "cholesky", matrix) {
   }
 
   param <- matrix$param
-  external_mean <- matrix$mean_external
-  if (is.null(external_mean)) external_mean <- .GeoMean_external(param, n = dime)
-  if (!is.null(external_mean)) {
-    external_mean <- as.numeric(external_mean)
-    if (length(external_mean) != dime || any(!is.finite(external_mean)))
-      stop("The external mean stored in the covariance object is invalid.")
-    if (!is.null(matrix$X))
-      stop("A fixed observation mean and X cannot be used together.")
-    MM <- external_mean
-  } else {
-    matrix$X <- .GeoMean_design(matrix$X, n = dime, name = "X")
-    beta <- .GeoMean_beta(param, ncol(matrix$X))
-    MM <- as.numeric(matrix$X %*% beta)
-  }
-
-  namesnuis <- matrix$namesnuis
-  nuisance <- param[namesnuis]
   model <- matrix$model
-  data <- switch(
-    as.character(model),
-    # Gaussian, StudentT, Tukey, Logistic
-    "1" = , "35" = , "12" = , "34" = , "25" = data - MM,
-    # SkewGaussian
-    "10" = {
-      kk <- as.numeric(param['skew'])
-      data - (MM + kk * sqrt(2/pi))
-    },
-    # Binomial
-    "11" = data - matrix$n * pnorm(MM),
-    # Poisson
-    "30" = , "36" = data - exp(MM),
-    # Poisson inflated
-    "43" = , "44" = {
-      p <- pnorm(as.numeric(param['pmu']))
-      data - (1 - p) * exp(MM)
-    },
-    # Two piece t models
-    "27" = {
-      kk <- as.numeric(param['skew'])
-      dd <- as.numeric(param['df'])
-      ss <- as.numeric(param['sill'])
-      adjustment <- (2 * kk * sqrt(ss * dd) * gamma((dd - 1) / 2)) /
-                   (gamma(dd / 2) * sqrt(pi))
-      data - (MM - adjustment)
-    },
-    # Two piece gaussian
-    "29" = {
-      kk <- as.numeric(param['skew'])
-      ss <- as.numeric(param['sill'])
-      data - (MM - 2 * kk * sqrt(2 * ss / pi))
-    },
-    # Two piece tukeyh
-    "38" = {
-      kk <- as.numeric(param['skew'])
-      ss <- as.numeric(param['sill'])
-      tt <- as.numeric(param['tail'])
-      data - (MM - 2 * kk * sqrt(2 * ss / pi) / (1 - tt))
-    },
-    # Tukeyh2
-    "40" = {
-      ss <- as.numeric(param['sill'])
-      t1 <- as.numeric(param['tail1'])
-      t2 <- as.numeric(param['tail2'])
-      data - (MM + sqrt(ss) * (t1 - t2) / (sqrt(2 * pi) * (1 - t1) * (1 - t2)))
-    },
-    # Binomial negative
-    "16" = data - matrix$n * (1 - pnorm(MM)) / pnorm(MM),
-    # Binomial negative inflated
-    "45" = {
-      p <- pnorm(as.numeric(param['pmu']))
-      data - (1 - p) * matrix$n * (1 - pnorm(MM)) / pnorm(MM)
-    },
-    # SAS
-    "20" = {
-      ss <- as.numeric(param['sill'])
-      kk <- as.numeric(param['skew'])
-      tt <- as.numeric(param['tail'])
-      bessel_term <- besselK(0.25, (tt + 1) / (2 * tt)) +
-                     besselK(0.25, (1 - tt) / (2 * tt))
-      adjustment <- sqrt(ss) * sinh(kk / tt) * exp(0.25) * bessel_term / sqrt(8 * pi)
-      data - (MM + adjustment)
-    },
-    data
-  )
+  if (isTRUE(matrix$bivariate)) {
+    if (!identical(as.integer(model), 1L))
+      stop("GeoDoScores supports bivariate covariance objects only for Gaussian margins.",
+           call. = FALSE)
+    MM <- .GeoBivariateObservedMean(param, matrix$X, matrix$ns,
+                                    context = "GeoDoScores")
+    marginal_mean <- MM
+  } else {
+    external_mean <- matrix$mean_external
+    if (is.null(external_mean)) external_mean <- .GeoMean_external(param, n = dime)
+    if (!is.null(external_mean)) {
+      external_mean <- as.numeric(external_mean)
+      if (length(external_mean) != dime || any(!is.finite(external_mean)))
+        stop("The external mean stored in the covariance object is invalid.")
+      if (!is.null(matrix$X))
+        stop("A fixed observation mean and X cannot be used together.")
+      MM <- external_mean
+    } else {
+      matrix$X <- .GeoMean_design(matrix$X, n = dime, name = "X")
+      beta <- .GeoMean_beta(param, ncol(matrix$X))
+      MM <- as.numeric(matrix$X %*% beta)
+    }
+    marginal_mean <- .GeoMarginalMean(model, param, MM, n = matrix$n,
+                                      copula = matrix$copula)
+  }
+  if (length(marginal_mean) != dime || any(!is.finite(marginal_mean)))
+    stop("The model does not have a finite marginal mean at every observation.",
+         call. = FALSE)
+  data <- data - marginal_mean
 
   ## LOO identities for Q = Sigma^{-1}:
   ##   e_i       = (Q r)_i / Q_ii

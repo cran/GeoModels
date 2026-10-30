@@ -637,6 +637,17 @@ GeoNeighborhood <- function(data = NULL, coordx = NULL, coordy = NULL,
     temporal_neighbors <- lapply(time, .select_times,
                                  coordt = coordt, maxtime = maxtime)
 
+    ## A block's spatial neighbors depend on the prediction location, not
+    ## on the requested prediction time.  Search all locations once per used
+    ## observation block and share the result across temporal tasks.
+    active_times <- sort(unique(unlist(temporal_neighbors, use.names = FALSE)))
+    spatial_by_time <- vector("list", nt)
+    if (length(active_times)) {
+      spatial_by_time[active_times] <- .map(active_times, function(tt) {
+        .find_neighbors(coordx_dyn[[tt]], loc, distance, maxdist, neighb, radius)
+      })
+    }
+
     ## Local prediction tasks use location-major order throughout GeoKrigloc:
     ## all requested times for location 1, then all times for location 2, etc.
     ## Do not use expand.grid(location, target_time) here because its first
@@ -663,11 +674,7 @@ GeoNeighborhood <- function(data = NULL, coordx = NULL, coordy = NULL,
       }
 
       blocks <- lapply(tidx, function(tt) {
-        nb <- .find_neighbors(
-          coordx_dyn[[tt]],
-          matrix(loc[i, ], nrow = 1L),
-          distance, maxdist, neighb, radius
-        )[[1L]]
+        nb <- spatial_by_time[[tt]][[i]]
 
         idx <- nb$indices
         list(

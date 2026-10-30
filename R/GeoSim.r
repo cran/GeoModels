@@ -257,68 +257,47 @@ pc=param[CorrParam(corrmodel)]
 
 
 
-ccov = GeoCovmatrix(coordx=coordx, coordy=coordy,coordz=coordz, coordt=coordt, coordx_dyn=coordx_dyn, corrmodel=corrmodel,
-                   distance=distance,grid=grid,model="Gaussian", n=n,
-                param=append(mc,pc), anisopars=anisopars, radius=radius, sparse=sparse,copula=NULL,
-                X=X)
-
-######################
-# matrix decomposition and square root
-if(!sparse) {
-   decompvarcov <- MatDecomp(ccov$covmatrix,method)
-   if(is.logical(decompvarcov)){print(" Covariance matrix is not positive definite");stop()}
-   sqrtvarcov <- MatSqrt(decompvarcov,method)
-}
-else {
- cholS <- spam::chol(ccov$covmatrix)
- # cholS is the upper triangular part of the permutated matrix Sigma
- iord <- spam::ordering(cholS, inv=TRUE)
- R <- spam::as.spam(cholS)
+simulation_plan <- .GeoSimulationPrepareExact(
+  list(coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+       coordx_dyn = coordx_dyn, corrmodel = corrmodel, distance = distance,
+       grid = grid, model = "Gaussian", n = n, param = append(mc, pc),
+       anisopars = anisopars, radius = radius, sparse = sparse, copula = NULL,
+       X = X),
+  method = method, sparse = sparse
+)
+ccov <- simulation_plan$ccov
+if (sparse) {
+  R <- simulation_plan$factor$R
+  iord <- simulation_plan$factor$iord
+} else {
+  sqrtvarcov <- simulation_plan$factor$sqrt
 }
 
-######################
-##############################################
-## putting 2 nugget
- if(model%in% c("PoissonZIP","BinomialNegZINB","PoissonGammaZIP"))
-{
-  II=diag(nrow(ccov$covmatrix));
-  II[lower.tri(II)] <- (1-param$nugget2)/(1-param$nugget1)
-  II <- t(II);
-  II[lower.tri(II)] <- (1-param$nugget2)/(1-param$nugget1)
-  ccov_with_nug=(ccov$covmatrix)*(II)
-
-if(!sparse) {
-  decompvarcov1 <- MatDecomp(ccov_with_nug,method)
-  if(is.logical(decompvarcov1)){print(" Covariance matrix is not positive definite");stop()}
-  sqrtvarcov1 <- MatSqrt(decompvarcov1,method)
-  }
-  else {
-   cholS1 <- spam::chol(ccov_with_nug)
-   iord1 <- spam::ordering(cholS1, inv=TRUE)
-   R1 <- spam::as.spam(cholS1)
-  }
+## A second nugget structure changes only the off-diagonal entries.  Preserve
+## sparse matrices and reuse the original factor when the structures coincide.
+second_multiplier <- NULL
+if (model %in% c("PoissonZIP", "BinomialNegZINB", "PoissonGammaZIP")) {
+  second_multiplier <- (1 - param$nugget2) / (1 - param$nugget1)
 }
-##############################################
-## putting 1 nugget
-if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
-               "TwoPieceStudentT","TwoPieceGaussian"))
-{
-  II=diag(nrow(ccov$covmatrix));
-  II[lower.tri(II)] <- (1-nugget);
-  II <- t(II);
-  II[lower.tri(II)] <- (1-nugget)
-  ccov_with_nug=ccov$covmatrix*II
-
-if(!sparse) {
-  decompvarcov1 <- MatDecomp(ccov_with_nug,method)
-if(is.logical(decompvarcov1)){print(" Covariance matrix is not positive definite");stop()}
-  sqrtvarcov1 <- MatSqrt(decompvarcov1,method)
+if (model %in% c("SkewGaussian", "StudentT", "SkewStudentT",
+                "TwoPieceTukeyh", "TwoPieceStudentT", "TwoPieceGaussian")) {
+  second_multiplier <- 1 - nugget
+}
+if (!is.null(second_multiplier)) {
+  ccov_with_nug <- .GeoSimulationScaleOffDiagonal(
+    ccov$covmatrix, second_multiplier
+  )
+  second_factor <- if (isTRUE(second_multiplier == 1)) {
+    simulation_plan$factor
+  } else {
+    .GeoSimulationFactor(ccov_with_nug, method, sparse)
   }
-  else {   
-    cholS1 <- spam::chol(ccov_with_nug)
-    iord1 <- spam::ordering(cholS1, inv=TRUE)
-    R1 <- spam::as.spam(cholS1)
-   }
+  if (sparse) {
+    R1 <- second_factor$R
+    iord1 <- second_factor$iord
+  } else {
+    sqrtvarcov1 <- second_factor$sqrt
+  }
 }
 ##########################################################################################################################################
  numtime=1
@@ -340,7 +319,7 @@ if(is.logical(decompvarcov1)){print(" Covariance matrix is not positive definite
    else { dime=nrow(ccov$covmatrix) }
 ########################
     
-SIM=list()
+SIM <- vector("list", nrep)
 ###################################################
 ### starting number of replicates
 ###################################################
@@ -413,7 +392,11 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
   }
 
   while(KK<=npoi) {
-  for(i in 1:k) {
+  ## The mixing field is fixed after the first arrival.  Subsequent arrivals
+  ## only need the two Gaussian fields defining their exponential increments.
+  k_iteration <- if (KK > 1L && model %in%
+                    c("PoissonGamma", "PoissonGammaZIP", "PoissonWeibull")) 2L else k
+  for(i in seq_len(k_iteration)) {
 
     ss=matrix(rnorm(dime) , nrow=dime, ncol = 1)
 
@@ -482,22 +465,26 @@ if(model%in% c("SkewGaussian","StudentT","SkewStudentT","TwoPieceTukeyh",
  }
   ####################################
  if(model %in% c("PoissonGamma","PoissonGammaZIP"))   {
-   if(KK==1) sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+   if(KK==1) {
+     sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+     threshold <- c(exp(mm)*sim3/(k-2))
+   }
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
    ssp=ssp+c(pois1)
-   threshold <- c(exp(mm)*sim3/(k-2))
    active <- ssp <= threshold
    poi_counts <- poi_counts + as.integer(active)
    if(!any(active)) break  ## stopping rule
  }
 if(model %in% c("PoissonWeibull"))   {
 
-  if(KK==1) sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+  if(KK==1) {
+    sim3 <- .GeoSimulationSquareSums(dd, 3:k)
+    threshold <- c(exp(mm)*(sim3/2)^(1/param$shape)/(gamma(1+1/param$shape)))
+  }
    #################################
    pois1=0.5*(dd[,,1]^2+dd[,,2]^2)
    ssp=ssp+c(pois1)
-   threshold <- c(exp(mm)*(sim3/2)^(1/param$shape)/(gamma(1+1/param$shape)))
    active <- ssp <= threshold
    poi_counts <- poi_counts + as.integer(active)
    if(!any(active)) break  ## stopping rule
@@ -617,24 +604,20 @@ if(bivariate){
 
   zz <- param[grep("mean", names(param))]
   pc <- param[CorrParam(corrmodel)]
-  ccov <- GeoCovmatrix(
-    coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
-    coordx_dyn = coordx_dyn, corrmodel = corrmodel, distance = distance,
-    grid = grid, model = "Gaussian", n = n, param = append(pc, zz),
-    anisopars = anisopars, radius = radius, sparse = sparse, copula = NULL, X = X
+  simulation_plan <- .GeoSimulationPrepareExact(
+    list(coordx = coordx, coordy = coordy, coordz = coordz, coordt = coordt,
+         coordx_dyn = coordx_dyn, corrmodel = corrmodel, distance = distance,
+         grid = grid, model = "Gaussian", n = n, param = append(pc, zz),
+         anisopars = anisopars, radius = radius, sparse = sparse,
+         copula = NULL, X = X),
+    method = method, sparse = sparse
   )
-
-  if(!sparse) {
-    decompvarcov <- MatDecomp(ccov$covmatrix, method)
-    if(is.logical(decompvarcov)) {
-      print(" Covariance matrix is not positive definite")
-      stop()
-    }
-    sqrtvarcov <- MatSqrt(decompvarcov, method)
+  ccov <- simulation_plan$ccov
+  if (sparse) {
+    R <- simulation_plan$factor$R
+    iord <- simulation_plan$factor$iord
   } else {
-    cholS <- spam::chol(ccov$covmatrix)
-    iord <- spam::ordering(cholS, inv = TRUE)
-    R <- spam::as.spam(cholS)
+    sqrtvarcov <- simulation_plan$factor$sqrt
   }
 
   ns <- as.integer(ccov$ns)
